@@ -40,6 +40,13 @@ uv run agentx ask "查 Memory Hall，整理 agentX 相關記憶" --namespace pro
 uv run agentx ask "找出這個 repo 的測試怎麼跑"
 ```
 
+After sourcing `~/.zshrc`, the local shortcut is:
+
+```bash
+ax
+agentx-shell
+```
+
 Use `chat` when you only want to test model speed or have a plain conversation.
 Use `ask` when you want the agent loop and tools.
 Use `shell` when you want a continuous Claude/Codex/Gemini CLI-style session.
