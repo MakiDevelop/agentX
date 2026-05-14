@@ -67,7 +67,7 @@ SLASH_COMMANDS = [
     ("/mode chat", "切換到純聊天模式，不使用工具，速度較快"),
     ("/mode agent", "切換到 agent 工具模式，可使用 repo / git / Memory Hall 工具"),
     ("/models", "列出 Ollama 目前可用模型"),
-    ("/model MODEL", "切換 Ollama 模型，例如 /model gemma4:31b"),
+    ("/model [MODEL]", "查看或切換 Ollama 模型，例如 /model gemma4:31b"),
     ("/remember TEXT", "把指定內容寫入目前 Memory Hall namespace"),
     ("/status", "顯示目前模型、模式、namespace、訊息數與粗估 context tokens"),
     ("/clear", "清空目前 shell session 上下文，並重新載入 repo 與 Memory Hall context"),
@@ -809,6 +809,13 @@ def shell(
                     console.print(f"models failed: {type(exc).__name__}: {exc}")
                     continue
                 print_tool_result("\n".join(models))
+                continue
+            if prompt == "/model":
+                transcript.write("slash_command", {"command": prompt, "model": settings.model})
+                console.print(f"model={settings.model}")
+                console.print("usage: /model MODEL")
+                console.print("example: /model gemma4:31b")
+                console.print("list models: /models")
                 continue
             if prompt.startswith("/model "):
                 model = prompt.removeprefix("/model ").strip()
