@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import queue
 import re
 import sys
 import threading
+import os
 from datetime import datetime
 
 from prompt_toolkit import PromptSession
@@ -18,6 +18,7 @@ from agentx.approval import ApprovalMode, ApprovalPolicy
 from agentx.config import Settings
 from agentx.doctor import run_doctor
 from agentx.git_workflow import build_commit_plan, commit_and_push
+from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
@@ -29,6 +30,7 @@ from agentx.safety import Risk
 from agentx.task import TaskState, clear_task, finish_task, load_task, start_task
 from agentx.tools import ToolRegistry
 from agentx.transcript import Transcript, find_transcript, list_transcripts, summarize_transcript
+from agentx.tui import AgentXTui
 
 app = typer.Typer(
     help="agentX local Ollama agent shell.",
@@ -49,6 +51,8 @@ SLASH_COMMANDS = [
     ("/context", "顯示目前 agent 上下文使用量與壓縮次數"),
     ("/compact", "壓縮目前 agent session 上下文，保留最近訊息摘要"),
     ("/history", "顯示本輪 shell 的簡短互動紀錄"),
+    ("/jobs", "顯示目前執行中與排隊中的 prompt"),
+    ("/cancel [JOB_ID|all]", "取消尚未執行的 queued prompt"),
     ("/sessions", "列出最近 transcript，可搭配 /resume"),
     ("/transcript", "顯示本輪 JSONL transcript 檔案路徑"),
     ("/handoff [TEXT]", "寫入 Memory Hall 交接摘要；未提供文字時自動整理本輪紀錄"),
@@ -143,6 +147,38 @@ def print_history(history: list[tuple[str, str]]) -> None:
     for index, (mode, prompt) in enumerate(history[-20:], start=max(1, len(history) - 19)):
         table.add_row(str(index), mode, prompt[:120])
     console.print(table)
+
+
+def print_jobs(job_queue: PromptJobQueue) -> None:
+    table = Table(title="agentX jobs", show_header=True, header_style="bold")
+    table.add_column("ID", justify="right", no_wrap=True)
+    table.add_column("State", style="cyan", no_wrap=True)
+    table.add_column("Prompt")
+    current = job_queue.current
+    if current is not None:
+        table.add_row(str(current.id), "running", current.prompt[:120])
+    for job in job_queue.pending():
+        table.add_row(str(job.id), "queued", job.prompt[:120])
+    if current is None and not job_queue.pending():
+        table.add_row("-", "idle", "(none)")
+    console.print(table)
+
+
+def cancel_jobs(job_queue: PromptJobQueue, value: str | None) -> str:
+    if value == "current":
+        return "current running job cannot be interrupted yet; queued jobs can be cancelled"
+    if value in (None, "", "all"):
+        cancelled = job_queue.cancel_pending()
+    else:
+        try:
+            job_id = int(value)
+        except ValueError:
+            return "usage: /cancel [JOB_ID|all]"
+        cancelled = job_queue.cancel_pending(job_id)
+    if not cancelled:
+        return "no queued jobs cancelled"
+    ids = ", ".join(str(job.id) for job in cancelled)
+    return f"cancelled queued jobs: {ids}"
 
 
 def print_sessions(settings: Settings) -> None:
@@ -451,6 +487,7 @@ def shell(
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
 ) -> None:
     """Start an interactive agentX session."""
+    global console
     settings = Settings()
     if max_steps is not None:
         settings = settings.with_updates(max_steps=max_steps)
@@ -474,28 +511,35 @@ def shell(
     chat_messages = [{"role": "system", "content": build_chat_system_prompt(settings.workspace)}]
     history: list[tuple[str, str]] = []
     plan_mode = False
-    prompt_queue: queue.Queue[str | None] = queue.Queue()
+    job_queue = PromptJobQueue()
     prompt_active = threading.Event()
     prompt_session: PromptSession[str] | None = None
-    if sys.stdin.isatty():
+    tui: AgentXTui | None = None
+    original_console = console
+
+    def status_line() -> str:
+        return f"{settings.model} | context {context_percent(settings, agent_session, chat_messages)}%"
+
+    if sys.stdin.isatty() and os.getenv("AGENTX_TUI", "1") != "0":
+        tui = AgentXTui(commands=SLASH_COMMANDS, status_text=status_line)
+        tui.start()
+        console = Console(file=tui.writer, force_terminal=False, color_system=None, width=100)
+    elif sys.stdin.isatty():
         prompt_session = PromptSession(
             completer=SlashCommandCompleter(SLASH_COMMANDS),
             complete_while_typing=True,
             erase_when_done=True,
             refresh_interval=0.2,
-            bottom_toolbar=lambda: (
-                f"{settings.model} | context "
-                f"{context_percent(settings, agent_session, chat_messages)}%"
-            ),
+            bottom_toolbar=status_line,
         )
 
     def run_prompt_worker() -> None:
         nonlocal chat_messages
         while True:
-            queued_prompt = prompt_queue.get()
-            if queued_prompt is None:
-                prompt_queue.task_done()
+            job = job_queue.get()
+            if job is None:
                 break
+            queued_prompt = job.prompt
             prompt_active.set()
             try:
                 if mode == "agent":
@@ -523,16 +567,17 @@ def shell(
                 console.print(f"[red]prompt failed:[/red] {type(exc).__name__}: {escape(str(exc))}")
             finally:
                 prompt_active.clear()
-                prompt_queue.task_done()
+                job_queue.complete_current()
 
     worker = threading.Thread(target=run_prompt_worker, name="agentx-prompt-worker", daemon=True)
     worker.start()
 
     def wait_for_prompt_worker() -> None:
-        prompt_queue.join()
+        while job_queue.current is not None or job_queue.pending_count() > 0:
+            threading.Event().wait(0.05)
 
     def stop_prompt_worker() -> None:
-        prompt_queue.put(None)
+        job_queue.stop()
         worker.join(timeout=5)
 
     console.print(
@@ -548,7 +593,9 @@ def shell(
     try:
         while True:
             try:
-                if prompt_session is None:
+                if tui is not None:
+                    prompt = tui.prompt().strip()
+                elif prompt_session is None:
                     prompt = typer.prompt("agentX").strip()
                 else:
                     with patch_stdout(raw=True):
@@ -590,7 +637,7 @@ def shell(
                     print_raw(message)
                 transcript.write("session_end", {"reason": prompt})
                 break
-            if prompt.startswith("/"):
+            if prompt.startswith("/") and not prompt.startswith(("/jobs", "/cancel")):
                 wait_for_prompt_worker()
             if prompt == "/help":
                 transcript.write("slash_command", {"command": prompt})
@@ -660,6 +707,15 @@ def shell(
             if prompt == "/history":
                 transcript.write("slash_command", {"command": prompt})
                 print_history(history)
+                continue
+            if prompt == "/jobs":
+                transcript.write("slash_command", {"command": prompt})
+                print_jobs(job_queue)
+                continue
+            if prompt.startswith("/cancel"):
+                value = prompt.removeprefix("/cancel").strip() or None
+                transcript.write("slash_command", {"command": prompt})
+                print_raw(cancel_jobs(job_queue, value))
                 continue
             if prompt == "/sessions":
                 transcript.write("slash_command", {"command": prompt})
@@ -878,12 +934,15 @@ def shell(
                 console.print("cleared")
                 continue
 
-            prompt_queue.put(prompt)
-            pending = prompt_queue.qsize()
+            job = job_queue.submit(prompt)
+            pending = job_queue.pending_count()
             if prompt_active.is_set() or pending > 1:
-                console.print(f"[dim]queued prompt; pending={pending}[/dim]")
+                console.print(f"[dim]queued job #{job.id}; pending={pending}[/dim]")
     finally:
         stop_prompt_worker()
+        if tui is not None:
+            tui.stop()
+            console = original_console
 
 
 if __name__ == "__main__":
