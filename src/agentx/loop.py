@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from enum import Enum
 
@@ -31,8 +32,13 @@ class AgentLoop:
             trace=trace,
         )
 
-    def run(self, prompt: str, namespace: str = "project:agentX") -> str:
-        return self.session.ask(prompt, namespace=namespace)
+    def run(
+        self,
+        prompt: str,
+        namespace: str = "project:agentX",
+        cancel_event: threading.Event | None = None,
+    ) -> str:
+        return self.session.ask(prompt, namespace=namespace, cancel_event=cancel_event)
 
 
 class AgentSession:
@@ -67,7 +73,12 @@ class AgentSession:
             },
         ]
 
-    def ask(self, prompt: str, namespace: str = "project:agentX") -> str:
+    def ask(
+        self,
+        prompt: str,
+        namespace: str = "project:agentX",
+        cancel_event: threading.Event | None = None,
+    ) -> str:
         direct = self._direct_tool_call(prompt)
         if direct is not None:
             result = self._run_tool(direct)
@@ -94,7 +105,7 @@ class AgentSession:
         )
 
         for _ in range(self.settings.max_steps):
-            raw = self.ollama.chat(self.messages, json_mode=True)
+            raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
             action = self._parse_action(raw)
             if isinstance(action, InvalidAction):
                 self.messages.append({"role": "assistant", "content": raw})

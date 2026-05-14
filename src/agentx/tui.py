@@ -92,8 +92,7 @@ class AgentXTui:
         if not content:
             return
         with self._lock:
-            prefix = "\n" if self.output.text else ""
-            self.output.text += prefix + content
+            self.output.text += content
             self.output.buffer.cursor_position = len(self.output.text)
         self.app.invalidate()
 

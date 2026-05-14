@@ -21,7 +21,7 @@ from agentx.git_workflow import build_commit_plan, commit_and_push
 from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
-from agentx.ollama import OllamaClient
+from agentx.ollama import OllamaCancelledError, OllamaClient
 from agentx.prompting import SlashCommandCompleter
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
@@ -112,6 +112,10 @@ def print_raw(text: object) -> None:
     console.print(ANSI_RE.sub("", str(text)), markup=False, highlight=False)
 
 
+def print_delta(text: object) -> None:
+    console.print(ANSI_RE.sub("", str(text)), markup=False, highlight=False, end="")
+
+
 def print_context(agent_session: AgentSession, chat_messages: list[dict[str, str]]) -> None:
     report = agent_session.context_report()
     table = Table(title="agentX context", show_header=False)
@@ -164,9 +168,16 @@ def print_jobs(job_queue: PromptJobQueue) -> None:
     console.print(table)
 
 
-def cancel_jobs(job_queue: PromptJobQueue, value: str | None) -> str:
+def cancel_jobs(
+    job_queue: PromptJobQueue,
+    value: str | None,
+    current_cancel: threading.Event | None = None,
+) -> str:
     if value == "current":
-        return "current running job cannot be interrupted yet; queued jobs can be cancelled"
+        if job_queue.current is None or current_cancel is None:
+            return "no running job to cancel"
+        current_cancel.set()
+        return f"cancelling running job: {job_queue.current.id}"
     if value in (None, "", "all"):
         cancelled = job_queue.cancel_pending()
     else:
@@ -513,6 +524,7 @@ def shell(
     plan_mode = False
     job_queue = PromptJobQueue()
     prompt_active = threading.Event()
+    current_cancel = threading.Event()
     prompt_session: PromptSession[str] | None = None
     tui: AgentXTui | None = None
     original_console = console
@@ -540,6 +552,7 @@ def shell(
             if job is None:
                 break
             queued_prompt = job.prompt
+            current_cancel.clear()
             prompt_active.set()
             try:
                 if mode == "agent":
@@ -548,7 +561,11 @@ def shell(
                     agent_prompt = queued_prompt
                     if plan_mode:
                         agent_prompt = "Plan only. Do not call tools. " + agent_prompt
-                    answer = agent_session.ask(agent_prompt, namespace=namespace)
+                    answer = agent_session.ask(
+                        agent_prompt,
+                        namespace=namespace,
+                        cancel_event=current_cancel,
+                    )
                     transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
                     print_raw(answer)
                     continue
@@ -559,14 +576,32 @@ def shell(
                 if plan_mode:
                     chat_prompt = "Plan only. Do not claim actions were performed. " + chat_prompt
                 chat_messages.append({"role": "user", "content": chat_prompt})
-                answer = ollama.chat(chat_messages, json_mode=False)
+                streamed: list[str] = []
+
+                def on_delta(delta: str) -> None:
+                    streamed.append(delta)
+                    print_delta(delta)
+
+                answer = ollama.chat(
+                    chat_messages,
+                    json_mode=False,
+                    on_delta=on_delta,
+                    cancel_event=current_cancel,
+                )
                 chat_messages.append({"role": "assistant", "content": answer})
                 transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
-                print_raw(answer)
+                if streamed:
+                    print_raw("")
+                else:
+                    print_raw(answer)
+            except OllamaCancelledError:
+                transcript.write("cancel", {"job": job.id, "prompt": queued_prompt})
+                print_raw(f"cancelled job #{job.id}")
             except Exception as exc:
                 console.print(f"[red]prompt failed:[/red] {type(exc).__name__}: {escape(str(exc))}")
             finally:
                 prompt_active.clear()
+                current_cancel.clear()
                 job_queue.complete_current()
 
     worker = threading.Thread(target=run_prompt_worker, name="agentx-prompt-worker", daemon=True)
@@ -715,7 +750,7 @@ def shell(
             if prompt.startswith("/cancel"):
                 value = prompt.removeprefix("/cancel").strip() or None
                 transcript.write("slash_command", {"command": prompt})
-                print_raw(cancel_jobs(job_queue, value))
+                print_raw(cancel_jobs(job_queue, value, current_cancel))
                 continue
             if prompt == "/sessions":
                 transcript.write("slash_command", {"command": prompt})

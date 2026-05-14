@@ -1,3 +1,5 @@
+import threading
+
 from agentx.jobs import PromptJobQueue
 from agentx.cli import cancel_jobs
 
@@ -41,6 +43,16 @@ def test_cancel_jobs_reports_cancelled_ids():
 def test_cancel_current_is_reported_as_not_supported():
     jobs = PromptJobQueue()
 
-    assert cancel_jobs(jobs, "current") == (
-        "current running job cannot be interrupted yet; queued jobs can be cancelled"
-    )
+    assert cancel_jobs(jobs, "current") == "no running job to cancel"
+
+
+def test_cancel_current_sets_cancel_event_for_running_job():
+    jobs = PromptJobQueue()
+    submitted = jobs.submit("running")
+    jobs.get()
+    cancel_event = threading.Event()
+
+    result = cancel_jobs(jobs, "current", cancel_event)
+
+    assert result == f"cancelling running job: {submitted.id}"
+    assert cancel_event.is_set()
