@@ -101,6 +101,15 @@ uv run agentx shell
 
 會列出所有 slash command 與中文說明。
 
+互動式 terminal 支援 slash command 自動補完：
+
+```text
+/con<Tab>
+/config s<Tab>
+```
+
+模型還在回應時，可以繼續輸入下一個一般 prompt。agentX 會把 prompt 放進背景佇列，依序送給同一個 session context。slash command 會等前面已排入的 prompt 完成後再執行，避免同時切模型、清 context 或改 mode。
+
 目前支援：
 
 | Command | 說明 |

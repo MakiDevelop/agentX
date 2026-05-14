@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import queue
+import sys
+import threading
 from datetime import datetime
 
+from prompt_toolkit import PromptSession
+from prompt_toolkit.patch_stdout import patch_stdout
 import typer
 from rich.console import Console
 from rich.markup import escape
@@ -15,6 +20,7 @@ from agentx.git_workflow import build_commit_plan, commit_and_push
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
+from agentx.prompting import SlashCommandCompleter
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
 from agentx.safety import Risk
@@ -445,6 +451,60 @@ def shell(
     chat_messages = [{"role": "system", "content": "Use Traditional Chinese. Answer concisely."}]
     history: list[tuple[str, str]] = []
     plan_mode = False
+    prompt_queue: queue.Queue[str | None] = queue.Queue()
+    prompt_active = threading.Event()
+    prompt_session: PromptSession[str] | None = None
+    if sys.stdin.isatty():
+        prompt_session = PromptSession(
+            completer=SlashCommandCompleter(SLASH_COMMANDS),
+            complete_while_typing=True,
+        )
+
+    def run_prompt_worker() -> None:
+        nonlocal chat_messages
+        while True:
+            queued_prompt = prompt_queue.get()
+            if queued_prompt is None:
+                prompt_queue.task_done()
+                break
+            prompt_active.set()
+            try:
+                if mode == "agent":
+                    history.append((mode, queued_prompt))
+                    transcript.write("user", {"mode": mode, "content": queued_prompt})
+                    agent_prompt = queued_prompt
+                    if plan_mode:
+                        agent_prompt = "Plan only. Do not call tools. " + agent_prompt
+                    answer = agent_session.ask(agent_prompt, namespace=namespace)
+                    transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
+                    console.print(answer)
+                    continue
+
+                history.append((mode, queued_prompt))
+                transcript.write("user", {"mode": mode, "content": queued_prompt})
+                chat_prompt = queued_prompt
+                if plan_mode:
+                    chat_prompt = "Plan only. Do not claim actions were performed. " + chat_prompt
+                chat_messages.append({"role": "user", "content": chat_prompt})
+                answer = ollama.chat(chat_messages, json_mode=False)
+                chat_messages.append({"role": "assistant", "content": answer})
+                transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
+                console.print(answer)
+            except Exception as exc:
+                console.print(f"[red]prompt failed:[/red] {type(exc).__name__}: {escape(str(exc))}")
+            finally:
+                prompt_active.clear()
+                prompt_queue.task_done()
+
+    worker = threading.Thread(target=run_prompt_worker, name="agentx-prompt-worker", daemon=True)
+    worker.start()
+
+    def wait_for_prompt_worker() -> None:
+        prompt_queue.join()
+
+    def stop_prompt_worker() -> None:
+        prompt_queue.put(None)
+        worker.join(timeout=5)
 
     console.print(
         Panel.fit(
@@ -456,340 +516,336 @@ def shell(
         )
     )
 
-    while True:
-        try:
-            prompt = typer.prompt("agentX").strip()
-        except (EOFError, KeyboardInterrupt):
-            if history and settings.auto_handoff:
-                message = write_handoff(
-                    tools,
-                    settings=settings,
-                    namespace=namespace,
-                    mode=mode,
-                    history=history,
-                    transcript=transcript,
-                    task=task,
-                )
-                transcript.write("handoff", {"auto": True, "result": message})
-                console.print(f"\n{message}")
-            console.print("\nbye")
-            break
-
-        if not prompt:
-            continue
-        if prompt in {"/exit", "/quit"}:
-            if history and settings.auto_handoff:
-                message = write_handoff(
-                    tools,
-                    settings=settings,
-                    namespace=namespace,
-                    mode=mode,
-                    history=history,
-                    transcript=transcript,
-                    task=task,
-                )
-                transcript.write("handoff", {"auto": True, "result": message})
-                console.print(message)
-            transcript.write("session_end", {"reason": prompt})
-            break
-        if prompt == "/help":
-            transcript.write("slash_command", {"command": prompt})
-            print_slash_help()
-            continue
-        if prompt == "/config":
-            transcript.write("slash_command", {"command": prompt})
-            print_config(settings, namespace, mode, approval_policy, task)
-            continue
-        if prompt.startswith("/config set "):
-            parts = prompt.split(maxsplit=3)
-            if len(parts) != 4:
-                console.print("usage: /config set KEY VALUE")
-                continue
-            _, _, key, value = parts
+    try:
+        while True:
             try:
-                updated = set_project_config(settings.workspace, key, value)
-            except ValueError as exc:
-                console.print(str(exc))
+                if prompt_session is None:
+                    prompt = typer.prompt("agentX").strip()
+                else:
+                    with patch_stdout():
+                        prompt = prompt_session.prompt("agentX: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                wait_for_prompt_worker()
+                if history and settings.auto_handoff:
+                    message = write_handoff(
+                        tools,
+                        settings=settings,
+                        namespace=namespace,
+                        mode=mode,
+                        history=history,
+                        transcript=transcript,
+                        task=task,
+                    )
+                    transcript.write("handoff", {"auto": True, "result": message})
+                    console.print(f"\n{message}")
+                console.print("\nbye")
+                break
+
+            if not prompt:
                 continue
-            transcript.write("slash_command", {"command": prompt, "config": key})
-            console.print(f"config updated: {key}")
-            console.print(updated)
-            continue
-        if prompt == "/task":
-            transcript.write("slash_command", {"command": prompt})
-            task = load_task(settings.workspace)
-            print_task(task)
-            continue
-        if prompt.startswith("/task "):
-            value = prompt.removeprefix("/task ").strip()
-            if value == "status":
+            if prompt in {"/exit", "/quit"}:
+                wait_for_prompt_worker()
+                if history and settings.auto_handoff:
+                    message = write_handoff(
+                        tools,
+                        settings=settings,
+                        namespace=namespace,
+                        mode=mode,
+                        history=history,
+                        transcript=transcript,
+                        task=task,
+                    )
+                    transcript.write("handoff", {"auto": True, "result": message})
+                    console.print(message)
+                transcript.write("session_end", {"reason": prompt})
+                break
+            if prompt.startswith("/"):
+                wait_for_prompt_worker()
+            if prompt == "/help":
+                transcript.write("slash_command", {"command": prompt})
+                print_slash_help()
+                continue
+            if prompt == "/config":
+                transcript.write("slash_command", {"command": prompt})
+                print_config(settings, namespace, mode, approval_policy, task)
+                continue
+            if prompt.startswith("/config set "):
+                parts = prompt.split(maxsplit=3)
+                if len(parts) != 4:
+                    console.print("usage: /config set KEY VALUE")
+                    continue
+                _, _, key, value = parts
+                try:
+                    updated = set_project_config(settings.workspace, key, value)
+                except ValueError as exc:
+                    console.print(str(exc))
+                    continue
+                transcript.write("slash_command", {"command": prompt, "config": key})
+                console.print(f"config updated: {key}")
+                console.print(updated)
+                continue
+            if prompt == "/task":
+                transcript.write("slash_command", {"command": prompt})
                 task = load_task(settings.workspace)
-            elif value == "done":
-                task = finish_task(settings.workspace)
-            elif value == "clear":
-                task = clear_task(settings.workspace)
-            else:
-                task = start_task(settings.workspace, value)
-            transcript.write("task", {"title": task.title, "status": task.status})
-            print_task(task)
-            continue
-        if prompt == "/doctor":
-            transcript.write("slash_command", {"command": prompt})
-            print_doctor(settings, memory, ollama)
-            continue
-        if prompt == "/init":
-            transcript.write("slash_command", {"command": prompt})
-            output = run_init(settings, tools, namespace)
-            transcript.write("init", {"content": output[:4000]})
-            console.print(output)
-            continue
-        if prompt == "/tools":
-            transcript.write("slash_command", {"command": prompt})
-            print_tools(tools)
-            continue
-        if prompt == "/context":
-            transcript.write("slash_command", {"command": prompt})
-            print_context(agent_session, chat_messages)
-            continue
-        if prompt == "/compact":
-            transcript.write("slash_command", {"command": prompt})
-            result = agent_session.compact()
-            transcript.write("compact", {"result": result})
-            console.print(result)
-            continue
-        if prompt == "/history":
-            transcript.write("slash_command", {"command": prompt})
-            print_history(history)
-            continue
-        if prompt == "/sessions":
-            transcript.write("slash_command", {"command": prompt})
-            print_sessions(settings)
-            continue
-        if prompt == "/transcript":
-            transcript.write("slash_command", {"command": prompt})
-            console.print(str(transcript.path))
-            continue
-        if prompt.startswith("/handoff"):
-            note = prompt.removeprefix("/handoff").strip() or None
-            message = write_handoff(
-                tools,
-                settings=settings,
-                namespace=namespace,
-                mode=mode,
-                history=history,
-                transcript=transcript,
-                task=task,
-                note=note,
-            )
-            transcript.write("handoff", {"auto": False, "note": note, "result": message})
-            console.print(message)
-            continue
-        if prompt.startswith("/resume"):
-            name = prompt.removeprefix("/resume").strip() or "latest"
-            resume_path = find_transcript(settings.workspace, name)
-            if resume_path is None:
-                console.print(f"transcript not found: {name}")
+                print_task(task)
                 continue
-            summary = summarize_transcript(resume_path)
-            agent_session.messages.append({"role": "system", "content": summary})
-            chat_messages.append({"role": "system", "content": summary})
-            transcript.write("resume", {"source": str(resume_path), "summary": summary[:2000]})
-            console.print(f"resumed {resume_path}")
-            continue
-        if prompt.startswith("/files"):
-            path = prompt.removeprefix("/files").strip() or "."
-            result = tools.run("list_files", {"path": path})
-            transcript.write(
-                "tool",
-                {"command": "/files", "ok": result.ok, "content": result.content[:2000]},
-            )
-            print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
-            continue
-        if prompt.startswith("/read "):
-            path = prompt.removeprefix("/read ").strip()
-            result = tools.run("read_file", {"path": path})
-            transcript.write(
-                "tool",
-                {"command": "/read", "path": path, "ok": result.ok, "content": result.content[:2000]},
-            )
-            print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
-            continue
-        if prompt.startswith("/search "):
-            pattern = prompt.removeprefix("/search ").strip()
-            result = tools.run("search_text", {"pattern": pattern})
-            transcript.write(
-                "tool",
-                {"command": "/search", "pattern": pattern, "ok": result.ok, "content": result.content[:2000]},
-            )
-            print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
-            continue
-        if prompt == "/git":
-            result = tools.run("git_status", {})
-            transcript.write("tool", {"command": "/git", "ok": result.ok, "content": result.content[:2000]})
-            print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
-            continue
-        if prompt.startswith("/diff"):
-            path = prompt.removeprefix("/diff").strip()
-            args = {"path": path} if path else {}
-            result = tools.run("git_diff", args)
-            transcript.write(
-                "tool",
-                {"command": "/diff", "path": path, "ok": result.ok, "content": result.content[:2000]},
-            )
-            print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
-            continue
-        if prompt.startswith("/apply "):
-            path = prompt.removeprefix("/apply ").strip()
-            patch_path = (settings.workspace / path).resolve()
-            if settings.workspace != patch_path and settings.workspace not in patch_path.parents:
-                console.print("patch path escapes workspace")
+            if prompt.startswith("/task "):
+                value = prompt.removeprefix("/task ").strip()
+                if value == "status":
+                    task = load_task(settings.workspace)
+                elif value == "done":
+                    task = finish_task(settings.workspace)
+                elif value == "clear":
+                    task = clear_task(settings.workspace)
+                else:
+                    task = start_task(settings.workspace, value)
+                transcript.write("task", {"title": task.title, "status": task.status})
+                print_task(task)
                 continue
-            if not patch_path.is_file():
-                console.print(f"patch file not found: {path}")
+            if prompt == "/doctor":
+                transcript.write("slash_command", {"command": prompt})
+                print_doctor(settings, memory, ollama)
                 continue
-            patch = patch_path.read_text(encoding="utf-8", errors="replace")
-            result = tools.run("apply_patch", {"patch": patch})
-            transcript.write(
-                "tool",
-                {"command": "/apply", "path": path, "ok": result.ok, "content": result.content[:2000]},
-            )
-            print_tool_result(result.content if result.ok else f"patch failed: {result.content}")
-            continue
-        if prompt == "/approval":
-            transcript.write("slash_command", {"command": prompt})
-            print_approval(approval_policy)
-            continue
-        if prompt.startswith("/approval "):
-            mode_value = prompt.removeprefix("/approval ").strip()
-            try:
-                approval_policy.mode = ApprovalMode(mode_value)
-            except ValueError:
-                console.print("usage: /approval ask|auto|off")
+            if prompt == "/init":
+                transcript.write("slash_command", {"command": prompt})
+                output = run_init(settings, tools, namespace)
+                transcript.write("init", {"content": output[:4000]})
+                console.print(output)
                 continue
-            transcript.write("slash_command", {"command": prompt, "approval": approval_policy.mode.value})
-            print_approval(approval_policy)
-            continue
-        if prompt.startswith("/memory "):
-            query = prompt.removeprefix("/memory ").strip()
-            result = tools.run("memory_search", {"query": query, "namespace": namespace})
-            transcript.write(
-                "tool",
-                {"command": "/memory", "query": query, "ok": result.ok, "content": result.content[:2000]},
-            )
-            print_tool_result(result.content if result.ok else f"memory search failed: {result.content}")
-            continue
-        if prompt.startswith("/run "):
-            command = prompt.removeprefix("/run ").strip()
-            result = tools.run("run_command", {"command": command})
-            transcript.write(
-                "tool",
-                {"command": "/run", "input": command, "ok": result.ok, "content": result.content[:4000]},
-            )
-            print_tool_result(result.content if result.ok else f"run failed: {result.content}")
-            continue
-        if prompt == "/test":
-            result = tools.run("run_tests", {})
-            transcript.write("tool", {"command": "/test", "ok": result.ok, "content": result.content[:4000]})
-            print_tool_result(result.content if result.ok else f"驗證失敗：{result.content}")
-            continue
-        if prompt == "/review":
-            transcript.write("slash_command", {"command": prompt})
-            output = run_review(ollama, tools)
-            transcript.write("review", {"content": output[:4000]})
-            console.print(output)
-            continue
-        if prompt.startswith("/commit"):
-            message = prompt.removeprefix("/commit").strip() or None
-            transcript.write("slash_command", {"command": prompt})
-            output = run_commit_flow(settings, tools, message)
-            transcript.write("commit", {"message": message, "content": output[:4000]})
-            console.print(output)
-            continue
-        if prompt == "/plan":
-            plan_mode = not plan_mode
-            transcript.write("slash_command", {"command": prompt, "plan": plan_mode})
-            console.print(f"plan={'on' if plan_mode else 'off'}")
-            continue
-        if prompt.startswith("/remember "):
-            content = prompt.removeprefix("/remember ").strip()
-            if not content:
-                console.print("usage: /remember 要寫入 Memory Hall 的內容")
+            if prompt == "/tools":
+                transcript.write("slash_command", {"command": prompt})
+                print_tools(tools)
                 continue
-            result = tools.run("memory_write", {"content": content, "namespace": namespace})
-            transcript.write("tool", {"command": "/remember", "ok": result.ok, "content": content})
-            if result.ok:
-                console.print(f"remembered in {namespace}")
-            else:
-                console.print(f"remember failed: {result.content}")
-            continue
-        if prompt.startswith("/mode "):
-            next_mode = prompt.removeprefix("/mode ").strip()
-            if next_mode not in {"chat", "agent"}:
-                console.print("mode must be chat or agent")
+            if prompt == "/context":
+                transcript.write("slash_command", {"command": prompt})
+                print_context(agent_session, chat_messages)
                 continue
-            mode = next_mode
-            transcript.write("slash_command", {"command": prompt, "mode": mode})
-            console.print(f"mode={mode}")
-            continue
-        if prompt == "/models":
-            transcript.write("slash_command", {"command": prompt})
-            try:
-                models = ollama.list_models()
-            except Exception as exc:
-                console.print(f"models failed: {type(exc).__name__}: {exc}")
+            if prompt == "/compact":
+                transcript.write("slash_command", {"command": prompt})
+                result = agent_session.compact()
+                transcript.write("compact", {"result": result})
+                console.print(result)
                 continue
-            print_tool_result("\n".join(models))
-            continue
-        if prompt.startswith("/model "):
-            model = prompt.removeprefix("/model ").strip()
-            if not model:
-                console.print("usage: /model gemma4:e2b")
+            if prompt == "/history":
+                transcript.write("slash_command", {"command": prompt})
+                print_history(history)
                 continue
-            settings = settings.with_updates(model=model)
-            ollama = OllamaClient(
-                base_url=settings.ollama_url,
-                model=settings.model,
-                timeout=settings.ollama_timeout,
-            )
-            agent_session.ollama = ollama
-            transcript.write("slash_command", {"command": prompt, "model": settings.model})
-            console.print(f"model={settings.model}")
-            continue
-        if prompt == "/status":
-            transcript.write("slash_command", {"command": prompt})
-            approx_tokens = agent_session.context_chars // 4
-            console.print(
-                f"model={settings.model} mode={mode} namespace={namespace} "
-                f"agent_messages={agent_session.message_count} "
-                f"agent_context~{approx_tokens} tokens chat_messages={len(chat_messages)}"
-            )
-            continue
-        if prompt == "/clear":
-            agent_session.clear()
-            chat_messages = [{"role": "system", "content": "Use Traditional Chinese. Answer concisely."}]
-            transcript.write("slash_command", {"command": prompt})
-            console.print("cleared")
-            continue
+            if prompt == "/sessions":
+                transcript.write("slash_command", {"command": prompt})
+                print_sessions(settings)
+                continue
+            if prompt == "/transcript":
+                transcript.write("slash_command", {"command": prompt})
+                console.print(str(transcript.path))
+                continue
+            if prompt.startswith("/handoff"):
+                note = prompt.removeprefix("/handoff").strip() or None
+                message = write_handoff(
+                    tools,
+                    settings=settings,
+                    namespace=namespace,
+                    mode=mode,
+                    history=history,
+                    transcript=transcript,
+                    task=task,
+                    note=note,
+                )
+                transcript.write("handoff", {"auto": False, "note": note, "result": message})
+                console.print(message)
+                continue
+            if prompt.startswith("/resume"):
+                name = prompt.removeprefix("/resume").strip() or "latest"
+                resume_path = find_transcript(settings.workspace, name)
+                if resume_path is None:
+                    console.print(f"transcript not found: {name}")
+                    continue
+                summary = summarize_transcript(resume_path)
+                agent_session.messages.append({"role": "system", "content": summary})
+                chat_messages.append({"role": "system", "content": summary})
+                transcript.write("resume", {"source": str(resume_path), "summary": summary[:2000]})
+                console.print(f"resumed {resume_path}")
+                continue
+            if prompt.startswith("/files"):
+                path = prompt.removeprefix("/files").strip() or "."
+                result = tools.run("list_files", {"path": path})
+                transcript.write(
+                    "tool",
+                    {"command": "/files", "ok": result.ok, "content": result.content[:2000]},
+                )
+                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
+                continue
+            if prompt.startswith("/read "):
+                path = prompt.removeprefix("/read ").strip()
+                result = tools.run("read_file", {"path": path})
+                transcript.write(
+                    "tool",
+                    {"command": "/read", "path": path, "ok": result.ok, "content": result.content[:2000]},
+                )
+                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
+                continue
+            if prompt.startswith("/search "):
+                pattern = prompt.removeprefix("/search ").strip()
+                result = tools.run("search_text", {"pattern": pattern})
+                transcript.write(
+                    "tool",
+                    {"command": "/search", "pattern": pattern, "ok": result.ok, "content": result.content[:2000]},
+                )
+                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
+                continue
+            if prompt == "/git":
+                result = tools.run("git_status", {})
+                transcript.write("tool", {"command": "/git", "ok": result.ok, "content": result.content[:2000]})
+                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
+                continue
+            if prompt.startswith("/diff"):
+                path = prompt.removeprefix("/diff").strip()
+                args = {"path": path} if path else {}
+                result = tools.run("git_diff", args)
+                transcript.write(
+                    "tool",
+                    {"command": "/diff", "path": path, "ok": result.ok, "content": result.content[:2000]},
+                )
+                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
+                continue
+            if prompt.startswith("/apply "):
+                path = prompt.removeprefix("/apply ").strip()
+                patch_path = (settings.workspace / path).resolve()
+                if settings.workspace != patch_path and settings.workspace not in patch_path.parents:
+                    console.print("patch path escapes workspace")
+                    continue
+                if not patch_path.is_file():
+                    console.print(f"patch file not found: {path}")
+                    continue
+                patch = patch_path.read_text(encoding="utf-8", errors="replace")
+                result = tools.run("apply_patch", {"patch": patch})
+                transcript.write(
+                    "tool",
+                    {"command": "/apply", "path": path, "ok": result.ok, "content": result.content[:2000]},
+                )
+                print_tool_result(result.content if result.ok else f"patch failed: {result.content}")
+                continue
+            if prompt == "/approval":
+                transcript.write("slash_command", {"command": prompt})
+                print_approval(approval_policy)
+                continue
+            if prompt.startswith("/approval "):
+                mode_value = prompt.removeprefix("/approval ").strip()
+                try:
+                    approval_policy.mode = ApprovalMode(mode_value)
+                except ValueError:
+                    console.print("usage: /approval ask|auto|off")
+                    continue
+                transcript.write("slash_command", {"command": prompt, "approval": approval_policy.mode.value})
+                print_approval(approval_policy)
+                continue
+            if prompt.startswith("/memory "):
+                query = prompt.removeprefix("/memory ").strip()
+                result = tools.run("memory_search", {"query": query, "namespace": namespace})
+                transcript.write(
+                    "tool",
+                    {"command": "/memory", "query": query, "ok": result.ok, "content": result.content[:2000]},
+                )
+                print_tool_result(result.content if result.ok else f"memory search failed: {result.content}")
+                continue
+            if prompt.startswith("/run "):
+                command = prompt.removeprefix("/run ").strip()
+                result = tools.run("run_command", {"command": command})
+                transcript.write(
+                    "tool",
+                    {"command": "/run", "input": command, "ok": result.ok, "content": result.content[:4000]},
+                )
+                print_tool_result(result.content if result.ok else f"run failed: {result.content}")
+                continue
+            if prompt == "/test":
+                result = tools.run("run_tests", {})
+                transcript.write("tool", {"command": "/test", "ok": result.ok, "content": result.content[:4000]})
+                print_tool_result(result.content if result.ok else f"驗證失敗：{result.content}")
+                continue
+            if prompt == "/review":
+                transcript.write("slash_command", {"command": prompt})
+                output = run_review(ollama, tools)
+                transcript.write("review", {"content": output[:4000]})
+                console.print(output)
+                continue
+            if prompt.startswith("/commit"):
+                message = prompt.removeprefix("/commit").strip() or None
+                transcript.write("slash_command", {"command": prompt})
+                output = run_commit_flow(settings, tools, message)
+                transcript.write("commit", {"message": message, "content": output[:4000]})
+                console.print(output)
+                continue
+            if prompt == "/plan":
+                plan_mode = not plan_mode
+                transcript.write("slash_command", {"command": prompt, "plan": plan_mode})
+                console.print(f"plan={'on' if plan_mode else 'off'}")
+                continue
+            if prompt.startswith("/remember "):
+                content = prompt.removeprefix("/remember ").strip()
+                if not content:
+                    console.print("usage: /remember 要寫入 Memory Hall 的內容")
+                    continue
+                result = tools.run("memory_write", {"content": content, "namespace": namespace})
+                transcript.write("tool", {"command": "/remember", "ok": result.ok, "content": content})
+                if result.ok:
+                    console.print(f"remembered in {namespace}")
+                else:
+                    console.print(f"remember failed: {result.content}")
+                continue
+            if prompt.startswith("/mode "):
+                next_mode = prompt.removeprefix("/mode ").strip()
+                if next_mode not in {"chat", "agent"}:
+                    console.print("mode must be chat or agent")
+                    continue
+                mode = next_mode
+                transcript.write("slash_command", {"command": prompt, "mode": mode})
+                console.print(f"mode={mode}")
+                continue
+            if prompt == "/models":
+                transcript.write("slash_command", {"command": prompt})
+                try:
+                    models = ollama.list_models()
+                except Exception as exc:
+                    console.print(f"models failed: {type(exc).__name__}: {exc}")
+                    continue
+                print_tool_result("\n".join(models))
+                continue
+            if prompt.startswith("/model "):
+                model = prompt.removeprefix("/model ").strip()
+                if not model:
+                    console.print("usage: /model gemma4:e2b")
+                    continue
+                settings = settings.with_updates(model=model)
+                ollama = OllamaClient(
+                    base_url=settings.ollama_url,
+                    model=settings.model,
+                    timeout=settings.ollama_timeout,
+                )
+                agent_session.ollama = ollama
+                transcript.write("slash_command", {"command": prompt, "model": settings.model})
+                console.print(f"model={settings.model}")
+                continue
+            if prompt == "/status":
+                transcript.write("slash_command", {"command": prompt})
+                approx_tokens = agent_session.context_chars // 4
+                console.print(
+                    f"model={settings.model} mode={mode} namespace={namespace} "
+                    f"agent_messages={agent_session.message_count} "
+                    f"agent_context~{approx_tokens} tokens chat_messages={len(chat_messages)}"
+                )
+                continue
+            if prompt == "/clear":
+                agent_session.clear()
+                chat_messages = [{"role": "system", "content": "Use Traditional Chinese. Answer concisely."}]
+                transcript.write("slash_command", {"command": prompt})
+                console.print("cleared")
+                continue
 
-        if mode == "agent":
-            history.append((mode, prompt))
-            transcript.write("user", {"mode": mode, "content": prompt})
-            if plan_mode:
-                prompt = "Plan only. Do not call tools. " + prompt
-            answer = agent_session.ask(prompt, namespace=namespace)
-            transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
-            console.print(answer)
-            continue
-
-        history.append((mode, prompt))
-        transcript.write("user", {"mode": mode, "content": prompt})
-        if plan_mode:
-            prompt = "Plan only. Do not claim actions were performed. " + prompt
-        chat_messages.append({"role": "user", "content": prompt})
-        answer = ollama.chat(chat_messages, json_mode=False)
-        chat_messages.append({"role": "assistant", "content": answer})
-        transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
-        console.print(answer)
+            prompt_queue.put(prompt)
+            pending = prompt_queue.qsize()
+            if prompt_active.is_set() or pending > 1:
+                console.print(f"[dim]queued prompt; pending={pending}[/dim]")
+    finally:
+        stop_prompt_worker()
 
 
 if __name__ == "__main__":
