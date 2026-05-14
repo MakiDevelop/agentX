@@ -44,6 +44,7 @@ SLASH_COMMANDS = [
     ("/memory QUERY", "查詢目前 namespace 的 Memory Hall 記憶"),
     ("/run COMMAND", "執行固定 allowlist 命令"),
     ("/test", "執行固定 allowlist 驗證：ruff check 與 pytest"),
+    ("/review", "收集 git diff 與測試結果，輸出 findings-first review"),
     ("/plan", "切換 plan 模式；plan 模式只討論方案，不使用工具"),
     ("/mode chat", "切換到純聊天模式，不使用工具，速度較快"),
     ("/mode agent", "切換到 agent 工具模式，可使用 repo / git / Memory Hall 工具"),
@@ -110,6 +111,36 @@ def print_history(history: list[tuple[str, str]]) -> None:
 
 def print_tool_result(result_text: str) -> None:
     console.print(result_text if result_text.strip() else "[dim](no output)[/dim]")
+
+
+def run_review(ollama: OllamaClient, tools: ToolRegistry) -> str:
+    status = tools.run("git_status", {}).content
+    diff = tools.run("git_diff", {}).content
+    tests = tools.run("run_tests", {}).content
+    if not diff.strip():
+        return "No diff to review.\n\n" + status
+
+    prompt = (
+        "你是 code reviewer。請用 findings-first 格式，用繁體中文回覆。"
+        "優先列出 bug、風險、回歸、測試缺口；如果沒有問題，明確說未發現重大問題。"
+        "不要稱讚，不要寫冗長摘要。\n\n"
+        f"Git status:\n{status[:4000]}\n\n"
+        f"Diff:\n{diff[:20000]}\n\n"
+        f"Tests:\n{tests[:8000]}"
+    )
+    try:
+        return ollama.chat(
+            [
+                {"role": "system", "content": "Use Traditional Chinese. Be concise and findings-first."},
+                {"role": "user", "content": prompt},
+            ],
+            json_mode=False,
+        )
+    except Exception as exc:
+        return (
+            f"review model call failed: {type(exc).__name__}: {exc}\n\n"
+            f"Git status:\n{status}\n\nDiff:\n{diff[:12000]}\n\nTests:\n{tests}"
+        )
 
 
 def approve_interactive(tool: str, args: dict[str, object], risk: Risk) -> bool:
@@ -483,6 +514,12 @@ def shell(
             result = tools.run("run_tests", {})
             transcript.write("tool", {"command": "/test", "ok": result.ok, "content": result.content[:4000]})
             print_tool_result(result.content if result.ok else f"驗證失敗：{result.content}")
+            continue
+        if prompt == "/review":
+            transcript.write("slash_command", {"command": prompt})
+            output = run_review(ollama, tools)
+            transcript.write("review", {"content": output[:4000]})
+            console.print(output)
             continue
         if prompt == "/plan":
             plan_mode = not plan_mode

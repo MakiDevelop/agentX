@@ -120,7 +120,9 @@ uv run agentx shell
 | `/apply PATCH_FILE` | 套用 workspace 內 patch 檔，需輸入 `yes` 確認 |
 | `/memory QUERY` | 查詢目前 namespace 的 Memory Hall |
 | `/remember TEXT` | 寫入目前 namespace 的 Memory Hall |
+| `/run COMMAND` | 執行固定 allowlist 命令 |
 | `/test` | 執行 allowlist 驗證：`ruff check` + `pytest` |
+| `/review` | 收集 git diff 與測試結果，輸出 findings-first review |
 | `/plan` | 切換 plan mode，只討論方案 |
 | `/mode chat` | 切到純聊天模式 |
 | `/mode agent` | 切到 agent 工具模式 |
@@ -143,6 +145,7 @@ uv run agentx shell
 /git
 /diff
 /test
+/review
 ```
 
 套用 patch：
@@ -264,6 +267,7 @@ AGENTX_AUTO_HANDOFF=0 ax
 - `git_diff`
 - `memory_search`
 - `memory_write`
+- `run_command`
 - `run_tests`
 - `apply_patch`
 
@@ -273,7 +277,7 @@ AGENTX_AUTO_HANDOFF=0 ax
 - YELLOW：可逆變更，後續會接 approval gate
 - RED：破壞性或敏感操作，禁止或必須 Maki 確認
 
-目前不支援任意 shell command，也不會讓模型直接改檔。
+目前不支援任意 shell command；`/run` 只允許固定 allowlist。
 
 ## 開發驗證
 
@@ -284,6 +288,5 @@ uv run pytest -q
 
 ## 下一步
 
-- allowlisted `run_command`
 - session transcript JSONL
 - 更完整的 model-assisted context compaction / summary
