@@ -9,6 +9,7 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
+from agentx.approval import ApprovalMode, ApprovalPolicy
 from agentx.config import Settings
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
@@ -39,6 +40,7 @@ SLASH_COMMANDS = [
     ("/git", "顯示 git status"),
     ("/diff [PATH]", "顯示 git diff，可指定單一檔案"),
     ("/apply PATCH_FILE", "套用 workspace 內 patch 檔，會先要求 approval"),
+    ("/approval [ask|auto|off]", "查看或切換 YELLOW 工具 approval policy"),
     ("/memory QUERY", "查詢目前 namespace 的 Memory Hall 記憶"),
     ("/test", "執行固定 allowlist 驗證：ruff check 與 pytest"),
     ("/plan", "切換 plan 模式；plan 模式只討論方案，不使用工具"),
@@ -117,6 +119,17 @@ def approve_interactive(tool: str, args: dict[str, object], risk: Risk) -> bool:
     return answer == "yes"
 
 
+def print_approval(policy: ApprovalPolicy) -> None:
+    table = Table(title="agentX approval policy", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    table.add_row("mode", policy.mode.value)
+    table.add_row("GREEN", "auto allow")
+    table.add_row("YELLOW", "ask / auto / off")
+    table.add_row("RED", "always block")
+    console.print(table)
+
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
@@ -136,7 +149,7 @@ def main(
 def build_runtime(
     settings: Settings,
     *,
-    interactive_approval: bool = False,
+    approval_policy: ApprovalPolicy | None = None,
 ) -> tuple[OllamaClient, MemoryHallClient, ToolRegistry]:
     ollama = OllamaClient(
         base_url=settings.ollama_url,
@@ -147,10 +160,15 @@ def build_runtime(
         base_url=settings.memory_hall_url,
         token=settings.memory_hall_token,
     )
+    def approve(tool: str, args: dict[str, object], risk: Risk) -> bool:
+        if approval_policy is None:
+            return False
+        return approval_policy.decide(tool, args, risk, approve_interactive)
+
     tools = ToolRegistry(
         workspace=settings.workspace,
         memory=memory,
-        approver=approve_interactive if interactive_approval else None,
+        approver=approve if approval_policy is not None else None,
     )
     return ollama, memory, tools
 
@@ -259,7 +277,8 @@ def shell(
     settings = Settings()
     if max_steps is not None:
         settings = replace(settings, max_steps=max_steps)
-    ollama, _, tools = build_runtime(settings, interactive_approval=True)
+    approval_policy = ApprovalPolicy()
+    ollama, _, tools = build_runtime(settings, approval_policy=approval_policy)
     transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
     agent_session = AgentSession(
         settings=settings,
@@ -426,6 +445,20 @@ def shell(
                 {"command": "/apply", "path": path, "ok": result.ok, "content": result.content[:2000]},
             )
             print_tool_result(result.content if result.ok else f"patch failed: {result.content}")
+            continue
+        if prompt == "/approval":
+            transcript.write("slash_command", {"command": prompt})
+            print_approval(approval_policy)
+            continue
+        if prompt.startswith("/approval "):
+            mode_value = prompt.removeprefix("/approval ").strip()
+            try:
+                approval_policy.mode = ApprovalMode(mode_value)
+            except ValueError:
+                console.print("usage: /approval ask|auto|off")
+                continue
+            transcript.write("slash_command", {"command": prompt, "approval": approval_policy.mode.value})
+            print_approval(approval_policy)
             continue
         if prompt.startswith("/memory "):
             query = prompt.removeprefix("/memory ").strip()
