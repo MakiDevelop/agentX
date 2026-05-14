@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 
 from agentx.config import Settings
@@ -14,6 +15,10 @@ from agentx.tools import ToolRegistry
 
 app = typer.Typer(help="agentX local Ollama agent shell.", no_args_is_help=True)
 console = Console()
+
+
+def print_trace(message: str) -> None:
+    console.print(f"[dim][trace] {escape(message)}[/dim]")
 
 
 @app.callback()
@@ -40,7 +45,7 @@ def ask(
         token=settings.memory_hall_token,
     )
     tools = ToolRegistry(workspace=settings.workspace, memory=memory)
-    agent = AgentLoop(settings=settings, ollama=ollama, tools=tools)
+    agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace)
     console.print(agent.run(prompt, namespace=namespace))
 
 
@@ -85,7 +90,7 @@ def shell(
         token=settings.memory_hall_token,
     )
     tools = ToolRegistry(workspace=settings.workspace, memory=memory)
-    agent_session = AgentSession(settings=settings, ollama=ollama, tools=tools)
+    agent_session = AgentSession(settings=settings, ollama=ollama, tools=tools, trace=print_trace)
     chat_messages = [{"role": "system", "content": "Use Traditional Chinese. Answer concisely."}]
 
     console.print(

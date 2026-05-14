@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from enum import Enum
 
 from pydantic import ValidationError
@@ -34,18 +35,31 @@ Prefer read-only inspection first. Use Traditional Chinese for user-facing answe
 
 
 class AgentLoop:
-    def __init__(self, settings: Settings, ollama: OllamaClient, tools: ToolRegistry) -> None:
-        self.session = AgentSession(settings=settings, ollama=ollama, tools=tools)
+    def __init__(
+        self,
+        settings: Settings,
+        ollama: OllamaClient,
+        tools: ToolRegistry,
+        trace: Callable[[str], None] | None = None,
+    ) -> None:
+        self.session = AgentSession(settings=settings, ollama=ollama, tools=tools, trace=trace)
 
     def run(self, prompt: str, namespace: str = "project:agentX") -> str:
         return self.session.ask(prompt, namespace=namespace)
 
 
 class AgentSession:
-    def __init__(self, settings: Settings, ollama: OllamaClient, tools: ToolRegistry) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        ollama: OllamaClient,
+        tools: ToolRegistry,
+        trace: Callable[[str], None] | None = None,
+    ) -> None:
         self.settings = settings
         self.ollama = ollama
         self.tools = tools
+        self.trace = trace
         self.messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
         ]
@@ -53,7 +67,7 @@ class AgentSession:
     def ask(self, prompt: str, namespace: str = "project:agentX") -> str:
         direct = self._direct_tool_call(prompt)
         if direct is not None:
-            result = self.tools.run(direct.tool, direct.args)
+            result = self._run_tool(direct)
             self.messages.append(
                 {
                     "role": "user",
@@ -97,7 +111,7 @@ class AgentSession:
                 self.messages.append({"role": "assistant", "content": action.content})
                 return action.content
 
-            result = self.tools.run(action.tool, action.args)
+            result = self._run_tool(action)
             self.messages.append({"role": "assistant", "content": action.model_dump_json()})
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
 
@@ -125,6 +139,17 @@ class AgentSession:
 
     def _format_tool_result(self, result: ToolResult) -> str:
         return result.model_dump_json()
+
+    def _run_tool(self, action: ToolCall) -> ToolResult:
+        self._emit_trace(f"tool_call {action.tool} args={action.args}")
+        result = self.tools.run(action.tool, action.args)
+        summary = result.content.replace("\n", "\\n")[:240]
+        self._emit_trace(f"tool_result {action.tool} ok={result.ok} content={summary}")
+        return result
+
+    def _emit_trace(self, message: str) -> None:
+        if self.trace is not None:
+            self.trace(message)
 
     def _direct_tool_call(self, prompt: str) -> ToolCall | None:
         normalized = prompt.lower()
