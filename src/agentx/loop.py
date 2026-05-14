@@ -52,7 +52,7 @@ class AgentLoop:
         ]
 
         for _ in range(self.settings.max_steps):
-            raw = self.ollama.chat(messages)
+            raw = self.ollama.chat(messages, json_mode=True)
             action = self._parse_action(raw)
             if isinstance(action, FinalAnswer):
                 return action.content
@@ -78,4 +78,3 @@ class AgentLoop:
 
     def _format_tool_result(self, result: ToolResult) -> str:
         return result.model_dump_json()
-

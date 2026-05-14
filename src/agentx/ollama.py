@@ -12,16 +12,16 @@ class OllamaClient:
         self.model = model
         self.timeout = timeout
 
-    def chat(self, messages: Sequence[dict[str, str]]) -> str:
+    def chat(self, messages: Sequence[dict[str, str]], *, json_mode: bool = False) -> str:
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": list(messages),
             "stream": False,
-            "format": "json",
         }
+        if json_mode:
+            payload["format"] = "json"
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(f"{self.base_url}/api/chat", json=payload)
             response.raise_for_status()
             data = response.json()
         return str(data.get("message", {}).get("content", "")).strip()
-
