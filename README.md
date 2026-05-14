@@ -111,11 +111,13 @@ uv run agentx shell
 | `/history` | 顯示本輪 shell 的簡短互動紀錄 |
 | `/transcript` | 顯示本輪 JSONL transcript 檔案路徑 |
 | `/handoff [TEXT]` | 寫入 Memory Hall 交接摘要 |
+| `/resume [latest\|FILE]` | 從 transcript 載入最近上下文摘要 |
 | `/files [PATH]` | 列出 repo 檔案 |
 | `/read PATH` | 讀取 repo 內指定檔案 |
 | `/search PATTERN` | 在 repo 內搜尋文字 |
 | `/git` | 顯示 git status |
 | `/diff [PATH]` | 顯示 git diff |
+| `/apply PATCH_FILE` | 套用 workspace 內 patch 檔，需輸入 `yes` 確認 |
 | `/memory QUERY` | 查詢目前 namespace 的 Memory Hall |
 | `/remember TEXT` | 寫入目前 namespace 的 Memory Hall |
 | `/test` | 執行 allowlist 驗證：`ruff check` + `pytest` |
@@ -141,6 +143,18 @@ uv run agentx shell
 /git
 /diff
 /test
+```
+
+套用 patch：
+
+```text
+/apply patches/my-change.patch
+```
+
+接續上一輪：
+
+```text
+/resume latest
 ```
 
 切模型：
@@ -251,6 +265,7 @@ AGENTX_AUTO_HANDOFF=0 ax
 - `memory_search`
 - `memory_write`
 - `run_tests`
+- `apply_patch`
 
 ## 安全模型
 
@@ -269,8 +284,6 @@ uv run pytest -q
 
 ## 下一步
 
-- approval gate
-- `apply_patch` 工具
 - allowlisted `run_command`
 - session transcript JSONL
-- 更完整的 context compaction / summary
+- 更完整的 model-assisted context compaction / summary

@@ -170,11 +170,29 @@ class AgentSession:
     def compact(self, keep_last: int = 8) -> str:
         bootstrap = self._initial_messages()
         tail = self.messages[-keep_last:] if len(self.messages) > keep_last else self.messages
+        user_items = [m.get("content", "") for m in self.messages if m.get("role") == "user"]
+        tool_items = [m.get("content", "") for m in self.messages if m.get("role") == "tool"]
+        assistant_items = [m.get("content", "") for m in self.messages if m.get("role") == "assistant"]
+
         summary_lines = [
-            "Session compacted. Preserve these recent facts:",
+            "Session compacted. Continue from this structured summary.",
             f"- Previous message count: {len(self.messages)}",
             f"- Kept last messages: {len(tail)}",
+            "",
+            "Current goal / user requests:",
         ]
+        for item in user_items[-5:]:
+            summary_lines.append(f"- {item.replace(chr(10), ' ')[:500]}")
+
+        summary_lines.extend(["", "Recent assistant conclusions:"])
+        for item in assistant_items[-5:]:
+            summary_lines.append(f"- {item.replace(chr(10), ' ')[:500]}")
+
+        summary_lines.extend(["", "Recent tool results:"])
+        for item in tool_items[-5:]:
+            summary_lines.append(f"- {item.replace(chr(10), ' ')[:500]}")
+
+        summary_lines.extend(["", "Recent raw messages:"])
         for message in tail:
             role = message.get("role", "unknown")
             content = message.get("content", "").replace("\n", " ")[:300]
