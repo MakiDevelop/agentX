@@ -15,6 +15,7 @@ from agentx.git_workflow import build_commit_plan, commit_and_push
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
+from agentx.project_profile import build_project_profile
 from agentx.safety import Risk
 from agentx.tools import ToolRegistry
 from agentx.transcript import Transcript, find_transcript, summarize_transcript
@@ -28,6 +29,7 @@ console = Console()
 
 SLASH_COMMANDS = [
     ("/help", "列出所有 slash command 與中文說明"),
+    ("/init", "掃描 repo 並寫入 project profile 到 Memory Hall"),
     ("/tools", "列出 agent 模式可用工具與中文說明"),
     ("/context", "顯示目前 agent 上下文使用量與壓縮次數"),
     ("/compact", "壓縮目前 agent session 上下文，保留最近訊息摘要"),
@@ -191,6 +193,14 @@ def run_commit_flow(settings: Settings, tools: ToolRegistry, message: str | None
         return "commit cancelled"
 
     return commit_and_push(settings.workspace, plan.files, commit_message)
+
+
+def run_init(settings: Settings, tools: ToolRegistry, namespace: str) -> str:
+    profile = build_project_profile(settings.workspace, namespace)
+    result = tools.run("memory_write", {"content": profile, "namespace": namespace})
+    if result.ok:
+        return "project profile written to Memory Hall\n\n" + profile[:4000]
+    return "project profile write failed\n\n" + result.content
 
 
 @app.callback(invoke_without_command=True)
@@ -401,6 +411,12 @@ def shell(
         if prompt == "/help":
             transcript.write("slash_command", {"command": prompt})
             print_slash_help()
+            continue
+        if prompt == "/init":
+            transcript.write("slash_command", {"command": prompt})
+            output = run_init(settings, tools, namespace)
+            transcript.write("init", {"content": output[:4000]})
+            console.print(output)
             continue
         if prompt == "/tools":
             transcript.write("slash_command", {"command": prompt})

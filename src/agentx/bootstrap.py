@@ -57,7 +57,7 @@ def _git_status(workspace: Path) -> str:
 
 
 def _file_inventory(workspace: Path, limit: int = 80) -> str:
-    skipped = {".git", ".venv", ".pytest_cache", ".ruff_cache", "__pycache__", "node_modules"}
+    skipped = {".git", ".venv", ".agentx", ".pytest_cache", ".ruff_cache", "__pycache__", "node_modules"}
     files = []
     for item in sorted(workspace.rglob("*")):
         relative = item.relative_to(workspace)
