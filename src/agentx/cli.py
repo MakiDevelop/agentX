@@ -13,6 +13,7 @@ from agentx.config import Settings
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
+from agentx.safety import Risk
 from agentx.tools import ToolRegistry
 from agentx.transcript import Transcript
 
@@ -36,6 +37,7 @@ SLASH_COMMANDS = [
     ("/search PATTERN", "在 repo 內搜尋文字"),
     ("/git", "顯示 git status"),
     ("/diff [PATH]", "顯示 git diff，可指定單一檔案"),
+    ("/apply PATCH_FILE", "套用 workspace 內 patch 檔，會先要求 approval"),
     ("/memory QUERY", "查詢目前 namespace 的 Memory Hall 記憶"),
     ("/test", "執行固定 allowlist 驗證：ruff check 與 pytest"),
     ("/plan", "切換 plan 模式；plan 模式只討論方案，不使用工具"),
@@ -106,6 +108,14 @@ def print_tool_result(result_text: str) -> None:
     console.print(result_text if result_text.strip() else "[dim](no output)[/dim]")
 
 
+def approve_interactive(tool: str, args: dict[str, object], risk: Risk) -> bool:
+    console.print(f"[yellow]approval required[/yellow] risk={risk.value} tool={tool}")
+    preview = str(args)
+    console.print(preview[:1200])
+    answer = typer.prompt("Approve? type yes").strip().lower()
+    return answer == "yes"
+
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
@@ -122,7 +132,11 @@ def main(
     raise typer.Exit()
 
 
-def build_runtime(settings: Settings) -> tuple[OllamaClient, MemoryHallClient, ToolRegistry]:
+def build_runtime(
+    settings: Settings,
+    *,
+    interactive_approval: bool = False,
+) -> tuple[OllamaClient, MemoryHallClient, ToolRegistry]:
     ollama = OllamaClient(
         base_url=settings.ollama_url,
         model=settings.model,
@@ -132,7 +146,11 @@ def build_runtime(settings: Settings) -> tuple[OllamaClient, MemoryHallClient, T
         base_url=settings.memory_hall_url,
         token=settings.memory_hall_token,
     )
-    tools = ToolRegistry(workspace=settings.workspace, memory=memory)
+    tools = ToolRegistry(
+        workspace=settings.workspace,
+        memory=memory,
+        approver=approve_interactive if interactive_approval else None,
+    )
     return ollama, memory, tools
 
 
@@ -240,7 +258,7 @@ def shell(
     settings = Settings()
     if max_steps is not None:
         settings = replace(settings, max_steps=max_steps)
-    ollama, _, tools = build_runtime(settings)
+    ollama, _, tools = build_runtime(settings, interactive_approval=True)
     transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
     agent_session = AgentSession(
         settings=settings,
@@ -378,6 +396,23 @@ def shell(
                 {"command": "/diff", "path": path, "ok": result.ok, "content": result.content[:2000]},
             )
             print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
+            continue
+        if prompt.startswith("/apply "):
+            path = prompt.removeprefix("/apply ").strip()
+            patch_path = (settings.workspace / path).resolve()
+            if settings.workspace != patch_path and settings.workspace not in patch_path.parents:
+                console.print("patch path escapes workspace")
+                continue
+            if not patch_path.is_file():
+                console.print(f"patch file not found: {path}")
+                continue
+            patch = patch_path.read_text(encoding="utf-8", errors="replace")
+            result = tools.run("apply_patch", {"patch": patch})
+            transcript.write(
+                "tool",
+                {"command": "/apply", "path": path, "ok": result.ok, "content": result.content[:2000]},
+            )
+            print_tool_result(result.content if result.ok else f"patch failed: {result.content}")
             continue
         if prompt.startswith("/memory "):
             query = prompt.removeprefix("/memory ").strip()

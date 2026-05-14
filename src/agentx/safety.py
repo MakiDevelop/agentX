@@ -20,6 +20,7 @@ READ_ONLY_TOOLS = {
 }
 
 YELLOW_TOOLS = {
+    "apply_patch",
     "memory_write",
 }
 

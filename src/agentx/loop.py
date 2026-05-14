@@ -30,6 +30,7 @@ Available tools:
 - memory_search(query, namespace="shared", limit=5)
 - memory_write(content, namespace="agent:agentx")
 - run_tests()
+- apply_patch(patch)
 
 Do not claim you used a tool unless the tool result is present in the conversation.
 Prefer read-only inspection first. Use Traditional Chinese for user-facing answers.

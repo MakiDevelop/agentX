@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from agentx.memory_hall import MemoryHallClient
 from agentx.protocol import ToolResult
-from agentx.safety import require_allowed
+from agentx.safety import Risk, classify_tool, require_allowed
 
 
 TOOL_DESCRIPTIONS = {
@@ -18,6 +18,7 @@ TOOL_DESCRIPTIONS = {
     "memory_search": "查詢 Memory Hall",
     "memory_write": "寫入 Memory Hall",
     "run_tests": "執行固定 allowlist 驗證：ruff check 與 pytest",
+    "apply_patch": "套用 unified diff patch，需 approval",
 }
 
 SKIPPED_DIRS = {
@@ -33,15 +34,25 @@ SKIPPED_DIRS = {
 
 
 class ToolRegistry:
-    def __init__(self, workspace: Path, memory: MemoryHallClient) -> None:
+    def __init__(
+        self,
+        workspace: Path,
+        memory: MemoryHallClient,
+        approver: Callable[[str, dict[str, Any], Risk], bool] | None = None,
+    ) -> None:
         self.workspace = workspace.resolve()
         self.memory = memory
+        self.approver = approver
 
     def describe_tools(self) -> dict[str, str]:
         return dict(TOOL_DESCRIPTIONS)
 
     def run(self, tool: str, args: dict[str, Any]) -> ToolResult:
         require_allowed(tool)
+        risk = classify_tool(tool)
+        if risk == Risk.YELLOW and self.approver is not None:
+            if not self.approver(tool, args, risk):
+                return ToolResult(tool=tool, ok=False, content=f"Rejected by approval gate: {tool}")
         try:
             method = getattr(self, f"_tool_{tool}")
         except AttributeError:
@@ -132,6 +143,36 @@ class ToolRegistry:
             if completed.returncode != 0:
                 break
         return "\n\n".join(outputs)
+
+    def _tool_apply_patch(self, patch: str) -> str:
+        patch_dir = self.workspace / ".agentx" / "patches"
+        patch_dir.mkdir(parents=True, exist_ok=True)
+        patch_path = patch_dir / "pending.patch"
+        patch_path.write_text(patch, encoding="utf-8")
+
+        check = subprocess.run(
+            ["git", "apply", "--check", str(patch_path)],
+            cwd=self.workspace,
+            text=True,
+            capture_output=True,
+            timeout=20,
+            check=False,
+        )
+        if check.returncode != 0:
+            return f"git apply --check failed\n{check.stdout}{check.stderr}".strip()
+
+        applied = subprocess.run(
+            ["git", "apply", str(patch_path)],
+            cwd=self.workspace,
+            text=True,
+            capture_output=True,
+            timeout=20,
+            check=False,
+        )
+        output = (applied.stdout + applied.stderr).strip()
+        if applied.returncode != 0:
+            return f"git apply failed\n{output}".strip()
+        return output or "patch applied"
 
     def _run_git(self, args: list[str]) -> str:
         completed = subprocess.run(
