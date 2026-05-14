@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import queue
+import re
 import sys
 import threading
 from datetime import datetime
@@ -35,6 +36,7 @@ app = typer.Typer(
     invoke_without_command=True,
 )
 console = Console()
+ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 SLASH_COMMANDS = [
     ("/help", "列出所有 slash command 與中文說明"),
@@ -102,6 +104,10 @@ def print_tools(tools: ToolRegistry) -> None:
     console.print(table)
 
 
+def print_raw(text: object) -> None:
+    console.print(ANSI_RE.sub("", str(text)), markup=False, highlight=False)
+
+
 def print_context(agent_session: AgentSession, chat_messages: list[dict[str, str]]) -> None:
     report = agent_session.context_report()
     table = Table(title="agentX context", show_header=False)
@@ -137,7 +143,10 @@ def print_sessions(settings: Settings) -> None:
 
 
 def print_tool_result(result_text: str) -> None:
-    console.print(result_text if result_text.strip() else "[dim](no output)[/dim]")
+    if result_text.strip():
+        print_raw(result_text)
+    else:
+        console.print("[dim](no output)[/dim]")
 
 
 def run_review(ollama: OllamaClient, tools: ToolRegistry) -> str:
@@ -254,14 +263,14 @@ def run_commit_flow(settings: Settings, tools: ToolRegistry, message: str | None
         return "Commit message is required."
 
     console.print("git status:")
-    console.print(plan.status)
+    print_raw(plan.status)
     console.print("git diff --stat:")
-    console.print(plan.diff_stat or "(no tracked diff stat; maybe untracked files only)")
+    print_raw(plan.diff_stat or "(no tracked diff stat; maybe untracked files only)")
     console.print("files to stage one by one:")
     for path in plan.files:
         console.print(f"- {path}")
     console.print("tests:")
-    console.print(tests.content)
+    print_raw(tests.content)
 
     if typer.prompt("Commit and push? type yes").strip().lower() != "yes":
         return "commit cancelled"
@@ -289,7 +298,7 @@ def main(
         return
     if ctx.invoked_subcommand is not None:
         return
-    console.print(run_print_prompt(print_prompt, namespace=namespace, agent_mode=agent))
+    print_raw(run_print_prompt(print_prompt, namespace=namespace, agent_mode=agent))
     raise typer.Exit()
 
 
@@ -402,7 +411,7 @@ def ask(
     namespace = namespace or project_config.namespace or "project:agentX"
     ollama, _, tools = build_runtime(settings)
     agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace)
-    console.print(agent.run(prompt, namespace=namespace))
+    print_raw(agent.run(prompt, namespace=namespace))
 
 
 @app.command()
@@ -419,7 +428,7 @@ def chat(
         ],
         json_mode=False,
     )
-    console.print(answer)
+    print_raw(answer)
 
 
 @app.command()
@@ -459,6 +468,10 @@ def shell(
         prompt_session = PromptSession(
             completer=SlashCommandCompleter(SLASH_COMMANDS),
             complete_while_typing=True,
+            bottom_toolbar=lambda: (
+                f"agentX | model={settings.model} | mode={mode} | "
+                f"queue={prompt_queue.qsize()} | {'running' if prompt_active.is_set() else 'idle'}"
+            ),
         )
 
     def run_prompt_worker() -> None:
@@ -478,7 +491,7 @@ def shell(
                         agent_prompt = "Plan only. Do not call tools. " + agent_prompt
                     answer = agent_session.ask(agent_prompt, namespace=namespace)
                     transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
-                    console.print(answer)
+                    print_raw(answer)
                     continue
 
                 history.append((mode, queued_prompt))
@@ -490,7 +503,7 @@ def shell(
                 answer = ollama.chat(chat_messages, json_mode=False)
                 chat_messages.append({"role": "assistant", "content": answer})
                 transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
-                console.print(answer)
+                print_raw(answer)
             except Exception as exc:
                 console.print(f"[red]prompt failed:[/red] {type(exc).__name__}: {escape(str(exc))}")
             finally:
@@ -538,7 +551,7 @@ def shell(
                         task=task,
                     )
                     transcript.write("handoff", {"auto": True, "result": message})
-                    console.print(f"\n{message}")
+                    print_raw(f"\n{message}")
                 console.print("\nbye")
                 break
 
@@ -557,7 +570,7 @@ def shell(
                         task=task,
                     )
                     transcript.write("handoff", {"auto": True, "result": message})
-                    console.print(message)
+                    print_raw(message)
                 transcript.write("session_end", {"reason": prompt})
                 break
             if prompt.startswith("/"):
@@ -583,7 +596,7 @@ def shell(
                     continue
                 transcript.write("slash_command", {"command": prompt, "config": key})
                 console.print(f"config updated: {key}")
-                console.print(updated)
+                print_raw(updated)
                 continue
             if prompt == "/task":
                 transcript.write("slash_command", {"command": prompt})
@@ -611,7 +624,7 @@ def shell(
                 transcript.write("slash_command", {"command": prompt})
                 output = run_init(settings, tools, namespace)
                 transcript.write("init", {"content": output[:4000]})
-                console.print(output)
+                print_raw(output)
                 continue
             if prompt == "/tools":
                 transcript.write("slash_command", {"command": prompt})
@@ -625,7 +638,7 @@ def shell(
                 transcript.write("slash_command", {"command": prompt})
                 result = agent_session.compact()
                 transcript.write("compact", {"result": result})
-                console.print(result)
+                print_raw(result)
                 continue
             if prompt == "/history":
                 transcript.write("slash_command", {"command": prompt})
@@ -652,7 +665,7 @@ def shell(
                     note=note,
                 )
                 transcript.write("handoff", {"auto": False, "note": note, "result": message})
-                console.print(message)
+                print_raw(message)
                 continue
             if prompt.startswith("/resume"):
                 name = prompt.removeprefix("/resume").strip() or "latest"
@@ -766,14 +779,14 @@ def shell(
                 transcript.write("slash_command", {"command": prompt})
                 output = run_review(ollama, tools)
                 transcript.write("review", {"content": output[:4000]})
-                console.print(output)
+                print_raw(output)
                 continue
             if prompt.startswith("/commit"):
                 message = prompt.removeprefix("/commit").strip() or None
                 transcript.write("slash_command", {"command": prompt})
                 output = run_commit_flow(settings, tools, message)
                 transcript.write("commit", {"message": message, "content": output[:4000]})
-                console.print(output)
+                print_raw(output)
                 continue
             if prompt == "/plan":
                 plan_mode = not plan_mode
