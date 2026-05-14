@@ -90,14 +90,20 @@ def shell(
         token=settings.memory_hall_token,
     )
     tools = ToolRegistry(workspace=settings.workspace, memory=memory)
-    agent_session = AgentSession(settings=settings, ollama=ollama, tools=tools, trace=print_trace)
+    agent_session = AgentSession(
+        settings=settings,
+        ollama=ollama,
+        tools=tools,
+        namespace=namespace,
+        trace=print_trace,
+    )
     chat_messages = [{"role": "system", "content": "Use Traditional Chinese. Answer concisely."}]
 
     console.print(
         Panel.fit(
             (
                 f"model={settings.model} mode={mode} namespace={namespace}\n"
-                "Commands: /help /mode chat|agent /model NAME /status /clear /exit"
+                "Commands: /help /mode chat|agent /model NAME /remember TEXT /status /clear /exit"
             ),
             title="agentX shell",
         )
@@ -116,9 +122,20 @@ def shell(
             break
         if prompt == "/help":
             console.print(
-                "Commands: /mode chat|agent, /model NAME, /status, /clear, /exit\n"
+                "Commands: /mode chat|agent, /model NAME, /remember TEXT, /status, /clear, /exit\n"
                 "chat = plain Ollama conversation; agent = JSON tool loop."
             )
+            continue
+        if prompt.startswith("/remember "):
+            content = prompt.removeprefix("/remember ").strip()
+            if not content:
+                console.print("usage: /remember 要寫入 Memory Hall 的內容")
+                continue
+            result = tools.run("memory_write", {"content": content, "namespace": namespace})
+            if result.ok:
+                console.print(f"remembered in {namespace}")
+            else:
+                console.print(f"remember failed: {result.content}")
             continue
         if prompt.startswith("/mode "):
             next_mode = prompt.removeprefix("/mode ").strip()
@@ -143,9 +160,11 @@ def shell(
             console.print(f"model={settings.model}")
             continue
         if prompt == "/status":
+            approx_tokens = agent_session.context_chars // 4
             console.print(
                 f"model={settings.model} mode={mode} namespace={namespace} "
-                f"agent_messages={agent_session.message_count} chat_messages={len(chat_messages)}"
+                f"agent_messages={agent_session.message_count} "
+                f"agent_context~{approx_tokens} tokens chat_messages={len(chat_messages)}"
             )
             continue
         if prompt == "/clear":

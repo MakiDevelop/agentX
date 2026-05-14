@@ -50,10 +50,15 @@ Inside `shell`:
 /mode chat
 /mode agent
 /model gemma4:e2b
+/remember agentX shell now supports Memory Hall context
 /status
 /clear
 /exit
 ```
+
+`/status` shows an approximate agent context token count. agentX keeps shell
+context in memory for the current session; use `/clear` when the session gets
+too long or the model starts drifting.
 
 For slow local models:
 

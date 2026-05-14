@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import Protocol
 
 
 BOOTSTRAP_FILES = ("AGENTS.md", "README.md", "pyproject.toml", "package.json")
+
+
+class MemorySearcher(Protocol):
+    def search(self, query: str, namespace: str = "shared", limit: int = 5) -> str: ...
 
 
 def build_repo_context(workspace: Path, max_chars: int = 12000) -> str:
@@ -20,6 +25,22 @@ def build_repo_context(workspace: Path, max_chars: int = 12000) -> str:
 
     context = "\n\n".join(part for part in parts if part.strip())
     return context[:max_chars]
+
+
+def build_memory_context(
+    memory: MemorySearcher,
+    project_namespace: str,
+    query: str,
+    max_chars: int = 8000,
+) -> str:
+    parts = []
+    for namespace in (project_namespace, "agent:agentx", "shared"):
+        try:
+            result = memory.search(query=query, namespace=namespace, limit=3)
+        except Exception as exc:
+            result = f"Memory Hall unavailable for {namespace}: {type(exc).__name__}: {exc}"
+        parts.append(f"--- memory {namespace} ---\n{result[:2500]}")
+    return "\n\n".join(parts)[:max_chars]
 
 
 def _git_status(workspace: Path) -> str:

@@ -5,7 +5,7 @@ from enum import Enum
 
 from pydantic import ValidationError
 
-from agentx.bootstrap import build_repo_context
+from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
 from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
@@ -41,6 +41,7 @@ class AgentLoop:
         settings: Settings,
         ollama: OllamaClient,
         tools: ToolRegistry,
+        namespace: str = "project:agentX",
         trace: Callable[[str], None] | None = None,
     ) -> None:
         self.session = AgentSession(settings=settings, ollama=ollama, tools=tools, trace=trace)
@@ -55,15 +56,29 @@ class AgentSession:
         settings: Settings,
         ollama: OllamaClient,
         tools: ToolRegistry,
+        namespace: str = "project:agentX",
         trace: Callable[[str], None] | None = None,
     ) -> None:
         self.settings = settings
         self.ollama = ollama
         self.tools = tools
+        self.namespace = namespace
         self.trace = trace
-        self.messages = [
+        self.messages = self._initial_messages()
+
+    def _initial_messages(self) -> list[dict[str, str]]:
+        return [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(settings.workspace)},
+            {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(self.settings.workspace)},
+            {
+                "role": "system",
+                "content": "Memory Hall context:\n"
+                + build_memory_context(
+                    self.tools.memory,
+                    project_namespace=self.namespace,
+                    query=f"{self.settings.workspace.name} project context",
+                ),
+            },
         ]
 
     def ask(self, prompt: str, namespace: str = "project:agentX") -> str:
@@ -120,14 +135,15 @@ class AgentSession:
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
 
     def clear(self) -> None:
-        self.messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(self.settings.workspace)},
-        ]
+        self.messages = self._initial_messages()
 
     @property
     def message_count(self) -> int:
         return len(self.messages)
+
+    @property
+    def context_chars(self) -> int:
+        return sum(len(message.get("content", "")) for message in self.messages)
 
     def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | "InvalidAction":
         data = extract_json_object(raw)
