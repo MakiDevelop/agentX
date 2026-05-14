@@ -123,6 +123,18 @@ def print_context(agent_session: AgentSession, chat_messages: list[dict[str, str
     console.print(table)
 
 
+def context_percent(
+    settings: Settings,
+    agent_session: AgentSession,
+    chat_messages: list[dict[str, str]],
+) -> int:
+    chat_tokens = sum(len(m.get("content", "")) for m in chat_messages) // 4
+    used_tokens = max(agent_session.context_tokens_estimate, chat_tokens)
+    if settings.context_limit_tokens <= 0:
+        return 0
+    return min(999, round((used_tokens / settings.context_limit_tokens) * 100))
+
+
 def print_history(history: list[tuple[str, str]]) -> None:
     table = Table(title="agentX session history", show_header=True, header_style="bold")
     table.add_column("#", justify="right", no_wrap=True)
@@ -228,6 +240,7 @@ def print_config(
     table.add_row("mode", mode)
     table.add_row("approval", approval_policy.mode.value)
     table.add_row("auto_handoff", str(settings.auto_handoff))
+    table.add_row("context_limit_tokens", str(settings.context_limit_tokens))
     project_config = load_project_config(settings.workspace)
     table.add_row("config_file_model", str(project_config.model))
     table.add_row("config_file_namespace", str(project_config.namespace))
@@ -468,9 +481,11 @@ def shell(
         prompt_session = PromptSession(
             completer=SlashCommandCompleter(SLASH_COMMANDS),
             complete_while_typing=True,
+            erase_when_done=True,
+            refresh_interval=0.2,
             bottom_toolbar=lambda: (
-                f"agentX | model={settings.model} | mode={mode} | "
-                f"queue={prompt_queue.qsize()} | {'running' if prompt_active.is_set() else 'idle'}"
+                f"{settings.model} | context "
+                f"{context_percent(settings, agent_session, chat_messages)}%"
             ),
         )
 
@@ -536,7 +551,7 @@ def shell(
                 if prompt_session is None:
                     prompt = typer.prompt("agentX").strip()
                 else:
-                    with patch_stdout():
+                    with patch_stdout(raw=True):
                         prompt = prompt_session.prompt("agentX: ").strip()
             except (EOFError, KeyboardInterrupt):
                 wait_for_prompt_worker()
@@ -557,6 +572,8 @@ def shell(
 
             if not prompt:
                 continue
+            if prompt_session is not None:
+                print_raw(f"agentX: {prompt}")
             if prompt in {"/exit", "/quit"}:
                 wait_for_prompt_worker()
                 if history and settings.auto_handoff:

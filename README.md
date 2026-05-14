@@ -110,7 +110,7 @@ uv run agentx shell
 
 模型還在回應時，可以繼續輸入下一個一般 prompt。agentX 會把 prompt 放進背景佇列，依序送給同一個 session context。slash command 會等前面已排入的 prompt 完成後再執行，避免同時切模型、清 context 或改 mode。
 
-互動式 terminal 會把輸入列維持在最下方；背景回應、tool output、狀態訊息會送到上方 scrollback。底部狀態列會顯示目前 model、mode、queue 數量和 running/idle。
+互動式 terminal 會把輸入列維持在最下方；背景回應、tool output、狀態訊息會送到上方 scrollback。底部狀態列會顯示目前 model name 與 context 使用率。
 
 chat mode 會明確告訴模型目前正在 agentX CLI 內執行，避免模型把自己誤認成完全不能碰本機的通用聊天機器人。實際能力仍依模式區分：chat mode 只回答；agent mode 與 slash command 才能使用工具。
 
@@ -271,6 +271,12 @@ agentX 會把以下內容放進 agent context：
 
 ```text
 /context
+```
+
+底部狀態列的 context 百分比用粗估 token 數計算，預設上限為 8192 tokens。可用環境變數調整：
+
+```bash
+AGENTX_CONTEXT_LIMIT=32768 ax
 ```
 
 如果 session 太長或模型開始飄：

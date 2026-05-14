@@ -17,6 +17,7 @@ class Settings:
     memory_hall_url: str
     memory_hall_token: str | None
     max_steps: int
+    context_limit_tokens: int
     auto_handoff: bool
     workspace: Path
 
@@ -33,6 +34,7 @@ class Settings:
             memory_hall_url=os.getenv("AGENTX_MEMORY_HALL_URL", "http://100.122.171.74:9100"),
             memory_hall_token=os.getenv("AGENTX_MEMORY_HALL_TOKEN") or os.getenv("MH_API_TOKEN"),
             max_steps=int(os.getenv("AGENTX_MAX_STEPS", "8")),
+            context_limit_tokens=int(os.getenv("AGENTX_CONTEXT_LIMIT", "8192")),
             auto_handoff=auto_handoff,
             workspace=workspace,
         )
@@ -47,6 +49,7 @@ class Settings:
         memory_hall_url: str,
         memory_hall_token: str | None,
         max_steps: int,
+        context_limit_tokens: int,
         auto_handoff: bool,
         workspace: Path,
     ) -> "Settings":
@@ -58,6 +61,7 @@ class Settings:
             memory_hall_url=memory_hall_url,
             memory_hall_token=memory_hall_token,
             max_steps=max_steps,
+            context_limit_tokens=context_limit_tokens,
             auto_handoff=auto_handoff,
             workspace=workspace,
         )
@@ -71,6 +75,7 @@ class Settings:
             "memory_hall_url": self.memory_hall_url,
             "memory_hall_token": self.memory_hall_token,
             "max_steps": self.max_steps,
+            "context_limit_tokens": self.context_limit_tokens,
             "auto_handoff": self.auto_handoff,
             "workspace": self.workspace,
         }
@@ -86,6 +91,7 @@ class Settings:
         memory_hall_url: str,
         memory_hall_token: str | None,
         max_steps: int,
+        context_limit_tokens: int,
         auto_handoff: bool,
         workspace: Path,
     ) -> None:
@@ -95,5 +101,6 @@ class Settings:
         object.__setattr__(self, "memory_hall_url", memory_hall_url)
         object.__setattr__(self, "memory_hall_token", memory_hall_token)
         object.__setattr__(self, "max_steps", max_steps)
+        object.__setattr__(self, "context_limit_tokens", context_limit_tokens)
         object.__setattr__(self, "auto_handoff", auto_handoff)
         object.__setattr__(self, "workspace", workspace)

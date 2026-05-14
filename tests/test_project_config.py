@@ -31,3 +31,12 @@ def test_settings_can_be_updated_without_reloading_env(tmp_path, monkeypatch):
     assert updated.model == "gemma4:31b"
     assert updated.max_steps == 3
     assert updated.workspace == tmp_path
+
+
+def test_settings_reads_context_limit_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTX_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("AGENTX_CONTEXT_LIMIT", "32768")
+
+    settings = Settings()
+
+    assert settings.context_limit_tokens == 32768
