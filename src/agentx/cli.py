@@ -11,6 +11,7 @@ from rich.table import Table
 
 from agentx.approval import ApprovalMode, ApprovalPolicy
 from agentx.config import Settings
+from agentx.git_workflow import build_commit_plan, commit_and_push
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
@@ -45,6 +46,7 @@ SLASH_COMMANDS = [
     ("/run COMMAND", "執行固定 allowlist 命令"),
     ("/test", "執行固定 allowlist 驗證：ruff check 與 pytest"),
     ("/review", "收集 git diff 與測試結果，輸出 findings-first review"),
+    ("/commit [MESSAGE]", "跑測試後逐檔 stage、中文 commit 並 push"),
     ("/plan", "切換 plan 模式；plan 模式只討論方案，不使用工具"),
     ("/mode chat", "切換到純聊天模式，不使用工具，速度較快"),
     ("/mode agent", "切換到 agent 工具模式，可使用 repo / git / Memory Hall 工具"),
@@ -160,6 +162,35 @@ def print_approval(policy: ApprovalPolicy) -> None:
     table.add_row("YELLOW", "ask / auto / off")
     table.add_row("RED", "always block")
     console.print(table)
+
+
+def run_commit_flow(settings: Settings, tools: ToolRegistry, message: str | None) -> str:
+    plan = build_commit_plan(settings.workspace)
+    if not plan.files:
+        return "No changes to commit."
+
+    tests = tools.run("run_tests", {})
+    if not tests.ok or "exit=1" in tests.content:
+        return "Tests failed; aborting commit.\n\n" + tests.content
+
+    commit_message = message or typer.prompt("Commit message 中文").strip()
+    if not commit_message:
+        return "Commit message is required."
+
+    console.print("git status:")
+    console.print(plan.status)
+    console.print("git diff --stat:")
+    console.print(plan.diff_stat or "(no tracked diff stat; maybe untracked files only)")
+    console.print("files to stage one by one:")
+    for path in plan.files:
+        console.print(f"- {path}")
+    console.print("tests:")
+    console.print(tests.content)
+
+    if typer.prompt("Commit and push? type yes").strip().lower() != "yes":
+        return "commit cancelled"
+
+    return commit_and_push(settings.workspace, plan.files, commit_message)
 
 
 @app.callback(invoke_without_command=True)
@@ -519,6 +550,13 @@ def shell(
             transcript.write("slash_command", {"command": prompt})
             output = run_review(ollama, tools)
             transcript.write("review", {"content": output[:4000]})
+            console.print(output)
+            continue
+        if prompt.startswith("/commit"):
+            message = prompt.removeprefix("/commit").strip() or None
+            transcript.write("slash_command", {"command": prompt})
+            output = run_commit_flow(settings, tools, message)
+            transcript.write("commit", {"message": message, "content": output[:4000]})
             console.print(output)
             continue
         if prompt == "/plan":

@@ -123,6 +123,7 @@ uv run agentx shell
 | `/run COMMAND` | 執行固定 allowlist 命令 |
 | `/test` | 執行 allowlist 驗證：`ruff check` + `pytest` |
 | `/review` | 收集 git diff 與測試結果，輸出 findings-first review |
+| `/commit [MESSAGE]` | 跑測試後逐檔 stage、中文 commit 並 push |
 | `/plan` | 切換 plan mode，只討論方案 |
 | `/mode chat` | 切到純聊天模式 |
 | `/mode agent` | 切到 agent 工具模式 |
@@ -147,6 +148,14 @@ uv run agentx shell
 /test
 /review
 ```
+
+提交並推送：
+
+```text
+/commit 新增 review 審查模式
+```
+
+`/commit` 會先跑 status、diff stat、測試，列出逐檔 stage 清單，輸入 `yes` 後才 commit/push。
 
 套用 patch：
 
