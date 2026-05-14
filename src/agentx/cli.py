@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import datetime
 
 import typer
@@ -16,6 +15,7 @@ from agentx.git_workflow import build_commit_plan, commit_and_push
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
+from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
 from agentx.safety import Risk
 from agentx.task import TaskState, clear_task, finish_task, load_task, start_task
@@ -35,6 +35,7 @@ SLASH_COMMANDS = [
     ("/task [TEXT|status|done|clear]", "設定或查看目前任務狀態"),
     ("/doctor", "檢查 Ollama、模型、Memory Hall、git、uv 狀態"),
     ("/config", "顯示目前 agentX 設定"),
+    ("/config set KEY VALUE", "寫入 .agentx/config.toml"),
     ("/tools", "列出 agent 模式可用工具與中文說明"),
     ("/context", "顯示目前 agent 上下文使用量與壓縮次數"),
     ("/compact", "壓縮目前 agent session 上下文，保留最近訊息摘要"),
@@ -211,6 +212,12 @@ def print_config(
     table.add_row("mode", mode)
     table.add_row("approval", approval_policy.mode.value)
     table.add_row("auto_handoff", str(settings.auto_handoff))
+    project_config = load_project_config(settings.workspace)
+    table.add_row("config_file_model", str(project_config.model))
+    table.add_row("config_file_namespace", str(project_config.namespace))
+    table.add_row("config_file_mode", str(project_config.mode))
+    table.add_row("config_file_approval", str(project_config.approval))
+    table.add_row("config_file_auto_handoff", str(project_config.auto_handoff))
     table.add_row("task", task.title or "(none)")
     table.add_row("task_status", task.status)
     console.print(table)
@@ -268,7 +275,7 @@ def main(
     ctx: typer.Context,
     print_prompt: str | None = typer.Option(None, "-p", "--print", help="Print one response and exit."),
     agent: bool = typer.Option(False, "--agent", help="Use agent/tool mode with -p."),
-    namespace: str = typer.Option("project:agentX", "--namespace", help="Memory Hall namespace for -p."),
+    namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
 ) -> None:
     """Run local Ollama agent workflows."""
     if print_prompt is None:
@@ -306,8 +313,10 @@ def build_runtime(
     return ollama, memory, tools
 
 
-def run_print_prompt(prompt: str, namespace: str, agent_mode: bool = False) -> str:
+def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = False) -> str:
     settings = Settings()
+    project_config = load_project_config(settings.workspace)
+    namespace = namespace or project_config.namespace or "project:agentX"
     ollama, _, tools = build_runtime(settings)
     if agent_mode:
         agent_loop = AgentLoop(settings=settings, ollama=ollama, tools=tools, namespace=namespace)
@@ -376,12 +385,14 @@ def write_handoff(
 @app.command()
 def ask(
     prompt: str = typer.Argument(..., help="Task or question for agentX."),
-    namespace: str = typer.Option("project:agentX", help="Default Memory Hall namespace."),
+    namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
 ) -> None:
     settings = Settings()
     if max_steps is not None:
-        settings = replace(settings, max_steps=max_steps)
+        settings = settings.with_updates(max_steps=max_steps)
+    project_config = load_project_config(settings.workspace)
+    namespace = namespace or project_config.namespace or "project:agentX"
     ollama, _, tools = build_runtime(settings)
     agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace)
     console.print(agent.run(prompt, namespace=namespace))
@@ -406,15 +417,20 @@ def chat(
 
 @app.command()
 def shell(
-    namespace: str = typer.Option("project:agentX", help="Default Memory Hall namespace."),
-    mode: str = typer.Option("chat", help="Start mode: chat or agent."),
+    namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
+    mode: str | None = typer.Option(None, help="Start mode: chat or agent."),
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
 ) -> None:
     """Start an interactive agentX session."""
     settings = Settings()
     if max_steps is not None:
-        settings = replace(settings, max_steps=max_steps)
-    approval_policy = ApprovalPolicy()
+        settings = settings.with_updates(max_steps=max_steps)
+    project_config = load_project_config(settings.workspace)
+    namespace = namespace or project_config.namespace or "project:agentX"
+    mode = mode or project_config.mode or "chat"
+    approval_policy = ApprovalPolicy(
+        mode=ApprovalMode(project_config.approval) if project_config.approval else ApprovalMode.ASK
+    )
     ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
     task = load_task(settings.workspace)
     transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
@@ -434,7 +450,7 @@ def shell(
         Panel.fit(
             (
                 f"model={settings.model} mode={mode} namespace={namespace}\n"
-                + slash_command_hint()
+                + escape(slash_command_hint())
             ),
             title="agentX shell",
         )
@@ -483,6 +499,21 @@ def shell(
         if prompt == "/config":
             transcript.write("slash_command", {"command": prompt})
             print_config(settings, namespace, mode, approval_policy, task)
+            continue
+        if prompt.startswith("/config set "):
+            parts = prompt.split(maxsplit=3)
+            if len(parts) != 4:
+                console.print("usage: /config set KEY VALUE")
+                continue
+            _, _, key, value = parts
+            try:
+                updated = set_project_config(settings.workspace, key, value)
+            except ValueError as exc:
+                console.print(str(exc))
+                continue
+            transcript.write("slash_command", {"command": prompt, "config": key})
+            console.print(f"config updated: {key}")
+            console.print(updated)
             continue
         if prompt == "/task":
             transcript.write("slash_command", {"command": prompt})
@@ -714,7 +745,7 @@ def shell(
             if not model:
                 console.print("usage: /model gemma4:e2b")
                 continue
-            settings = replace(settings, model=model)
+            settings = settings.with_updates(model=model)
             ollama = OllamaClient(
                 base_url=settings.ollama_url,
                 model=settings.model,

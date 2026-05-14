@@ -40,9 +40,10 @@ ax
 等同於：
 
 ```bash
-cd /Users/maki/GitHub/agentX
-AGENTX_MODEL="${AGENTX_MODEL:-gemma4:e2b}" uv run agentx shell
+AGENTX_WORKSPACE="$PWD" uv --directory /Users/maki/GitHub/agentX run agentx shell
 ```
+
+`ax` 會使用你目前所在的目錄當 workspace，所以可以在任何 repo 裡直接啟動 agentX。
 
 指定模型：
 
@@ -108,6 +109,7 @@ uv run agentx shell
 | `/init` | 掃描 repo 並寫入 project profile 到 Memory Hall |
 | `/doctor` | 檢查 Ollama、模型、Memory Hall、git、uv 狀態 |
 | `/config` | 顯示目前 agentX 設定 |
+| `/config set KEY VALUE` | 寫入 `.agentx/config.toml` 專案設定 |
 | `/task [TEXT\|status\|done\|clear]` | 設定或查看目前任務狀態 |
 | `/tools` | 列出 agent 模式可用工具 |
 | `/context` | 顯示目前 agent context 使用量 |
@@ -193,11 +195,52 @@ uv run agentx shell
 /model gemma4:31b
 ```
 
+寫入專案預設值：
+
+```text
+/config set model gemma4:e2b
+/config set namespace project:agentX
+/config set mode chat
+/config set approval ask
+/config set auto_handoff true
+```
+
+`/model`、`/mode`、`/approval` 是本輪 shell 立即生效；`/config set` 會寫入 `.agentx/config.toml`，供下次在同一個 repo 啟動時自動載入。
+
 寫記憶：
 
 ```text
 /remember agentX 現在支援 slash command 與 context compact
 ```
+
+## Project Config
+
+每個 repo 可以放自己的 `.agentx/config.toml`：
+
+```toml
+[agentx]
+model = "gemma4:e2b"
+namespace = "project:agentX"
+mode = "chat"
+approval = "ask"
+auto_handoff = true
+```
+
+載入優先序：
+
+1. 環境變數，例如 `AGENTX_MODEL=gemma4:31b ax`
+2. 目前 workspace 的 `.agentx/config.toml`
+3. agentX 預設值
+
+常用鍵：
+
+| Key | 說明 |
+|---|---|
+| `model` | Ollama 模型名稱 |
+| `namespace` | Memory Hall namespace |
+| `mode` | shell 啟動模式，`chat` 或 `agent` |
+| `approval` | YELLOW 工具 approval policy，`ask` / `auto` / `off` |
+| `auto_handoff` | 離開 shell 時是否自動寫 Memory Hall handoff |
 
 ## 上下文限制
 

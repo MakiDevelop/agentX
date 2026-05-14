@@ -1,0 +1,6 @@
+[agentx]
+model = "gemma4:e2b"
+namespace = "project:agentX"
+mode = "chat"
+approval = "ask"
+auto_handoff = true

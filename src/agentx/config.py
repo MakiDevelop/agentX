@@ -4,14 +4,96 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from agentx.project_config import load_project_config
+
+DEFAULT_MODEL = "gemma4:e2b"
+
 
 @dataclass(frozen=True)
 class Settings:
-    model: str = os.getenv("AGENTX_MODEL", "gemma3:latest")
-    ollama_url: str = os.getenv("AGENTX_OLLAMA_URL", "http://127.0.0.1:11434")
-    ollama_timeout: float = float(os.getenv("AGENTX_OLLAMA_TIMEOUT", "60"))
-    memory_hall_url: str = os.getenv("AGENTX_MEMORY_HALL_URL", "http://100.122.171.74:9100")
-    memory_hall_token: str | None = os.getenv("AGENTX_MEMORY_HALL_TOKEN") or os.getenv("MH_API_TOKEN")
-    max_steps: int = int(os.getenv("AGENTX_MAX_STEPS", "8"))
-    auto_handoff: bool = os.getenv("AGENTX_AUTO_HANDOFF", "1") != "0"
-    workspace: Path = Path(os.getenv("AGENTX_WORKSPACE", os.getcwd())).resolve()
+    model: str
+    ollama_url: str
+    ollama_timeout: float
+    memory_hall_url: str
+    memory_hall_token: str | None
+    max_steps: int
+    auto_handoff: bool
+    workspace: Path
+
+    def __init__(self) -> None:
+        workspace = Path(os.getenv("AGENTX_WORKSPACE", os.getcwd())).resolve()
+        config = load_project_config(workspace)
+        auto_handoff = config.auto_handoff if config.auto_handoff is not None else True
+        if "AGENTX_AUTO_HANDOFF" in os.environ:
+            auto_handoff = os.getenv("AGENTX_AUTO_HANDOFF") != "0"
+        self._set_values(
+            model=os.getenv("AGENTX_MODEL") or config.model or DEFAULT_MODEL,
+            ollama_url=os.getenv("AGENTX_OLLAMA_URL", "http://127.0.0.1:11434"),
+            ollama_timeout=float(os.getenv("AGENTX_OLLAMA_TIMEOUT", "60")),
+            memory_hall_url=os.getenv("AGENTX_MEMORY_HALL_URL", "http://100.122.171.74:9100"),
+            memory_hall_token=os.getenv("AGENTX_MEMORY_HALL_TOKEN") or os.getenv("MH_API_TOKEN"),
+            max_steps=int(os.getenv("AGENTX_MAX_STEPS", "8")),
+            auto_handoff=auto_handoff,
+            workspace=workspace,
+        )
+
+    @classmethod
+    def from_values(
+        cls,
+        *,
+        model: str,
+        ollama_url: str,
+        ollama_timeout: float,
+        memory_hall_url: str,
+        memory_hall_token: str | None,
+        max_steps: int,
+        auto_handoff: bool,
+        workspace: Path,
+    ) -> "Settings":
+        settings = cls.__new__(cls)
+        settings._set_values(
+            model=model,
+            ollama_url=ollama_url,
+            ollama_timeout=ollama_timeout,
+            memory_hall_url=memory_hall_url,
+            memory_hall_token=memory_hall_token,
+            max_steps=max_steps,
+            auto_handoff=auto_handoff,
+            workspace=workspace,
+        )
+        return settings
+
+    def with_updates(self, **changes: object) -> "Settings":
+        values = {
+            "model": self.model,
+            "ollama_url": self.ollama_url,
+            "ollama_timeout": self.ollama_timeout,
+            "memory_hall_url": self.memory_hall_url,
+            "memory_hall_token": self.memory_hall_token,
+            "max_steps": self.max_steps,
+            "auto_handoff": self.auto_handoff,
+            "workspace": self.workspace,
+        }
+        values.update(changes)
+        return type(self).from_values(**values)
+
+    def _set_values(
+        self,
+        *,
+        model: str,
+        ollama_url: str,
+        ollama_timeout: float,
+        memory_hall_url: str,
+        memory_hall_token: str | None,
+        max_steps: int,
+        auto_handoff: bool,
+        workspace: Path,
+    ) -> None:
+        object.__setattr__(self, "model", model)
+        object.__setattr__(self, "ollama_url", ollama_url)
+        object.__setattr__(self, "ollama_timeout", ollama_timeout)
+        object.__setattr__(self, "memory_hall_url", memory_hall_url)
+        object.__setattr__(self, "memory_hall_token", memory_hall_token)
+        object.__setattr__(self, "max_steps", max_steps)
+        object.__setattr__(self, "auto_handoff", auto_handoff)
+        object.__setattr__(self, "workspace", workspace)
