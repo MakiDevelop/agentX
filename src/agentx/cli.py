@@ -11,6 +11,7 @@ from rich.table import Table
 
 from agentx.approval import ApprovalMode, ApprovalPolicy
 from agentx.config import Settings
+from agentx.doctor import run_doctor
 from agentx.git_workflow import build_commit_plan, commit_and_push
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
@@ -30,6 +31,8 @@ console = Console()
 SLASH_COMMANDS = [
     ("/help", "列出所有 slash command 與中文說明"),
     ("/init", "掃描 repo 並寫入 project profile 到 Memory Hall"),
+    ("/doctor", "檢查 Ollama、模型、Memory Hall、git、uv 狀態"),
+    ("/config", "顯示目前 agentX 設定"),
     ("/tools", "列出 agent 模式可用工具與中文說明"),
     ("/context", "顯示目前 agent 上下文使用量與壓縮次數"),
     ("/compact", "壓縮目前 agent session 上下文，保留最近訊息摘要"),
@@ -163,6 +166,32 @@ def print_approval(policy: ApprovalPolicy) -> None:
     table.add_row("GREEN", "auto allow")
     table.add_row("YELLOW", "ask / auto / off")
     table.add_row("RED", "always block")
+    console.print(table)
+
+
+def print_config(settings: Settings, namespace: str, mode: str, approval_policy: ApprovalPolicy) -> None:
+    table = Table(title="agentX config", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    table.add_row("model", settings.model)
+    table.add_row("ollama_url", settings.ollama_url)
+    table.add_row("memory_hall_url", settings.memory_hall_url)
+    table.add_row("memory_hall_token", "set" if settings.memory_hall_token else "missing")
+    table.add_row("workspace", str(settings.workspace))
+    table.add_row("namespace", namespace)
+    table.add_row("mode", mode)
+    table.add_row("approval", approval_policy.mode.value)
+    table.add_row("auto_handoff", str(settings.auto_handoff))
+    console.print(table)
+
+
+def print_doctor(settings: Settings, memory: MemoryHallClient, ollama: OllamaClient) -> None:
+    table = Table(title="agentX doctor", show_header=True, header_style="bold")
+    table.add_column("Check", style="cyan")
+    table.add_column("OK")
+    table.add_column("Detail")
+    for name, ok, detail in run_doctor(settings, memory, ollama):
+        table.add_row(name, "yes" if ok else "no", detail)
     console.print(table)
 
 
@@ -351,7 +380,7 @@ def shell(
     if max_steps is not None:
         settings = replace(settings, max_steps=max_steps)
     approval_policy = ApprovalPolicy()
-    ollama, _, tools = build_runtime(settings, approval_policy=approval_policy)
+    ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
     transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
     agent_session = AgentSession(
         settings=settings,
@@ -411,6 +440,14 @@ def shell(
         if prompt == "/help":
             transcript.write("slash_command", {"command": prompt})
             print_slash_help()
+            continue
+        if prompt == "/config":
+            transcript.write("slash_command", {"command": prompt})
+            print_config(settings, namespace, mode, approval_policy)
+            continue
+        if prompt == "/doctor":
+            transcript.write("slash_command", {"command": prompt})
+            print_doctor(settings, memory, ollama)
             continue
         if prompt == "/init":
             transcript.write("slash_command", {"command": prompt})
