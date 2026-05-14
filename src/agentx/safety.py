@@ -16,6 +16,7 @@ READ_ONLY_TOOLS = {
     "git_status",
     "git_diff",
     "memory_search",
+    "run_tests",
 }
 
 YELLOW_TOOLS = {
@@ -61,4 +62,3 @@ def require_allowed(tool: str) -> None:
     risk = classify_tool(tool)
     if risk == Risk.RED:
         raise PermissionError(f"Tool is blocked by safety policy: {tool}")
-

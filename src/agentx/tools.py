@@ -9,6 +9,17 @@ from agentx.protocol import ToolResult
 from agentx.safety import require_allowed
 
 
+TOOL_DESCRIPTIONS = {
+    "list_files": "列出 workspace 內檔案，會跳過 .git/.venv/cache 目錄",
+    "read_file": "讀取 workspace 內指定檔案內容",
+    "search_text": "使用 rg 搜尋 workspace 內文字",
+    "git_status": "查看 git status --short --branch",
+    "git_diff": "查看 git diff，可指定單一 path",
+    "memory_search": "查詢 Memory Hall",
+    "memory_write": "寫入 Memory Hall",
+    "run_tests": "執行固定 allowlist 驗證：ruff check 與 pytest",
+}
+
 SKIPPED_DIRS = {
     ".git",
     ".mypy_cache",
@@ -24,6 +35,9 @@ class ToolRegistry:
     def __init__(self, workspace: Path, memory: MemoryHallClient) -> None:
         self.workspace = workspace.resolve()
         self.memory = memory
+
+    def describe_tools(self) -> dict[str, str]:
+        return dict(TOOL_DESCRIPTIONS)
 
     def run(self, tool: str, args: dict[str, Any]) -> ToolResult:
         require_allowed(tool)
@@ -94,6 +108,29 @@ class ToolRegistry:
 
     def _tool_memory_write(self, content: str, namespace: str = "agent:agentx") -> str:
         return self.memory.write(content=content, namespace=namespace)
+
+    def _tool_run_tests(self) -> str:
+        commands = [
+            ["uv", "run", "ruff", "check", "."],
+            ["uv", "run", "pytest", "-q"],
+        ]
+        outputs = []
+        for command in commands:
+            completed = subprocess.run(
+                command,
+                cwd=self.workspace,
+                text=True,
+                capture_output=True,
+                timeout=120,
+                check=False,
+            )
+            output = completed.stdout or completed.stderr
+            outputs.append(
+                f"$ {' '.join(command)}\nexit={completed.returncode}\n{output.strip()}"
+            )
+            if completed.returncode != 0:
+                break
+        return "\n\n".join(outputs)
 
     def _run_git(self, args: list[str]) -> str:
         completed = subprocess.run(

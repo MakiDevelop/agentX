@@ -29,6 +29,7 @@ Available tools:
 - git_diff(path=null, max_chars=30000)
 - memory_search(query, namespace="shared", limit=5)
 - memory_write(content, namespace="agent:agentx")
+- run_tests()
 
 Do not claim you used a tool unless the tool result is present in the conversation.
 Prefer read-only inspection first. Use Traditional Chinese for user-facing answers.
@@ -44,7 +45,13 @@ class AgentLoop:
         namespace: str = "project:agentX",
         trace: Callable[[str], None] | None = None,
     ) -> None:
-        self.session = AgentSession(settings=settings, ollama=ollama, tools=tools, trace=trace)
+        self.session = AgentSession(
+            settings=settings,
+            ollama=ollama,
+            tools=tools,
+            namespace=namespace,
+            trace=trace,
+        )
 
     def run(self, prompt: str, namespace: str = "project:agentX") -> str:
         return self.session.ask(prompt, namespace=namespace)
@@ -64,6 +71,7 @@ class AgentSession:
         self.tools = tools
         self.namespace = namespace
         self.trace = trace
+        self.compaction_count = 0
         self.messages = self._initial_messages()
 
     def _initial_messages(self) -> list[dict[str, str]]:
@@ -144,6 +152,41 @@ class AgentSession:
     @property
     def context_chars(self) -> int:
         return sum(len(message.get("content", "")) for message in self.messages)
+
+    @property
+    def context_tokens_estimate(self) -> int:
+        return self.context_chars // 4
+
+    def context_report(self) -> dict[str, int | str]:
+        return {
+            "namespace": self.namespace,
+            "messages": self.message_count,
+            "chars": self.context_chars,
+            "tokens_estimate": self.context_tokens_estimate,
+            "compactions": self.compaction_count,
+        }
+
+    def compact(self, keep_last: int = 8) -> str:
+        bootstrap = self._initial_messages()
+        tail = self.messages[-keep_last:] if len(self.messages) > keep_last else self.messages
+        summary_lines = [
+            "Session compacted. Preserve these recent facts:",
+            f"- Previous message count: {len(self.messages)}",
+            f"- Kept last messages: {len(tail)}",
+        ]
+        for message in tail:
+            role = message.get("role", "unknown")
+            content = message.get("content", "").replace("\n", " ")[:300]
+            summary_lines.append(f"- {role}: {content}")
+        self.compaction_count += 1
+        self.messages = [
+            *bootstrap,
+            {"role": "system", "content": "\n".join(summary_lines)},
+        ]
+        return (
+            f"已壓縮上下文：保留最近 {len(tail)} 則訊息摘要，"
+            f"目前約 {self.context_tokens_estimate} tokens。"
+        )
 
     def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | "InvalidAction":
         data = extract_json_object(raw)
