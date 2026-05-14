@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import datetime
 
 import typer
 from rich.console import Console
@@ -13,8 +14,13 @@ from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
 from agentx.tools import ToolRegistry
+from agentx.transcript import Transcript
 
-app = typer.Typer(help="agentX local Ollama agent shell.", no_args_is_help=True)
+app = typer.Typer(
+    help="agentX local Ollama agent shell.",
+    no_args_is_help=True,
+    invoke_without_command=True,
+)
 console = Console()
 
 SLASH_COMMANDS = [
@@ -23,6 +29,8 @@ SLASH_COMMANDS = [
     ("/context", "顯示目前 agent 上下文使用量與壓縮次數"),
     ("/compact", "壓縮目前 agent session 上下文，保留最近訊息摘要"),
     ("/history", "顯示本輪 shell 的簡短互動紀錄"),
+    ("/transcript", "顯示本輪 JSONL transcript 檔案路徑"),
+    ("/handoff [TEXT]", "寫入 Memory Hall 交接摘要；未提供文字時自動整理本輪紀錄"),
     ("/files [PATH]", "列出 repo 檔案，預設目前 workspace"),
     ("/read PATH", "讀取 repo 內指定檔案"),
     ("/search PATTERN", "在 repo 內搜尋文字"),
@@ -33,6 +41,7 @@ SLASH_COMMANDS = [
     ("/plan", "切換 plan 模式；plan 模式只討論方案，不使用工具"),
     ("/mode chat", "切換到純聊天模式，不使用工具，速度較快"),
     ("/mode agent", "切換到 agent 工具模式，可使用 repo / git / Memory Hall 工具"),
+    ("/models", "列出 Ollama 目前可用模型"),
     ("/model MODEL", "切換 Ollama 模型，例如 /model gemma4:31b"),
     ("/remember TEXT", "把指定內容寫入目前 Memory Hall namespace"),
     ("/status", "顯示目前模型、模式、namespace、訊息數與粗估 context tokens"),
@@ -97,9 +106,97 @@ def print_tool_result(result_text: str) -> None:
     console.print(result_text if result_text.strip() else "[dim](no output)[/dim]")
 
 
-@app.callback()
-def main() -> None:
+@app.callback(invoke_without_command=True)
+def main(
+    ctx: typer.Context,
+    print_prompt: str | None = typer.Option(None, "-p", "--print", help="Print one response and exit."),
+    agent: bool = typer.Option(False, "--agent", help="Use agent/tool mode with -p."),
+    namespace: str = typer.Option("project:agentX", "--namespace", help="Memory Hall namespace for -p."),
+) -> None:
     """Run local Ollama agent workflows."""
+    if print_prompt is None:
+        return
+    if ctx.invoked_subcommand is not None:
+        return
+    console.print(run_print_prompt(print_prompt, namespace=namespace, agent_mode=agent))
+    raise typer.Exit()
+
+
+def build_runtime(settings: Settings) -> tuple[OllamaClient, MemoryHallClient, ToolRegistry]:
+    ollama = OllamaClient(
+        base_url=settings.ollama_url,
+        model=settings.model,
+        timeout=settings.ollama_timeout,
+    )
+    memory = MemoryHallClient(
+        base_url=settings.memory_hall_url,
+        token=settings.memory_hall_token,
+    )
+    tools = ToolRegistry(workspace=settings.workspace, memory=memory)
+    return ollama, memory, tools
+
+
+def run_print_prompt(prompt: str, namespace: str, agent_mode: bool = False) -> str:
+    settings = Settings()
+    ollama, _, tools = build_runtime(settings)
+    if agent_mode:
+        agent_loop = AgentLoop(settings=settings, ollama=ollama, tools=tools, namespace=namespace)
+        return agent_loop.run(prompt, namespace=namespace)
+    return ollama.chat(
+        [
+            {"role": "system", "content": "Use Traditional Chinese. Answer concisely."},
+            {"role": "user", "content": prompt},
+        ],
+        json_mode=False,
+    )
+
+
+def build_handoff(
+    *,
+    settings: Settings,
+    namespace: str,
+    mode: str,
+    history: list[tuple[str, str]],
+    transcript: Transcript,
+    note: str | None = None,
+) -> str:
+    recent = "\n".join(f"- [{item_mode}] {prompt}" for item_mode, prompt in history[-10:])
+    note_section = f"\n人類補充：{note}\n" if note else ""
+    return (
+        f"agentX session handoff\n"
+        f"時間：{datetime.now().isoformat(timespec='seconds')}\n"
+        f"workspace：{settings.workspace}\n"
+        f"model：{settings.model}\n"
+        f"mode：{mode}\n"
+        f"namespace：{namespace}\n"
+        f"transcript：{transcript.path}\n"
+        f"{note_section}"
+        f"最近互動：\n{recent if recent else '- 無使用者任務'}"
+    )
+
+
+def write_handoff(
+    tools: ToolRegistry,
+    *,
+    settings: Settings,
+    namespace: str,
+    mode: str,
+    history: list[tuple[str, str]],
+    transcript: Transcript,
+    note: str | None = None,
+) -> str:
+    content = build_handoff(
+        settings=settings,
+        namespace=namespace,
+        mode=mode,
+        history=history,
+        transcript=transcript,
+        note=note,
+    )
+    result = tools.run("memory_write", {"content": content, "namespace": namespace})
+    if result.ok:
+        return f"handoff written to {namespace}"
+    return f"handoff failed: {result.content}"
 
 
 @app.command()
@@ -111,16 +208,7 @@ def ask(
     settings = Settings()
     if max_steps is not None:
         settings = replace(settings, max_steps=max_steps)
-    ollama = OllamaClient(
-        base_url=settings.ollama_url,
-        model=settings.model,
-        timeout=settings.ollama_timeout,
-    )
-    memory = MemoryHallClient(
-        base_url=settings.memory_hall_url,
-        token=settings.memory_hall_token,
-    )
-    tools = ToolRegistry(workspace=settings.workspace, memory=memory)
+    ollama, _, tools = build_runtime(settings)
     agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace)
     console.print(agent.run(prompt, namespace=namespace))
 
@@ -131,11 +219,7 @@ def chat(
 ) -> None:
     """Call Ollama directly without tool JSON mode."""
     settings = Settings()
-    ollama = OllamaClient(
-        base_url=settings.ollama_url,
-        model=settings.model,
-        timeout=settings.ollama_timeout,
-    )
+    ollama, _, _ = build_runtime(settings)
     answer = ollama.chat(
         [
             {"role": "system", "content": "Use Traditional Chinese. Answer concisely."},
@@ -156,16 +240,8 @@ def shell(
     settings = Settings()
     if max_steps is not None:
         settings = replace(settings, max_steps=max_steps)
-    ollama = OllamaClient(
-        base_url=settings.ollama_url,
-        model=settings.model,
-        timeout=settings.ollama_timeout,
-    )
-    memory = MemoryHallClient(
-        base_url=settings.memory_hall_url,
-        token=settings.memory_hall_token,
-    )
-    tools = ToolRegistry(workspace=settings.workspace, memory=memory)
+    ollama, _, tools = build_runtime(settings)
+    transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
     agent_session = AgentSession(
         settings=settings,
         ollama=ollama,
@@ -191,64 +267,135 @@ def shell(
         try:
             prompt = typer.prompt("agentX").strip()
         except (EOFError, KeyboardInterrupt):
+            if history and settings.auto_handoff:
+                message = write_handoff(
+                    tools,
+                    settings=settings,
+                    namespace=namespace,
+                    mode=mode,
+                    history=history,
+                    transcript=transcript,
+                )
+                transcript.write("handoff", {"auto": True, "result": message})
+                console.print(f"\n{message}")
             console.print("\nbye")
             break
 
         if not prompt:
             continue
         if prompt in {"/exit", "/quit"}:
+            if history and settings.auto_handoff:
+                message = write_handoff(
+                    tools,
+                    settings=settings,
+                    namespace=namespace,
+                    mode=mode,
+                    history=history,
+                    transcript=transcript,
+                )
+                transcript.write("handoff", {"auto": True, "result": message})
+                console.print(message)
+            transcript.write("session_end", {"reason": prompt})
             break
         if prompt == "/help":
+            transcript.write("slash_command", {"command": prompt})
             print_slash_help()
             continue
         if prompt == "/tools":
+            transcript.write("slash_command", {"command": prompt})
             print_tools(tools)
             continue
         if prompt == "/context":
+            transcript.write("slash_command", {"command": prompt})
             print_context(agent_session, chat_messages)
             continue
         if prompt == "/compact":
-            console.print(agent_session.compact())
+            transcript.write("slash_command", {"command": prompt})
+            result = agent_session.compact()
+            transcript.write("compact", {"result": result})
+            console.print(result)
             continue
         if prompt == "/history":
+            transcript.write("slash_command", {"command": prompt})
             print_history(history)
+            continue
+        if prompt == "/transcript":
+            transcript.write("slash_command", {"command": prompt})
+            console.print(str(transcript.path))
+            continue
+        if prompt.startswith("/handoff"):
+            note = prompt.removeprefix("/handoff").strip() or None
+            message = write_handoff(
+                tools,
+                settings=settings,
+                namespace=namespace,
+                mode=mode,
+                history=history,
+                transcript=transcript,
+                note=note,
+            )
+            transcript.write("handoff", {"auto": False, "note": note, "result": message})
+            console.print(message)
             continue
         if prompt.startswith("/files"):
             path = prompt.removeprefix("/files").strip() or "."
             result = tools.run("list_files", {"path": path})
+            transcript.write(
+                "tool",
+                {"command": "/files", "ok": result.ok, "content": result.content[:2000]},
+            )
             print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
             continue
         if prompt.startswith("/read "):
             path = prompt.removeprefix("/read ").strip()
             result = tools.run("read_file", {"path": path})
+            transcript.write(
+                "tool",
+                {"command": "/read", "path": path, "ok": result.ok, "content": result.content[:2000]},
+            )
             print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
             continue
         if prompt.startswith("/search "):
             pattern = prompt.removeprefix("/search ").strip()
             result = tools.run("search_text", {"pattern": pattern})
+            transcript.write(
+                "tool",
+                {"command": "/search", "pattern": pattern, "ok": result.ok, "content": result.content[:2000]},
+            )
             print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
             continue
         if prompt == "/git":
             result = tools.run("git_status", {})
+            transcript.write("tool", {"command": "/git", "ok": result.ok, "content": result.content[:2000]})
             print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
             continue
         if prompt.startswith("/diff"):
             path = prompt.removeprefix("/diff").strip()
             args = {"path": path} if path else {}
             result = tools.run("git_diff", args)
+            transcript.write(
+                "tool",
+                {"command": "/diff", "path": path, "ok": result.ok, "content": result.content[:2000]},
+            )
             print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
             continue
         if prompt.startswith("/memory "):
             query = prompt.removeprefix("/memory ").strip()
             result = tools.run("memory_search", {"query": query, "namespace": namespace})
+            transcript.write(
+                "tool",
+                {"command": "/memory", "query": query, "ok": result.ok, "content": result.content[:2000]},
+            )
             print_tool_result(result.content if result.ok else f"memory search failed: {result.content}")
             continue
         if prompt == "/test":
             result = tools.run("run_tests", {})
+            transcript.write("tool", {"command": "/test", "ok": result.ok, "content": result.content[:4000]})
             print_tool_result(result.content if result.ok else f"驗證失敗：{result.content}")
             continue
         if prompt == "/plan":
             plan_mode = not plan_mode
+            transcript.write("slash_command", {"command": prompt, "plan": plan_mode})
             console.print(f"plan={'on' if plan_mode else 'off'}")
             continue
         if prompt.startswith("/remember "):
@@ -257,6 +404,7 @@ def shell(
                 console.print("usage: /remember 要寫入 Memory Hall 的內容")
                 continue
             result = tools.run("memory_write", {"content": content, "namespace": namespace})
+            transcript.write("tool", {"command": "/remember", "ok": result.ok, "content": content})
             if result.ok:
                 console.print(f"remembered in {namespace}")
             else:
@@ -268,7 +416,17 @@ def shell(
                 console.print("mode must be chat or agent")
                 continue
             mode = next_mode
+            transcript.write("slash_command", {"command": prompt, "mode": mode})
             console.print(f"mode={mode}")
+            continue
+        if prompt == "/models":
+            transcript.write("slash_command", {"command": prompt})
+            try:
+                models = ollama.list_models()
+            except Exception as exc:
+                console.print(f"models failed: {type(exc).__name__}: {exc}")
+                continue
+            print_tool_result("\n".join(models))
             continue
         if prompt.startswith("/model "):
             model = prompt.removeprefix("/model ").strip()
@@ -282,9 +440,11 @@ def shell(
                 timeout=settings.ollama_timeout,
             )
             agent_session.ollama = ollama
+            transcript.write("slash_command", {"command": prompt, "model": settings.model})
             console.print(f"model={settings.model}")
             continue
         if prompt == "/status":
+            transcript.write("slash_command", {"command": prompt})
             approx_tokens = agent_session.context_chars // 4
             console.print(
                 f"model={settings.model} mode={mode} namespace={namespace} "
@@ -295,22 +455,28 @@ def shell(
         if prompt == "/clear":
             agent_session.clear()
             chat_messages = [{"role": "system", "content": "Use Traditional Chinese. Answer concisely."}]
+            transcript.write("slash_command", {"command": prompt})
             console.print("cleared")
             continue
 
         if mode == "agent":
             history.append((mode, prompt))
+            transcript.write("user", {"mode": mode, "content": prompt})
             if plan_mode:
                 prompt = "Plan only. Do not call tools. " + prompt
-            console.print(agent_session.ask(prompt, namespace=namespace))
+            answer = agent_session.ask(prompt, namespace=namespace)
+            transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
+            console.print(answer)
             continue
 
         history.append((mode, prompt))
+        transcript.write("user", {"mode": mode, "content": prompt})
         if plan_mode:
             prompt = "Plan only. Do not claim actions were performed. " + prompt
         chat_messages.append({"role": "user", "content": prompt})
         answer = ollama.chat(chat_messages, json_mode=False)
         chat_messages.append({"role": "assistant", "content": answer})
+        transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
         console.print(answer)
 
 

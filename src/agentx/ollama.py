@@ -25,3 +25,10 @@ class OllamaClient:
             response.raise_for_status()
             data = response.json()
         return str(data.get("message", {}).get("content", "")).strip()
+
+    def list_models(self) -> list[str]:
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.get(f"{self.base_url}/api/tags")
+            response.raise_for_status()
+            data = response.json()
+        return [str(model.get("name", "")) for model in data.get("models", []) if model.get("name")]

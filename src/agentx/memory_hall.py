@@ -21,7 +21,7 @@ class MemoryHallClient:
     def search(self, query: str, namespace: str = "shared", limit: int = 5) -> str:
         payload: dict[str, Any] = {
             "query": query,
-            "namespace": namespace,
+            "namespace": [namespace],
             "mode": "hybrid",
             "limit": limit,
         }
@@ -35,7 +35,16 @@ class MemoryHallClient:
             return response.text
 
     def write(self, content: str, namespace: str = "agent:agentx") -> str:
-        payload = {"content": content, "namespace": namespace}
+        payload: dict[str, Any] = {
+            "agent_id": "agentx",
+            "namespace": namespace,
+            "type": "handoff" if "handoff" in content.lower() else "note",
+            "content": content,
+            "summary": content.splitlines()[0][:160] if content else None,
+            "tags": ["agentx"],
+            "references": [],
+            "metadata": {"source": "agentx"},
+        }
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(
                 f"{self.base_url}/v1/memory/write",
@@ -44,4 +53,3 @@ class MemoryHallClient:
             )
             response.raise_for_status()
             return response.text
-
