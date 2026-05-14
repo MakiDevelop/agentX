@@ -5,6 +5,7 @@ import sys
 import threading
 import os
 from datetime import datetime
+from pathlib import Path
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
@@ -15,6 +16,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from agentx.approval import ApprovalMode, ApprovalPolicy
+from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from agentx.config import Settings
 from agentx.doctor import run_doctor
 from agentx.git_workflow import build_commit_plan, commit_and_push
@@ -59,6 +61,7 @@ SLASH_COMMANDS = [
     ("/resume [latest|FILE]", "從 JSONL transcript 載入最近上下文摘要"),
     ("/files [PATH]", "列出 repo 檔案，預設目前 workspace"),
     ("/read PATH", "讀取 repo 內指定檔案"),
+    ("/attach PATH...", "把指定檔案內容加入本輪 context；支援拖曳路徑"),
     ("/search PATTERN", "在 repo 內搜尋文字"),
     ("/git", "顯示 git status"),
     ("/diff [PATH]", "顯示 git diff，可指定單一檔案"),
@@ -206,6 +209,12 @@ def print_tool_result(result_text: str) -> None:
         print_raw(result_text)
     else:
         console.print("[dim](no output)[/dim]")
+
+
+def build_attachment_context(prompt: str, workspace: Path) -> tuple[str, list[str]]:
+    paths = extract_file_paths(prompt, workspace)
+    attachments = read_attachments(paths)
+    return format_attachment_context(attachments), [str(item.path) for item in attachments]
 
 
 def run_review(ollama: OllamaClient, tools: ToolRegistry) -> str:
@@ -394,6 +403,9 @@ def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = Fals
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
     ollama, _, tools = build_runtime(settings)
+    attachment_context, _ = build_attachment_context(prompt, settings.workspace)
+    if attachment_context:
+        prompt = f"{prompt}\n\n{attachment_context}"
     if agent_mode:
         agent_loop = AgentLoop(settings=settings, ollama=ollama, tools=tools, namespace=namespace)
         return agent_loop.run(prompt, namespace=namespace)
@@ -480,6 +492,9 @@ def chat(
 ) -> None:
     """Call Ollama directly without tool JSON mode."""
     settings = Settings()
+    attachment_context, _ = build_attachment_context(prompt, settings.workspace)
+    if attachment_context:
+        prompt = f"{prompt}\n\n{attachment_context}"
     ollama, _, _ = build_runtime(settings)
     answer = ollama.chat(
         [
@@ -555,6 +570,13 @@ def shell(
             current_cancel.clear()
             prompt_active.set()
             try:
+                attachment_context, attachment_paths = build_attachment_context(
+                    queued_prompt,
+                    settings.workspace,
+                )
+                if attachment_context:
+                    queued_prompt = f"{queued_prompt}\n\n{attachment_context}"
+                    transcript.write("attachments", {"paths": attachment_paths})
                 if mode == "agent":
                     history.append((mode, queued_prompt))
                     transcript.write("user", {"mode": mode, "content": queued_prompt})
@@ -804,6 +826,20 @@ def shell(
                     {"command": "/read", "path": path, "ok": result.ok, "content": result.content[:2000]},
                 )
                 print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
+                continue
+            if prompt.startswith("/attach "):
+                attachment_text = prompt.removeprefix("/attach ").strip()
+                attachment_context, attachment_paths = build_attachment_context(
+                    attachment_text,
+                    settings.workspace,
+                )
+                if not attachment_context:
+                    print_raw("no readable attachment found")
+                    continue
+                agent_session.messages.append({"role": "system", "content": attachment_context})
+                chat_messages.append({"role": "system", "content": attachment_context})
+                transcript.write("attachments", {"paths": attachment_paths})
+                print_raw("attached files:\n" + "\n".join(attachment_paths))
                 continue
             if prompt.startswith("/search "):
                 pattern = prompt.removeprefix("/search ").strip()
