@@ -34,13 +34,23 @@ Prefer read-only inspection first. Use Traditional Chinese for user-facing answe
 
 class AgentLoop:
     def __init__(self, settings: Settings, ollama: OllamaClient, tools: ToolRegistry) -> None:
+        self.session = AgentSession(settings=settings, ollama=ollama, tools=tools)
+
+    def run(self, prompt: str, namespace: str = "project:agentX") -> str:
+        return self.session.ask(prompt, namespace=namespace)
+
+
+class AgentSession:
+    def __init__(self, settings: Settings, ollama: OllamaClient, tools: ToolRegistry) -> None:
         self.settings = settings
         self.ollama = ollama
         self.tools = tools
-
-    def run(self, prompt: str, namespace: str = "project:agentX") -> str:
-        messages = [
+        self.messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
+        ]
+
+    def ask(self, prompt: str, namespace: str = "project:agentX") -> str:
+        self.messages.append(
             {
                 "role": "user",
                 "content": (
@@ -48,20 +58,28 @@ class AgentLoop:
                     f"Default memory namespace: {namespace}\n"
                     f"Task: {prompt}"
                 ),
-            },
-        ]
+            }
+        )
 
         for _ in range(self.settings.max_steps):
-            raw = self.ollama.chat(messages, json_mode=True)
+            raw = self.ollama.chat(self.messages, json_mode=True)
             action = self._parse_action(raw)
             if isinstance(action, FinalAnswer):
+                self.messages.append({"role": "assistant", "content": action.content})
                 return action.content
 
             result = self.tools.run(action.tool, action.args)
-            messages.append({"role": "assistant", "content": action.model_dump_json()})
-            messages.append({"role": "tool", "content": self._format_tool_result(result)})
+            self.messages.append({"role": "assistant", "content": action.model_dump_json()})
+            self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
 
         return "已達最大步數，先停止。請縮小任務或提高 AGENTX_MAX_STEPS。"
+
+    def clear(self) -> None:
+        self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    @property
+    def message_count(self) -> int:
+        return len(self.messages)
 
     def _parse_action(self, raw: str) -> ToolCall | FinalAnswer:
         try:

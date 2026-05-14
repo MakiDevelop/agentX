@@ -4,9 +4,10 @@ from dataclasses import replace
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
 
 from agentx.config import Settings
-from agentx.loop import AgentLoop
+from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
 from agentx.tools import ToolRegistry
@@ -62,6 +63,100 @@ def chat(
         json_mode=False,
     )
     console.print(answer)
+
+
+@app.command()
+def shell(
+    namespace: str = typer.Option("project:agentX", help="Default Memory Hall namespace."),
+    mode: str = typer.Option("chat", help="Start mode: chat or agent."),
+    max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
+) -> None:
+    """Start an interactive agentX session."""
+    settings = Settings()
+    if max_steps is not None:
+        settings = replace(settings, max_steps=max_steps)
+    ollama = OllamaClient(
+        base_url=settings.ollama_url,
+        model=settings.model,
+        timeout=settings.ollama_timeout,
+    )
+    memory = MemoryHallClient(
+        base_url=settings.memory_hall_url,
+        token=settings.memory_hall_token,
+    )
+    tools = ToolRegistry(workspace=settings.workspace, memory=memory)
+    agent_session = AgentSession(settings=settings, ollama=ollama, tools=tools)
+    chat_messages = [{"role": "system", "content": "Use Traditional Chinese. Answer concisely."}]
+
+    console.print(
+        Panel.fit(
+            (
+                f"model={settings.model} mode={mode} namespace={namespace}\n"
+                "Commands: /help /mode chat|agent /model NAME /status /clear /exit"
+            ),
+            title="agentX shell",
+        )
+    )
+
+    while True:
+        try:
+            prompt = typer.prompt("agentX").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print("\nbye")
+            break
+
+        if not prompt:
+            continue
+        if prompt in {"/exit", "/quit"}:
+            break
+        if prompt == "/help":
+            console.print(
+                "Commands: /mode chat|agent, /model NAME, /status, /clear, /exit\n"
+                "chat = plain Ollama conversation; agent = JSON tool loop."
+            )
+            continue
+        if prompt.startswith("/mode "):
+            next_mode = prompt.removeprefix("/mode ").strip()
+            if next_mode not in {"chat", "agent"}:
+                console.print("mode must be chat or agent")
+                continue
+            mode = next_mode
+            console.print(f"mode={mode}")
+            continue
+        if prompt.startswith("/model "):
+            model = prompt.removeprefix("/model ").strip()
+            if not model:
+                console.print("usage: /model gemma4:e2b")
+                continue
+            settings = replace(settings, model=model)
+            ollama = OllamaClient(
+                base_url=settings.ollama_url,
+                model=settings.model,
+                timeout=settings.ollama_timeout,
+            )
+            agent_session.ollama = ollama
+            console.print(f"model={settings.model}")
+            continue
+        if prompt == "/status":
+            console.print(
+                f"model={settings.model} mode={mode} namespace={namespace} "
+                f"agent_messages={agent_session.message_count} chat_messages={len(chat_messages)}"
+            )
+            continue
+        if prompt == "/clear":
+            agent_session.clear()
+            chat_messages = [{"role": "system", "content": "Use Traditional Chinese. Answer concisely."}]
+            console.print("cleared")
+            continue
+
+        if mode == "agent":
+            console.print(agent_session.ask(prompt, namespace=namespace))
+            continue
+
+        chat_messages.append({"role": "user", "content": prompt})
+        answer = ollama.chat(chat_messages, json_mode=False)
+        chat_messages.append({"role": "assistant", "content": answer})
+        console.print(answer)
 
 
 if __name__ == "__main__":

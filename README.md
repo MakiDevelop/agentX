@@ -34,6 +34,7 @@ export AGENTX_MEMORY_HALL_TOKEN=...
 
 ```bash
 uv run agentx chat "只回一句話：你是什麼？"
+uv run agentx shell
 uv run agentx ask "這個 repo 是做什麼的？"
 uv run agentx ask "查 Memory Hall，整理 agentX 相關記憶" --namespace project:agentX
 uv run agentx ask "找出這個 repo 的測試怎麼跑"
@@ -41,11 +42,24 @@ uv run agentx ask "找出這個 repo 的測試怎麼跑"
 
 Use `chat` when you only want to test model speed or have a plain conversation.
 Use `ask` when you want the agent loop and tools.
+Use `shell` when you want a continuous Claude/Codex/Gemini CLI-style session.
+
+Inside `shell`:
+
+```text
+/mode chat
+/mode agent
+/model gemma4:e2b
+/status
+/clear
+/exit
+```
 
 For slow local models:
 
 ```bash
 AGENTX_MODEL=gemma4:e2b AGENTX_OLLAMA_TIMEOUT=30 uv run agentx chat "只回一句話"
+AGENTX_MODEL=gemma4:e2b AGENTX_OLLAMA_TIMEOUT=30 uv run agentx shell
 AGENTX_MODEL=gemma4:e2b uv run agentx ask "列出 repo 檔案" --max-steps 2
 ```
 
