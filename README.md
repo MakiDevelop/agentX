@@ -105,6 +105,10 @@ uv run agentx shell
 | Command | 說明 |
 |---|---|
 | `/help` | 列出所有 slash command 與中文說明 |
+| `/init` | 掃描 repo 並寫入 project profile 到 Memory Hall |
+| `/doctor` | 檢查 Ollama、模型、Memory Hall、git、uv 狀態 |
+| `/config` | 顯示目前 agentX 設定 |
+| `/task [TEXT\|status\|done\|clear]` | 設定或查看目前任務狀態 |
 | `/tools` | 列出 agent 模式可用工具 |
 | `/context` | 顯示目前 agent context 使用量 |
 | `/compact` | 壓縮目前 agent session context |
@@ -138,6 +142,9 @@ uv run agentx shell
 
 ```text
 /init
+/task 建立 agentX task 狀態
+/task status
+/task done
 /doctor
 /config
 /sessions
