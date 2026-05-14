@@ -5,6 +5,7 @@ from enum import Enum
 
 from pydantic import ValidationError
 
+from agentx.bootstrap import build_repo_context
 from agentx.config import Settings
 from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
@@ -62,6 +63,7 @@ class AgentSession:
         self.trace = trace
         self.messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(settings.workspace)},
         ]
 
     def ask(self, prompt: str, namespace: str = "project:agentX") -> str:
@@ -118,7 +120,10 @@ class AgentSession:
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
 
     def clear(self) -> None:
-        self.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        self.messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(self.settings.workspace)},
+        ]
 
     @property
     def message_count(self) -> int:
