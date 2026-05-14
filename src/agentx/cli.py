@@ -19,7 +19,7 @@ from agentx.ollama import OllamaClient
 from agentx.project_profile import build_project_profile
 from agentx.safety import Risk
 from agentx.tools import ToolRegistry
-from agentx.transcript import Transcript, find_transcript, summarize_transcript
+from agentx.transcript import Transcript, find_transcript, list_transcripts, summarize_transcript
 
 app = typer.Typer(
     help="agentX local Ollama agent shell.",
@@ -37,6 +37,7 @@ SLASH_COMMANDS = [
     ("/context", "顯示目前 agent 上下文使用量與壓縮次數"),
     ("/compact", "壓縮目前 agent session 上下文，保留最近訊息摘要"),
     ("/history", "顯示本輪 shell 的簡短互動紀錄"),
+    ("/sessions", "列出最近 transcript，可搭配 /resume"),
     ("/transcript", "顯示本輪 JSONL transcript 檔案路徑"),
     ("/handoff [TEXT]", "寫入 Memory Hall 交接摘要；未提供文字時自動整理本輪紀錄"),
     ("/resume [latest|FILE]", "從 JSONL transcript 載入最近上下文摘要"),
@@ -113,6 +114,15 @@ def print_history(history: list[tuple[str, str]]) -> None:
     table.add_column("Prompt")
     for index, (mode, prompt) in enumerate(history[-20:], start=max(1, len(history) - 19)):
         table.add_row(str(index), mode, prompt[:120])
+    console.print(table)
+
+
+def print_sessions(settings: Settings) -> None:
+    table = Table(title="agentX sessions", show_header=True, header_style="bold")
+    table.add_column("Name", style="cyan")
+    table.add_column("Path")
+    for path in list_transcripts(settings.workspace):
+        table.add_row(path.stem, str(path))
     console.print(table)
 
 
@@ -472,6 +482,10 @@ def shell(
         if prompt == "/history":
             transcript.write("slash_command", {"command": prompt})
             print_history(history)
+            continue
+        if prompt == "/sessions":
+            transcript.write("slash_command", {"command": prompt})
+            print_sessions(settings)
             continue
         if prompt == "/transcript":
             transcript.write("slash_command", {"command": prompt})

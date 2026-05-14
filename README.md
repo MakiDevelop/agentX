@@ -109,6 +109,7 @@ uv run agentx shell
 | `/context` | 顯示目前 agent context 使用量 |
 | `/compact` | 壓縮目前 agent session context |
 | `/history` | 顯示本輪 shell 的簡短互動紀錄 |
+| `/sessions` | 列出最近 transcript，可搭配 `/resume` |
 | `/transcript` | 顯示本輪 JSONL transcript 檔案路徑 |
 | `/handoff [TEXT]` | 寫入 Memory Hall 交接摘要 |
 | `/resume [latest\|FILE]` | 從 transcript 載入最近上下文摘要 |
@@ -132,6 +133,15 @@ uv run agentx shell
 | `/status` | 顯示模型、模式、namespace、粗估 tokens |
 | `/clear` | 清空 session 並重新載入 repo / memory context |
 | `/exit` / `/quit` | 離開 shell |
+
+維護與排錯：
+
+```text
+/init
+/doctor
+/config
+/sessions
+```
 
 ## 常用流程
 

@@ -67,3 +67,10 @@ def summarize_transcript(path: Path, limit: int = 12) -> str:
         prefix = f"{event}({mode})" if mode else event
         lines.append(f"- {prefix}: {content.replace(chr(10), ' ')[:500]}")
     return "\n".join(lines)
+
+
+def list_transcripts(workspace: Path, limit: int = 10) -> list[Path]:
+    directory = workspace / ".agentx" / "sessions"
+    if not directory.exists():
+        return []
+    return sorted(directory.glob("*.jsonl"), reverse=True)[:limit]
