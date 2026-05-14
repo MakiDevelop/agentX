@@ -42,6 +42,7 @@ SLASH_COMMANDS = [
     ("/apply PATCH_FILE", "套用 workspace 內 patch 檔，會先要求 approval"),
     ("/approval [ask|auto|off]", "查看或切換 YELLOW 工具 approval policy"),
     ("/memory QUERY", "查詢目前 namespace 的 Memory Hall 記憶"),
+    ("/run COMMAND", "執行固定 allowlist 命令"),
     ("/test", "執行固定 allowlist 驗證：ruff check 與 pytest"),
     ("/plan", "切換 plan 模式；plan 模式只討論方案，不使用工具"),
     ("/mode chat", "切換到純聊天模式，不使用工具，速度較快"),
@@ -468,6 +469,15 @@ def shell(
                 {"command": "/memory", "query": query, "ok": result.ok, "content": result.content[:2000]},
             )
             print_tool_result(result.content if result.ok else f"memory search failed: {result.content}")
+            continue
+        if prompt.startswith("/run "):
+            command = prompt.removeprefix("/run ").strip()
+            result = tools.run("run_command", {"command": command})
+            transcript.write(
+                "tool",
+                {"command": "/run", "input": command, "ok": result.ok, "content": result.content[:4000]},
+            )
+            print_tool_result(result.content if result.ok else f"run failed: {result.content}")
             continue
         if prompt == "/test":
             result = tools.run("run_tests", {})

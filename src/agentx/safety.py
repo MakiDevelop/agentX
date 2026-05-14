@@ -16,6 +16,7 @@ READ_ONLY_TOOLS = {
     "git_status",
     "git_diff",
     "memory_search",
+    "run_command",
     "run_tests",
 }
 

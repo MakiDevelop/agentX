@@ -10,12 +10,11 @@ def test_memory_write_is_yellow() -> None:
     assert classify_tool("memory_write") == Risk.YELLOW
 
 
-def test_unknown_tool_is_red() -> None:
-    assert classify_tool("run_command") == Risk.RED
+def test_run_command_is_green_but_allowlisted_in_tool_layer() -> None:
+    assert classify_tool("run_command") == Risk.GREEN
 
 
 def test_destructive_commands_are_red() -> None:
     assert classify_command("rm -rf /tmp/demo") == Risk.RED
     assert classify_command("rsync --delete a b") == Risk.RED
     assert classify_command("chmod -R 777 .") == Risk.RED
-

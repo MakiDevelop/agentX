@@ -29,6 +29,7 @@ Available tools:
 - git_diff(path=null, max_chars=30000)
 - memory_search(query, namespace="shared", limit=5)
 - memory_write(content, namespace="agent:agentx")
+- run_command(command)
 - run_tests()
 - apply_patch(patch)
 

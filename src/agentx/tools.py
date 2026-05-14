@@ -17,6 +17,7 @@ TOOL_DESCRIPTIONS = {
     "git_diff": "查看 git diff，可指定單一 path",
     "memory_search": "查詢 Memory Hall",
     "memory_write": "寫入 Memory Hall",
+    "run_command": "執行固定 allowlist 命令",
     "run_tests": "執行固定 allowlist 驗證：ruff check 與 pytest",
     "apply_patch": "套用 unified diff patch，需 approval",
 }
@@ -30,6 +31,13 @@ SKIPPED_DIRS = {
     ".agentx",
     "__pycache__",
     "node_modules",
+}
+
+ALLOWED_COMMANDS = {
+    "uv run ruff check .": ["uv", "run", "ruff", "check", "."],
+    "uv run pytest -q": ["uv", "run", "pytest", "-q"],
+    "git status --short --branch": ["git", "status", "--short", "--branch"],
+    "git diff": ["git", "diff"],
 }
 
 
@@ -143,6 +151,22 @@ class ToolRegistry:
             if completed.returncode != 0:
                 break
         return "\n\n".join(outputs)
+
+    def _tool_run_command(self, command: str) -> str:
+        if command not in ALLOWED_COMMANDS:
+            allowed = "\n".join(f"- {item}" for item in sorted(ALLOWED_COMMANDS))
+            raise PermissionError(f"Command is not allowlisted: {command}\nAllowed:\n{allowed}")
+
+        completed = subprocess.run(
+            ALLOWED_COMMANDS[command],
+            cwd=self.workspace,
+            text=True,
+            capture_output=True,
+            timeout=120,
+            check=False,
+        )
+        output = completed.stdout or completed.stderr
+        return f"$ {command}\nexit={completed.returncode}\n{output.strip()}"
 
     def _tool_apply_patch(self, patch: str) -> str:
         patch_dir = self.workspace / ".agentx" / "patches"
