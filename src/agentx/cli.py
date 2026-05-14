@@ -15,7 +15,7 @@ from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
 from agentx.safety import Risk
 from agentx.tools import ToolRegistry
-from agentx.transcript import Transcript
+from agentx.transcript import Transcript, find_transcript, summarize_transcript
 
 app = typer.Typer(
     help="agentX local Ollama agent shell.",
@@ -32,6 +32,7 @@ SLASH_COMMANDS = [
     ("/history", "顯示本輪 shell 的簡短互動紀錄"),
     ("/transcript", "顯示本輪 JSONL transcript 檔案路徑"),
     ("/handoff [TEXT]", "寫入 Memory Hall 交接摘要；未提供文字時自動整理本輪紀錄"),
+    ("/resume [latest|FILE]", "從 JSONL transcript 載入最近上下文摘要"),
     ("/files [PATH]", "列出 repo 檔案，預設目前 workspace"),
     ("/read PATH", "讀取 repo 內指定檔案"),
     ("/search PATTERN", "在 repo 內搜尋文字"),
@@ -354,6 +355,18 @@ def shell(
             )
             transcript.write("handoff", {"auto": False, "note": note, "result": message})
             console.print(message)
+            continue
+        if prompt.startswith("/resume"):
+            name = prompt.removeprefix("/resume").strip() or "latest"
+            resume_path = find_transcript(settings.workspace, name)
+            if resume_path is None:
+                console.print(f"transcript not found: {name}")
+                continue
+            summary = summarize_transcript(resume_path)
+            agent_session.messages.append({"role": "system", "content": summary})
+            chat_messages.append({"role": "system", "content": summary})
+            transcript.write("resume", {"source": str(resume_path), "summary": summary[:2000]})
+            console.print(f"resumed {resume_path}")
             continue
         if prompt.startswith("/files"):
             path = prompt.removeprefix("/files").strip() or "."
