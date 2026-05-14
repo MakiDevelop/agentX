@@ -6,6 +6,7 @@ import typer
 from rich.console import Console
 from rich.markup import escape
 from rich.panel import Panel
+from rich.table import Table
 
 from agentx.config import Settings
 from agentx.loop import AgentLoop, AgentSession
@@ -16,9 +17,34 @@ from agentx.tools import ToolRegistry
 app = typer.Typer(help="agentX local Ollama agent shell.", no_args_is_help=True)
 console = Console()
 
+SLASH_COMMANDS = [
+    ("/help", "列出所有 slash command 與中文說明"),
+    ("/mode chat", "切換到純聊天模式，不使用工具，速度較快"),
+    ("/mode agent", "切換到 agent 工具模式，可使用 repo / git / Memory Hall 工具"),
+    ("/model MODEL", "切換 Ollama 模型，例如 /model gemma4:31b"),
+    ("/remember TEXT", "把指定內容寫入目前 Memory Hall namespace"),
+    ("/status", "顯示目前模型、模式、namespace、訊息數與粗估 context tokens"),
+    ("/clear", "清空目前 shell session 上下文，並重新載入 repo 與 Memory Hall context"),
+    ("/exit", "離開 agentX shell"),
+    ("/quit", "離開 agentX shell，同 /exit"),
+]
+
 
 def print_trace(message: str) -> None:
     console.print(f"[dim][trace] {escape(message)}[/dim]")
+
+
+def slash_command_hint() -> str:
+    return "Commands: " + " ".join(command for command, _ in SLASH_COMMANDS)
+
+
+def print_slash_help() -> None:
+    table = Table(title="agentX slash commands", show_header=True, header_style="bold")
+    table.add_column("Command", style="cyan", no_wrap=True)
+    table.add_column("中文說明")
+    for command, description in SLASH_COMMANDS:
+        table.add_row(command, description)
+    console.print(table)
 
 
 @app.callback()
@@ -103,7 +129,7 @@ def shell(
         Panel.fit(
             (
                 f"model={settings.model} mode={mode} namespace={namespace}\n"
-                "Commands: /help /mode chat|agent /model NAME /remember TEXT /status /clear /exit"
+                + slash_command_hint()
             ),
             title="agentX shell",
         )
@@ -121,10 +147,7 @@ def shell(
         if prompt in {"/exit", "/quit"}:
             break
         if prompt == "/help":
-            console.print(
-                "Commands: /mode chat|agent, /model NAME, /remember TEXT, /status, /clear, /exit\n"
-                "chat = plain Ollama conversation; agent = JSON tool loop."
-            )
+            print_slash_help()
             continue
         if prompt.startswith("/remember "):
             content = prompt.removeprefix("/remember ").strip()
