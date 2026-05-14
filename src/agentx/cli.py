@@ -23,6 +23,7 @@ from agentx.ollama import OllamaClient
 from agentx.prompting import SlashCommandCompleter
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
+from agentx.runtime_prompt import build_chat_system_prompt
 from agentx.safety import Risk
 from agentx.task import TaskState, clear_task, finish_task, load_task, start_task
 from agentx.tools import ToolRegistry
@@ -329,7 +330,7 @@ def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = Fals
         return agent_loop.run(prompt, namespace=namespace)
     return ollama.chat(
         [
-            {"role": "system", "content": "Use Traditional Chinese. Answer concisely."},
+            {"role": "system", "content": build_chat_system_prompt(settings.workspace)},
             {"role": "user", "content": prompt},
         ],
         json_mode=False,
@@ -413,7 +414,7 @@ def chat(
     ollama, _, _ = build_runtime(settings)
     answer = ollama.chat(
         [
-            {"role": "system", "content": "Use Traditional Chinese. Answer concisely."},
+            {"role": "system", "content": build_chat_system_prompt(settings.workspace)},
             {"role": "user", "content": prompt},
         ],
         json_mode=False,
@@ -448,7 +449,7 @@ def shell(
         namespace=namespace,
         trace=print_trace,
     )
-    chat_messages = [{"role": "system", "content": "Use Traditional Chinese. Answer concisely."}]
+    chat_messages = [{"role": "system", "content": build_chat_system_prompt(settings.workspace)}]
     history: list[tuple[str, str]] = []
     plan_mode = False
     prompt_queue: queue.Queue[str | None] = queue.Queue()
@@ -835,7 +836,7 @@ def shell(
                 continue
             if prompt == "/clear":
                 agent_session.clear()
-                chat_messages = [{"role": "system", "content": "Use Traditional Chinese. Answer concisely."}]
+                chat_messages = [{"role": "system", "content": build_chat_system_prompt(settings.workspace)}]
                 transcript.write("slash_command", {"command": prompt})
                 console.print("cleared")
                 continue

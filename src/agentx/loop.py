@@ -10,32 +10,8 @@ from agentx.config import Settings
 from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
 from agentx.protocol import FinalAnswer, ToolCall, ToolResult
+from agentx.runtime_prompt import AGENT_SYSTEM_PROMPT
 from agentx.tools import ToolRegistry
-
-
-SYSTEM_PROMPT = """You are agentX, a local engineering agent.
-You can use tools through strict JSON only.
-
-Return exactly one JSON object per turn:
-{"type":"tool_call","tool":"tool_name","args":{...}}
-or
-{"type":"final","content":"your final answer"}
-
-Available tools:
-- list_files(path=".", limit=200)
-- read_file(path, max_chars=20000)
-- search_text(pattern, path=".", limit=100)
-- git_status()
-- git_diff(path=null, max_chars=30000)
-- memory_search(query, namespace="shared", limit=5)
-- memory_write(content, namespace="agent:agentx")
-- run_command(command)
-- run_tests()
-- apply_patch(patch)
-
-Do not claim you used a tool unless the tool result is present in the conversation.
-Prefer read-only inspection first. Use Traditional Chinese for user-facing answers.
-"""
 
 
 class AgentLoop:
@@ -78,7 +54,7 @@ class AgentSession:
 
     def _initial_messages(self) -> list[dict[str, str]]:
         return [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": AGENT_SYSTEM_PROMPT},
             {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(self.settings.workspace)},
             {
                 "role": "system",
