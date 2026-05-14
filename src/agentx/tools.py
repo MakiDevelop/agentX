@@ -9,6 +9,17 @@ from agentx.protocol import ToolResult
 from agentx.safety import require_allowed
 
 
+SKIPPED_DIRS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "node_modules",
+}
+
+
 class ToolRegistry:
     def __init__(self, workspace: Path, memory: MemoryHallClient) -> None:
         self.workspace = workspace.resolve()
@@ -39,7 +50,7 @@ class ToolRegistry:
             raise FileNotFoundError(path)
         files = []
         for item in sorted(root.rglob("*")):
-            if ".git" in item.parts:
+            if any(part in SKIPPED_DIRS for part in item.relative_to(self.workspace).parts):
                 continue
             if item.is_file():
                 files.append(str(item.relative_to(self.workspace)))
@@ -94,4 +105,3 @@ class ToolRegistry:
             check=False,
         )
         return completed.stdout or completed.stderr
-
