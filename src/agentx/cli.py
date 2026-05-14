@@ -119,6 +119,10 @@ def print_delta(text: object) -> None:
     console.print(ANSI_RE.sub("", str(text)), markup=False, highlight=False, end="")
 
 
+def print_block(text: object) -> None:
+    print_raw(f"\n{text}\n")
+
+
 def print_context(agent_session: AgentSession, chat_messages: list[dict[str, str]]) -> None:
     report = agent_session.context_report()
     table = Table(title="agentX context", show_header=False)
@@ -547,7 +551,7 @@ def shell(
     def status_line() -> str:
         return f"{settings.model} | context {context_percent(settings, agent_session, chat_messages)}%"
 
-    if sys.stdin.isatty() and os.getenv("AGENTX_TUI", "1") != "0":
+    if sys.stdin.isatty() and os.getenv("AGENTX_TUI", "0") == "1":
         tui = AgentXTui(commands=SLASH_COMMANDS, status_text=status_line)
         tui.start()
         console = Console(file=tui.writer, force_terminal=False, color_system=None, width=100)
@@ -589,7 +593,7 @@ def shell(
                         cancel_event=current_cancel,
                     )
                     transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
-                    print_raw(answer)
+                    print_block(answer)
                     continue
 
                 history.append((mode, queued_prompt))
@@ -599,6 +603,7 @@ def shell(
                     chat_prompt = "Plan only. Do not claim actions were performed. " + chat_prompt
                 chat_messages.append({"role": "user", "content": chat_prompt})
                 streamed: list[str] = []
+                print_raw("")
 
                 def on_delta(delta: str) -> None:
                     streamed.append(delta)
@@ -615,10 +620,10 @@ def shell(
                 if streamed:
                     print_raw("")
                 else:
-                    print_raw(answer)
+                    print_block(answer)
             except OllamaCancelledError:
                 transcript.write("cancel", {"job": job.id, "prompt": queued_prompt})
-                print_raw(f"cancelled job #{job.id}")
+                print_block(f"cancelled job #{job.id}")
             except Exception as exc:
                 console.print(f"[red]prompt failed:[/red] {type(exc).__name__}: {escape(str(exc))}")
             finally:
@@ -677,7 +682,7 @@ def shell(
             if not prompt:
                 continue
             if prompt_session is not None:
-                print_raw(f"agentX: {prompt}")
+                print_block(f"agentX: {prompt}")
             if prompt in {"/exit", "/quit"}:
                 wait_for_prompt_worker()
                 if history and settings.auto_handoff:

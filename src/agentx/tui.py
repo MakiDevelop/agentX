@@ -19,7 +19,7 @@ class AgentXTuiWriter:
 
     def write(self, data: str) -> int:
         if data:
-            self.tui.write(data.rstrip("\n"))
+            self.tui.write(data)
         return len(data)
 
     def flush(self) -> None:
@@ -70,7 +70,7 @@ class AgentXTui:
             key_bindings=key_bindings,
             full_screen=True,
             refresh_interval=0.2,
-            mouse_support=True,
+            mouse_support=False,
         )
         self.writer = AgentXTuiWriter(self)
         self._thread: threading.Thread | None = None
@@ -100,6 +100,6 @@ class AgentXTui:
         text = getattr(buffer, "text", "").strip()
         getattr(buffer, "reset")()
         if text:
-            self.write(f"agentX: {text}")
+            self.write(f"\nagentX: {text}\n")
             self._input_queue.put(text)
         return True
