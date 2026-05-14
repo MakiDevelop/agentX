@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from enum import Enum
 
 from pydantic import ValidationError
 
 from agentx.config import Settings
+from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
 from agentx.protocol import FinalAnswer, ToolCall, ToolResult
 from agentx.tools import ToolRegistry
@@ -125,9 +125,8 @@ class AgentSession:
         return len(self.messages)
 
     def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | "InvalidAction":
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = extract_json_object(raw)
+        if data is None:
             return InvalidAction.NON_JSON
 
         try:
