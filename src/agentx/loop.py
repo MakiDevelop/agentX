@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json as _json
+import re as _re
 import threading
 from collections.abc import Callable
 from enum import Enum
@@ -109,6 +111,7 @@ class AgentSession:
             }
         )
 
+        finalize_retries = 0
         for _ in range(self.settings.max_steps):
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
             action = self._parse_action(raw)
@@ -127,6 +130,22 @@ class AgentSession:
                 )
                 continue
             if isinstance(action, FinalAnswer):
+                failing = self._unresolved_failing_tools()
+                if failing and finalize_retries < self.MAX_FINALIZE_RETRIES:
+                    finalize_retries += 1
+                    self.messages.append({"role": "assistant", "content": action.content})
+                    failing_summary = ", ".join(sorted(failing))
+                    self.messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                f"上一次 {failing_summary} 工具回應顯示失敗（exit≠0 或 ok=false）。"
+                                "在問題解決前不可以下成功結論。請繼續呼叫工具修正，"
+                                "或若確定卡住，請用 type=final 明確說明失敗原因，不要含糊。"
+                            ),
+                        }
+                    )
+                    continue
                 self.messages.append({"role": "assistant", "content": action.content})
                 return action.content
 
@@ -135,6 +154,26 @@ class AgentSession:
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
 
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
+
+    MAX_FINALIZE_RETRIES = 3
+    _RECENT_TOOL_WINDOW = 12
+    _EXIT_FAIL_RE = _re.compile(r"\bexit=([1-9]\d*)\b")
+
+    def _unresolved_failing_tools(self) -> set[str]:
+        last_by_tool: dict[str, bool] = {}
+        recent = [m for m in self.messages if m.get("role") == "tool"][-self._RECENT_TOOL_WINDOW :]
+        for msg in recent:
+            try:
+                data = _json.loads(msg.get("content", "") or "{}")
+            except _json.JSONDecodeError:
+                continue
+            tool_name = str(data.get("tool", ""))
+            ok = bool(data.get("ok"))
+            content = str(data.get("content", ""))
+            if ok and self._EXIT_FAIL_RE.search(content):
+                ok = False
+            last_by_tool[tool_name] = ok
+        return {name for name, ok in last_by_tool.items() if not ok}
 
     def clear(self) -> None:
         self.messages = self._initial_messages()
