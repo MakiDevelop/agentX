@@ -203,6 +203,41 @@ def test_write_file_rejects_dotgit(tmp_path: Path) -> None:
     assert ".git" in result.content
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".GIT/hooks/pre-commit",
+        ".Git/hooks/pre-commit",
+        "src/.GIT/x",
+        ".git./hooks/x",
+        ".git /hooks/x",
+        ".git::$DATA",
+    ],
+)
+def test_write_file_rejects_dotgit_bypass_variants(tmp_path: Path, path: str) -> None:
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "write_file",
+        {"path": path, "content": "x"},
+    )
+    assert not result.ok
+    assert "protected location" in result.content
+
+
+@pytest.mark.parametrize("path", ["gitstuff/notes.md", "mytarget.txt"])
+def test_write_file_allows_names_that_contain_protected_substrings(
+    tmp_path: Path,
+    path: str,
+) -> None:
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "write_file",
+        {"path": path, "content": "x"},
+    )
+    assert result.ok
+    assert (tmp_path / path).read_text(encoding="utf-8") == "x"
+
+
 def test_write_file_rejects_dotagentx(tmp_path: Path) -> None:
     registry = _registry(tmp_path)
     result = registry.run(

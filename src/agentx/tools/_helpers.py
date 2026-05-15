@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import unicodedata
 from pathlib import Path
 
 
@@ -32,6 +33,17 @@ WRITE_PROTECTED_PARTS = frozenset(
         "target",
     }
 )
+
+
+def _canonical_part(part: str) -> str:
+    """Normalize one path component for write-protection checks."""
+    part = unicodedata.normalize("NFC", part)
+    part = part.split(":", 1)[0]
+    part = part.rstrip(" .")
+    return part.casefold()
+
+
+_PROTECTED_CANONICAL = frozenset(_canonical_part(part) for part in WRITE_PROTECTED_PARTS)
 
 # GREEN-risk commands: read-only inspection or pure syntax checks. Safe to run
 # without approval. uv run pytest stays here for backward compat even though it
@@ -72,13 +84,17 @@ def ensure_safe_write_path(workspace: Path, target: Path) -> None:
 
     ``.git/hooks/pre-commit`` is the highlight: writing there gives any
     subsequent git operation arbitrary code execution.
+
+    Known residual risk: a malicious workspace can still race the checked path
+    with a symlink swap before the write; the agent approval gate is the
+    remaining backstop for that TOCTOU class.
     """
     try:
         relative = target.relative_to(workspace)
     except ValueError as exc:
         raise ValueError(f"target is outside workspace: {target}") from exc
     for part in relative.parts:
-        if part in WRITE_PROTECTED_PARTS:
+        if _canonical_part(part) in _PROTECTED_CANONICAL:
             raise ValueError(
                 f"refusing to write to protected location: {relative} "
                 f"(matched {part!r}); see WRITE_PROTECTED_PARTS"
