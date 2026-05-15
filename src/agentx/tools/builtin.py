@@ -59,6 +59,26 @@ class ReadFileTool(_WorkspaceTool):
         return target.read_text(encoding="utf-8", errors="replace")[:max_chars]
 
 
+class WriteFileTool(_WorkspaceTool):
+    name = "write_file"
+    description = "寫入 workspace 內檔案，自動建立父目錄，覆寫既有檔；需 approval"
+    risk = Risk.YELLOW
+    signature = "path, content"
+
+    def run(self, args: dict[str, Any]) -> str:
+        path = args["path"]
+        content = args.get("content", "")
+        if not isinstance(content, str):
+            content = str(content)
+        target = resolve_inside_workspace(self.workspace, path)
+        if target == self.workspace:
+            raise ValueError("path must not be the workspace root itself")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        relative = target.relative_to(self.workspace)
+        return f"wrote {len(content)} bytes to {relative}"
+
+
 class SearchTextTool(_WorkspaceTool):
     name = "search_text"
     description = "使用 rg 搜尋 workspace 內文字"
@@ -309,6 +329,7 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
     return [
         ListFilesTool(workspace),
         ReadFileTool(workspace),
+        WriteFileTool(workspace),
         SearchTextTool(workspace),
         GitStatusTool(workspace),
         GitDiffTool(workspace),

@@ -61,3 +61,52 @@ def test_docker_compose_command_rejects_workspace_escape(tmp_path: Path) -> None
 
     with pytest.raises(ValueError):
         docker_compose_command(tmp_path, "ps", compose_file="../compose.yaml")
+
+
+def test_write_file_creates_file(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "write_file",
+        {"path": "hello.txt", "content": "hi"},
+    )
+    assert result.ok
+    assert (tmp_path / "hello.txt").read_text(encoding="utf-8") == "hi"
+
+
+def test_write_file_creates_parent_dirs(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "write_file",
+        {"path": "a/b/c.txt", "content": "x"},
+    )
+    assert result.ok
+    assert (tmp_path / "a" / "b" / "c.txt").read_text(encoding="utf-8") == "x"
+
+
+def test_write_file_overwrites_existing(tmp_path: Path) -> None:
+    target = tmp_path / "out.txt"
+    target.write_text("old", encoding="utf-8")
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "write_file",
+        {"path": "out.txt", "content": "new"},
+    )
+    assert result.ok
+    assert target.read_text(encoding="utf-8") == "new"
+
+
+def test_write_file_rejects_workspace_escape(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "write_file",
+        {"path": "../outside.txt", "content": "nope"},
+    )
+    assert not result.ok
+    assert "escapes workspace" in result.content
+
+
+def test_write_file_rejects_workspace_root(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    result = registry.run("write_file", {"path": "", "content": "nope"})
+    assert not result.ok
+    assert "workspace root" in result.content
