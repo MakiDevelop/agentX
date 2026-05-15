@@ -11,7 +11,7 @@ from agentx.config import Settings
 from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
 from agentx.protocol import FinalAnswer, ToolCall, ToolResult
-from agentx.runtime_prompt import AGENT_SYSTEM_PROMPT
+from agentx.runtime_prompt import build_agent_system_prompt
 from agentx.tools import ToolRegistry
 
 
@@ -60,7 +60,7 @@ class AgentSession:
 
     def _initial_messages(self) -> list[dict[str, str]]:
         return [
-            {"role": "system", "content": AGENT_SYSTEM_PROMPT},
+            {"role": "system", "content": build_agent_system_prompt(self.settings.persona)},
             {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(self.settings.workspace)},
             {
                 "role": "system",

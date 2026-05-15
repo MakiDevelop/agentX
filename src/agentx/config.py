@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from agentx.persona import normalize_persona
 from agentx.project_config import load_project_config
 
 DEFAULT_MODEL = "gemma4:e2b"
@@ -19,6 +20,7 @@ class Settings:
     max_steps: int
     context_limit_tokens: int
     auto_handoff: bool
+    persona: str
     workspace: Path
 
     def __init__(self) -> None:
@@ -36,6 +38,7 @@ class Settings:
             max_steps=int(os.getenv("AGENTX_MAX_STEPS", "8")),
             context_limit_tokens=int(os.getenv("AGENTX_CONTEXT_LIMIT", "8192")),
             auto_handoff=auto_handoff,
+            persona=normalize_persona(os.getenv("AGENTX_PERSONA") or config.persona or "default"),
             workspace=workspace,
         )
 
@@ -51,6 +54,7 @@ class Settings:
         max_steps: int,
         context_limit_tokens: int,
         auto_handoff: bool,
+        persona: str,
         workspace: Path,
     ) -> "Settings":
         settings = cls.__new__(cls)
@@ -63,6 +67,7 @@ class Settings:
             max_steps=max_steps,
             context_limit_tokens=context_limit_tokens,
             auto_handoff=auto_handoff,
+            persona=persona,
             workspace=workspace,
         )
         return settings
@@ -77,6 +82,7 @@ class Settings:
             "max_steps": self.max_steps,
             "context_limit_tokens": self.context_limit_tokens,
             "auto_handoff": self.auto_handoff,
+            "persona": self.persona,
             "workspace": self.workspace,
         }
         values.update(changes)
@@ -93,6 +99,7 @@ class Settings:
         max_steps: int,
         context_limit_tokens: int,
         auto_handoff: bool,
+        persona: str,
         workspace: Path,
     ) -> None:
         object.__setattr__(self, "model", model)
@@ -103,4 +110,5 @@ class Settings:
         object.__setattr__(self, "max_steps", max_steps)
         object.__setattr__(self, "context_limit_tokens", context_limit_tokens)
         object.__setattr__(self, "auto_handoff", auto_handoff)
+        object.__setattr__(self, "persona", persona)
         object.__setattr__(self, "workspace", workspace)

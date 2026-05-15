@@ -25,6 +25,7 @@ from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaCancelledError, OllamaClient
+from agentx.persona import list_personas, normalize_persona
 from agentx.prompting import SlashCommandCompleter
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
@@ -79,6 +80,7 @@ SLASH_COMMANDS = [
     ("/mode agent", "切換到 agent 工具模式，可使用 repo / git / Memory Hall 工具"),
     ("/models", "列出 Ollama 目前可用模型"),
     ("/model [MODEL]", "查看或切換 Ollama 模型，例如 /model gemma4:31b"),
+    ("/persona [default|tutor]", "查看或切換人格設定；tutor 是女子大學生家庭教師模式"),
     ("/remember TEXT", "把指定內容寫入目前 Memory Hall namespace"),
     ("/status", "顯示目前模型、模式、namespace、訊息數與粗估 context tokens"),
     ("/clear", "清空目前 shell session 上下文，並重新載入 repo 與 Memory Hall context"),
@@ -327,6 +329,7 @@ def print_config(
     table.add_row("namespace", namespace)
     table.add_row("mode", mode)
     table.add_row("approval", approval_policy.mode.value)
+    table.add_row("persona", settings.persona)
     table.add_row("auto_handoff", str(settings.auto_handoff))
     table.add_row("context_limit_tokens", str(settings.context_limit_tokens))
     project_config = load_project_config(settings.workspace)
@@ -334,6 +337,7 @@ def print_config(
     table.add_row("config_file_namespace", str(project_config.namespace))
     table.add_row("config_file_mode", str(project_config.mode))
     table.add_row("config_file_approval", str(project_config.approval))
+    table.add_row("config_file_persona", str(project_config.persona))
     table.add_row("config_file_auto_handoff", str(project_config.auto_handoff))
     table.add_row("task", task.title or "(none)")
     table.add_row("task_status", task.status)
@@ -443,7 +447,7 @@ def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = Fals
         return agent_loop.run(prompt, namespace=namespace)
     return ollama.chat(
         [
-            {"role": "system", "content": build_chat_system_prompt(settings.workspace)},
+            {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)},
             {"role": "user", "content": prompt},
         ],
         json_mode=False,
@@ -530,7 +534,7 @@ def chat(
     ollama, _, _ = build_runtime(settings)
     answer = ollama.chat(
         [
-            {"role": "system", "content": build_chat_system_prompt(settings.workspace)},
+            {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)},
             {"role": "user", "content": prompt},
         ],
         json_mode=False,
@@ -566,7 +570,9 @@ def shell(
         namespace=namespace,
         trace=print_trace,
     )
-    chat_messages = [{"role": "system", "content": build_chat_system_prompt(settings.workspace)}]
+    chat_messages = [
+        {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)}
+    ]
     history: list[tuple[str, str]] = []
     plan_mode = False
     job_queue = PromptJobQueue()
@@ -1058,18 +1064,47 @@ def shell(
                 transcript.write("slash_command", {"command": prompt, "model": settings.model})
                 console.print(f"model={settings.model}")
                 continue
+            if prompt == "/persona":
+                transcript.write("slash_command", {"command": prompt, "persona": settings.persona})
+                console.print(f"persona={settings.persona}")
+                print_raw(list_personas())
+                continue
+            if prompt.startswith("/persona "):
+                value = prompt.removeprefix("/persona ").strip()
+                try:
+                    persona = normalize_persona(value)
+                except ValueError as exc:
+                    console.print(str(exc))
+                    continue
+                settings = settings.with_updates(persona=persona)
+                agent_session.settings = settings
+                agent_session.clear()
+                chat_messages = [
+                    {
+                        "role": "system",
+                        "content": build_chat_system_prompt(settings.workspace, settings.persona),
+                    }
+                ]
+                transcript.write("slash_command", {"command": prompt, "persona": settings.persona})
+                console.print(f"persona={settings.persona}")
+                continue
             if prompt == "/status":
                 transcript.write("slash_command", {"command": prompt})
                 approx_tokens = agent_session.context_chars // 4
                 console.print(
                     f"model={settings.model} mode={mode} namespace={namespace} "
-                    f"agent_messages={agent_session.message_count} "
+                    f"persona={settings.persona} agent_messages={agent_session.message_count} "
                     f"agent_context~{approx_tokens} tokens chat_messages={len(chat_messages)}"
                 )
                 continue
             if prompt == "/clear":
                 agent_session.clear()
-                chat_messages = [{"role": "system", "content": build_chat_system_prompt(settings.workspace)}]
+                chat_messages = [
+                    {
+                        "role": "system",
+                        "content": build_chat_system_prompt(settings.workspace, settings.persona),
+                    }
+                ]
                 transcript.write("slash_command", {"command": prompt})
                 console.print("cleared")
                 continue

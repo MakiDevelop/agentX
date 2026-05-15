@@ -7,7 +7,10 @@ from pathlib import Path
 from typing import Any
 
 
-CONFIG_KEYS = {"model", "namespace", "mode", "auto_handoff", "approval"}
+from agentx.persona import normalize_persona
+
+
+CONFIG_KEYS = {"model", "namespace", "mode", "auto_handoff", "approval", "persona"}
 
 
 @dataclass(frozen=True)
@@ -17,6 +20,7 @@ class ProjectConfig:
     mode: str | None = None
     auto_handoff: bool | None = None
     approval: str | None = None
+    persona: str | None = None
 
 
 def config_path(workspace: Path) -> Path:
@@ -35,6 +39,7 @@ def load_project_config(workspace: Path) -> ProjectConfig:
         mode=agentx.get("mode"),
         auto_handoff=agentx.get("auto_handoff"),
         approval=agentx.get("approval"),
+        persona=agentx.get("persona"),
     )
 
 
@@ -48,6 +53,7 @@ def set_project_config(workspace: Path, key: str, value: str) -> ProjectConfig:
         "mode": current.mode,
         "auto_handoff": current.auto_handoff,
         "approval": current.approval,
+        "persona": current.persona,
     }
     data[key] = _parse_value(key, value)
     updated = ProjectConfig(**data)
@@ -59,7 +65,7 @@ def write_project_config(workspace: Path, config: ProjectConfig) -> None:
     path = config_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = ["[agentx]"]
-    for key in ("model", "namespace", "mode", "approval"):
+    for key in ("model", "namespace", "mode", "approval", "persona"):
         value = getattr(config, key)
         if value is not None:
             lines.append(f"{key} = {json.dumps(value)}")
@@ -74,6 +80,8 @@ def _parse_value(key: str, value: str) -> str | bool:
         if not value:
             raise ValueError(f"{key} must not be empty")
         return value
+    if key == "persona":
+        return normalize_persona(value)
     if key == "mode":
         if value not in {"chat", "agent"}:
             raise ValueError("mode must be chat or agent")

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from agentx.runtime_prompt import AGENT_SYSTEM_PROMPT, build_chat_system_prompt
+from agentx.runtime_prompt import AGENT_SYSTEM_PROMPT, build_agent_system_prompt, build_chat_system_prompt
 
 
 def test_chat_prompt_describes_agentx_runtime_without_generic_denial():
@@ -25,3 +25,12 @@ def test_agent_prompt_states_ssh_limit_and_tool_evidence_rule():
     assert "Docker push is not enabled" in AGENT_SYSTEM_PROMPT
     assert "You cannot run arbitrary shell commands or SSH" in AGENT_SYSTEM_PROMPT
     assert "Do not claim you used a tool unless the tool result is present" in AGENT_SYSTEM_PROMPT
+
+
+def test_tutor_persona_is_injected_into_prompts():
+    chat_prompt = build_chat_system_prompt(Path("/tmp/workspace"), "tutor")
+    agent_prompt = build_agent_system_prompt("tutor")
+
+    assert "女子大學生家庭教師模式" in chat_prompt
+    assert "女子大學生家庭教師模式" in agent_prompt
+    assert "不使用曖昧、戀愛、情色" in chat_prompt
