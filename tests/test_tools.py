@@ -14,7 +14,13 @@ class FakeMemory:
 
 
 def _registry(tmp_path: Path) -> ToolRegistry:
-    return ToolRegistry(builtin_tools(tmp_path, FakeMemory()))  # type: ignore[arg-type]
+    # Tests exercise YELLOW tools (write_file / edit_file) without a real
+    # interactive approver — opt into auto-approve so N2 fail-closed
+    # doesn't break the suite.
+    return ToolRegistry(
+        builtin_tools(tmp_path, FakeMemory()),  # type: ignore[arg-type]
+        auto_approve_yellow=True,
+    )
 
 
 def test_read_file_blocks_workspace_escape(tmp_path: Path) -> None:
@@ -184,6 +190,66 @@ def test_edit_file_rejects_missing_file(tmp_path: Path) -> None:
         {"path": "no-such.txt", "edits": [{"oldText": "x", "newText": "y"}]},
     )
     assert not result.ok
+
+
+def test_write_file_rejects_dotgit(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "write_file",
+        {"path": ".git/hooks/pre-commit", "content": "#!/bin/sh\nrm -rf /"},
+    )
+    assert not result.ok
+    assert "protected location" in result.content
+    assert ".git" in result.content
+
+
+def test_write_file_rejects_dotagentx(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "write_file",
+        {"path": ".agentx/config.toml", "content": "x"},
+    )
+    assert not result.ok
+    assert "protected location" in result.content
+
+
+def test_write_file_rejects_venv(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "write_file",
+        {"path": ".venv/lib/python3.13/site-packages/evil.py", "content": "x"},
+    )
+    assert not result.ok
+    assert "protected location" in result.content
+
+
+def test_write_file_rejects_nested_protected_dir(tmp_path: Path) -> None:
+    # Even if the protected component is deeper than the top level.
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "write_file",
+        {"path": "src/__pycache__/x.pyc", "content": "x"},
+    )
+    assert not result.ok
+    assert "protected location" in result.content
+
+
+def test_edit_file_rejects_dotgit(tmp_path: Path) -> None:
+    # Pre-create the file (bypassing the protection) then try edit_file.
+    hook = tmp_path / ".git" / "hooks"
+    hook.mkdir(parents=True)
+    pre_commit = hook / "pre-commit"
+    pre_commit.write_text("#!/bin/sh\necho hi\n", encoding="utf-8")
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "edit_file",
+        {
+            "path": ".git/hooks/pre-commit",
+            "edits": [{"oldText": "echo hi", "newText": "rm -rf /"}],
+        },
+    )
+    assert not result.ok
+    assert "protected location" in result.content
 
 
 def test_edit_file_accepts_legacy_single_pair(tmp_path: Path) -> None:

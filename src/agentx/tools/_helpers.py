@@ -15,6 +15,24 @@ SKIPPED_DIRS = {
     "node_modules",
 }
 
+# Path components write_file / edit_file refuse to descend into. .git is the
+# critical one — writing .git/hooks/pre-commit lets the agent achieve arbitrary
+# code execution on the next git operation. The rest are caches / vendored
+# code / virtualenvs that should never be agent-edited.
+WRITE_PROTECTED_PARTS = frozenset(
+    {
+        ".git",
+        ".agentx",
+        ".venv",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        "__pycache__",
+        "node_modules",
+        "target",
+    }
+)
+
 ALLOWED_COMMANDS: dict[str, list[str]] = {
     "uv run ruff check .": ["uv", "run", "ruff", "check", "."],
     "uv run pytest -q": ["uv", "run", "pytest", "-q"],
@@ -36,6 +54,25 @@ def resolve_inside_workspace(workspace: Path, path: str | None) -> Path:
     if workspace != target and workspace not in target.parents:
         raise ValueError(f"Path escapes workspace: {path}")
     return target
+
+
+def ensure_safe_write_path(workspace: Path, target: Path) -> None:
+    """Reject writes into workspace-internal directories that should never be
+    agent-modified (``.git``, ``.agentx``, ``.venv``, caches, vendored deps).
+
+    ``.git/hooks/pre-commit`` is the highlight: writing there gives any
+    subsequent git operation arbitrary code execution.
+    """
+    try:
+        relative = target.relative_to(workspace)
+    except ValueError as exc:
+        raise ValueError(f"target is outside workspace: {target}") from exc
+    for part in relative.parts:
+        if part in WRITE_PROTECTED_PARTS:
+            raise ValueError(
+                f"refusing to write to protected location: {relative} "
+                f"(matched {part!r}); see WRITE_PROTECTED_PARTS"
+            )
 
 
 def run_subprocess(

@@ -11,6 +11,7 @@ from agentx.tools._helpers import (
     ALLOWED_COMMANDS,
     SKIPPED_DIRS,
     docker_compose_command,
+    ensure_safe_write_path,
     resolve_inside_workspace,
     run_subprocess,
 )
@@ -73,6 +74,7 @@ class WriteFileTool(_WorkspaceTool):
         target = resolve_inside_workspace(self.workspace, path)
         if target == self.workspace:
             raise ValueError("path must not be the workspace root itself")
+        ensure_safe_write_path(self.workspace, target)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         relative = target.relative_to(self.workspace)
@@ -93,6 +95,7 @@ class EditFileTool(_WorkspaceTool):
         target = resolve_inside_workspace(self.workspace, path)
         if not target.is_file():
             raise FileNotFoundError(path)
+        ensure_safe_write_path(self.workspace, target)
 
         edits = _coerce_edits(args)
         if not edits:
