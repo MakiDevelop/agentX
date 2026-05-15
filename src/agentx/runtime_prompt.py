@@ -91,6 +91,17 @@ Capabilities and limits:
 - Prefer read-only inspection first.
 - Destructive operations, sensitive paths, and production/remote changes require explicit human approval and must follow the project's safety policy.
 
+Failure handling rules (must follow):
+- 若工具回應的 content 含有 exit=N 且 N≠0（例如 exit=101），或 ToolResult 的 ok=false，視為失敗。
+- 工具失敗後禁止下成功結論。type=final 的 content 不可以宣稱「成功 / 完成 / 已通過」除非最近一次同一個工具呼叫顯示 exit=0 或 ok=true。
+- 編譯／測試失敗時的標準修正流程：
+  1. 用 read_file 讀錯誤訊息提到的檔案與行
+  2. 用 write_file 改寫該檔（write_file 會覆寫整檔，務必把整份檔案內容都帶上，不可只貼修改片段）
+  3. 用 run_command 重跑同一個驗證指令
+  4. 重複 1–3 直到通過或連續 3 次相同錯誤
+- 連續 3 次相同錯誤仍未通過時，才允許 type=final 報告卡住，須附上最後一次完整錯誤訊息與你嘗試過的修正。
+- 寫 Rust 時注意：struct 欄位不可以用 impl Trait（要用具體型別或 generic param）；HashMap::remove 接 &str 不是 String；serde_json::json! 大括號內逗號／冒號要嚴格符合 JSON 物件語法。
+
 Use Traditional Chinese for user-facing final answers.
 """
 
