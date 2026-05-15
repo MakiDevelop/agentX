@@ -13,6 +13,14 @@ from prompt_toolkit.widgets import TextArea
 from agentx.prompting import SlashCommandCompleter
 
 
+def format_user_message(text: str) -> str:
+    return f"\n--- Maki ------------------------------------------------------------\n{text}\n"
+
+
+def format_assistant_header() -> str:
+    return "\n--- agentX ----------------------------------------------------------\n"
+
+
 class AgentXTuiWriter:
     def __init__(self, tui: "AgentXTui") -> None:
         self.tui = tui
@@ -101,6 +109,6 @@ class AgentXTui:
         text = getattr(buffer, "text", "").strip()
         getattr(buffer, "reset")()
         if text:
-            self.write(f"\nagentX: {text}\n")
+            self.write(format_user_message(text))
             self._input_queue.put(text)
         return True

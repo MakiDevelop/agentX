@@ -128,6 +128,8 @@ AGENTX_TUI=fullscreen ax
 
 底部狀態列會顯示目前 model name 與 context 使用率。
 
+對話區會用 `Maki` 與 `agentX` 分隔每輪訊息，避免使用者輸入與模型回覆擠在一起。
+
 chat mode 會明確告訴模型目前正在 agentX CLI 內執行，避免模型把自己誤認成完全不能碰本機的通用聊天機器人。實際能力仍依模式區分：chat mode 只回答；agent mode 與 slash command 才能使用工具。
 
 目前支援：
@@ -444,5 +446,5 @@ uv run pytest -q
 
 ## 下一步
 
-- session transcript JSONL
+- persona/profile 設定：把 agentX 的工程人格、語氣與安全邊界做成可切換設定
 - 更完整的 model-assisted context compaction / summary

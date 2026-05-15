@@ -33,7 +33,7 @@ from agentx.safety import Risk
 from agentx.task import TaskState, clear_task, finish_task, load_task, start_task
 from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
 from agentx.transcript import Transcript, find_transcript, list_transcripts, summarize_transcript
-from agentx.tui import AgentXTui
+from agentx.tui import AgentXTui, format_assistant_header
 
 app = typer.Typer(
     help="agentX local Ollama agent shell.",
@@ -626,6 +626,8 @@ def shell(
                         cancel_event=current_cancel,
                     )
                     transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
+                    if tui is not None:
+                        print_raw(format_assistant_header())
                     print_block(answer)
                     continue
 
@@ -636,7 +638,7 @@ def shell(
                     chat_prompt = "Plan only. Do not claim actions were performed. " + chat_prompt
                 chat_messages.append({"role": "user", "content": chat_prompt})
                 streamed: list[str] = []
-                print_raw("")
+                print_raw(format_assistant_header() if tui is not None else "")
 
                 def on_delta(delta: str) -> None:
                     streamed.append(delta)
