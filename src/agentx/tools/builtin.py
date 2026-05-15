@@ -59,6 +59,79 @@ class ReadFileTool(_WorkspaceTool):
         return target.read_text(encoding="utf-8", errors="replace")[:max_chars]
 
 
+class WriteFileTool(_WorkspaceTool):
+    name = "write_file"
+    description = "寫入 workspace 內檔案（新檔或整檔重寫），自動建立父目錄；需 approval。改既有檔案的局部請改用 edit_file"
+    risk = Risk.YELLOW
+    signature = "path, content"
+
+    def run(self, args: dict[str, Any]) -> str:
+        path = args["path"]
+        content = args.get("content", "")
+        if not isinstance(content, str):
+            content = str(content)
+        target = resolve_inside_workspace(self.workspace, path)
+        if target == self.workspace:
+            raise ValueError("path must not be the workspace root itself")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        relative = target.relative_to(self.workspace)
+        return f"wrote {len(content)} bytes to {relative}"
+
+
+class EditFileTool(_WorkspaceTool):
+    name = "edit_file"
+    description = (
+        "對 workspace 內既有檔案做 oldText→newText 替換；"
+        "每個 oldText 必須在檔內出現恰好一次；改 bug／局部修正用這個比 write_file 安全"
+    )
+    risk = Risk.YELLOW
+    signature = "path, edits=[{oldText, newText}]"
+
+    def run(self, args: dict[str, Any]) -> str:
+        path = args["path"]
+        target = resolve_inside_workspace(self.workspace, path)
+        if not target.is_file():
+            raise FileNotFoundError(path)
+
+        edits = _coerce_edits(args)
+        if not edits:
+            raise ValueError("edits must contain at least one {oldText, newText} entry")
+
+        content = target.read_text(encoding="utf-8", errors="replace")
+        for index, edit in enumerate(edits):
+            old_text = str(edit.get("oldText", ""))
+            new_text = str(edit.get("newText", ""))
+            if not old_text:
+                raise ValueError(f"edits[{index}].oldText must not be empty")
+            count = content.count(old_text)
+            if count == 0:
+                raise ValueError(
+                    f"edits[{index}] 找不到指定的 oldText 在 {path}。"
+                    " oldText 必須完整符合，包含所有空白與換行。"
+                )
+            if count > 1:
+                raise ValueError(
+                    f"edits[{index}] 在 {path} 找到 {count} 處 oldText 出現；"
+                    " 每個 oldText 必須唯一，請加上更多前後文以區分。"
+                )
+            content = content.replace(old_text, new_text, 1)
+
+        target.write_text(content, encoding="utf-8")
+        return f"applied {len(edits)} edit(s) to {target.relative_to(self.workspace)}"
+
+
+def _coerce_edits(args: dict[str, Any]) -> list[dict[str, Any]]:
+    edits = args.get("edits")
+    if isinstance(edits, list):
+        return [e for e in edits if isinstance(e, dict)]
+    old_text = args.get("oldText")
+    new_text = args.get("newText")
+    if isinstance(old_text, str) and isinstance(new_text, str):
+        return [{"oldText": old_text, "newText": new_text}]
+    return []
+
+
 class SearchTextTool(_WorkspaceTool):
     name = "search_text"
     description = "使用 rg 搜尋 workspace 內文字"
@@ -309,6 +382,8 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
     return [
         ListFilesTool(workspace),
         ReadFileTool(workspace),
+        WriteFileTool(workspace),
+        EditFileTool(workspace),
         SearchTextTool(workspace),
         GitStatusTool(workspace),
         GitDiffTool(workspace),

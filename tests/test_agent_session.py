@@ -1,10 +1,12 @@
 import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 from agentx.config import Settings
 from agentx.hooks import HookEvent, HookManager, ToolCallContext
 from agentx.loop import AgentSession
+from agentx.protocol import Risk
 from agentx.tools import ToolRegistry, builtin_tools
 
 
@@ -147,3 +149,180 @@ def test_compact_preserves_recent_tail(tmp_path: Path) -> None:
     assert session.compaction_count == 1
     assert "壓縮" in note
     assert session.message_count <= before
+
+
+class _StubTool:
+    risk = Risk.GREEN
+
+    def __init__(self, name: str, returns: str = "", raises: Exception | None = None) -> None:
+        self.name = name
+        self.description = name
+        self._returns = returns
+        self._raises = raises
+
+    def run(self, args: dict[str, Any]) -> str:
+        if self._raises is not None:
+            raise self._raises
+        return self._returns
+
+
+class _FlakyTool:
+    name = "flaky"
+    description = "fails first, succeeds after"
+    risk = Risk.GREEN
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def run(self, args: dict[str, Any]) -> str:
+        self.calls += 1
+        code = 1 if self.calls == 1 else 0
+        return f"$ flaky\nexit={code}\n"
+
+
+def _guard_session(
+    tmp_path: Path,
+    responses: Sequence[str],
+    tools: list[object],
+    max_steps: int = 10,
+) -> AgentSession:
+    ollama = FakeOllama(responses)
+    memory = FakeMemory()
+    registry = ToolRegistry(tools)  # type: ignore[arg-type]
+    settings = _make_settings(tmp_path, max_steps=max_steps)
+    return AgentSession(
+        settings=settings,
+        ollama=ollama,
+        tools=registry,
+        memory=memory,  # type: ignore[arg-type]
+    )
+
+
+def test_final_blocked_when_tool_content_has_nonzero_exit(tmp_path: Path) -> None:
+    session = _guard_session(
+        tmp_path,
+        [
+            '{"type":"tool_call","tool":"fail_cmd","args":{}}',
+            '{"type":"final","content":"completed successfully"}',
+            '{"type":"final","content":"卡住了"}',
+            '{"type":"final","content":"放棄"}',
+            '{"type":"final","content":"final attempt"}',
+        ],
+        [_StubTool("fail_cmd", returns="$ thing\nexit=1\nerror: nope")],
+    )
+    answer = session.ask("hi")
+    assert answer == "final attempt"
+
+
+def test_final_blocked_when_tool_raised(tmp_path: Path) -> None:
+    session = _guard_session(
+        tmp_path,
+        [
+            '{"type":"tool_call","tool":"boom","args":{}}',
+            '{"type":"final","content":"works"}',
+            '{"type":"final","content":"works"}',
+            '{"type":"final","content":"works"}',
+            '{"type":"final","content":"works"}',
+        ],
+        [_StubTool("boom", raises=RuntimeError("kaboom"))],
+    )
+    answer = session.ask("hi")
+    assert answer == "works"
+
+
+def test_final_accepted_after_same_tool_succeeds(tmp_path: Path) -> None:
+    session = _guard_session(
+        tmp_path,
+        [
+            '{"type":"tool_call","tool":"flaky","args":{}}',
+            '{"type":"tool_call","tool":"flaky","args":{}}',
+            '{"type":"final","content":"recovered"}',
+        ],
+        [_FlakyTool()],
+    )
+    assert session.ask("hi") == "recovered"
+
+
+def test_final_accepted_when_no_recent_failure(tmp_path: Path) -> None:
+    session = _guard_session(
+        tmp_path,
+        [
+            '{"type":"tool_call","tool":"ok_cmd","args":{}}',
+            '{"type":"final","content":"all good"}',
+        ],
+        [_StubTool("ok_cmd", returns="$ x\nexit=0\n")],
+    )
+    assert session.ask("hi") == "all good"
+
+
+def test_auto_compact_triggers_above_threshold(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.settings = session.settings.with_updates(context_limit_tokens=200)
+    session.messages.append({"role": "user", "content": "x" * 2000})
+    assert session.compaction_count == 0
+    session.ask("hi")
+    assert session.compaction_count >= 1
+
+
+def test_auto_compact_skips_below_threshold(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.settings = session.settings.with_updates(context_limit_tokens=100_000)
+    assert session.compaction_count == 0
+    session.ask("hi")
+    assert session.compaction_count == 0
+
+
+def test_auto_compact_disabled_when_limit_zero(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.settings = session.settings.with_updates(context_limit_tokens=0)
+    session.messages.append({"role": "user", "content": "x" * 5000})
+    session.ask("hi")
+    assert session.compaction_count == 0
+
+
+def _record_tool_call(tool: str, args: dict) -> dict:
+    import json as _json
+
+    return {
+        "role": "assistant",
+        "content": _json.dumps({"type": "tool_call", "tool": tool, "args": args}),
+    }
+
+
+def test_compact_includes_modified_files_tag(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.messages.append(_record_tool_call("write_file", {"path": "src/a.rs", "content": "x"}))
+    session.messages.append(_record_tool_call("edit_file", {"path": "src/b.rs", "edits": []}))
+    note = session.compact()
+
+    summary = session.messages[-1]["content"]
+    assert "<modified-files>" in summary
+    assert "src/a.rs" in summary
+    assert "src/b.rs" in summary
+    assert "壓縮" in note
+
+
+def test_compact_includes_read_files_tag(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.messages.append(_record_tool_call("read_file", {"path": "src/c.rs"}))
+    session.compact()
+
+    summary = session.messages[-1]["content"]
+    assert "<read-files>" in summary
+    assert "src/c.rs" in summary
+
+
+def test_compact_read_then_write_only_listed_as_modified(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.messages.append(_record_tool_call("read_file", {"path": "shared.rs"}))
+    session.messages.append(_record_tool_call("write_file", {"path": "shared.rs", "content": "x"}))
+    session.compact()
+
+    summary = session.messages[-1]["content"]
+    assert "<modified-files>" in summary
+    assert "shared.rs" in summary
+    # 不該同時出現在 read-files
+    read_block_start = summary.find("<read-files>")
+    if read_block_start != -1:
+        read_block = summary[read_block_start:summary.find("</read-files>")]
+        assert "shared.rs" not in read_block

@@ -9,6 +9,8 @@ from agentx.tools import ToolRegistry, tool_prompt_line
 DEFAULT_TOOL_LINES = (
     '- list_files(path=".", limit=200) — 列出 workspace 內檔案，會跳過 .git/.venv/cache 目錄',
     "- read_file(path, max_chars=20000) — 讀取 workspace 內指定檔案內容",
+    "- write_file(path, content) — 寫入新檔或整檔重寫，自動建立父目錄；需 approval；改既有檔局部請改用 edit_file",
+    "- edit_file(path, edits=[{oldText, newText}]) — 對既有檔做 oldText→newText 替換；oldText 必須在檔內唯一；改 bug 用這個比 write_file 安全",
     '- search_text(pattern, path=".", limit=100) — 使用 rg 搜尋 workspace 內文字',
     "- git_status — 查看 git status --short --branch",
     "- git_diff(path=null, max_chars=30000) — 查看 git diff，可指定單一 path",
@@ -89,6 +91,18 @@ Capabilities and limits:
 - Do not claim you used a tool unless the tool result is present in the conversation.
 - Prefer read-only inspection first.
 - Destructive operations, sensitive paths, and production/remote changes require explicit human approval and must follow the project's safety policy.
+
+Failure handling rules (must follow):
+- 若工具回應的 content 含有 exit=N 且 N≠0（例如 exit=101），或 ToolResult 的 ok=false，視為失敗。
+- 工具失敗後禁止下成功結論。type=final 的 content 不可以宣稱「成功 / 完成 / 已通過」除非最近一次同一個工具呼叫顯示 exit=0 或 ok=true。
+- 編譯／測試失敗時的標準修正流程：
+  1. 用 read_file 讀錯誤訊息提到的檔案與行
+  2. 用 edit_file 做精準 oldText→newText 替換修正出錯的那段（首選；oldText 要包含足夠前後文確保唯一）
+     只有當需要從零建檔或要整檔重寫時才用 write_file
+  3. 用 run_command 重跑同一個驗證指令
+  4. 重複 1–3 直到通過或連續 3 次相同錯誤
+- 連續 3 次相同錯誤仍未通過時，才允許 type=final 報告卡住，須附上最後一次完整錯誤訊息與你嘗試過的修正。
+- 寫 Rust 時注意：struct 欄位不可以用 impl Trait（要用具體型別或 generic param）；HashMap::remove 接 &str 不是 String；serde_json::json! 大括號內逗號／冒號要嚴格符合 JSON 物件語法。
 
 Use Traditional Chinese for user-facing final answers.
 """

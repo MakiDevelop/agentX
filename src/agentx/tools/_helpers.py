@@ -20,6 +20,11 @@ ALLOWED_COMMANDS: dict[str, list[str]] = {
     "uv run pytest -q": ["uv", "run", "pytest", "-q"],
     "git status --short --branch": ["git", "status", "--short", "--branch"],
     "git diff": ["git", "diff"],
+    "cargo check": ["cargo", "check"],
+    "cargo build": ["cargo", "build"],
+    "cargo test": ["cargo", "test"],
+    "cargo fmt --check": ["cargo", "fmt", "--", "--check"],
+    "cargo clippy -- -D warnings": ["cargo", "clippy", "--", "-D", "warnings"],
 }
 
 DOCKER_COMPOSE_ACTIONS = {"ps", "build", "up", "down", "logs"}

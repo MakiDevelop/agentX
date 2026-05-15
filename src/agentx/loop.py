@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json as _json
+import re as _re
 import threading
 from collections.abc import Callable
 from enum import Enum
@@ -109,7 +111,9 @@ class AgentSession:
             }
         )
 
+        finalize_retries = 0
         for _ in range(self.settings.max_steps):
+            self._maybe_auto_compact()
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
             action = self._parse_action(raw)
             if isinstance(action, InvalidAction):
@@ -127,6 +131,22 @@ class AgentSession:
                 )
                 continue
             if isinstance(action, FinalAnswer):
+                failing = self._unresolved_failing_tools()
+                if failing and finalize_retries < self.MAX_FINALIZE_RETRIES:
+                    finalize_retries += 1
+                    self.messages.append({"role": "assistant", "content": action.content})
+                    failing_summary = ", ".join(sorted(failing))
+                    self.messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                f"上一次 {failing_summary} 工具回應顯示失敗（exit≠0 或 ok=false）。"
+                                "在問題解決前不可以下成功結論。請繼續呼叫工具修正，"
+                                "或若確定卡住，請用 type=final 明確說明失敗原因，不要含糊。"
+                            ),
+                        }
+                    )
+                    continue
                 self.messages.append({"role": "assistant", "content": action.content})
                 return action.content
 
@@ -135,6 +155,38 @@ class AgentSession:
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
 
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
+
+    MAX_FINALIZE_RETRIES = 3
+    AUTO_COMPACT_RATIO = 0.7
+    _RECENT_TOOL_WINDOW = 12
+    _EXIT_FAIL_RE = _re.compile(r"\bexit=([1-9]\d*)\b")
+
+    def _maybe_auto_compact(self) -> None:
+        limit = self.settings.context_limit_tokens
+        if limit <= 0:
+            return
+        if self.context_tokens_estimate < limit * self.AUTO_COMPACT_RATIO:
+            return
+        self._emit_trace(
+            f"auto-compact at {self.context_tokens_estimate} tokens (limit={limit})"
+        )
+        self.compact()
+
+    def _unresolved_failing_tools(self) -> set[str]:
+        last_by_tool: dict[str, bool] = {}
+        recent = [m for m in self.messages if m.get("role") == "tool"][-self._RECENT_TOOL_WINDOW :]
+        for msg in recent:
+            try:
+                data = _json.loads(msg.get("content", "") or "{}")
+            except _json.JSONDecodeError:
+                continue
+            tool_name = str(data.get("tool", ""))
+            ok = bool(data.get("ok"))
+            content = str(data.get("content", ""))
+            if ok and self._EXIT_FAIL_RE.search(content):
+                ok = False
+            last_by_tool[tool_name] = ok
+        return {name for name, ok in last_by_tool.items() if not ok}
 
     def clear(self) -> None:
         self.messages = self._initial_messages()
@@ -185,6 +237,20 @@ class AgentSession:
         for item in tool_items[-5:]:
             summary_lines.append(f"- {item.replace(chr(10), ' ')[:500]}")
 
+        read_files, modified_files = self._extract_file_operations()
+        if read_files:
+            summary_lines.append("")
+            summary_lines.append("<read-files>")
+            for path in sorted(read_files):
+                summary_lines.append(f"  {path}")
+            summary_lines.append("</read-files>")
+        if modified_files:
+            summary_lines.append("")
+            summary_lines.append("<modified-files>")
+            for path in sorted(modified_files):
+                summary_lines.append(f"  {path}")
+            summary_lines.append("</modified-files>")
+
         summary_lines.extend(["", "Recent raw messages:"])
         for message in tail:
             role = message.get("role", "unknown")
@@ -199,6 +265,35 @@ class AgentSession:
             f"已壓縮上下文：保留最近 {len(tail)} 則訊息摘要，"
             f"目前約 {self.context_tokens_estimate} tokens。"
         )
+
+    _FILE_READ_TOOLS = frozenset({"read_file"})
+    _FILE_WRITE_TOOLS = frozenset({"write_file", "edit_file", "apply_patch"})
+
+    def _extract_file_operations(self) -> tuple[set[str], set[str]]:
+        read_files: set[str] = set()
+        modified_files: set[str] = set()
+        for msg in self.messages:
+            if msg.get("role") != "assistant":
+                continue
+            try:
+                data = _json.loads(msg.get("content", "") or "{}")
+            except _json.JSONDecodeError:
+                continue
+            if not isinstance(data, dict) or data.get("type") != "tool_call":
+                continue
+            tool = str(data.get("tool", ""))
+            args = data.get("args") or {}
+            if not isinstance(args, dict):
+                continue
+            path = args.get("path")
+            if not isinstance(path, str) or not path:
+                continue
+            if tool in self._FILE_READ_TOOLS:
+                read_files.add(path)
+            elif tool in self._FILE_WRITE_TOOLS:
+                modified_files.add(path)
+        read_files -= modified_files
+        return read_files, modified_files
 
     def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | InvalidAction:
         data = extract_json_object(raw)

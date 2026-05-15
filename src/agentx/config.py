@@ -36,7 +36,7 @@ class Settings:
             memory_hall_url=os.getenv("AGENTX_MEMORY_HALL_URL", "http://100.122.171.74:9100"),
             memory_hall_token=os.getenv("AGENTX_MEMORY_HALL_TOKEN") or os.getenv("MH_API_TOKEN"),
             max_steps=int(os.getenv("AGENTX_MAX_STEPS", "8")),
-            context_limit_tokens=int(os.getenv("AGENTX_CONTEXT_LIMIT", "8192")),
+            context_limit_tokens=int(os.getenv("AGENTX_CONTEXT_LIMIT", "32768")),
             auto_handoff=auto_handoff,
             persona=normalize_persona(os.getenv("AGENTX_PERSONA") or config.persona or "default"),
             workspace=workspace,
