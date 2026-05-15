@@ -2,6 +2,7 @@ from agentx.config import Settings
 from agentx.hooks import (
     HookEvent,
     HookManager,
+    HookResult,
     HookVeto,
     ToolCallContext,
     ToolResultContext,
@@ -15,6 +16,7 @@ __all__ = [
     "ApprovalCallback",
     "HookEvent",
     "HookManager",
+    "HookResult",
     "HookVeto",
     "Risk",
     "Settings",

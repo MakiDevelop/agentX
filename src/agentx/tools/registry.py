@@ -3,13 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Any
 
-from agentx.hooks import (
-    HookEvent,
-    HookManager,
-    HookVeto,
-    ToolCallContext,
-    ToolResultContext,
-)
+from agentx.hooks import HookEvent, HookManager, ToolCallContext, ToolResultContext
 from agentx.protocol import Tool, ToolResult
 from agentx.safety import Risk
 
@@ -65,17 +59,19 @@ class ToolRegistry:
                     content=f"Rejected by approval gate: {name}",
                 )
         if self.hooks is not None:
-            try:
-                self.hooks.fire(
-                    HookEvent.BEFORE_TOOL_CALL,
-                    ToolCallContext(tool=name, args=args, risk=tool.risk),
-                )
-            except HookVeto as veto:
+            pre = self.hooks.fire(
+                HookEvent.PRE_TOOL_USE,
+                ToolCallContext(tool=name, args=args, risk=tool.risk),
+            )
+            if pre.blocked:
+                reason = pre.reason or "no reason given"
                 return ToolResult(
                     tool=name,
                     ok=False,
-                    content=f"Vetoed by hook: {veto}",
+                    content=f"Blocked by hook: {reason}",
                 )
+            if pre.updated_args is not None:
+                args = pre.updated_args
         try:
             content = tool.run(args)
             result = ToolResult(tool=name, ok=True, content=str(content))
@@ -83,7 +79,7 @@ class ToolRegistry:
             result = ToolResult(tool=name, ok=False, content=f"{type(exc).__name__}: {exc}")
         if self.hooks is not None:
             self.hooks.fire(
-                HookEvent.AFTER_TOOL_CALL,
+                HookEvent.POST_TOOL_USE,
                 ToolResultContext(tool=name, args=args, result=result),
             )
         return result

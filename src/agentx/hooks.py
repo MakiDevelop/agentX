@@ -11,12 +11,30 @@ from agentx.safety import Risk
 
 
 class HookEvent(str, Enum):
-    BEFORE_TOOL_CALL = "before_tool_call"
-    AFTER_TOOL_CALL = "after_tool_call"
+    PRE_TOOL_USE = "PreToolUse"
+    POST_TOOL_USE = "PostToolUse"
 
 
 class HookVeto(Exception):
-    """Raised by a before_* hook to abort the pending action."""
+    """Backward-compatible block signal.
+
+    New code should return ``HookResult(decision='block', reason=...)``.
+    Raising ``HookVeto`` is still supported and gets mapped to the same
+    structured result.
+    """
+
+
+@dataclass
+class HookResult:
+    decision: str = "allow"
+    reason: str | None = None
+    updated_args: dict[str, Any] | None = None
+    additional_context: str | None = None
+    system_message: str | None = None
+
+    @property
+    def blocked(self) -> bool:
+        return self.decision == "block"
 
 
 @dataclass
@@ -33,7 +51,7 @@ class ToolResultContext:
     result: ToolResult
 
 
-HookCallback = Callable[[Any], None]
+HookCallback = Callable[[Any], "HookResult | None"]
 
 
 class HookManager:
@@ -51,10 +69,36 @@ class HookManager:
     def listeners(self, event: HookEvent | str) -> list[HookCallback]:
         return list(self._listeners.get(_key(event), []))
 
-    def fire(self, event: HookEvent | str, context: Any) -> None:
+    def fire(self, event: HookEvent | str, context: Any) -> HookResult:
+        merged = HookResult()
         for callback in list(self._listeners.get(_key(event), [])):
-            callback(context)
+            try:
+                result = callback(context)
+            except HookVeto as veto:
+                return HookResult(decision="block", reason=str(veto))
+            if result is None:
+                continue
+            merged = _merge_results(merged, result)
+            if merged.blocked:
+                return merged
+        return merged
 
 
 def _key(event: HookEvent | str) -> str:
     return event.value if isinstance(event, HookEvent) else event
+
+
+def _merge_results(a: HookResult, b: HookResult) -> HookResult:
+    return HookResult(
+        decision="block" if b.decision == "block" else a.decision,
+        reason=b.reason or a.reason,
+        updated_args=b.updated_args if b.updated_args is not None else a.updated_args,
+        additional_context=_concat(a.additional_context, b.additional_context),
+        system_message=_concat(a.system_message, b.system_message),
+    )
+
+
+def _concat(a: str | None, b: str | None) -> str | None:
+    if a and b:
+        return f"{a}\n{b}"
+    return b or a
