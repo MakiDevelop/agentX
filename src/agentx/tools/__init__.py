@@ -26,7 +26,14 @@ from agentx.tools.builtin import (
     SearchTextTool,
     builtin_tools,
 )
-from agentx.tools.registry import ApprovalCallback, ToolRegistry
+from agentx.tools.registry import (
+    ApprovalCallback,
+    ToolRegistry,
+    tool_aliases,
+    tool_is_enabled,
+    tool_prompt_line,
+    tool_signature,
+)
 
 __all__ = [
     "ALLOWED_COMMANDS",
@@ -55,4 +62,8 @@ __all__ = [
     "resolve_compose_file",
     "resolve_inside_workspace",
     "run_subprocess",
+    "tool_aliases",
+    "tool_is_enabled",
+    "tool_prompt_line",
+    "tool_signature",
 ]
