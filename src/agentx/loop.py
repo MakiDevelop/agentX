@@ -8,13 +8,7 @@ from pydantic import ValidationError
 
 from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
-from agentx.hooks import (
-    ChatContext,
-    CompactContext,
-    HookEvent,
-    HookManager,
-    HookVeto,
-)
+from agentx.hooks import HookManager
 from agentx.json_repair import extract_json_object
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
@@ -112,14 +106,6 @@ class AgentSession:
         )
 
         for _ in range(self.settings.max_steps):
-            if self.hooks is not None:
-                try:
-                    self.hooks.fire(
-                        HookEvent.BEFORE_CHAT,
-                        ChatContext(messages=list(self.messages), json_mode=True),
-                    )
-                except HookVeto as veto:
-                    return f"Chat 被 hook 中止：{veto}"
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
             action = self._parse_action(raw)
             if isinstance(action, InvalidAction):
@@ -171,14 +157,6 @@ class AgentSession:
         }
 
     def compact(self, keep_last: int = 8) -> str:
-        if self.hooks is not None:
-            try:
-                self.hooks.fire(
-                    HookEvent.ON_COMPACT,
-                    CompactContext(message_count=len(self.messages), keep_last=keep_last),
-                )
-            except HookVeto as veto:
-                return f"Compact 被 hook 中止：{veto}"
         bootstrap = self._initial_messages()
         tail = self.messages[-keep_last:] if len(self.messages) > keep_last else self.messages
         user_items = [m.get("content", "") for m in self.messages if m.get("role") == "user"]

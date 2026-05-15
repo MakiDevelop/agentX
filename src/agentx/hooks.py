@@ -13,8 +13,6 @@ from agentx.safety import Risk
 class HookEvent(str, Enum):
     BEFORE_TOOL_CALL = "before_tool_call"
     AFTER_TOOL_CALL = "after_tool_call"
-    ON_COMPACT = "on_compact"
-    BEFORE_CHAT = "before_chat"
 
 
 class HookVeto(Exception):
@@ -33,18 +31,6 @@ class ToolResultContext:
     tool: str
     args: dict[str, Any]
     result: ToolResult
-
-
-@dataclass
-class CompactContext:
-    message_count: int
-    keep_last: int
-
-
-@dataclass
-class ChatContext:
-    messages: list[dict[str, str]]
-    json_mode: bool
 
 
 HookCallback = Callable[[Any], None]
