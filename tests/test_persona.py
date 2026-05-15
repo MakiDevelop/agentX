@@ -13,6 +13,7 @@ def test_persona_prompt_has_professional_boundary() -> None:
 
     assert "女子大學生家庭教師模式" in prompt
     assert "家庭教師" in prompt
+    assert "小Ge" in prompt
     assert "安全邊界" in prompt
 
 
