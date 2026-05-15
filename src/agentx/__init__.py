@@ -1,4 +1,12 @@
 from agentx.config import Settings
+from agentx.coordinator import (
+    Coordinator,
+    CoordinatorError,
+    CoordinatorResult,
+    Plan,
+    PlanStep,
+    StepResult,
+)
 from agentx.hooks import (
     HookEvent,
     HookManager,
@@ -14,12 +22,18 @@ from agentx.tools import ApprovalCallback, ToolRegistry, builtin_tools
 __all__ = [
     "__version__",
     "ApprovalCallback",
+    "Coordinator",
+    "CoordinatorError",
+    "CoordinatorResult",
     "HookEvent",
     "HookManager",
     "HookResult",
     "HookVeto",
+    "Plan",
+    "PlanStep",
     "Risk",
     "Settings",
+    "StepResult",
     "Tool",
     "ToolCallContext",
     "ToolRegistry",
