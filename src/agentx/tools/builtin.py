@@ -25,6 +25,7 @@ class ListFilesTool(_WorkspaceTool):
     name = "list_files"
     description = "列出 workspace 內檔案，會跳過 .git/.venv/cache 目錄"
     risk = Risk.GREEN
+    signature = 'path=".", limit=200'
 
     def run(self, args: dict[str, Any]) -> str:
         path = args.get("path", ".")
@@ -47,6 +48,7 @@ class ReadFileTool(_WorkspaceTool):
     name = "read_file"
     description = "讀取 workspace 內指定檔案內容"
     risk = Risk.GREEN
+    signature = "path, max_chars=20000"
 
     def run(self, args: dict[str, Any]) -> str:
         path = args["path"]
@@ -61,6 +63,7 @@ class SearchTextTool(_WorkspaceTool):
     name = "search_text"
     description = "使用 rg 搜尋 workspace 內文字"
     risk = Risk.GREEN
+    signature = 'pattern, path=".", limit=100'
 
     def run(self, args: dict[str, Any]) -> str:
         pattern = args["pattern"]
@@ -88,6 +91,7 @@ class GitDiffTool(_WorkspaceTool):
     name = "git_diff"
     description = "查看 git diff，可指定單一 path"
     risk = Risk.GREEN
+    signature = "path=null, max_chars=30000"
 
     def run(self, args: dict[str, Any]) -> str:
         path = args.get("path")
@@ -104,6 +108,7 @@ class MemorySearchTool:
     name = "memory_search"
     description = "查詢 Memory Hall"
     risk = Risk.GREEN
+    signature = 'query, namespace="shared", limit=5'
 
     def __init__(self, memory: MemoryHallClient) -> None:
         self.memory = memory
@@ -120,6 +125,7 @@ class MemoryWriteTool:
     name = "memory_write"
     description = "寫入 Memory Hall"
     risk = Risk.YELLOW
+    signature = 'content, namespace="agent:agentx"'
 
     def __init__(self, memory: MemoryHallClient) -> None:
         self.memory = memory
@@ -135,6 +141,7 @@ class RunCommandTool(_WorkspaceTool):
     name = "run_command"
     description = "執行固定 allowlist 命令"
     risk = Risk.GREEN
+    signature = "command"
 
     def run(self, args: dict[str, Any]) -> str:
         command = args["command"]
@@ -186,6 +193,7 @@ class ApplyPatchTool(_WorkspaceTool):
     name = "apply_patch"
     description = "套用 unified diff patch，需 approval"
     risk = Risk.YELLOW
+    signature = "patch"
 
     def run(self, args: dict[str, Any]) -> str:
         patch = args["patch"]
@@ -246,6 +254,7 @@ class DockerComposePsTool(_DockerComposeTool):
     name = "docker_compose_ps"
     description = "查看 docker compose ps"
     risk = Risk.GREEN
+    signature = "compose_file=null"
     action = "ps"
 
     def run(self, args: dict[str, Any]) -> str:
@@ -256,6 +265,7 @@ class DockerComposeBuildTool(_DockerComposeTool):
     name = "docker_compose_build"
     description = "執行 docker compose build，需 approval"
     risk = Risk.YELLOW
+    signature = "compose_file=null"
     action = "build"
 
     def run(self, args: dict[str, Any]) -> str:
@@ -266,6 +276,7 @@ class DockerComposeUpTool(_DockerComposeTool):
     name = "docker_compose_up"
     description = "執行 docker compose up -d，需 approval"
     risk = Risk.YELLOW
+    signature = "compose_file=null"
     action = "up"
 
     def run(self, args: dict[str, Any]) -> str:
@@ -276,6 +287,7 @@ class DockerComposeDownTool(_DockerComposeTool):
     name = "docker_compose_down"
     description = "執行 docker compose down，需 approval"
     risk = Risk.YELLOW
+    signature = "compose_file=null"
     action = "down"
 
     def run(self, args: dict[str, Any]) -> str:
@@ -286,6 +298,7 @@ class DockerComposeLogsTool(_DockerComposeTool):
     name = "docker_compose_logs"
     description = "查看 docker compose logs"
     risk = Risk.GREEN
+    signature = "compose_file=null, service=null, tail=100"
     action = "logs"
 
     def run(self, args: dict[str, Any]) -> str:

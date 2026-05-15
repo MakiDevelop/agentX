@@ -75,7 +75,10 @@ class AgentSession:
 
     def _initial_messages(self) -> list[dict[str, str]]:
         return [
-            {"role": "system", "content": build_agent_system_prompt(self.settings.persona)},
+            {
+                "role": "system",
+                "content": build_agent_system_prompt(self.settings.persona, tools=self.tools),
+            },
             {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(self.settings.workspace)},
             {
                 "role": "system",

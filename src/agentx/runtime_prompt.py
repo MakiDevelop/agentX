@@ -3,6 +3,26 @@ from __future__ import annotations
 from pathlib import Path
 
 from agentx.persona import persona_prompt
+from agentx.tools import ToolRegistry, tool_prompt_line
+
+
+DEFAULT_TOOL_LINES = (
+    '- list_files(path=".", limit=200) — 列出 workspace 內檔案，會跳過 .git/.venv/cache 目錄',
+    "- read_file(path, max_chars=20000) — 讀取 workspace 內指定檔案內容",
+    '- search_text(pattern, path=".", limit=100) — 使用 rg 搜尋 workspace 內文字',
+    "- git_status — 查看 git status --short --branch",
+    "- git_diff(path=null, max_chars=30000) — 查看 git diff，可指定單一 path",
+    '- memory_search(query, namespace="shared", limit=5) — 查詢 Memory Hall',
+    '- memory_write(content, namespace="agent:agentx") — 寫入 Memory Hall',
+    "- run_command(command) — 執行固定 allowlist 命令",
+    "- run_tests — 執行固定 allowlist 驗證：ruff check 與 pytest",
+    "- apply_patch(patch) — 套用 unified diff patch，需 approval",
+    "- docker_compose_ps(compose_file=null) — 查看 docker compose ps",
+    "- docker_compose_logs(compose_file=null, service=null, tail=100) — 查看 docker compose logs",
+    "- docker_compose_build(compose_file=null) — 執行 docker compose build，需 approval",
+    "- docker_compose_up(compose_file=null) — 執行 docker compose up -d，需 approval",
+    "- docker_compose_down(compose_file=null) — 執行 docker compose down，需 approval",
+)
 
 
 def build_chat_system_prompt(workspace: Path, persona: str = "default") -> str:
@@ -35,7 +55,15 @@ When the user asks about your capabilities, answer as this local agentX runtime,
 """
 
 
-def build_agent_system_prompt(persona: str = "default") -> str:
+def build_agent_system_prompt(
+    persona: str = "default",
+    tools: ToolRegistry | None = None,
+) -> str:
+    if tools is None:
+        tool_section = "\n".join(DEFAULT_TOOL_LINES)
+    else:
+        lines = [tool_prompt_line(tool) for tool in tools.tools()]
+        tool_section = "\n".join(lines) if lines else "(no tools registered)"
     return f"""You are agentX, a local engineering agent.
 You can use tools through strict JSON only.
 Persona:
@@ -49,21 +77,7 @@ or
 {{"type":"final","content":"your final answer"}}
 
 Available tools:
-- list_files(path=".", limit=200)
-- read_file(path, max_chars=20000)
-- search_text(pattern, path=".", limit=100)
-- git_status()
-- git_diff(path=null, max_chars=30000)
-- memory_search(query, namespace="shared", limit=5)
-- memory_write(content, namespace="agent:agentx")
-- run_command(command)
-- docker_compose_ps(compose_file=null)
-- docker_compose_logs(compose_file=null, service=null, tail=100)
-- docker_compose_build(compose_file=null)
-- docker_compose_up(compose_file=null)
-- docker_compose_down(compose_file=null)
-- run_tests()
-- apply_patch(patch)
+{tool_section}
 
 Capabilities and limits:
 - You run inside the agentX CLI on the user's machine and operate against the configured workspace.
