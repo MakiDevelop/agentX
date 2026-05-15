@@ -54,8 +54,20 @@ class ToolRegistry:
                 self.register(tool)
 
     def register(self, tool: Tool) -> None:
+        aliases = tool_aliases(tool)
+        if tool.name in self._tools:
+            self.unregister(tool.name)
+        elif tool.name in self._aliases:
+            owner = self._aliases[tool.name]
+            raise ValueError(f"tool name conflicts with alias: {tool.name} -> {owner}")
+        for alias in aliases:
+            if alias in self._tools:
+                raise ValueError(f"tool alias conflicts with tool name: {alias}")
+            if alias in self._aliases:
+                owner = self._aliases[alias]
+                raise ValueError(f"tool alias conflicts with alias: {alias} -> {owner}")
         self._tools[tool.name] = tool
-        for alias in tool_aliases(tool):
+        for alias in aliases:
             self._aliases[alias] = tool.name
 
     def unregister(self, name: str) -> None:
@@ -96,13 +108,6 @@ class ToolRegistry:
                 ok=False,
                 content=f"Tool is blocked by safety policy: {name}",
             )
-        if tool.risk == Risk.YELLOW and self.approver is not None:
-            if not self.approver(primary, args, tool.risk):
-                return ToolResult(
-                    tool=name,
-                    ok=False,
-                    content=f"Rejected by approval gate: {primary}",
-                )
         if self.hooks is not None:
             pre = self.hooks.fire(
                 HookEvent.PRE_TOOL_USE,
@@ -117,14 +122,34 @@ class ToolRegistry:
                 )
             if pre.updated_args is not None:
                 args = pre.updated_args
+        if tool.risk == Risk.YELLOW and self.approver is not None:
+            if not self.approver(primary, args, tool.risk):
+                return ToolResult(
+                    tool=name,
+                    ok=False,
+                    content=f"Rejected by approval gate: {primary}",
+                )
         try:
             content = tool.run(args)
             result = ToolResult(tool=primary, ok=True, content=str(content))
         except Exception as exc:
             result = ToolResult(tool=primary, ok=False, content=f"{type(exc).__name__}: {exc}")
         if self.hooks is not None:
-            self.hooks.fire(
+            post = self.hooks.fire(
                 HookEvent.POST_TOOL_USE,
                 ToolResultContext(tool=primary, args=args, result=result),
             )
+            if post.blocked:
+                reason = post.reason or "no reason given"
+                return ToolResult(
+                    tool=primary,
+                    ok=False,
+                    content=f"Blocked by post hook: {reason}",
+                )
+            if post.additional_context:
+                result = ToolResult(
+                    tool=result.tool,
+                    ok=result.ok,
+                    content=f"{result.content}\n\nAdditional context:\n{post.additional_context}",
+                )
         return result

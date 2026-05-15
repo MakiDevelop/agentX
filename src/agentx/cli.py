@@ -91,6 +91,29 @@ SLASH_COMMANDS = [
 ]
 
 NON_BLOCKING_COMMANDS = {"/jobs", "/cancel"}
+ZERO_ARG_COMMANDS = frozenset(
+    {
+        "/help",
+        "/doctor",
+        "/init",
+        "/tools",
+        "/context",
+        "/compact",
+        "/history",
+        "/jobs",
+        "/sessions",
+        "/transcript",
+        "/git",
+        "/test",
+        "/review",
+        "/plan",
+        "/models",
+        "/status",
+        "/clear",
+        "/exit",
+        "/quit",
+    }
+)
 
 
 @dataclass
@@ -955,6 +978,9 @@ def dispatch_slash(state: ShellState, prompt: str) -> bool:
     handler = SLASH_HANDLERS.get(head)
     if handler is None:
         return False
+    if head in ZERO_ARG_COMMANDS and arg.strip():
+        console.print(f"{head} 不接受參數")
+        return True
     handler(state, arg)
     return True
 

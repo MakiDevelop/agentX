@@ -133,6 +133,46 @@ def test_unregister_by_alias_removes_tool() -> None:
     assert registry.get("alt") is None
 
 
+class OtherAliasTool:
+    name = "other"
+    description = "other tool"
+    risk = Risk.GREEN
+    aliases = ("primary",)
+
+    def run(self, args: dict[str, Any]) -> str:
+        return "ran other"
+
+
+class ReplacedAliasTool:
+    name = "primary"
+    description = "replacement"
+    risk = Risk.GREEN
+    aliases = ("new",)
+
+    def run(self, args: dict[str, Any]) -> str:
+        return "ran replacement"
+
+
+def test_register_rejects_alias_conflict_with_primary_name() -> None:
+    registry = ToolRegistry([AliasTool()])
+    try:
+        registry.register(OtherAliasTool())
+    except ValueError as exc:
+        assert "conflicts" in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected alias conflict")
+
+
+def test_register_replaces_same_name_and_clears_stale_aliases() -> None:
+    registry = ToolRegistry([AliasTool()])
+    registry.register(ReplacedAliasTool())
+
+    assert registry.get("primary") is not None
+    assert registry.get("alt") is None
+    assert registry.get("p") is None
+    assert registry.run("new", {}).content == "ran replacement"
+
+
 class DisabledTool:
     name = "off"
     description = "off in this env"

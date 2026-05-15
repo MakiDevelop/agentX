@@ -3,6 +3,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from agentx.config import Settings
+from agentx.hooks import HookEvent, HookManager, ToolCallContext
 from agentx.loop import AgentSession
 from agentx.tools import ToolRegistry, builtin_tools
 
@@ -77,6 +78,34 @@ def test_tool_call_then_final(tmp_path: Path) -> None:
         ],
     )
     assert session.ask("use a tool") == "after tool"
+
+
+def test_session_hooks_are_connected_to_tool_registry(tmp_path: Path) -> None:
+    seen: list[str] = []
+    hooks = HookManager()
+
+    def observe(ctx: ToolCallContext) -> None:
+        seen.append(ctx.tool)
+
+    hooks.add(HookEvent.PRE_TOOL_USE, observe)
+    ollama = FakeOllama(
+        [
+            '{"type":"tool_call","tool":"memory_search","args":{"query":"x"}}',
+            '{"type":"final","content":"done"}',
+        ]
+    )
+    memory = FakeMemory()
+    registry = ToolRegistry(builtin_tools(tmp_path, memory))  # type: ignore[arg-type]
+    session = AgentSession(
+        settings=_make_settings(tmp_path),
+        ollama=ollama,  # type: ignore[arg-type]
+        tools=registry,
+        memory=memory,  # type: ignore[arg-type]
+        hooks=hooks,
+    )
+
+    assert session.ask("use a tool") == "done"
+    assert seen == ["memory_search"]
 
 
 def test_invalid_json_retries_then_final(tmp_path: Path) -> None:

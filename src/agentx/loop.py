@@ -69,7 +69,8 @@ class AgentSession:
         self.memory = memory
         self.namespace = namespace
         self.trace = trace
-        self.hooks = hooks
+        if hooks is not None:
+            self.tools.hooks = hooks
         self.compaction_count = 0
         self.messages = self._initial_messages()
 

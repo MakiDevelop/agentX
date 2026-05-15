@@ -89,6 +89,57 @@ def test_hook_can_modify_args() -> None:
     assert result.content == "echo:REDACTED"
 
 
+def test_pre_hook_updates_args_before_yellow_approval() -> None:
+    seen: list[dict[str, Any]] = []
+    hooks = HookManager()
+
+    def update_args(ctx: ToolCallContext) -> HookResult:
+        return HookResult(updated_args={**ctx.args, "value": "final"})
+
+    def approve(name: str, args: dict[str, Any], risk: Risk) -> bool:
+        seen.append(args)
+        return True
+
+    hooks.add(HookEvent.PRE_TOOL_USE, update_args)
+    registry = ToolRegistry([YellowEchoTool()], approver=approve, hooks=hooks)
+
+    result = registry.run("yellow_echo", {"value": "original"})
+
+    assert result.ok
+    assert result.content == "yellow:final"
+    assert seen == [{"value": "final"}]
+
+
+def test_post_hook_can_block_result() -> None:
+    hooks = HookManager()
+    hooks.add(
+        HookEvent.POST_TOOL_USE,
+        lambda ctx: HookResult(decision="block", reason=f"bad {ctx.tool}"),
+    )
+    registry = ToolRegistry([EchoTool()], hooks=hooks)
+
+    result = registry.run("echo", {"value": "hi"})
+
+    assert not result.ok
+    assert result.content == "Blocked by post hook: bad echo"
+
+
+def test_post_hook_additional_context_is_visible() -> None:
+    hooks = HookManager()
+    hooks.add(
+        HookEvent.POST_TOOL_USE,
+        lambda ctx: HookResult(additional_context="audit note"),
+    )
+    registry = ToolRegistry([EchoTool()], hooks=hooks)
+
+    result = registry.run("echo", {"value": "hi"})
+
+    assert result.ok
+    assert "echo:hi" in result.content
+    assert "Additional context:" in result.content
+    assert "audit note" in result.content
+
+
 def test_hooks_chain_in_order_and_short_circuit_on_block() -> None:
     fired: list[str] = []
     hooks = HookManager()
@@ -132,3 +183,12 @@ def test_remove_hook_stops_firing() -> None:
 def test_event_values_match_claude_code() -> None:
     assert HookEvent.PRE_TOOL_USE.value == "PreToolUse"
     assert HookEvent.POST_TOOL_USE.value == "PostToolUse"
+
+
+class YellowEchoTool:
+    name = "yellow_echo"
+    description = "yellow echo"
+    risk = Risk.YELLOW
+
+    def run(self, args: dict[str, Any]) -> str:
+        return f"yellow:{args.get('value', '')}"

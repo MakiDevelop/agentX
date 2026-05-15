@@ -162,6 +162,20 @@ def test_cmd_clear_resets_session(tmp_path: Path) -> None:
     assert state.chat_messages[0]["role"] == "system"
 
 
+def test_zero_arg_commands_reject_extra_args(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+
+    assert dispatch_slash(state, "/exit later") is True
+    assert dispatch_slash(state, "/clear notes") is True
+    assert dispatch_slash(state, "/git foo") is True
+
+    session: FakeAgentSession = state.agent_session  # type: ignore[assignment]
+    tools: FakeTools = state.tools  # type: ignore[assignment]
+    assert state.should_exit is False
+    assert session.cleared == 0
+    assert tools.calls == []
+
+
 def test_non_blocking_commands_set() -> None:
     assert NON_BLOCKING_COMMANDS == {"/jobs", "/cancel"}
 
