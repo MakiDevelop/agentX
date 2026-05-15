@@ -43,11 +43,13 @@ class ToolRegistry:
         tools: Iterable[Tool] | None = None,
         *,
         approver: ApprovalCallback | None = None,
+        auto_approve_yellow: bool = False,
         hooks: HookManager | None = None,
     ) -> None:
         self._tools: dict[str, Tool] = {}
         self._aliases: dict[str, str] = {}
         self.approver = approver
+        self.auto_approve_yellow = auto_approve_yellow
         self.hooks = hooks
         if tools is not None:
             for tool in tools:
@@ -122,12 +124,23 @@ class ToolRegistry:
                 )
             if pre.updated_args is not None:
                 args = pre.updated_args
-        if tool.risk == Risk.YELLOW and self.approver is not None:
-            if not self.approver(primary, args, tool.risk):
+        if tool.risk == Risk.YELLOW:
+            if self.approver is not None:
+                if not self.approver(primary, args, tool.risk):
+                    return ToolResult(
+                        tool=name,
+                        ok=False,
+                        content=f"Rejected by approval gate: {primary}",
+                    )
+            elif not self.auto_approve_yellow:
                 return ToolResult(
                     tool=name,
                     ok=False,
-                    content=f"Rejected by approval gate: {primary}",
+                    content=(
+                        f"YELLOW tool {primary!r} requires explicit approval but no "
+                        "approver is configured (fail-closed). Pass approver=... or "
+                        "auto_approve_yellow=True when constructing ToolRegistry."
+                    ),
                 )
         try:
             content = tool.run(args)

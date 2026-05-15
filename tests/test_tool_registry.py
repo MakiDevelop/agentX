@@ -232,3 +232,30 @@ class CustomPromptTool:
 
 def test_tool_prompt_line_uses_custom_prompt() -> None:
     assert tool_prompt_line(CustomPromptTool()) == "## custom block"
+
+
+def test_yellow_fails_closed_when_no_approver() -> None:
+    registry = ToolRegistry([YellowTool()])
+    result = registry.run("yellow", {})
+    assert not result.ok
+    assert "fail-closed" in result.content
+    assert "approver" in result.content
+
+
+def test_yellow_runs_when_auto_approve_explicitly_set() -> None:
+    registry = ToolRegistry([YellowTool()], auto_approve_yellow=True)
+    result = registry.run("yellow", {})
+    assert result.ok
+    assert result.content == "done"
+
+
+def test_yellow_approver_takes_precedence_over_auto_approve() -> None:
+    # When both supplied, the explicit approver still gates.
+    registry = ToolRegistry(
+        [YellowTool()],
+        approver=lambda *_: False,
+        auto_approve_yellow=True,
+    )
+    result = registry.run("yellow", {})
+    assert not result.ok
+    assert "approval" in result.content.lower()
