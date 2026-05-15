@@ -112,15 +112,21 @@ uv run agentx shell
 
 chat mode 會串流顯示 Ollama 回應；agent mode 的工具 JSON 回合可取消但不串流顯示，避免破壞 tool-call 解析。
 
-互動式 terminal 預設使用 classic prompt，方便選取與複製文字。
+互動式 terminal 預設使用底部輸入列與狀態列，並保留一般 terminal scrollback，方便選取與複製文字。
 
-如果想試 full-screen TUI，可手動開啟：
+如果想回到 classic prompt：
 
 ```bash
-AGENTX_TUI=1 ax
+AGENTX_TUI=0 ax
 ```
 
-full-screen TUI 會使用上方 scrollback、下方固定輸入列與狀態列。底部狀態列會顯示目前 model name 與 context 使用率。
+如果想試 alternate-screen full-screen TUI，可手動開啟：
+
+```bash
+AGENTX_TUI=fullscreen ax
+```
+
+底部狀態列會顯示目前 model name 與 context 使用率。
 
 chat mode 會明確告訴模型目前正在 agentX CLI 內執行，避免模型把自己誤認成完全不能碰本機的通用聊天機器人。實際能力仍依模式區分：chat mode 只回答；agent mode 與 slash command 才能使用工具。
 
@@ -236,7 +242,7 @@ Docker Compose allowlist：
 /quit
 ```
 
-full-screen TUI 裡也可以按 `Ctrl+D` 離開；`Ctrl+C` 會清空目前輸入。
+底部輸入列裡也可以按 `Ctrl+D` 離開；`Ctrl+C` 會清空目前輸入。
 
 提交並推送：
 

@@ -32,6 +32,7 @@ class AgentXTui:
         *,
         commands: list[tuple[str, str]],
         status_text: Callable[[], str],
+        full_screen: bool = False,
     ) -> None:
         self._input_queue: queue.Queue[str] = queue.Queue()
         self._lock = threading.Lock()
@@ -68,7 +69,7 @@ class AgentXTui:
         self.app: Application[None] = Application(
             layout=Layout(HSplit([self.output, status, self.input]), focused_element=self.input),
             key_bindings=key_bindings,
-            full_screen=True,
+            full_screen=full_screen,
             refresh_interval=0.2,
             mouse_support=False,
         )

@@ -579,8 +579,13 @@ def shell(
     def status_line() -> str:
         return f"{settings.model} | context {context_percent(settings, agent_session, chat_messages)}%"
 
-    if sys.stdin.isatty() and os.getenv("AGENTX_TUI", "0") == "1":
-        tui = AgentXTui(commands=SLASH_COMMANDS, status_text=status_line)
+    ui_mode = os.getenv("AGENTX_TUI", "1").lower()
+    if sys.stdin.isatty() and ui_mode not in {"0", "false", "classic"}:
+        tui = AgentXTui(
+            commands=SLASH_COMMANDS,
+            status_text=status_line,
+            full_screen=ui_mode in {"fullscreen", "full-screen"},
+        )
         tui.start()
         console = Console(file=tui.writer, force_terminal=False, color_system=None, width=100)
     elif sys.stdin.isatty():
