@@ -113,6 +113,7 @@ class AgentSession:
 
         finalize_retries = 0
         for _ in range(self.settings.max_steps):
+            self._maybe_auto_compact()
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
             action = self._parse_action(raw)
             if isinstance(action, InvalidAction):
@@ -156,8 +157,20 @@ class AgentSession:
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
 
     MAX_FINALIZE_RETRIES = 3
+    AUTO_COMPACT_RATIO = 0.7
     _RECENT_TOOL_WINDOW = 12
     _EXIT_FAIL_RE = _re.compile(r"\bexit=([1-9]\d*)\b")
+
+    def _maybe_auto_compact(self) -> None:
+        limit = self.settings.context_limit_tokens
+        if limit <= 0:
+            return
+        if self.context_tokens_estimate < limit * self.AUTO_COMPACT_RATIO:
+            return
+        self._emit_trace(
+            f"auto-compact at {self.context_tokens_estimate} tokens (limit={limit})"
+        )
+        self.compact()
 
     def _unresolved_failing_tools(self) -> set[str]:
         last_by_tool: dict[str, bool] = {}

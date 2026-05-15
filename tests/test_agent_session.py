@@ -253,3 +253,28 @@ def test_final_accepted_when_no_recent_failure(tmp_path: Path) -> None:
         [_StubTool("ok_cmd", returns="$ x\nexit=0\n")],
     )
     assert session.ask("hi") == "all good"
+
+
+def test_auto_compact_triggers_above_threshold(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.settings = session.settings.with_updates(context_limit_tokens=200)
+    session.messages.append({"role": "user", "content": "x" * 2000})
+    assert session.compaction_count == 0
+    session.ask("hi")
+    assert session.compaction_count >= 1
+
+
+def test_auto_compact_skips_below_threshold(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.settings = session.settings.with_updates(context_limit_tokens=100_000)
+    assert session.compaction_count == 0
+    session.ask("hi")
+    assert session.compaction_count == 0
+
+
+def test_auto_compact_disabled_when_limit_zero(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.settings = session.settings.with_updates(context_limit_tokens=0)
+    session.messages.append({"role": "user", "content": "x" * 5000})
+    session.ask("hi")
+    assert session.compaction_count == 0
