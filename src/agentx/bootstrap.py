@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Protocol
+
+from agentx.tools import SKIPPED_DIRS
 
 
 BOOTSTRAP_FILES = ("AGENTS.md", "README.md", "pyproject.toml", "package.json")
@@ -57,14 +60,13 @@ def _git_status(workspace: Path) -> str:
 
 
 def _file_inventory(workspace: Path, limit: int = 80) -> str:
-    skipped = {".git", ".venv", ".agentx", ".pytest_cache", ".ruff_cache", "__pycache__", "node_modules"}
-    files = []
-    for item in sorted(workspace.rglob("*")):
-        relative = item.relative_to(workspace)
-        if any(part in skipped for part in relative.parts):
-            continue
-        if item.is_file():
+    files: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(workspace):
+        dirnames[:] = [d for d in dirnames if d not in SKIPPED_DIRS]
+        dirnames.sort()
+        for name in sorted(filenames):
+            relative = Path(dirpath, name).relative_to(workspace)
             files.append(str(relative))
-        if len(files) >= limit:
-            break
+            if len(files) >= limit:
+                return "--- file inventory ---\n" + "\n".join(files)
     return "--- file inventory ---\n" + "\n".join(files)
