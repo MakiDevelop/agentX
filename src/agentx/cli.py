@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 import sys
 import threading
 import os
@@ -30,7 +31,7 @@ from agentx.project_profile import build_project_profile
 from agentx.runtime_prompt import build_chat_system_prompt
 from agentx.safety import Risk
 from agentx.task import TaskState, clear_task, finish_task, load_task, start_task
-from agentx.tools import ToolRegistry
+from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
 from agentx.transcript import Transcript, find_transcript, list_transcripts, summarize_transcript
 from agentx.tui import AgentXTui
 
@@ -69,6 +70,7 @@ SLASH_COMMANDS = [
     ("/approval [ask|auto|off]", "查看或切換 YELLOW 工具 approval policy"),
     ("/memory QUERY", "查詢目前 namespace 的 Memory Hall 記憶"),
     ("/run COMMAND", "執行固定 allowlist 命令"),
+    ("/docker [ps|build|up|logs|down]", "執行 workspace 內 Docker Compose allowlist 指令"),
     ("/test", "執行固定 allowlist 驗證：ruff check 與 pytest"),
     ("/review", "收集 git diff 與測試結果，輸出 findings-first review"),
     ("/commit [MESSAGE]", "跑測試後逐檔 stage、中文 commit 並 push"),
@@ -213,6 +215,32 @@ def print_tool_result(result_text: str) -> None:
         print_raw(result_text)
     else:
         console.print("[dim](no output)[/dim]")
+
+
+def print_command_preview(command: list[str]) -> None:
+    print_raw("final command:")
+    print_raw(" ".join(shlex.quote(part) for part in command))
+    print_raw("args:")
+    for index, part in enumerate(command):
+        print_raw(f"{index}: {part}")
+
+
+def parse_docker_prompt(prompt: str) -> dict[str, object] | None:
+    try:
+        parts = shlex.split(prompt)
+    except ValueError:
+        return None
+    if len(parts) < 2:
+        return None
+    action = parts[1]
+    if action not in DOCKER_COMPOSE_ACTIONS:
+        return None
+    args: dict[str, object] = {}
+    if action == "logs" and len(parts) >= 3:
+        args["service"] = parts[2]
+    if len(parts) > 3:
+        return None
+    return {"action": action, **args}
 
 
 def build_attachment_context(prompt: str, workspace: Path) -> tuple[str, list[str]]:
@@ -918,6 +946,35 @@ def shell(
                     {"command": "/run", "input": command, "ok": result.ok, "content": result.content[:4000]},
                 )
                 print_tool_result(result.content if result.ok else f"run failed: {result.content}")
+                continue
+            if prompt.startswith("/docker"):
+                docker_args = parse_docker_prompt(prompt)
+                if docker_args is None:
+                    console.print("usage: /docker ps|build|up|logs [SERVICE]|down")
+                    continue
+                action = str(docker_args.pop("action"))
+                try:
+                    command = docker_compose_command(
+                        settings.workspace,
+                        action,
+                        service=str(docker_args["service"]) if "service" in docker_args else None,
+                    )
+                except Exception as exc:
+                    print_raw(f"docker command rejected: {type(exc).__name__}: {exc}")
+                    continue
+                print_command_preview(command)
+                result = tools.run(f"docker_compose_{action}", docker_args)
+                transcript.write(
+                    "tool",
+                    {
+                        "command": "/docker",
+                        "action": action,
+                        "args": docker_args,
+                        "ok": result.ok,
+                        "content": result.content[:4000],
+                    },
+                )
+                print_tool_result(result.content if result.ok else f"docker failed: {result.content}")
                 continue
             if prompt == "/test":
                 result = tools.run("run_tests", {})

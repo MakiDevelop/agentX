@@ -18,10 +18,15 @@ READ_ONLY_TOOLS = {
     "memory_search",
     "run_command",
     "run_tests",
+    "docker_compose_ps",
+    "docker_compose_logs",
 }
 
 YELLOW_TOOLS = {
     "apply_patch",
+    "docker_compose_build",
+    "docker_compose_down",
+    "docker_compose_up",
     "memory_write",
 }
 

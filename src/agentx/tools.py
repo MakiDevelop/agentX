@@ -20,6 +20,11 @@ TOOL_DESCRIPTIONS = {
     "run_command": "執行固定 allowlist 命令",
     "run_tests": "執行固定 allowlist 驗證：ruff check 與 pytest",
     "apply_patch": "套用 unified diff patch，需 approval",
+    "docker_compose_build": "執行 docker compose build，需 approval",
+    "docker_compose_down": "執行 docker compose down，需 approval",
+    "docker_compose_logs": "查看 docker compose logs",
+    "docker_compose_ps": "查看 docker compose ps",
+    "docker_compose_up": "執行 docker compose up -d，需 approval",
 }
 
 SKIPPED_DIRS = {
@@ -39,6 +44,51 @@ ALLOWED_COMMANDS = {
     "git status --short --branch": ["git", "status", "--short", "--branch"],
     "git diff": ["git", "diff"],
 }
+
+DOCKER_COMPOSE_ACTIONS = {"ps", "build", "up", "down", "logs"}
+DOCKER_COMPOSE_FILES = ("compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml")
+
+
+def docker_compose_command(
+    workspace: Path,
+    action: str,
+    *,
+    compose_file: str | None = None,
+    service: str | None = None,
+    tail: int = 100,
+) -> list[str]:
+    workspace = workspace.resolve()
+    compose_path = resolve_compose_file(workspace, compose_file)
+    command = ["docker", "compose", "-f", str(compose_path)]
+    if action == "ps":
+        return [*command, "ps"]
+    if action == "build":
+        return [*command, "build"]
+    if action == "up":
+        return [*command, "up", "-d"]
+    if action == "down":
+        return [*command, "down"]
+    if action == "logs":
+        safe_tail = max(1, min(int(tail), 1000))
+        args = [*command, "logs", "--tail", str(safe_tail)]
+        if service:
+            args.append(service)
+        return args
+    raise ValueError(f"unsupported docker compose action: {action}")
+
+
+def resolve_compose_file(workspace: Path, compose_file: str | None = None) -> Path:
+    workspace = workspace.resolve()
+    candidates = [compose_file] if compose_file else list(DOCKER_COMPOSE_FILES)
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = (workspace / candidate).resolve()
+        if workspace != path and workspace not in path.parents:
+            raise ValueError(f"compose file escapes workspace: {candidate}")
+        if path.is_file():
+            return path
+    raise FileNotFoundError("compose.yaml / compose.yml / docker-compose.yml not found")
 
 
 class ToolRegistry:
@@ -197,6 +247,75 @@ class ToolRegistry:
         if applied.returncode != 0:
             return f"git apply failed\n{output}".strip()
         return output or "patch applied"
+
+    def _tool_docker_compose_ps(self, compose_file: str | None = None) -> str:
+        return self._run_docker_compose("ps", compose_file=compose_file)
+
+    def _tool_docker_compose_build(self, compose_file: str | None = None) -> str:
+        return self._run_docker_compose("build", compose_file=compose_file)
+
+    def _tool_docker_compose_up(self, compose_file: str | None = None) -> str:
+        return self._run_docker_compose("up", compose_file=compose_file)
+
+    def _tool_docker_compose_down(self, compose_file: str | None = None) -> str:
+        return self._run_docker_compose("down", compose_file=compose_file)
+
+    def _tool_docker_compose_logs(
+        self,
+        compose_file: str | None = None,
+        service: str | None = None,
+        tail: int = 100,
+    ) -> str:
+        return self._run_docker_compose(
+            "logs",
+            compose_file=compose_file,
+            service=service,
+            tail=tail,
+        )
+
+    def _run_docker_compose(
+        self,
+        action: str,
+        *,
+        compose_file: str | None = None,
+        service: str | None = None,
+        tail: int = 100,
+    ) -> str:
+        command = self._docker_compose_command(
+            action,
+            compose_file=compose_file,
+            service=service,
+            tail=tail,
+        )
+        completed = subprocess.run(
+            command,
+            cwd=self.workspace,
+            text=True,
+            capture_output=True,
+            timeout=300,
+            check=False,
+        )
+        output = completed.stdout or completed.stderr
+        return f"$ {' '.join(command)}\nexit={completed.returncode}\n{output.strip()}"
+
+    def _docker_compose_command(
+        self,
+        action: str,
+        *,
+        compose_file: str | None = None,
+        service: str | None = None,
+        tail: int = 100,
+    ) -> list[str]:
+        return docker_compose_command(
+            self.workspace,
+            action,
+            compose_file=compose_file,
+            service=service,
+            tail=tail,
+        )
+
+    def _resolve_compose_file(self, compose_file: str | None = None) -> Path:
+        return resolve_compose_file(self.workspace, compose_file)
 
     def _run_git(self, args: list[str]) -> str:
         completed = subprocess.run(
