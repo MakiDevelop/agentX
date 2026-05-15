@@ -17,3 +17,16 @@ def test_run_command_rejects_non_allowlisted_command(tmp_path: Path) -> None:
 
     assert not result.ok
     assert "not allowlisted" in result.content
+
+
+def test_cargo_commands_in_allowlist() -> None:
+    from agentx.tools._helpers import ALLOWED_COMMANDS
+
+    for command in (
+        "cargo check",
+        "cargo build",
+        "cargo test",
+        "cargo fmt --check",
+        "cargo clippy -- -D warnings",
+    ):
+        assert command in ALLOWED_COMMANDS
