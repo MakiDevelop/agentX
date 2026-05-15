@@ -1,7 +1,7 @@
 from typing import Any
 
 from agentx.protocol import Risk
-from agentx.tools import ToolRegistry
+from agentx.tools import ToolRegistry, tool_prompt_line
 
 
 class EchoTool:
@@ -100,3 +100,95 @@ def test_describe_tools_lists_registered() -> None:
     registry = ToolRegistry([EchoTool(), BoomTool()])
     described = registry.describe_tools()
     assert set(described) == {"echo", "boom"}
+
+
+class AliasTool:
+    name = "primary"
+    description = "primary tool"
+    risk = Risk.GREEN
+    aliases = ("alt", "p")
+
+    def run(self, args: dict[str, Any]) -> str:
+        return "ran primary"
+
+
+def test_aliases_resolve_to_primary() -> None:
+    registry = ToolRegistry([AliasTool()])
+    assert registry.get("primary") is not None
+    assert registry.get("alt") is registry.get("primary")
+    assert registry.run("alt", {}).ok
+    assert registry.run("p", {}).ok
+
+
+def test_describe_tools_only_shows_primary_names() -> None:
+    registry = ToolRegistry([AliasTool()])
+    described = registry.describe_tools()
+    assert set(described) == {"primary"}
+
+
+def test_unregister_by_alias_removes_tool() -> None:
+    registry = ToolRegistry([AliasTool()])
+    registry.unregister("alt")
+    assert registry.get("primary") is None
+    assert registry.get("alt") is None
+
+
+class DisabledTool:
+    name = "off"
+    description = "off in this env"
+    risk = Risk.GREEN
+
+    def is_enabled(self) -> bool:
+        return False
+
+    def run(self, args: dict[str, Any]) -> str:
+        return "should not run"
+
+
+def test_disabled_tool_run_returns_failure() -> None:
+    registry = ToolRegistry([DisabledTool()])
+    result = registry.run("off", {})
+    assert not result.ok
+    assert "disabled" in result.content.lower()
+
+
+def test_disabled_tool_hidden_from_describe_and_names() -> None:
+    registry = ToolRegistry([EchoTool(), DisabledTool()])
+    assert "off" not in registry.names()
+    assert "off" not in registry.describe_tools()
+
+
+class SignatureTool:
+    name = "sig"
+    description = "with signature"
+    risk = Risk.GREEN
+    signature = "x, y=1"
+
+    def run(self, args: dict[str, Any]) -> str:
+        return ""
+
+
+def test_tool_prompt_line_uses_signature() -> None:
+    line = tool_prompt_line(SignatureTool())
+    assert line == "- sig(x, y=1) — with signature"
+
+
+def test_tool_prompt_line_falls_back_to_description() -> None:
+    line = tool_prompt_line(EchoTool())
+    assert line == "- echo — echoes the args back"
+
+
+class CustomPromptTool:
+    name = "custom"
+    description = "fallback desc"
+    risk = Risk.GREEN
+
+    def run(self, args: dict[str, Any]) -> str:
+        return ""
+
+    def prompt(self) -> str:
+        return "## custom block"
+
+
+def test_tool_prompt_line_uses_custom_prompt() -> None:
+    assert tool_prompt_line(CustomPromptTool()) == "## custom block"
