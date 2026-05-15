@@ -79,6 +79,9 @@ class AgentSession:
         # prefixes of the summary).
         self.last_termination: str = "unknown"
         self.last_failing_tools: set[str] = set()
+        # Hysteresis state for auto-compact (review N8: don't re-compact every
+        # turn when bootstrap alone is over threshold).
+        self._last_compact_tokens: int | None = None
         self.messages = self._initial_messages()
 
     def _initial_messages(self) -> list[dict[str, str]]:
@@ -185,6 +188,9 @@ class AgentSession:
 
     MAX_FINALIZE_RETRIES = 3
     AUTO_COMPACT_RATIO = 0.7
+    # Don't re-compact unless context has grown by at least this fraction of
+    # the limit since the previous compact (hysteresis, review N8).
+    AUTO_COMPACT_HYSTERESIS_RATIO = 0.1
     _RECENT_TOOL_WINDOW = 12
     _EXIT_FAIL_RE = _re.compile(r"\bexit=([1-9]\d*)\b")
 
@@ -192,12 +198,25 @@ class AgentSession:
         limit = self.settings.context_limit_tokens
         if limit <= 0:
             return
-        if self.context_tokens_estimate < limit * self.AUTO_COMPACT_RATIO:
+        current = self.context_tokens_estimate
+        if current < limit * self.AUTO_COMPACT_RATIO:
             return
-        self._emit_trace(
-            f"auto-compact at {self.context_tokens_estimate} tokens (limit={limit})"
-        )
-        self.compact()
+        if self._last_compact_tokens is not None:
+            growth = current - self._last_compact_tokens
+            if growth < limit * self.AUTO_COMPACT_HYSTERESIS_RATIO:
+                # Already compacted recently; bootstrap + summary alone are
+                # above threshold. Compacting again would burn cycles and
+                # rebuild the same summary without freeing meaningful space.
+                self._emit_trace(
+                    f"auto-compact skipped: only +{growth} tokens since last compact"
+                )
+                return
+        try:
+            self._emit_trace(f"auto-compact at {current} tokens (limit={limit})")
+            self.compact()
+            self._last_compact_tokens = self.context_tokens_estimate
+        except Exception as exc:  # don't crash the agent loop on compact failure
+            self._emit_trace(f"auto-compact failed: {type(exc).__name__}: {exc}")
 
     def _unresolved_failing_tools(self) -> set[str]:
         last_by_tool: dict[str, bool] = {}

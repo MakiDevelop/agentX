@@ -307,6 +307,41 @@ def test_auto_compact_disabled_when_limit_zero(tmp_path: Path) -> None:
     assert session.compaction_count == 0
 
 
+def test_auto_compact_skipped_when_no_growth_since_last(tmp_path: Path) -> None:
+    """Repeated _maybe_auto_compact() calls without intervening message growth
+    should compact only once — bootstrap-on-its-own-over-threshold should not
+    re-compact every turn (hysteresis, review N8)."""
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.settings = session.settings.with_updates(context_limit_tokens=200)
+    session.messages.append({"role": "user", "content": "x" * 2000})
+
+    session._maybe_auto_compact()
+    assert session.compaction_count == 1
+
+    # No new messages added → growth = 0 → hysteresis kicks in.
+    session._maybe_auto_compact()
+    assert session.compaction_count == 1
+    session._maybe_auto_compact()
+    assert session.compaction_count == 1
+
+
+def test_auto_compact_failure_does_not_break_loop(tmp_path: Path, monkeypatch) -> None:
+    """If compact() raises, the agent loop continues without crashing
+    (review N8)."""
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.settings = session.settings.with_updates(context_limit_tokens=200)
+    session.messages.append({"role": "user", "content": "x" * 2000})
+
+    def explode(*_args, **_kwargs):
+        raise RuntimeError("compact go boom")
+
+    monkeypatch.setattr(session, "compact", explode)
+    # Should not raise — exception swallowed.
+    answer = session.ask("hi")
+    assert answer == "done"
+    assert session.last_termination == "final"
+
+
 def _record_tool_call(tool: str, args: dict) -> dict:
     import json as _json
 
