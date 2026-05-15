@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
+
+from agentx.safety import Risk
 
 
 class ToolCall(BaseModel):
@@ -21,3 +23,11 @@ class ToolResult(BaseModel):
     ok: bool
     content: str
 
+
+@runtime_checkable
+class Tool(Protocol):
+    name: str
+    description: str
+    risk: Risk
+
+    def run(self, args: dict[str, Any]) -> str: ...
