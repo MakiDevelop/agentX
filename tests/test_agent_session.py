@@ -4,7 +4,7 @@ from pathlib import Path
 
 from agentx.config import Settings
 from agentx.loop import AgentSession
-from agentx.tools import ToolRegistry
+from agentx.tools import ToolRegistry, builtin_tools
 
 
 class FakeOllama:
@@ -51,9 +51,15 @@ def _make_settings(workspace: Path, max_steps: int = 5) -> Settings:
 
 def _session(tmp_path: Path, responses: Sequence[str], max_steps: int = 5) -> tuple[AgentSession, FakeOllama]:
     ollama = FakeOllama(responses)
-    registry = ToolRegistry(workspace=tmp_path, memory=FakeMemory())  # type: ignore[arg-type]
+    memory = FakeMemory()
+    registry = ToolRegistry(builtin_tools(tmp_path, memory))  # type: ignore[arg-type]
     settings = _make_settings(tmp_path, max_steps=max_steps)
-    session = AgentSession(settings=settings, ollama=ollama, tools=registry)  # type: ignore[arg-type]
+    session = AgentSession(
+        settings=settings,
+        ollama=ollama,
+        tools=registry,
+        memory=memory,  # type: ignore[arg-type]
+    )
     return session, ollama
 
 

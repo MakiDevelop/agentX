@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
 from agentx.json_repair import extract_json_object
+from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
 from agentx.protocol import FinalAnswer, ToolCall, ToolResult
 from agentx.runtime_prompt import build_agent_system_prompt
@@ -26,6 +27,7 @@ class AgentLoop:
         settings: Settings,
         ollama: OllamaClient,
         tools: ToolRegistry,
+        memory: MemoryHallClient,
         namespace: str = "project:agentX",
         trace: Callable[[str], None] | None = None,
     ) -> None:
@@ -33,6 +35,7 @@ class AgentLoop:
             settings=settings,
             ollama=ollama,
             tools=tools,
+            memory=memory,
             namespace=namespace,
             trace=trace,
         )
@@ -52,12 +55,14 @@ class AgentSession:
         settings: Settings,
         ollama: OllamaClient,
         tools: ToolRegistry,
+        memory: MemoryHallClient,
         namespace: str = "project:agentX",
         trace: Callable[[str], None] | None = None,
     ) -> None:
         self.settings = settings
         self.ollama = ollama
         self.tools = tools
+        self.memory = memory
         self.namespace = namespace
         self.trace = trace
         self.compaction_count = 0
@@ -71,7 +76,7 @@ class AgentSession:
                 "role": "system",
                 "content": "Memory Hall context:\n"
                 + build_memory_context(
-                    self.tools.memory,
+                    self.memory,
                     project_namespace=self.namespace,
                     query=f"{self.settings.workspace.name} project context",
                 ),

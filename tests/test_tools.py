@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agentx.tools import ToolRegistry, docker_compose_command
+from agentx.tools import ToolRegistry, builtin_tools, docker_compose_command
 
 
 class FakeMemory:
@@ -13,8 +13,12 @@ class FakeMemory:
         return f"write:{namespace}:{content}"
 
 
+def _registry(tmp_path: Path) -> ToolRegistry:
+    return ToolRegistry(builtin_tools(tmp_path, FakeMemory()))  # type: ignore[arg-type]
+
+
 def test_read_file_blocks_workspace_escape(tmp_path: Path) -> None:
-    registry = ToolRegistry(workspace=tmp_path, memory=FakeMemory())  # type: ignore[arg-type]
+    registry = _registry(tmp_path)
     result = registry.run("read_file", {"path": "../outside.txt"})
     assert not result.ok
     assert "escapes workspace" in result.content
@@ -22,7 +26,7 @@ def test_read_file_blocks_workspace_escape(tmp_path: Path) -> None:
 
 def test_list_files(tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("hello", encoding="utf-8")
-    registry = ToolRegistry(workspace=tmp_path, memory=FakeMemory())  # type: ignore[arg-type]
+    registry = _registry(tmp_path)
     result = registry.run("list_files", {})
     assert result.ok
     assert result.content == "a.txt"

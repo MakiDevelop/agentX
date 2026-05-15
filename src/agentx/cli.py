@@ -32,7 +32,7 @@ from agentx.project_profile import build_project_profile
 from agentx.runtime_prompt import build_chat_system_prompt
 from agentx.safety import Risk
 from agentx.task import TaskState, clear_task, finish_task, load_task, start_task
-from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
+from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, builtin_tools, docker_compose_command
 from agentx.transcript import Transcript, find_transcript, list_transcripts, summarize_transcript
 from agentx.tui import AgentXTui, format_assistant_header
 
@@ -427,8 +427,7 @@ def build_runtime(
         return approval_policy.decide(tool, args, risk, approve_interactive)
 
     tools = ToolRegistry(
-        workspace=settings.workspace,
-        memory=memory,
+        builtin_tools(settings.workspace, memory),
         approver=approve if approval_policy is not None else None,
     )
     return ollama, memory, tools
@@ -438,12 +437,18 @@ def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = Fals
     settings = Settings()
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
-    ollama, _, tools = build_runtime(settings)
+    ollama, memory, tools = build_runtime(settings)
     attachment_context, _ = build_attachment_context(prompt, settings.workspace)
     if attachment_context:
         prompt = f"{prompt}\n\n{attachment_context}"
     if agent_mode:
-        agent_loop = AgentLoop(settings=settings, ollama=ollama, tools=tools, namespace=namespace)
+        agent_loop = AgentLoop(
+            settings=settings,
+            ollama=ollama,
+            tools=tools,
+            memory=memory,
+            namespace=namespace,
+        )
         return agent_loop.run(prompt, namespace=namespace)
     return ollama.chat(
         [
@@ -517,8 +522,14 @@ def ask(
         settings = settings.with_updates(max_steps=max_steps)
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
-    ollama, _, tools = build_runtime(settings)
-    agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace)
+    ollama, memory, tools = build_runtime(settings)
+    agent = AgentLoop(
+        settings=settings,
+        ollama=ollama,
+        tools=tools,
+        memory=memory,
+        trace=print_trace,
+    )
     print_raw(agent.run(prompt, namespace=namespace))
 
 
@@ -567,6 +578,7 @@ def shell(
         settings=settings,
         ollama=ollama,
         tools=tools,
+        memory=memory,
         namespace=namespace,
         trace=print_trace,
     )
