@@ -230,7 +230,13 @@ def test_final_blocked_when_tool_content_has_nonzero_exit(tmp_path: Path) -> Non
         [_StubTool("fail_cmd", returns="$ thing\nexit=1\nerror: nope")],
     )
     answer = session.ask("hi")
-    assert answer == "final attempt"
+    # After N7 fix: retries-exhausted with unresolved failure → forced failure
+    # summary instead of the model's "final attempt" claim.
+    assert answer.startswith("任務失敗")
+    assert "fail_cmd" in answer
+    assert "final attempt" in answer  # original model claim preserved as reference
+    assert session.last_termination == "final"
+    assert session.last_failing_tools == {"fail_cmd"}
 
 
 def test_final_blocked_when_tool_raised(tmp_path: Path) -> None:
@@ -246,7 +252,9 @@ def test_final_blocked_when_tool_raised(tmp_path: Path) -> None:
         [_StubTool("boom", raises=RuntimeError("kaboom"))],
     )
     answer = session.ask("hi")
-    assert answer == "works"
+    assert answer.startswith("任務失敗")
+    assert "boom" in answer
+    assert session.last_failing_tools == {"boom"}
 
 
 def test_final_accepted_after_same_tool_succeeds(tmp_path: Path) -> None:

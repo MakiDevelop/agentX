@@ -154,8 +154,24 @@ class AgentSession:
                         }
                     )
                     continue
+                if failing:
+                    # Retries exhausted with unresolved failures — refuse to
+                    # propagate the model's final claim (review N7). Replace
+                    # with a forced failure summary that callers / coordinators
+                    # can rely on for honest reporting.
+                    failing_summary = ", ".join(sorted(failing))
+                    forced_final = (
+                        f"任務失敗：經過 {self.MAX_FINALIZE_RETRIES + 1} 次嘗試後，"
+                        f"以下工具仍處於失敗狀態：{failing_summary}。"
+                        f"模型最後一次回應（僅供參考、非結論）："
+                        f"{action.content.replace(chr(10), ' ')[:400]}"
+                    )
+                    self.messages.append({"role": "assistant", "content": forced_final})
+                    self.last_failing_tools = failing
+                    self.last_termination = "final"
+                    return forced_final
                 self.messages.append({"role": "assistant", "content": action.content})
-                self.last_failing_tools = failing or set()
+                self.last_failing_tools = set()
                 self.last_termination = "final"
                 return action.content
 
