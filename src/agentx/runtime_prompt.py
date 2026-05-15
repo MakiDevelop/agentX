@@ -9,7 +9,8 @@ from agentx.tools import ToolRegistry, tool_prompt_line
 DEFAULT_TOOL_LINES = (
     '- list_files(path=".", limit=200) — 列出 workspace 內檔案，會跳過 .git/.venv/cache 目錄',
     "- read_file(path, max_chars=20000) — 讀取 workspace 內指定檔案內容",
-    "- write_file(path, content) — 寫入 workspace 內檔案，自動建立父目錄，覆寫既有檔；需 approval",
+    "- write_file(path, content) — 寫入新檔或整檔重寫，自動建立父目錄；需 approval；改既有檔局部請改用 edit_file",
+    "- edit_file(path, edits=[{oldText, newText}]) — 對既有檔做 oldText→newText 替換；oldText 必須在檔內唯一；改 bug 用這個比 write_file 安全",
     '- search_text(pattern, path=".", limit=100) — 使用 rg 搜尋 workspace 內文字',
     "- git_status — 查看 git status --short --branch",
     "- git_diff(path=null, max_chars=30000) — 查看 git diff，可指定單一 path",
@@ -96,7 +97,8 @@ Failure handling rules (must follow):
 - 工具失敗後禁止下成功結論。type=final 的 content 不可以宣稱「成功 / 完成 / 已通過」除非最近一次同一個工具呼叫顯示 exit=0 或 ok=true。
 - 編譯／測試失敗時的標準修正流程：
   1. 用 read_file 讀錯誤訊息提到的檔案與行
-  2. 用 write_file 改寫該檔（write_file 會覆寫整檔，務必把整份檔案內容都帶上，不可只貼修改片段）
+  2. 用 edit_file 做精準 oldText→newText 替換修正出錯的那段（首選；oldText 要包含足夠前後文確保唯一）
+     只有當需要從零建檔或要整檔重寫時才用 write_file
   3. 用 run_command 重跑同一個驗證指令
   4. 重複 1–3 直到通過或連續 3 次相同錯誤
 - 連續 3 次相同錯誤仍未通過時，才允許 type=final 報告卡住，須附上最後一次完整錯誤訊息與你嘗試過的修正。

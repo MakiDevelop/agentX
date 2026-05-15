@@ -278,3 +278,51 @@ def test_auto_compact_disabled_when_limit_zero(tmp_path: Path) -> None:
     session.messages.append({"role": "user", "content": "x" * 5000})
     session.ask("hi")
     assert session.compaction_count == 0
+
+
+def _record_tool_call(tool: str, args: dict) -> dict:
+    import json as _json
+
+    return {
+        "role": "assistant",
+        "content": _json.dumps({"type": "tool_call", "tool": tool, "args": args}),
+    }
+
+
+def test_compact_includes_modified_files_tag(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.messages.append(_record_tool_call("write_file", {"path": "src/a.rs", "content": "x"}))
+    session.messages.append(_record_tool_call("edit_file", {"path": "src/b.rs", "edits": []}))
+    note = session.compact()
+
+    summary = session.messages[-1]["content"]
+    assert "<modified-files>" in summary
+    assert "src/a.rs" in summary
+    assert "src/b.rs" in summary
+    assert "壓縮" in note
+
+
+def test_compact_includes_read_files_tag(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.messages.append(_record_tool_call("read_file", {"path": "src/c.rs"}))
+    session.compact()
+
+    summary = session.messages[-1]["content"]
+    assert "<read-files>" in summary
+    assert "src/c.rs" in summary
+
+
+def test_compact_read_then_write_only_listed_as_modified(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.messages.append(_record_tool_call("read_file", {"path": "shared.rs"}))
+    session.messages.append(_record_tool_call("write_file", {"path": "shared.rs", "content": "x"}))
+    session.compact()
+
+    summary = session.messages[-1]["content"]
+    assert "<modified-files>" in summary
+    assert "shared.rs" in summary
+    # 不該同時出現在 read-files
+    read_block_start = summary.find("<read-files>")
+    if read_block_start != -1:
+        read_block = summary[read_block_start:summary.find("</read-files>")]
+        assert "shared.rs" not in read_block
