@@ -49,13 +49,18 @@ MERGE_SYSTEM_PROMPT = """你是 agentX 的整合員。
 """
 
 
+PLAN_MAX_STEPS = 7
+
+
 class PlanStep(BaseModel):
     title: str
     details: str = ""
 
 
 class Plan(BaseModel):
-    steps: list[PlanStep] = Field(default_factory=list)
+    # Cap the plan length so a misbehaving model can't return 100+ steps that
+    # would each spin a fresh AgentSession (review N6: cost / time blow-up).
+    steps: list[PlanStep] = Field(default_factory=list, max_length=PLAN_MAX_STEPS)
 
 
 @dataclass

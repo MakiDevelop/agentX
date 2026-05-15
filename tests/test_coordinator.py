@@ -188,6 +188,19 @@ class _FailingTool:
         return "$ thing\nexit=1\nerror"
 
 
+def test_coordinator_rejects_plan_exceeding_max_steps(tmp_path: Path) -> None:
+    # Plan with 8 steps exceeds PLAN_MAX_STEPS (7) → Pydantic validation
+    # fails inside Coordinator._plan, wrapped in CoordinatorError (review N6).
+    big_plan_steps = ",".join(
+        f'{{"title": "s{i}", "details": "d"}}' for i in range(8)
+    )
+    plan_json = f'{{"steps": [{big_plan_steps}]}}'
+
+    coordinator, _ = _coordinator(tmp_path, [plan_json])
+    with pytest.raises(CoordinatorError, match="plan JSON invalid"):
+        coordinator.run("goal")
+
+
 def test_coordinator_step_fails_when_session_has_unresolved_failing_tool(tmp_path: Path) -> None:
     """Sub-agent's final content claiming success must not flip step.success
     to True when AgentSession reports unresolved failing tools (review N5:
