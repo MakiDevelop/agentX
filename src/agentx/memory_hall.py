@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import TracebackType
 from typing import Any
 
 import httpx
@@ -10,13 +11,17 @@ class MemoryHallClient:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout
+        self._client = httpx.Client(timeout=timeout, headers=self._build_headers())
 
-    @property
-    def headers(self) -> dict[str, str]:
+    def _build_headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return self._build_headers()
 
     def search(self, query: str, namespace: str = "shared", limit: int = 5) -> str:
         payload: dict[str, Any] = {
@@ -25,14 +30,9 @@ class MemoryHallClient:
             "mode": "hybrid",
             "limit": limit,
         }
-        with httpx.Client(timeout=self.timeout) as client:
-            response = client.post(
-                f"{self.base_url}/v1/memory/search",
-                headers=self.headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            return response.text
+        response = self._client.post(f"{self.base_url}/v1/memory/search", json=payload)
+        response.raise_for_status()
+        return response.text
 
     def write(self, content: str, namespace: str = "agent:agentx") -> str:
         payload: dict[str, Any] = {
@@ -45,11 +45,20 @@ class MemoryHallClient:
             "references": [],
             "metadata": {"source": "agentx"},
         }
-        with httpx.Client(timeout=self.timeout) as client:
-            response = client.post(
-                f"{self.base_url}/v1/memory/write",
-                headers=self.headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            return response.text
+        response = self._client.post(f"{self.base_url}/v1/memory/write", json=payload)
+        response.raise_for_status()
+        return response.text
+
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self) -> "MemoryHallClient":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.close()
