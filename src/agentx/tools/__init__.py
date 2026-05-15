@@ -24,6 +24,7 @@ from agentx.tools.builtin import (
     RunCommandTool,
     RunTestsTool,
     SearchTextTool,
+    WriteFileTool,
     builtin_tools,
 )
 from agentx.tools.registry import (
@@ -57,6 +58,7 @@ __all__ = [
     "SKIPPED_DIRS",
     "SearchTextTool",
     "ToolRegistry",
+    "WriteFileTool",
     "builtin_tools",
     "docker_compose_command",
     "resolve_compose_file",

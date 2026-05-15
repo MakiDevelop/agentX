@@ -9,6 +9,7 @@ from agentx.tools import ToolRegistry, tool_prompt_line
 DEFAULT_TOOL_LINES = (
     '- list_files(path=".", limit=200) — 列出 workspace 內檔案，會跳過 .git/.venv/cache 目錄',
     "- read_file(path, max_chars=20000) — 讀取 workspace 內指定檔案內容",
+    "- write_file(path, content) — 寫入 workspace 內檔案，自動建立父目錄，覆寫既有檔；需 approval",
     '- search_text(pattern, path=".", limit=100) — 使用 rg 搜尋 workspace 內文字',
     "- git_status — 查看 git status --short --branch",
     "- git_diff(path=null, max_chars=30000) — 查看 git diff，可指定單一 path",
