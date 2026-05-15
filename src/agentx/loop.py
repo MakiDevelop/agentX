@@ -74,6 +74,11 @@ class AgentSession:
         if hooks is not None:
             self.tools.hooks = hooks
         self.compaction_count = 0
+        # Outcome of the most recent ask() — coordinator / callers consume these
+        # for structured success judgment (review N5: don't rely on string
+        # prefixes of the summary).
+        self.last_termination: str = "unknown"
+        self.last_failing_tools: set[str] = set()
         self.messages = self._initial_messages()
 
     def _initial_messages(self) -> list[dict[str, str]]:
@@ -100,6 +105,8 @@ class AgentSession:
         namespace: str = "project:agentX",
         cancel_event: threading.Event | None = None,
     ) -> str:
+        self.last_termination = "running"
+        self.last_failing_tools = set()
         self.messages.append(
             {
                 "role": "user",
@@ -148,12 +155,16 @@ class AgentSession:
                     )
                     continue
                 self.messages.append({"role": "assistant", "content": action.content})
+                self.last_failing_tools = failing or set()
+                self.last_termination = "final"
                 return action.content
 
             result = self._run_tool(action)
             self.messages.append({"role": "assistant", "content": action.model_dump_json()})
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
 
+        self.last_failing_tools = self._unresolved_failing_tools()
+        self.last_termination = "max_steps_exceeded"
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
 
     MAX_FINALIZE_RETRIES = 3

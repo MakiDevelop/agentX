@@ -162,7 +162,13 @@ class Coordinator:
             "說明你做了什麼、是否成功、若失敗最後一次錯誤是什麼。"
         )
         summary = session.ask(prompt, namespace=self.namespace)
-        success = not summary.startswith("模型沒有輸出有效")
+        # Structured success: model must have hit a clean final answer AND no
+        # tool result was left in a failed state. String prefixes on the
+        # summary are unreliable (review N5).
+        success = (
+            session.last_termination == "final"
+            and not session.last_failing_tools
+        )
         return StepResult(step=step, summary=summary, success=success)
 
     def _merge(self, goal: str, plan: Plan, results: list[StepResult]) -> str:

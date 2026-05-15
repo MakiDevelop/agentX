@@ -177,3 +177,36 @@ def test_coordinator_handles_empty_plan(tmp_path: Path) -> None:
     assert result.step_results == []
     assert not result.success
     assert "empty" in result.final.lower() or "plan" in result.final.lower()
+
+
+class _FailingTool:
+    name = "fake_run"
+    description = "always returns exit=1"
+    risk = Risk.GREEN
+
+    def run(self, args: dict[str, Any]) -> str:
+        return "$ thing\nexit=1\nerror"
+
+
+def test_coordinator_step_fails_when_session_has_unresolved_failing_tool(tmp_path: Path) -> None:
+    """Sub-agent's final content claiming success must not flip step.success
+    to True when AgentSession reports unresolved failing tools (review N5:
+    structured signal, not string prefix)."""
+    plan_json = '{"steps": [{"title": "only", "details": "x"}]}'
+    responses = [
+        plan_json,
+        '{"type":"tool_call","tool":"fake_run","args":{}}',  # sub iter 1
+        '{"type":"final","content":"all good"}',             # iter 2 — blocked
+        '{"type":"final","content":"still done"}',           # iter 3 — blocked
+        '{"type":"final","content":"finished"}',             # iter 4 — blocked
+        '{"type":"final","content":"final answer succeeded"}',  # iter 5 — accepted
+        "merge report",
+    ]
+    coordinator, _ = _coordinator(tmp_path, responses, tools=[_FailingTool()])
+    result = coordinator.run("g")
+
+    assert len(result.step_results) == 1
+    step = result.step_results[0]
+    assert "succeeded" in step.summary
+    assert not step.success
+    assert not result.success

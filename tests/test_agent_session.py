@@ -151,6 +151,25 @@ def test_compact_preserves_recent_tail(tmp_path: Path) -> None:
     assert session.message_count <= before
 
 
+def test_ask_reports_final_termination_on_clean_finish(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    assert session.last_termination == "unknown"
+    session.ask("hi")
+    assert session.last_termination == "final"
+    assert session.last_failing_tools == set()
+
+
+def test_ask_reports_max_steps_termination(tmp_path: Path) -> None:
+    session, _ = _session(
+        tmp_path,
+        ["bogus", "bogus", "bogus"],
+        max_steps=2,
+    )
+    answer = session.ask("hi")
+    assert "停止" in answer
+    assert session.last_termination == "max_steps_exceeded"
+
+
 class _StubTool:
     risk = Risk.GREEN
 
