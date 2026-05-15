@@ -82,6 +82,14 @@ class AgentSession:
         # Hysteresis state for auto-compact (review N8: don't re-compact every
         # turn when bootstrap alone is over threshold).
         self._last_compact_tokens: int | None = None
+        # Persistent per-tool outcome tracker. Updated on every _run_tool;
+        # later success of the same tool clears its failed state. Survives
+        # compact() (which empties messages but not session-level state)
+        # but is reset by clear(). (review codex C3: 12-message window was
+        # too narrow — a long sequence of read_file / search_text after a
+        # failed cargo test would make the failure "fall off" and let the
+        # finalization guard pass a lying success.)
+        self._tool_outcomes: dict[str, bool] = {}
         self.messages = self._initial_messages()
 
     def _initial_messages(self) -> list[dict[str, str]]:
@@ -191,7 +199,6 @@ class AgentSession:
     # Don't re-compact unless context has grown by at least this fraction of
     # the limit since the previous compact (hysteresis, review N8).
     AUTO_COMPACT_HYSTERESIS_RATIO = 0.1
-    _RECENT_TOOL_WINDOW = 12
     _EXIT_FAIL_RE = _re.compile(r"\bexit=([1-9]\d*)\b")
 
     def _maybe_auto_compact(self) -> None:
@@ -219,23 +226,16 @@ class AgentSession:
             self._emit_trace(f"auto-compact failed: {type(exc).__name__}: {exc}")
 
     def _unresolved_failing_tools(self) -> set[str]:
-        last_by_tool: dict[str, bool] = {}
-        recent = [m for m in self.messages if m.get("role") == "tool"][-self._RECENT_TOOL_WINDOW :]
-        for msg in recent:
-            try:
-                data = _json.loads(msg.get("content", "") or "{}")
-            except _json.JSONDecodeError:
-                continue
-            tool_name = str(data.get("tool", ""))
-            ok = bool(data.get("ok"))
-            content = str(data.get("content", ""))
-            if ok and self._EXIT_FAIL_RE.search(content):
-                ok = False
-            last_by_tool[tool_name] = ok
-        return {name for name, ok in last_by_tool.items() if not ok}
+        return {name for name, ok in self._tool_outcomes.items() if not ok}
 
     def clear(self) -> None:
         self.messages = self._initial_messages()
+        # Reset session bookkeeping so a fresh task starts clean (review codex
+        # C2: stale _last_compact_tokens disables auto-compact across /clear).
+        self._last_compact_tokens = None
+        self._tool_outcomes = {}
+        self.last_termination = "unknown"
+        self.last_failing_tools = set()
 
     @property
     def message_count(self) -> int:
@@ -358,6 +358,12 @@ class AgentSession:
     def _run_tool(self, action: ToolCall) -> ToolResult:
         self._emit_trace(f"tool_call {action.tool} args={action.args}")
         result = self.tools.run(action.tool, action.args)
+        # Persist per-tool outcome so unresolved failures don't fall off a
+        # window when other tools are called later (review codex C3). Treat
+        # exit=N (N≠0) inside content as failure even when ok=True (registry
+        # wraps subprocess exit codes that way).
+        is_failure = (not result.ok) or bool(self._EXIT_FAIL_RE.search(result.content))
+        self._tool_outcomes[result.tool] = not is_failure
         summary = result.content.replace("\n", "\\n")[:240]
         self._emit_trace(f"tool_result {action.tool} ok={result.ok} content={summary}")
         return result

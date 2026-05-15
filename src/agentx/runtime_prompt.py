@@ -100,7 +100,7 @@ Failure handling rules (must follow):
   1. 用 read_file 讀錯誤訊息提到的檔案與行
   2. 用 edit_file 做精準 oldText→newText 替換修正出錯的那段（首選；oldText 要包含足夠前後文確保唯一）
      只有當需要從零建檔或要整檔重寫時才用 write_file
-  3. 用 run_command 重跑同一個驗證指令
+  3. 重跑原本的驗證指令：cargo check／build／test／clippy 走 run_build_command；ruff／git／cargo fmt --check 走 run_command。用錯工具會被 allowlist 拒絕
   4. 重複 1–3 直到通過或連續 3 次相同錯誤
 - 連續 3 次相同錯誤仍未通過時，才允許 type=final 報告卡住，須附上最後一次完整錯誤訊息與你嘗試過的修正。
 - 寫 Rust 時注意：struct 欄位不可以用 impl Trait（要用具體型別或 generic param）；HashMap::remove 接 &str 不是 String；serde_json::json! 大括號內逗號／冒號要嚴格符合 JSON 物件語法。

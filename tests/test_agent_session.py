@@ -325,6 +325,55 @@ def test_auto_compact_skipped_when_no_growth_since_last(tmp_path: Path) -> None:
     assert session.compaction_count == 1
 
 
+def test_clear_resets_compact_hysteresis(tmp_path: Path) -> None:
+    """clear() must drop _last_compact_tokens so a fresh task in the same
+    AgentSession can re-trigger auto-compact (review codex C2)."""
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+    session.settings = session.settings.with_updates(context_limit_tokens=200)
+    session.messages.append({"role": "user", "content": "x" * 2000})
+    session._maybe_auto_compact()
+    assert session.compaction_count == 1
+    assert session._last_compact_tokens is not None
+
+    session.clear()
+    assert session._last_compact_tokens is None
+    assert session._tool_outcomes == {}
+    assert session.last_termination == "unknown"
+    assert session.last_failing_tools == set()
+
+
+def test_failing_tool_remembered_across_many_later_calls(tmp_path: Path) -> None:
+    """A nonzero-exit tool result must keep flagging the tool as unresolved
+    even after 12+ other tool calls happen later (review codex C3:
+    sliding window was too narrow)."""
+    session, _ = _session(tmp_path, [])
+    session._tool_outcomes = {}
+    # Simulate one failed tool followed by 20 other-tool successes.
+    from agentx.protocol import ToolResult
+
+    class _FakeTools:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run(self, name: str, args: dict) -> ToolResult:
+            self.calls += 1
+            if name == "fail_cmd":
+                return ToolResult(tool="fail_cmd", ok=True, content="$ x\nexit=1\nerror")
+            return ToolResult(tool=name, ok=True, content="ok")
+
+    session.tools = _FakeTools()  # type: ignore[assignment]
+    from agentx.protocol import ToolCall
+
+    session._run_tool(ToolCall(type="tool_call", tool="fail_cmd", args={}))
+    assert "fail_cmd" in session._unresolved_failing_tools()
+
+    for i in range(20):
+        session._run_tool(ToolCall(type="tool_call", tool=f"other_{i}", args={}))
+
+    # Failed tool still tracked despite many later successful tool calls.
+    assert "fail_cmd" in session._unresolved_failing_tools()
+
+
 def test_auto_compact_failure_does_not_break_loop(tmp_path: Path, monkeypatch) -> None:
     """If compact() raises, the agent loop continues without crashing
     (review N8)."""
