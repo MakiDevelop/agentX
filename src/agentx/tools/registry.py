@@ -3,6 +3,13 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Any
 
+from agentx.hooks import (
+    HookEvent,
+    HookManager,
+    HookVeto,
+    ToolCallContext,
+    ToolResultContext,
+)
 from agentx.protocol import Tool, ToolResult
 from agentx.safety import Risk
 
@@ -16,9 +23,11 @@ class ToolRegistry:
         tools: Iterable[Tool] | None = None,
         *,
         approver: ApprovalCallback | None = None,
+        hooks: HookManager | None = None,
     ) -> None:
         self._tools: dict[str, Tool] = {}
         self.approver = approver
+        self.hooks = hooks
         if tools is not None:
             for tool in tools:
                 self.register(tool)
@@ -55,8 +64,26 @@ class ToolRegistry:
                     ok=False,
                     content=f"Rejected by approval gate: {name}",
                 )
+        if self.hooks is not None:
+            try:
+                self.hooks.fire(
+                    HookEvent.BEFORE_TOOL_CALL,
+                    ToolCallContext(tool=name, args=args, risk=tool.risk),
+                )
+            except HookVeto as veto:
+                return ToolResult(
+                    tool=name,
+                    ok=False,
+                    content=f"Vetoed by hook: {veto}",
+                )
         try:
             content = tool.run(args)
-            return ToolResult(tool=name, ok=True, content=str(content))
+            result = ToolResult(tool=name, ok=True, content=str(content))
         except Exception as exc:
-            return ToolResult(tool=name, ok=False, content=f"{type(exc).__name__}: {exc}")
+            result = ToolResult(tool=name, ok=False, content=f"{type(exc).__name__}: {exc}")
+        if self.hooks is not None:
+            self.hooks.fire(
+                HookEvent.AFTER_TOOL_CALL,
+                ToolResultContext(tool=name, args=args, result=result),
+            )
+        return result
