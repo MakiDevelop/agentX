@@ -33,15 +33,25 @@ WRITE_PROTECTED_PARTS = frozenset(
     }
 )
 
+# GREEN-risk commands: read-only inspection or pure syntax checks. Safe to run
+# without approval. uv run pytest stays here for backward compat even though it
+# executes arbitrary test code — reviewer note: pre-existing scope, not promoted
+# in this change.
 ALLOWED_COMMANDS: dict[str, list[str]] = {
     "uv run ruff check .": ["uv", "run", "ruff", "check", "."],
     "uv run pytest -q": ["uv", "run", "pytest", "-q"],
     "git status --short --branch": ["git", "status", "--short", "--branch"],
     "git diff": ["git", "diff"],
+    "cargo fmt --check": ["cargo", "fmt", "--", "--check"],
+}
+
+# YELLOW-risk build / test commands: invoke build.rs, proc-macros, or test code
+# → potentially run arbitrary code from the workspace or its dependencies.
+# Routed through a separate run_build_command tool that requires approval.
+BUILD_COMMANDS: dict[str, list[str]] = {
     "cargo check": ["cargo", "check"],
     "cargo build": ["cargo", "build"],
     "cargo test": ["cargo", "test"],
-    "cargo fmt --check": ["cargo", "fmt", "--", "--check"],
     "cargo clippy -- -D warnings": ["cargo", "clippy", "--", "-D", "warnings"],
 }
 

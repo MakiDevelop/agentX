@@ -9,6 +9,7 @@ from agentx.protocol import Tool
 from agentx.safety import Risk
 from agentx.tools._helpers import (
     ALLOWED_COMMANDS,
+    BUILD_COMMANDS,
     SKIPPED_DIRS,
     docker_compose_command,
     ensure_safe_write_path,
@@ -215,7 +216,7 @@ class MemoryWriteTool:
 
 class RunCommandTool(_WorkspaceTool):
     name = "run_command"
-    description = "執行固定 allowlist 命令"
+    description = "執行 GREEN allowlist 命令（read-only 檢查、純語法掃描）"
     risk = Risk.GREEN
     signature = "command"
 
@@ -230,6 +231,32 @@ class RunCommandTool(_WorkspaceTool):
             text=True,
             capture_output=True,
             timeout=120,
+            check=False,
+        )
+        output = completed.stdout or completed.stderr
+        return f"$ {command}\nexit={completed.returncode}\n{output.strip()}"
+
+
+class RunBuildCommandTool(_WorkspaceTool):
+    name = "run_build_command"
+    description = (
+        "執行 YELLOW build/test allowlist 命令（cargo check/build/test/clippy）；"
+        "會 invoke build.rs、proc-macro、測試碼 = 執行任意 repo 內程式，故需 approval"
+    )
+    risk = Risk.YELLOW
+    signature = "command"
+
+    def run(self, args: dict[str, Any]) -> str:
+        command = args["command"]
+        if command not in BUILD_COMMANDS:
+            allowed = "\n".join(f"- {item}" for item in sorted(BUILD_COMMANDS))
+            raise PermissionError(f"Command is not allowlisted: {command}\nAllowed:\n{allowed}")
+        completed = subprocess.run(
+            BUILD_COMMANDS[command],
+            cwd=self.workspace,
+            text=True,
+            capture_output=True,
+            timeout=300,
             check=False,
         )
         output = completed.stdout or completed.stderr
@@ -393,6 +420,7 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
         MemorySearchTool(memory),
         MemoryWriteTool(memory),
         RunCommandTool(workspace),
+        RunBuildCommandTool(workspace),
         RunTestsTool(workspace),
         ApplyPatchTool(workspace),
         DockerComposePsTool(workspace),
