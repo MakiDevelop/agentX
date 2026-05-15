@@ -15,6 +15,11 @@ from agentx.runtime_prompt import build_agent_system_prompt
 from agentx.tools import ToolRegistry
 
 
+class InvalidAction(Enum):
+    NON_JSON = "non_json"
+    BAD_SCHEMA = "bad_schema"
+
+
 class AgentLoop:
     def __init__(
         self,
@@ -79,20 +84,6 @@ class AgentSession:
         namespace: str = "project:agentX",
         cancel_event: threading.Event | None = None,
     ) -> str:
-        direct = self._direct_tool_call(prompt)
-        if direct is not None:
-            result = self._run_tool(direct)
-            self.messages.append(
-                {
-                    "role": "user",
-                    "content": f"Task: {prompt}",
-                }
-            )
-            self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
-            if result.ok:
-                return result.content
-            return f"工具執行失敗：{result.content}"
-
         self.messages.append(
             {
                 "role": "user",
@@ -195,16 +186,15 @@ class AgentSession:
             f"目前約 {self.context_tokens_estimate} tokens。"
         )
 
-    def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | "InvalidAction":
+    def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | InvalidAction:
         data = extract_json_object(raw)
         if data is None:
             return InvalidAction.NON_JSON
-
         try:
             if data.get("type") == "tool_call":
                 return ToolCall.model_validate(data)
             return FinalAnswer.model_validate(data)
-        except (AttributeError, ValidationError):
+        except ValidationError:
             return InvalidAction.BAD_SCHEMA
 
     def _format_tool_result(self, result: ToolResult) -> str:
@@ -220,17 +210,3 @@ class AgentSession:
     def _emit_trace(self, message: str) -> None:
         if self.trace is not None:
             self.trace(message)
-
-    def _direct_tool_call(self, prompt: str) -> ToolCall | None:
-        normalized = prompt.lower()
-        if any(keyword in normalized for keyword in ("列出", "檔案", "files", "list files")):
-            if any(keyword in normalized for keyword in ("repo", "目錄", "directory", "workspace")):
-                return ToolCall(type="tool_call", tool="list_files", args={"path": "."})
-        if "git status" in normalized:
-            return ToolCall(type="tool_call", tool="git_status", args={})
-        return None
-
-
-class InvalidAction(Enum):
-    NON_JSON = "non_json"
-    BAD_SCHEMA = "bad_schema"
