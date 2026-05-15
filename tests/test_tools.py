@@ -252,6 +252,20 @@ def test_edit_file_rejects_dotgit(tmp_path: Path) -> None:
     assert "protected location" in result.content
 
 
+def test_edit_file_rejects_malformed_edit_entry(tmp_path: Path) -> None:
+    target = tmp_path / "f.txt"
+    target.write_text("hello world", encoding="utf-8")
+    registry = _registry(tmp_path)
+    # Pass a string where the entry should be a dict — should raise ValueError
+    # via _coerce_edits (review N9: no silent drops).
+    result = registry.run(
+        "edit_file",
+        {"path": "f.txt", "edits": ["not a dict"]},
+    )
+    assert not result.ok
+    assert "must be a dict" in result.content
+
+
 def test_edit_file_accepts_legacy_single_pair(tmp_path: Path) -> None:
     target = tmp_path / "f.txt"
     target.write_text("alpha", encoding="utf-8")

@@ -128,7 +128,17 @@ class EditFileTool(_WorkspaceTool):
 def _coerce_edits(args: dict[str, Any]) -> list[dict[str, Any]]:
     edits = args.get("edits")
     if isinstance(edits, list):
-        return [e for e in edits if isinstance(e, dict)]
+        cleaned: list[dict[str, Any]] = []
+        for index, entry in enumerate(edits):
+            if not isinstance(entry, dict):
+                # Review N9: surface malformed entries instead of silently
+                # dropping them — partial intent should not be reported as ok.
+                raise ValueError(
+                    f"edits[{index}] must be a dict with oldText/newText, "
+                    f"got {type(entry).__name__}"
+                )
+            cleaned.append(entry)
+        return cleaned
     old_text = args.get("oldText")
     new_text = args.get("newText")
     if isinstance(old_text, str) and isinstance(new_text, str):
