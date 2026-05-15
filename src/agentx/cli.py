@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import sys
 import threading
-import os
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+import typer
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
-import typer
 from rich.console import Console
 from rich.markup import escape
 from rich.panel import Panel
@@ -87,6 +89,34 @@ SLASH_COMMANDS = [
     ("/exit", "離開 agentX shell"),
     ("/quit", "離開 agentX shell，同 /exit"),
 ]
+
+NON_BLOCKING_COMMANDS = {"/jobs", "/cancel"}
+
+
+@dataclass
+class ShellState:
+    settings: Settings
+    ollama: OllamaClient
+    memory: MemoryHallClient
+    tools: ToolRegistry
+    agent_session: AgentSession
+    transcript: Transcript
+    job_queue: PromptJobQueue
+    approval_policy: ApprovalPolicy
+    task: TaskState
+    namespace: str
+    mode: str
+    plan_mode: bool = False
+    chat_messages: list[dict[str, str]] = field(default_factory=list)
+    history: list[tuple[str, str]] = field(default_factory=list)
+    current_cancel: threading.Event = field(default_factory=threading.Event)
+    prompt_active: threading.Event = field(default_factory=threading.Event)
+    tui: AgentXTui | None = None
+    should_exit: bool = False
+    exit_reason: str | None = None
+
+
+SlashHandler = Callable[[ShellState, str], None]
 
 
 def print_trace(message: str) -> None:
@@ -391,74 +421,6 @@ def run_init(settings: Settings, tools: ToolRegistry, namespace: str) -> str:
     return "project profile write failed\n\n" + result.content
 
 
-@app.callback(invoke_without_command=True)
-def main(
-    ctx: typer.Context,
-    print_prompt: str | None = typer.Option(None, "-p", "--print", help="Print one response and exit."),
-    agent: bool = typer.Option(False, "--agent", help="Use agent/tool mode with -p."),
-    namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
-) -> None:
-    """Run local Ollama agent workflows."""
-    if print_prompt is None:
-        return
-    if ctx.invoked_subcommand is not None:
-        return
-    print_raw(run_print_prompt(print_prompt, namespace=namespace, agent_mode=agent))
-    raise typer.Exit()
-
-
-def build_runtime(
-    settings: Settings,
-    *,
-    approval_policy: ApprovalPolicy | None = None,
-) -> tuple[OllamaClient, MemoryHallClient, ToolRegistry]:
-    ollama = OllamaClient(
-        base_url=settings.ollama_url,
-        model=settings.model,
-        timeout=settings.ollama_timeout,
-    )
-    memory = MemoryHallClient(
-        base_url=settings.memory_hall_url,
-        token=settings.memory_hall_token,
-    )
-    def approve(tool: str, args: dict[str, object], risk: Risk) -> bool:
-        if approval_policy is None:
-            return False
-        return approval_policy.decide(tool, args, risk, approve_interactive)
-
-    tools = ToolRegistry(
-        builtin_tools(settings.workspace, memory),
-        approver=approve if approval_policy is not None else None,
-    )
-    return ollama, memory, tools
-
-
-def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = False) -> str:
-    settings = Settings()
-    project_config = load_project_config(settings.workspace)
-    namespace = namespace or project_config.namespace or "project:agentX"
-    ollama, memory, tools = build_runtime(settings)
-    attachment_context, _ = build_attachment_context(prompt, settings.workspace)
-    if attachment_context:
-        prompt = f"{prompt}\n\n{attachment_context}"
-    if agent_mode:
-        agent_loop = AgentLoop(
-            settings=settings,
-            ollama=ollama,
-            tools=tools,
-            memory=memory,
-            namespace=namespace,
-        )
-        return agent_loop.run(prompt, namespace=namespace)
-    return ollama.chat(
-        [
-            {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)},
-            {"role": "user", "content": prompt},
-        ],
-        json_mode=False,
-    )
-
-
 def build_handoff(
     *,
     settings: Settings,
@@ -511,6 +473,578 @@ def write_handoff(
     return f"handoff failed: {result.content}"
 
 
+def _print_tool_run(state: ShellState, tool: str, args: dict[str, object], slash: str, failure_prefix: str = "工具執行失敗", transcript_extra: dict[str, object] | None = None) -> None:
+    result = state.tools.run(tool, args)
+    record: dict[str, object] = {
+        "command": slash,
+        "ok": result.ok,
+        "content": result.content[:2000],
+    }
+    if transcript_extra:
+        record.update(transcript_extra)
+    state.transcript.write("tool", record)
+    print_tool_result(result.content if result.ok else f"{failure_prefix}：{result.content}")
+
+
+def cmd_help(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/help"})
+    print_slash_help()
+
+
+def cmd_config(state: ShellState, arg: str) -> None:
+    if arg.startswith("set "):
+        parts = arg.split(maxsplit=2)
+        if len(parts) != 3:
+            console.print("usage: /config set KEY VALUE")
+            return
+        _, key, value = parts
+        try:
+            updated = set_project_config(state.settings.workspace, key, value)
+        except ValueError as exc:
+            console.print(str(exc))
+            return
+        state.transcript.write("slash_command", {"command": f"/config set {key}", "config": key})
+        console.print(f"config updated: {key}")
+        print_raw(updated)
+        return
+    if arg:
+        console.print("usage: /config | /config set KEY VALUE")
+        return
+    state.transcript.write("slash_command", {"command": "/config"})
+    print_config(state.settings, state.namespace, state.mode, state.approval_policy, state.task)
+
+
+def cmd_task(state: ShellState, arg: str) -> None:
+    value = arg.strip()
+    if not value:
+        state.transcript.write("slash_command", {"command": "/task"})
+        state.task = load_task(state.settings.workspace)
+    else:
+        if value == "status":
+            state.task = load_task(state.settings.workspace)
+        elif value == "done":
+            state.task = finish_task(state.settings.workspace)
+        elif value == "clear":
+            state.task = clear_task(state.settings.workspace)
+        else:
+            state.task = start_task(state.settings.workspace, value)
+        state.transcript.write("task", {"title": state.task.title, "status": state.task.status})
+    print_task(state.task)
+
+
+def cmd_doctor(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/doctor"})
+    print_doctor(state.settings, state.memory, state.ollama)
+
+
+def cmd_init(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/init"})
+    output = run_init(state.settings, state.tools, state.namespace)
+    state.transcript.write("init", {"content": output[:4000]})
+    print_raw(output)
+
+
+def cmd_tools(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/tools"})
+    print_tools(state.tools)
+
+
+def cmd_context(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/context"})
+    print_context(state.agent_session, state.chat_messages)
+
+
+def cmd_compact(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/compact"})
+    result = state.agent_session.compact()
+    state.transcript.write("compact", {"result": result})
+    print_raw(result)
+
+
+def cmd_history(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/history"})
+    print_history(state.history)
+
+
+def cmd_jobs(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/jobs"})
+    print_jobs(state.job_queue)
+
+
+def cmd_cancel(state: ShellState, arg: str) -> None:
+    value = arg.strip() or None
+    state.transcript.write("slash_command", {"command": "/cancel"})
+    print_raw(cancel_jobs(state.job_queue, value, state.current_cancel))
+
+
+def cmd_sessions(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/sessions"})
+    print_sessions(state.settings)
+
+
+def cmd_transcript(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/transcript"})
+    console.print(str(state.transcript.path))
+
+
+def cmd_handoff(state: ShellState, arg: str) -> None:
+    note = arg.strip() or None
+    message = write_handoff(
+        state.tools,
+        settings=state.settings,
+        namespace=state.namespace,
+        mode=state.mode,
+        history=state.history,
+        transcript=state.transcript,
+        task=state.task,
+        note=note,
+    )
+    state.transcript.write("handoff", {"auto": False, "note": note, "result": message})
+    print_raw(message)
+
+
+def cmd_resume(state: ShellState, arg: str) -> None:
+    name = arg.strip() or "latest"
+    resume_path = find_transcript(state.settings.workspace, name)
+    if resume_path is None:
+        console.print(f"transcript not found: {name}")
+        return
+    summary = summarize_transcript(resume_path)
+    state.agent_session.messages.append({"role": "system", "content": summary})
+    state.chat_messages.append({"role": "system", "content": summary})
+    state.transcript.write("resume", {"source": str(resume_path), "summary": summary[:2000]})
+    console.print(f"resumed {resume_path}")
+
+
+def cmd_files(state: ShellState, arg: str) -> None:
+    path = arg.strip() or "."
+    _print_tool_run(state, "list_files", {"path": path}, "/files")
+
+
+def cmd_read(state: ShellState, arg: str) -> None:
+    path = arg.strip()
+    if not path:
+        console.print("usage: /read PATH")
+        return
+    _print_tool_run(state, "read_file", {"path": path}, "/read", transcript_extra={"path": path})
+
+
+def cmd_attach(state: ShellState, arg: str) -> None:
+    attachment_text = arg.strip()
+    if not attachment_text:
+        console.print("usage: /attach PATH [PATH...]")
+        return
+    attachment_context, attachment_paths = build_attachment_context(
+        attachment_text,
+        state.settings.workspace,
+    )
+    if not attachment_context:
+        print_raw("no readable attachment found")
+        return
+    state.agent_session.messages.append({"role": "system", "content": attachment_context})
+    state.chat_messages.append({"role": "system", "content": attachment_context})
+    state.transcript.write("attachments", {"paths": attachment_paths})
+    print_raw("attached files:\n" + "\n".join(attachment_paths))
+
+
+def cmd_search(state: ShellState, arg: str) -> None:
+    pattern = arg.strip()
+    if not pattern:
+        console.print("usage: /search PATTERN")
+        return
+    _print_tool_run(state, "search_text", {"pattern": pattern}, "/search", transcript_extra={"pattern": pattern})
+
+
+def cmd_git(state: ShellState, arg: str) -> None:
+    _print_tool_run(state, "git_status", {}, "/git")
+
+
+def cmd_diff(state: ShellState, arg: str) -> None:
+    path = arg.strip()
+    args = {"path": path} if path else {}
+    _print_tool_run(state, "git_diff", args, "/diff", transcript_extra={"path": path})
+
+
+def cmd_apply(state: ShellState, arg: str) -> None:
+    path = arg.strip()
+    if not path:
+        console.print("usage: /apply PATCH_FILE")
+        return
+    patch_path = (state.settings.workspace / path).resolve()
+    if state.settings.workspace != patch_path and state.settings.workspace not in patch_path.parents:
+        console.print("patch path escapes workspace")
+        return
+    if not patch_path.is_file():
+        console.print(f"patch file not found: {path}")
+        return
+    patch = patch_path.read_text(encoding="utf-8", errors="replace")
+    _print_tool_run(
+        state,
+        "apply_patch",
+        {"patch": patch},
+        "/apply",
+        failure_prefix="patch failed",
+        transcript_extra={"path": path},
+    )
+
+
+def cmd_approval(state: ShellState, arg: str) -> None:
+    value = arg.strip()
+    if not value:
+        state.transcript.write("slash_command", {"command": "/approval"})
+        print_approval(state.approval_policy)
+        return
+    try:
+        state.approval_policy.mode = ApprovalMode(value)
+    except ValueError:
+        console.print("usage: /approval ask|auto|off")
+        return
+    state.transcript.write(
+        "slash_command",
+        {"command": f"/approval {value}", "approval": state.approval_policy.mode.value},
+    )
+    print_approval(state.approval_policy)
+
+
+def cmd_memory(state: ShellState, arg: str) -> None:
+    query = arg.strip()
+    if not query:
+        console.print("usage: /memory QUERY")
+        return
+    _print_tool_run(
+        state,
+        "memory_search",
+        {"query": query, "namespace": state.namespace},
+        "/memory",
+        failure_prefix="memory search failed",
+        transcript_extra={"query": query},
+    )
+
+
+def cmd_run(state: ShellState, arg: str) -> None:
+    command = arg.strip()
+    if not command:
+        console.print("usage: /run COMMAND")
+        return
+    _print_tool_run(
+        state,
+        "run_command",
+        {"command": command},
+        "/run",
+        failure_prefix="run failed",
+        transcript_extra={"input": command},
+    )
+
+
+def cmd_docker(state: ShellState, arg: str) -> None:
+    prompt_text = f"/docker {arg}".strip()
+    docker_args = parse_docker_prompt(prompt_text)
+    if docker_args is None:
+        console.print("usage: /docker ps|build|up|logs [SERVICE]|down")
+        return
+    action = str(docker_args.pop("action"))
+    try:
+        command = docker_compose_command(
+            state.settings.workspace,
+            action,
+            service=str(docker_args["service"]) if "service" in docker_args else None,
+        )
+    except Exception as exc:
+        print_raw(f"docker command rejected: {type(exc).__name__}: {exc}")
+        return
+    print_command_preview(command)
+    result = state.tools.run(f"docker_compose_{action}", docker_args)
+    state.transcript.write(
+        "tool",
+        {
+            "command": "/docker",
+            "action": action,
+            "args": docker_args,
+            "ok": result.ok,
+            "content": result.content[:4000],
+        },
+    )
+    print_tool_result(result.content if result.ok else f"docker failed: {result.content}")
+
+
+def cmd_test(state: ShellState, arg: str) -> None:
+    result = state.tools.run("run_tests", {})
+    state.transcript.write("tool", {"command": "/test", "ok": result.ok, "content": result.content[:4000]})
+    print_tool_result(result.content if result.ok else f"驗證失敗：{result.content}")
+
+
+def cmd_review(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/review"})
+    output = run_review(state.ollama, state.tools)
+    state.transcript.write("review", {"content": output[:4000]})
+    print_raw(output)
+
+
+def cmd_commit(state: ShellState, arg: str) -> None:
+    message = arg.strip() or None
+    state.transcript.write("slash_command", {"command": "/commit"})
+    output = run_commit_flow(state.settings, state.tools, message)
+    state.transcript.write("commit", {"message": message, "content": output[:4000]})
+    print_raw(output)
+
+
+def cmd_plan(state: ShellState, arg: str) -> None:
+    state.plan_mode = not state.plan_mode
+    state.transcript.write("slash_command", {"command": "/plan", "plan": state.plan_mode})
+    console.print(f"plan={'on' if state.plan_mode else 'off'}")
+
+
+def cmd_remember(state: ShellState, arg: str) -> None:
+    content = arg.strip()
+    if not content:
+        console.print("usage: /remember 要寫入 Memory Hall 的內容")
+        return
+    result = state.tools.run("memory_write", {"content": content, "namespace": state.namespace})
+    state.transcript.write("tool", {"command": "/remember", "ok": result.ok, "content": content})
+    if result.ok:
+        console.print(f"remembered in {state.namespace}")
+    else:
+        console.print(f"remember failed: {result.content}")
+
+
+def cmd_mode(state: ShellState, arg: str) -> None:
+    next_mode = arg.strip()
+    if next_mode not in {"chat", "agent"}:
+        console.print("mode must be chat or agent")
+        return
+    state.mode = next_mode
+    state.transcript.write("slash_command", {"command": f"/mode {next_mode}", "mode": next_mode})
+    console.print(f"mode={next_mode}")
+
+
+def cmd_models(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/models"})
+    try:
+        models = state.ollama.list_models()
+    except Exception as exc:
+        console.print(f"models failed: {type(exc).__name__}: {exc}")
+        return
+    print_tool_result("\n".join(models))
+
+
+def cmd_model(state: ShellState, arg: str) -> None:
+    model = arg.strip()
+    if not model:
+        state.transcript.write("slash_command", {"command": "/model", "model": state.settings.model})
+        console.print(f"model={state.settings.model}")
+        console.print("usage: /model MODEL")
+        console.print("example: /model gemma4:31b")
+        console.print("list models: /models")
+        return
+    state.settings = state.settings.with_updates(model=model)
+    old_ollama = state.ollama
+    state.ollama = OllamaClient(
+        base_url=state.settings.ollama_url,
+        model=state.settings.model,
+        timeout=state.settings.ollama_timeout,
+    )
+    state.agent_session.ollama = state.ollama
+    if hasattr(old_ollama, "close"):
+        old_ollama.close()
+    state.transcript.write("slash_command", {"command": f"/model {model}", "model": state.settings.model})
+    console.print(f"model={state.settings.model}")
+
+
+def cmd_persona(state: ShellState, arg: str) -> None:
+    value = arg.strip()
+    if not value:
+        state.transcript.write("slash_command", {"command": "/persona", "persona": state.settings.persona})
+        console.print(f"persona={state.settings.persona}")
+        print_raw(list_personas())
+        return
+    try:
+        persona = normalize_persona(value)
+    except ValueError as exc:
+        console.print(str(exc))
+        return
+    state.settings = state.settings.with_updates(persona=persona)
+    state.agent_session.settings = state.settings
+    state.agent_session.clear()
+    state.chat_messages = [
+        {
+            "role": "system",
+            "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona),
+        }
+    ]
+    state.transcript.write("slash_command", {"command": f"/persona {value}", "persona": state.settings.persona})
+    console.print(f"persona={state.settings.persona}")
+
+
+def cmd_status(state: ShellState, arg: str) -> None:
+    state.transcript.write("slash_command", {"command": "/status"})
+    approx_tokens = state.agent_session.context_chars // 4
+    console.print(
+        f"model={state.settings.model} mode={state.mode} namespace={state.namespace} "
+        f"persona={state.settings.persona} agent_messages={state.agent_session.message_count} "
+        f"agent_context~{approx_tokens} tokens chat_messages={len(state.chat_messages)}"
+    )
+
+
+def cmd_clear(state: ShellState, arg: str) -> None:
+    state.agent_session.clear()
+    state.chat_messages = [
+        {
+            "role": "system",
+            "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona),
+        }
+    ]
+    state.transcript.write("slash_command", {"command": "/clear"})
+    console.print("cleared")
+
+
+def cmd_exit(state: ShellState, arg: str) -> None:
+    state.should_exit = True
+    state.exit_reason = "/exit"
+
+
+def cmd_quit(state: ShellState, arg: str) -> None:
+    state.should_exit = True
+    state.exit_reason = "/quit"
+
+
+SLASH_HANDLERS: dict[str, SlashHandler] = {
+    "/help": cmd_help,
+    "/config": cmd_config,
+    "/task": cmd_task,
+    "/doctor": cmd_doctor,
+    "/init": cmd_init,
+    "/tools": cmd_tools,
+    "/context": cmd_context,
+    "/compact": cmd_compact,
+    "/history": cmd_history,
+    "/jobs": cmd_jobs,
+    "/cancel": cmd_cancel,
+    "/sessions": cmd_sessions,
+    "/transcript": cmd_transcript,
+    "/handoff": cmd_handoff,
+    "/resume": cmd_resume,
+    "/files": cmd_files,
+    "/read": cmd_read,
+    "/attach": cmd_attach,
+    "/search": cmd_search,
+    "/git": cmd_git,
+    "/diff": cmd_diff,
+    "/apply": cmd_apply,
+    "/approval": cmd_approval,
+    "/memory": cmd_memory,
+    "/run": cmd_run,
+    "/docker": cmd_docker,
+    "/test": cmd_test,
+    "/review": cmd_review,
+    "/commit": cmd_commit,
+    "/plan": cmd_plan,
+    "/remember": cmd_remember,
+    "/mode": cmd_mode,
+    "/models": cmd_models,
+    "/model": cmd_model,
+    "/persona": cmd_persona,
+    "/status": cmd_status,
+    "/clear": cmd_clear,
+    "/exit": cmd_exit,
+    "/quit": cmd_quit,
+}
+
+
+def dispatch_slash(state: ShellState, prompt: str) -> bool:
+    head, _, arg = prompt.partition(" ")
+    handler = SLASH_HANDLERS.get(head)
+    if handler is None:
+        return False
+    handler(state, arg)
+    return True
+
+
+def finalize_session(state: ShellState, reason: str | None) -> None:
+    if state.history and state.settings.auto_handoff:
+        message = write_handoff(
+            state.tools,
+            settings=state.settings,
+            namespace=state.namespace,
+            mode=state.mode,
+            history=state.history,
+            transcript=state.transcript,
+            task=state.task,
+        )
+        state.transcript.write("handoff", {"auto": True, "result": message})
+        print_raw(message if reason is None else f"\n{message}")
+    if reason is not None:
+        state.transcript.write("session_end", {"reason": reason})
+
+
+@app.callback(invoke_without_command=True)
+def main(
+    ctx: typer.Context,
+    print_prompt: str | None = typer.Option(None, "-p", "--print", help="Print one response and exit."),
+    agent: bool = typer.Option(False, "--agent", help="Use agent/tool mode with -p."),
+    namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
+) -> None:
+    """Run local Ollama agent workflows."""
+    if print_prompt is None:
+        return
+    if ctx.invoked_subcommand is not None:
+        return
+    print_raw(run_print_prompt(print_prompt, namespace=namespace, agent_mode=agent))
+    raise typer.Exit()
+
+
+def build_runtime(
+    settings: Settings,
+    *,
+    approval_policy: ApprovalPolicy | None = None,
+) -> tuple[OllamaClient, MemoryHallClient, ToolRegistry]:
+    ollama = OllamaClient(
+        base_url=settings.ollama_url,
+        model=settings.model,
+        timeout=settings.ollama_timeout,
+    )
+    memory = MemoryHallClient(
+        base_url=settings.memory_hall_url,
+        token=settings.memory_hall_token,
+    )
+
+    def approve(tool: str, args: dict[str, object], risk: Risk) -> bool:
+        if approval_policy is None:
+            return False
+        return approval_policy.decide(tool, args, risk, approve_interactive)
+
+    tools = ToolRegistry(
+        builtin_tools(settings.workspace, memory),
+        approver=approve if approval_policy is not None else None,
+    )
+    return ollama, memory, tools
+
+
+def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = False) -> str:
+    settings = Settings()
+    project_config = load_project_config(settings.workspace)
+    namespace = namespace or project_config.namespace or "project:agentX"
+    ollama, memory, tools = build_runtime(settings)
+    attachment_context, _ = build_attachment_context(prompt, settings.workspace)
+    if attachment_context:
+        prompt = f"{prompt}\n\n{attachment_context}"
+    if agent_mode:
+        agent_loop = AgentLoop(
+            settings=settings,
+            ollama=ollama,
+            tools=tools,
+            memory=memory,
+            namespace=namespace,
+        )
+        return agent_loop.run(prompt, namespace=namespace)
+    return ollama.chat(
+        [
+            {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)},
+            {"role": "user", "content": prompt},
+        ],
+        json_mode=False,
+    )
+
+
 @app.command()
 def ask(
     prompt: str = typer.Argument(..., help="Task or question for agentX."),
@@ -553,6 +1087,75 @@ def chat(
     print_raw(answer)
 
 
+def _run_prompt_worker(state: ShellState) -> None:
+    while True:
+        job = state.job_queue.get()
+        if job is None:
+            break
+        queued_prompt = job.prompt
+        state.current_cancel.clear()
+        state.prompt_active.set()
+        try:
+            attachment_context, attachment_paths = build_attachment_context(
+                queued_prompt,
+                state.settings.workspace,
+            )
+            if attachment_context:
+                queued_prompt = f"{queued_prompt}\n\n{attachment_context}"
+                state.transcript.write("attachments", {"paths": attachment_paths})
+            if state.mode == "agent":
+                state.history.append((state.mode, queued_prompt))
+                state.transcript.write("user", {"mode": state.mode, "content": queued_prompt})
+                agent_prompt = queued_prompt
+                if state.plan_mode:
+                    agent_prompt = "Plan only. Do not call tools. " + agent_prompt
+                answer = state.agent_session.ask(
+                    agent_prompt,
+                    namespace=state.namespace,
+                    cancel_event=state.current_cancel,
+                )
+                state.transcript.write("assistant", {"mode": state.mode, "content": answer[:4000]})
+                if state.tui is not None:
+                    print_raw(format_assistant_header())
+                print_block(answer)
+                continue
+
+            state.history.append((state.mode, queued_prompt))
+            state.transcript.write("user", {"mode": state.mode, "content": queued_prompt})
+            chat_prompt = queued_prompt
+            if state.plan_mode:
+                chat_prompt = "Plan only. Do not claim actions were performed. " + chat_prompt
+            state.chat_messages.append({"role": "user", "content": chat_prompt})
+            streamed: list[str] = []
+            print_raw(format_assistant_header() if state.tui is not None else "")
+
+            def on_delta(delta: str) -> None:
+                streamed.append(delta)
+                print_delta(delta)
+
+            answer = state.ollama.chat(
+                state.chat_messages,
+                json_mode=False,
+                on_delta=on_delta,
+                cancel_event=state.current_cancel,
+            )
+            state.chat_messages.append({"role": "assistant", "content": answer})
+            state.transcript.write("assistant", {"mode": state.mode, "content": answer[:4000]})
+            if streamed:
+                print_raw("")
+            else:
+                print_block(answer)
+        except OllamaCancelledError:
+            state.transcript.write("cancel", {"job": job.id, "prompt": queued_prompt})
+            print_block(f"cancelled job #{job.id}")
+        except Exception as exc:
+            console.print(f"[red]prompt failed:[/red] {type(exc).__name__}: {escape(str(exc))}")
+        finally:
+            state.prompt_active.clear()
+            state.current_cancel.clear()
+            state.job_queue.complete_current()
+
+
 @app.command()
 def shell(
     namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
@@ -582,30 +1185,39 @@ def shell(
         namespace=namespace,
         trace=print_trace,
     )
-    chat_messages = [
-        {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)}
-    ]
-    history: list[tuple[str, str]] = []
-    plan_mode = False
-    job_queue = PromptJobQueue()
-    prompt_active = threading.Event()
-    current_cancel = threading.Event()
+
+    state = ShellState(
+        settings=settings,
+        ollama=ollama,
+        memory=memory,
+        tools=tools,
+        agent_session=agent_session,
+        transcript=transcript,
+        job_queue=PromptJobQueue(),
+        approval_policy=approval_policy,
+        task=task,
+        namespace=namespace,
+        mode=mode,
+        chat_messages=[
+            {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)}
+        ],
+    )
+
     prompt_session: PromptSession[str] | None = None
-    tui: AgentXTui | None = None
     original_console = console
 
     def status_line() -> str:
-        return f"{settings.model} | context {context_percent(settings, agent_session, chat_messages)}%"
+        return f"{state.settings.model} | context {context_percent(state.settings, state.agent_session, state.chat_messages)}%"
 
     ui_mode = os.getenv("AGENTX_TUI", "1").lower()
     if sys.stdin.isatty() and ui_mode not in {"0", "false", "classic"}:
-        tui = AgentXTui(
+        state.tui = AgentXTui(
             commands=SLASH_COMMANDS,
             status_text=status_line,
             full_screen=ui_mode in {"fullscreen", "full-screen"},
         )
-        tui.start()
-        console = Console(file=tui.writer, force_terminal=False, color_system=None, width=100)
+        state.tui.start()
+        console = Console(file=state.tui.writer, force_terminal=False, color_system=None, width=100)
     elif sys.stdin.isatty():
         prompt_session = PromptSession(
             completer=SlashCommandCompleter(SLASH_COMMANDS),
@@ -615,90 +1227,26 @@ def shell(
             bottom_toolbar=status_line,
         )
 
-    def run_prompt_worker() -> None:
-        nonlocal chat_messages
-        while True:
-            job = job_queue.get()
-            if job is None:
-                break
-            queued_prompt = job.prompt
-            current_cancel.clear()
-            prompt_active.set()
-            try:
-                attachment_context, attachment_paths = build_attachment_context(
-                    queued_prompt,
-                    settings.workspace,
-                )
-                if attachment_context:
-                    queued_prompt = f"{queued_prompt}\n\n{attachment_context}"
-                    transcript.write("attachments", {"paths": attachment_paths})
-                if mode == "agent":
-                    history.append((mode, queued_prompt))
-                    transcript.write("user", {"mode": mode, "content": queued_prompt})
-                    agent_prompt = queued_prompt
-                    if plan_mode:
-                        agent_prompt = "Plan only. Do not call tools. " + agent_prompt
-                    answer = agent_session.ask(
-                        agent_prompt,
-                        namespace=namespace,
-                        cancel_event=current_cancel,
-                    )
-                    transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
-                    if tui is not None:
-                        print_raw(format_assistant_header())
-                    print_block(answer)
-                    continue
-
-                history.append((mode, queued_prompt))
-                transcript.write("user", {"mode": mode, "content": queued_prompt})
-                chat_prompt = queued_prompt
-                if plan_mode:
-                    chat_prompt = "Plan only. Do not claim actions were performed. " + chat_prompt
-                chat_messages.append({"role": "user", "content": chat_prompt})
-                streamed: list[str] = []
-                print_raw(format_assistant_header() if tui is not None else "")
-
-                def on_delta(delta: str) -> None:
-                    streamed.append(delta)
-                    print_delta(delta)
-
-                answer = ollama.chat(
-                    chat_messages,
-                    json_mode=False,
-                    on_delta=on_delta,
-                    cancel_event=current_cancel,
-                )
-                chat_messages.append({"role": "assistant", "content": answer})
-                transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
-                if streamed:
-                    print_raw("")
-                else:
-                    print_block(answer)
-            except OllamaCancelledError:
-                transcript.write("cancel", {"job": job.id, "prompt": queued_prompt})
-                print_block(f"cancelled job #{job.id}")
-            except Exception as exc:
-                console.print(f"[red]prompt failed:[/red] {type(exc).__name__}: {escape(str(exc))}")
-            finally:
-                prompt_active.clear()
-                current_cancel.clear()
-                job_queue.complete_current()
-
-    worker = threading.Thread(target=run_prompt_worker, name="agentx-prompt-worker", daemon=True)
+    worker = threading.Thread(
+        target=_run_prompt_worker,
+        args=(state,),
+        name="agentx-prompt-worker",
+        daemon=True,
+    )
     worker.start()
 
     def wait_for_prompt_worker() -> None:
-        while job_queue.current is not None or job_queue.pending_count() > 0:
+        while state.job_queue.current is not None or state.job_queue.pending_count() > 0:
             threading.Event().wait(0.05)
 
     def stop_prompt_worker() -> None:
-        job_queue.stop()
+        state.job_queue.stop()
         worker.join(timeout=5)
 
     console.print(
         Panel.fit(
             (
-                f"model={settings.model} mode={mode} namespace={namespace}\n"
+                f"model={state.settings.model} mode={state.mode} namespace={state.namespace}\n"
                 + escape(slash_command_hint())
             ),
             title="agentX shell",
@@ -706,10 +1254,10 @@ def shell(
     )
 
     try:
-        while True:
+        while not state.should_exit:
             try:
-                if tui is not None:
-                    prompt = tui.prompt().strip()
+                if state.tui is not None:
+                    prompt = state.tui.prompt().strip()
                 elif prompt_session is None:
                     prompt = typer.prompt("agentX").strip()
                 else:
@@ -717,18 +1265,7 @@ def shell(
                         prompt = prompt_session.prompt("agentX: ").strip()
             except (EOFError, KeyboardInterrupt):
                 wait_for_prompt_worker()
-                if history and settings.auto_handoff:
-                    message = write_handoff(
-                        tools,
-                        settings=settings,
-                        namespace=namespace,
-                        mode=mode,
-                        history=history,
-                        transcript=transcript,
-                        task=task,
-                    )
-                    transcript.write("handoff", {"auto": True, "result": message})
-                    print_raw(f"\n{message}")
+                finalize_session(state, None)
                 console.print("\nbye")
                 break
 
@@ -736,399 +1273,25 @@ def shell(
                 continue
             if prompt_session is not None:
                 print_block(f"agentX: {prompt}")
-            if prompt in {"/exit", "/quit"}:
+
+            head, _, _ = prompt.partition(" ")
+            if head in SLASH_HANDLERS and head not in NON_BLOCKING_COMMANDS:
                 wait_for_prompt_worker()
-                if history and settings.auto_handoff:
-                    message = write_handoff(
-                        tools,
-                        settings=settings,
-                        namespace=namespace,
-                        mode=mode,
-                        history=history,
-                        transcript=transcript,
-                        task=task,
-                    )
-                    transcript.write("handoff", {"auto": True, "result": message})
-                    print_raw(message)
-                transcript.write("session_end", {"reason": prompt})
-                break
-            if prompt.startswith("/") and not prompt.startswith(("/jobs", "/cancel")):
-                wait_for_prompt_worker()
-            if prompt == "/help":
-                transcript.write("slash_command", {"command": prompt})
-                print_slash_help()
-                continue
-            if prompt == "/config":
-                transcript.write("slash_command", {"command": prompt})
-                print_config(settings, namespace, mode, approval_policy, task)
-                continue
-            if prompt.startswith("/config set "):
-                parts = prompt.split(maxsplit=3)
-                if len(parts) != 4:
-                    console.print("usage: /config set KEY VALUE")
-                    continue
-                _, _, key, value = parts
-                try:
-                    updated = set_project_config(settings.workspace, key, value)
-                except ValueError as exc:
-                    console.print(str(exc))
-                    continue
-                transcript.write("slash_command", {"command": prompt, "config": key})
-                console.print(f"config updated: {key}")
-                print_raw(updated)
-                continue
-            if prompt == "/task":
-                transcript.write("slash_command", {"command": prompt})
-                task = load_task(settings.workspace)
-                print_task(task)
-                continue
-            if prompt.startswith("/task "):
-                value = prompt.removeprefix("/task ").strip()
-                if value == "status":
-                    task = load_task(settings.workspace)
-                elif value == "done":
-                    task = finish_task(settings.workspace)
-                elif value == "clear":
-                    task = clear_task(settings.workspace)
-                else:
-                    task = start_task(settings.workspace, value)
-                transcript.write("task", {"title": task.title, "status": task.status})
-                print_task(task)
-                continue
-            if prompt == "/doctor":
-                transcript.write("slash_command", {"command": prompt})
-                print_doctor(settings, memory, ollama)
-                continue
-            if prompt == "/init":
-                transcript.write("slash_command", {"command": prompt})
-                output = run_init(settings, tools, namespace)
-                transcript.write("init", {"content": output[:4000]})
-                print_raw(output)
-                continue
-            if prompt == "/tools":
-                transcript.write("slash_command", {"command": prompt})
-                print_tools(tools)
-                continue
-            if prompt == "/context":
-                transcript.write("slash_command", {"command": prompt})
-                print_context(agent_session, chat_messages)
-                continue
-            if prompt == "/compact":
-                transcript.write("slash_command", {"command": prompt})
-                result = agent_session.compact()
-                transcript.write("compact", {"result": result})
-                print_raw(result)
-                continue
-            if prompt == "/history":
-                transcript.write("slash_command", {"command": prompt})
-                print_history(history)
-                continue
-            if prompt == "/jobs":
-                transcript.write("slash_command", {"command": prompt})
-                print_jobs(job_queue)
-                continue
-            if prompt.startswith("/cancel"):
-                value = prompt.removeprefix("/cancel").strip() or None
-                transcript.write("slash_command", {"command": prompt})
-                print_raw(cancel_jobs(job_queue, value, current_cancel))
-                continue
-            if prompt == "/sessions":
-                transcript.write("slash_command", {"command": prompt})
-                print_sessions(settings)
-                continue
-            if prompt == "/transcript":
-                transcript.write("slash_command", {"command": prompt})
-                console.print(str(transcript.path))
-                continue
-            if prompt.startswith("/handoff"):
-                note = prompt.removeprefix("/handoff").strip() or None
-                message = write_handoff(
-                    tools,
-                    settings=settings,
-                    namespace=namespace,
-                    mode=mode,
-                    history=history,
-                    transcript=transcript,
-                    task=task,
-                    note=note,
-                )
-                transcript.write("handoff", {"auto": False, "note": note, "result": message})
-                print_raw(message)
-                continue
-            if prompt.startswith("/resume"):
-                name = prompt.removeprefix("/resume").strip() or "latest"
-                resume_path = find_transcript(settings.workspace, name)
-                if resume_path is None:
-                    console.print(f"transcript not found: {name}")
-                    continue
-                summary = summarize_transcript(resume_path)
-                agent_session.messages.append({"role": "system", "content": summary})
-                chat_messages.append({"role": "system", "content": summary})
-                transcript.write("resume", {"source": str(resume_path), "summary": summary[:2000]})
-                console.print(f"resumed {resume_path}")
-                continue
-            if prompt.startswith("/files"):
-                path = prompt.removeprefix("/files").strip() or "."
-                result = tools.run("list_files", {"path": path})
-                transcript.write(
-                    "tool",
-                    {"command": "/files", "ok": result.ok, "content": result.content[:2000]},
-                )
-                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
-                continue
-            if prompt.startswith("/read "):
-                path = prompt.removeprefix("/read ").strip()
-                result = tools.run("read_file", {"path": path})
-                transcript.write(
-                    "tool",
-                    {"command": "/read", "path": path, "ok": result.ok, "content": result.content[:2000]},
-                )
-                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
-                continue
-            if prompt.startswith("/attach "):
-                attachment_text = prompt.removeprefix("/attach ").strip()
-                attachment_context, attachment_paths = build_attachment_context(
-                    attachment_text,
-                    settings.workspace,
-                )
-                if not attachment_context:
-                    print_raw("no readable attachment found")
-                    continue
-                agent_session.messages.append({"role": "system", "content": attachment_context})
-                chat_messages.append({"role": "system", "content": attachment_context})
-                transcript.write("attachments", {"paths": attachment_paths})
-                print_raw("attached files:\n" + "\n".join(attachment_paths))
-                continue
-            if prompt.startswith("/search "):
-                pattern = prompt.removeprefix("/search ").strip()
-                result = tools.run("search_text", {"pattern": pattern})
-                transcript.write(
-                    "tool",
-                    {"command": "/search", "pattern": pattern, "ok": result.ok, "content": result.content[:2000]},
-                )
-                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
-                continue
-            if prompt == "/git":
-                result = tools.run("git_status", {})
-                transcript.write("tool", {"command": "/git", "ok": result.ok, "content": result.content[:2000]})
-                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
-                continue
-            if prompt.startswith("/diff"):
-                path = prompt.removeprefix("/diff").strip()
-                args = {"path": path} if path else {}
-                result = tools.run("git_diff", args)
-                transcript.write(
-                    "tool",
-                    {"command": "/diff", "path": path, "ok": result.ok, "content": result.content[:2000]},
-                )
-                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
-                continue
-            if prompt.startswith("/apply "):
-                path = prompt.removeprefix("/apply ").strip()
-                patch_path = (settings.workspace / path).resolve()
-                if settings.workspace != patch_path and settings.workspace not in patch_path.parents:
-                    console.print("patch path escapes workspace")
-                    continue
-                if not patch_path.is_file():
-                    console.print(f"patch file not found: {path}")
-                    continue
-                patch = patch_path.read_text(encoding="utf-8", errors="replace")
-                result = tools.run("apply_patch", {"patch": patch})
-                transcript.write(
-                    "tool",
-                    {"command": "/apply", "path": path, "ok": result.ok, "content": result.content[:2000]},
-                )
-                print_tool_result(result.content if result.ok else f"patch failed: {result.content}")
-                continue
-            if prompt == "/approval":
-                transcript.write("slash_command", {"command": prompt})
-                print_approval(approval_policy)
-                continue
-            if prompt.startswith("/approval "):
-                mode_value = prompt.removeprefix("/approval ").strip()
-                try:
-                    approval_policy.mode = ApprovalMode(mode_value)
-                except ValueError:
-                    console.print("usage: /approval ask|auto|off")
-                    continue
-                transcript.write("slash_command", {"command": prompt, "approval": approval_policy.mode.value})
-                print_approval(approval_policy)
-                continue
-            if prompt.startswith("/memory "):
-                query = prompt.removeprefix("/memory ").strip()
-                result = tools.run("memory_search", {"query": query, "namespace": namespace})
-                transcript.write(
-                    "tool",
-                    {"command": "/memory", "query": query, "ok": result.ok, "content": result.content[:2000]},
-                )
-                print_tool_result(result.content if result.ok else f"memory search failed: {result.content}")
-                continue
-            if prompt.startswith("/run "):
-                command = prompt.removeprefix("/run ").strip()
-                result = tools.run("run_command", {"command": command})
-                transcript.write(
-                    "tool",
-                    {"command": "/run", "input": command, "ok": result.ok, "content": result.content[:4000]},
-                )
-                print_tool_result(result.content if result.ok else f"run failed: {result.content}")
-                continue
-            if prompt.startswith("/docker"):
-                docker_args = parse_docker_prompt(prompt)
-                if docker_args is None:
-                    console.print("usage: /docker ps|build|up|logs [SERVICE]|down")
-                    continue
-                action = str(docker_args.pop("action"))
-                try:
-                    command = docker_compose_command(
-                        settings.workspace,
-                        action,
-                        service=str(docker_args["service"]) if "service" in docker_args else None,
-                    )
-                except Exception as exc:
-                    print_raw(f"docker command rejected: {type(exc).__name__}: {exc}")
-                    continue
-                print_command_preview(command)
-                result = tools.run(f"docker_compose_{action}", docker_args)
-                transcript.write(
-                    "tool",
-                    {
-                        "command": "/docker",
-                        "action": action,
-                        "args": docker_args,
-                        "ok": result.ok,
-                        "content": result.content[:4000],
-                    },
-                )
-                print_tool_result(result.content if result.ok else f"docker failed: {result.content}")
-                continue
-            if prompt == "/test":
-                result = tools.run("run_tests", {})
-                transcript.write("tool", {"command": "/test", "ok": result.ok, "content": result.content[:4000]})
-                print_tool_result(result.content if result.ok else f"驗證失敗：{result.content}")
-                continue
-            if prompt == "/review":
-                transcript.write("slash_command", {"command": prompt})
-                output = run_review(ollama, tools)
-                transcript.write("review", {"content": output[:4000]})
-                print_raw(output)
-                continue
-            if prompt.startswith("/commit"):
-                message = prompt.removeprefix("/commit").strip() or None
-                transcript.write("slash_command", {"command": prompt})
-                output = run_commit_flow(settings, tools, message)
-                transcript.write("commit", {"message": message, "content": output[:4000]})
-                print_raw(output)
-                continue
-            if prompt == "/plan":
-                plan_mode = not plan_mode
-                transcript.write("slash_command", {"command": prompt, "plan": plan_mode})
-                console.print(f"plan={'on' if plan_mode else 'off'}")
-                continue
-            if prompt.startswith("/remember "):
-                content = prompt.removeprefix("/remember ").strip()
-                if not content:
-                    console.print("usage: /remember 要寫入 Memory Hall 的內容")
-                    continue
-                result = tools.run("memory_write", {"content": content, "namespace": namespace})
-                transcript.write("tool", {"command": "/remember", "ok": result.ok, "content": content})
-                if result.ok:
-                    console.print(f"remembered in {namespace}")
-                else:
-                    console.print(f"remember failed: {result.content}")
-                continue
-            if prompt.startswith("/mode "):
-                next_mode = prompt.removeprefix("/mode ").strip()
-                if next_mode not in {"chat", "agent"}:
-                    console.print("mode must be chat or agent")
-                    continue
-                mode = next_mode
-                transcript.write("slash_command", {"command": prompt, "mode": mode})
-                console.print(f"mode={mode}")
-                continue
-            if prompt == "/models":
-                transcript.write("slash_command", {"command": prompt})
-                try:
-                    models = ollama.list_models()
-                except Exception as exc:
-                    console.print(f"models failed: {type(exc).__name__}: {exc}")
-                    continue
-                print_tool_result("\n".join(models))
-                continue
-            if prompt == "/model":
-                transcript.write("slash_command", {"command": prompt, "model": settings.model})
-                console.print(f"model={settings.model}")
-                console.print("usage: /model MODEL")
-                console.print("example: /model gemma4:31b")
-                console.print("list models: /models")
-                continue
-            if prompt.startswith("/model "):
-                model = prompt.removeprefix("/model ").strip()
-                if not model:
-                    console.print("usage: /model gemma4:e2b")
-                    continue
-                settings = settings.with_updates(model=model)
-                ollama = OllamaClient(
-                    base_url=settings.ollama_url,
-                    model=settings.model,
-                    timeout=settings.ollama_timeout,
-                )
-                agent_session.ollama = ollama
-                transcript.write("slash_command", {"command": prompt, "model": settings.model})
-                console.print(f"model={settings.model}")
-                continue
-            if prompt == "/persona":
-                transcript.write("slash_command", {"command": prompt, "persona": settings.persona})
-                console.print(f"persona={settings.persona}")
-                print_raw(list_personas())
-                continue
-            if prompt.startswith("/persona "):
-                value = prompt.removeprefix("/persona ").strip()
-                try:
-                    persona = normalize_persona(value)
-                except ValueError as exc:
-                    console.print(str(exc))
-                    continue
-                settings = settings.with_updates(persona=persona)
-                agent_session.settings = settings
-                agent_session.clear()
-                chat_messages = [
-                    {
-                        "role": "system",
-                        "content": build_chat_system_prompt(settings.workspace, settings.persona),
-                    }
-                ]
-                transcript.write("slash_command", {"command": prompt, "persona": settings.persona})
-                console.print(f"persona={settings.persona}")
-                continue
-            if prompt == "/status":
-                transcript.write("slash_command", {"command": prompt})
-                approx_tokens = agent_session.context_chars // 4
-                console.print(
-                    f"model={settings.model} mode={mode} namespace={namespace} "
-                    f"persona={settings.persona} agent_messages={agent_session.message_count} "
-                    f"agent_context~{approx_tokens} tokens chat_messages={len(chat_messages)}"
-                )
-                continue
-            if prompt == "/clear":
-                agent_session.clear()
-                chat_messages = [
-                    {
-                        "role": "system",
-                        "content": build_chat_system_prompt(settings.workspace, settings.persona),
-                    }
-                ]
-                transcript.write("slash_command", {"command": prompt})
-                console.print("cleared")
+
+            if dispatch_slash(state, prompt):
+                if state.should_exit:
+                    wait_for_prompt_worker()
+                    finalize_session(state, state.exit_reason)
                 continue
 
-            job = job_queue.submit(prompt)
-            pending = job_queue.pending_count()
-            if prompt_active.is_set() or pending > 1:
+            job = state.job_queue.submit(prompt)
+            pending = state.job_queue.pending_count()
+            if state.prompt_active.is_set() or pending > 1:
                 console.print(f"[dim]queued job #{job.id}; pending={pending}[/dim]")
     finally:
         stop_prompt_worker()
-        if tui is not None:
-            tui.stop()
+        if state.tui is not None:
+            state.tui.stop()
             console = original_console
 
 
