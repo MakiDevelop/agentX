@@ -65,6 +65,7 @@ SLASH_COMMANDS = [
     ("/read PATH", "讀取 repo 內指定檔案"),
     ("/attach PATH...", "把指定檔案內容加入本輪 context；支援拖曳路徑"),
     ("/search PATTERN", "在 repo 內搜尋文字"),
+    ("/fetch URL", "讀取指定外部網頁文字，會阻擋 localhost 與私有網段"),
     ("/git", "顯示 git status"),
     ("/diff [PATH]", "顯示 git diff，可指定單一檔案"),
     ("/apply PATCH_FILE", "套用 workspace 內 patch 檔，會先要求 approval"),
@@ -895,6 +896,15 @@ def shell(
                     {"command": "/search", "pattern": pattern, "ok": result.ok, "content": result.content[:2000]},
                 )
                 print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
+                continue
+            if prompt.startswith("/fetch "):
+                url = prompt.removeprefix("/fetch ").strip()
+                result = tools.run("web_fetch", {"url": url})
+                transcript.write(
+                    "tool",
+                    {"command": "/fetch", "url": url, "ok": result.ok, "content": result.content[:4000]},
+                )
+                print_tool_result(result.content if result.ok else f"fetch failed: {result.content}")
                 continue
             if prompt == "/git":
                 result = tools.run("git_status", {})

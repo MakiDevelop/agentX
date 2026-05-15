@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import ipaddress
+import re
+import socket
 import subprocess
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlparse
+
+import httpx
 
 from agentx.memory_hall import MemoryHallClient
 from agentx.protocol import ToolResult
@@ -18,6 +25,7 @@ TOOL_DESCRIPTIONS = {
     "memory_search": "查詢 Memory Hall",
     "memory_write": "寫入 Memory Hall",
     "run_command": "執行固定 allowlist 命令",
+    "web_fetch": "讀取指定外部 http/https 網頁文字，會阻擋 localhost 與私有網段",
     "run_tests": "執行固定 allowlist 驗證：ruff check 與 pytest",
     "apply_patch": "套用 unified diff patch，需 approval",
     "docker_compose_build": "執行 docker compose build，需 approval",
@@ -47,6 +55,7 @@ ALLOWED_COMMANDS = {
 
 DOCKER_COMPOSE_ACTIONS = {"ps", "build", "up", "down", "logs"}
 DOCKER_COMPOSE_FILES = ("compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml")
+WEB_MAX_BYTES = 1_000_000
 
 
 def docker_compose_command(
@@ -89,6 +98,60 @@ def resolve_compose_file(workspace: Path, compose_file: str | None = None) -> Pa
         if path.is_file():
             return path
     raise FileNotFoundError("compose.yaml / compose.yml / docker-compose.yml not found")
+
+
+class TextExtractingHTMLParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.parts: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() in {"script", "style", "noscript", "svg"}:
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() in {"script", "style", "noscript", "svg"} and self._skip_depth > 0:
+            self._skip_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth == 0 and data.strip():
+            self.parts.append(data.strip())
+
+    def text(self) -> str:
+        return re.sub(r"\n{3,}", "\n\n", "\n".join(self.parts)).strip()
+
+
+def validate_external_url(url: str) -> str:
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("URL must use http or https")
+    if not parsed.hostname:
+        raise ValueError("URL must include a host")
+    host = parsed.hostname.lower()
+    if host in {"localhost"} or host.endswith(".local"):
+        raise ValueError("local hosts are blocked")
+    for info in socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80)):
+        address = info[4][0]
+        ip = ipaddress.ip_address(address)
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            raise ValueError(f"blocked non-public address: {address}")
+    return url.strip()
+
+
+def extract_web_text(content: str, content_type: str = "") -> str:
+    if "html" not in content_type.lower() and not re.search(r"<html|<body|<p\\b", content, re.I):
+        return content.strip()
+    parser = TextExtractingHTMLParser()
+    parser.feed(content)
+    return parser.text()
 
 
 class ToolRegistry:
@@ -217,6 +280,24 @@ class ToolRegistry:
         )
         output = completed.stdout or completed.stderr
         return f"$ {command}\nexit={completed.returncode}\n{output.strip()}"
+
+    def _tool_web_fetch(self, url: str, max_chars: int = 20000) -> str:
+        safe_url = validate_external_url(url)
+        with httpx.Client(
+            follow_redirects=True,
+            timeout=20,
+            headers={"User-Agent": "agentX/0.1 (+local engineering shell)"},
+        ) as client:
+            response = client.get(safe_url)
+            response.raise_for_status()
+        content = response.content[:WEB_MAX_BYTES].decode(
+            response.encoding or "utf-8",
+            errors="replace",
+        )
+        text = extract_web_text(content, response.headers.get("content-type", ""))
+        if not text:
+            text = f"[no extractable text from {safe_url}]"
+        return f"URL: {response.url}\nStatus: {response.status_code}\n\n{text[:max_chars]}"
 
     def _tool_apply_patch(self, patch: str) -> str:
         patch_dir = self.workspace / ".agentx" / "patches"

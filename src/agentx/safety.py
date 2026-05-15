@@ -17,6 +17,7 @@ READ_ONLY_TOOLS = {
     "git_diff",
     "memory_search",
     "run_command",
+    "web_fetch",
     "run_tests",
     "docker_compose_ps",
     "docker_compose_logs",

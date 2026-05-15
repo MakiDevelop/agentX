@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agentx.tools import ToolRegistry, docker_compose_command
+from agentx.tools import ToolRegistry, docker_compose_command, extract_web_text, validate_external_url
 
 
 class FakeMemory:
@@ -57,3 +57,28 @@ def test_docker_compose_command_rejects_workspace_escape(tmp_path: Path) -> None
 
     with pytest.raises(ValueError):
         docker_compose_command(tmp_path, "ps", compose_file="../compose.yaml")
+
+
+def test_extract_web_text_strips_scripts_and_tags() -> None:
+    html = "<html><script>bad()</script><body><h1>Hello</h1><p>World</p></body></html>"
+
+    text = extract_web_text(html, "text/html")
+
+    assert "Hello" in text
+    assert "World" in text
+    assert "bad()" not in text
+
+
+def test_validate_external_url_rejects_localhost() -> None:
+    with pytest.raises(ValueError, match="local hosts"):
+        validate_external_url("http://localhost:3000")
+
+
+def test_web_fetch_blocks_private_network(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "agentx.tools.socket.getaddrinfo",
+        lambda *args, **kwargs: [(None, None, None, None, ("192.168.1.1", 80))],
+    )
+
+    with pytest.raises(ValueError, match="blocked non-public"):
+        validate_external_url("https://example.test")
