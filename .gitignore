@@ -7,3 +7,4 @@ __pycache__/
 .agentx/sessions/
 .agentx/patches/
 .agentx/task.json
+playground/
