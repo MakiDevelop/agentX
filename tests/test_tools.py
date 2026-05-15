@@ -110,3 +110,89 @@ def test_write_file_rejects_workspace_root(tmp_path: Path) -> None:
     result = registry.run("write_file", {"path": "", "content": "nope"})
     assert not result.ok
     assert "workspace root" in result.content
+
+
+def test_edit_file_applies_single_replacement(tmp_path: Path) -> None:
+    target = tmp_path / "src.rs"
+    target.write_text("fn main() { println!(\"hi\"); }", encoding="utf-8")
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "edit_file",
+        {"path": "src.rs", "edits": [{"oldText": "\"hi\"", "newText": "\"world\""}]},
+    )
+    assert result.ok
+    assert target.read_text(encoding="utf-8") == "fn main() { println!(\"world\"); }"
+
+
+def test_edit_file_applies_multiple_edits_in_order(tmp_path: Path) -> None:
+    target = tmp_path / "f.txt"
+    target.write_text("AAA BBB CCC", encoding="utf-8")
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "edit_file",
+        {
+            "path": "f.txt",
+            "edits": [
+                {"oldText": "AAA", "newText": "111"},
+                {"oldText": "CCC", "newText": "333"},
+            ],
+        },
+    )
+    assert result.ok
+    assert target.read_text(encoding="utf-8") == "111 BBB 333"
+
+
+def test_edit_file_rejects_missing_old_text(tmp_path: Path) -> None:
+    target = tmp_path / "f.txt"
+    target.write_text("hello", encoding="utf-8")
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "edit_file",
+        {"path": "f.txt", "edits": [{"oldText": "GONE", "newText": "x"}]},
+    )
+    assert not result.ok
+    assert "找不到" in result.content
+
+
+def test_edit_file_rejects_non_unique_old_text(tmp_path: Path) -> None:
+    target = tmp_path / "f.txt"
+    target.write_text("foo foo foo", encoding="utf-8")
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "edit_file",
+        {"path": "f.txt", "edits": [{"oldText": "foo", "newText": "bar"}]},
+    )
+    assert not result.ok
+    assert "唯一" in result.content
+
+
+def test_edit_file_rejects_empty_old_text(tmp_path: Path) -> None:
+    target = tmp_path / "f.txt"
+    target.write_text("hello", encoding="utf-8")
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "edit_file",
+        {"path": "f.txt", "edits": [{"oldText": "", "newText": "x"}]},
+    )
+    assert not result.ok
+
+
+def test_edit_file_rejects_missing_file(tmp_path: Path) -> None:
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "edit_file",
+        {"path": "no-such.txt", "edits": [{"oldText": "x", "newText": "y"}]},
+    )
+    assert not result.ok
+
+
+def test_edit_file_accepts_legacy_single_pair(tmp_path: Path) -> None:
+    target = tmp_path / "f.txt"
+    target.write_text("alpha", encoding="utf-8")
+    registry = _registry(tmp_path)
+    result = registry.run(
+        "edit_file",
+        {"path": "f.txt", "oldText": "alpha", "newText": "beta"},
+    )
+    assert result.ok
+    assert target.read_text(encoding="utf-8") == "beta"

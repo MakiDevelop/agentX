@@ -237,6 +237,20 @@ class AgentSession:
         for item in tool_items[-5:]:
             summary_lines.append(f"- {item.replace(chr(10), ' ')[:500]}")
 
+        read_files, modified_files = self._extract_file_operations()
+        if read_files:
+            summary_lines.append("")
+            summary_lines.append("<read-files>")
+            for path in sorted(read_files):
+                summary_lines.append(f"  {path}")
+            summary_lines.append("</read-files>")
+        if modified_files:
+            summary_lines.append("")
+            summary_lines.append("<modified-files>")
+            for path in sorted(modified_files):
+                summary_lines.append(f"  {path}")
+            summary_lines.append("</modified-files>")
+
         summary_lines.extend(["", "Recent raw messages:"])
         for message in tail:
             role = message.get("role", "unknown")
@@ -251,6 +265,35 @@ class AgentSession:
             f"已壓縮上下文：保留最近 {len(tail)} 則訊息摘要，"
             f"目前約 {self.context_tokens_estimate} tokens。"
         )
+
+    _FILE_READ_TOOLS = frozenset({"read_file"})
+    _FILE_WRITE_TOOLS = frozenset({"write_file", "edit_file", "apply_patch"})
+
+    def _extract_file_operations(self) -> tuple[set[str], set[str]]:
+        read_files: set[str] = set()
+        modified_files: set[str] = set()
+        for msg in self.messages:
+            if msg.get("role") != "assistant":
+                continue
+            try:
+                data = _json.loads(msg.get("content", "") or "{}")
+            except _json.JSONDecodeError:
+                continue
+            if not isinstance(data, dict) or data.get("type") != "tool_call":
+                continue
+            tool = str(data.get("tool", ""))
+            args = data.get("args") or {}
+            if not isinstance(args, dict):
+                continue
+            path = args.get("path")
+            if not isinstance(path, str) or not path:
+                continue
+            if tool in self._FILE_READ_TOOLS:
+                read_files.add(path)
+            elif tool in self._FILE_WRITE_TOOLS:
+                modified_files.add(path)
+        read_files -= modified_files
+        return read_files, modified_files
 
     def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | InvalidAction:
         data = extract_json_object(raw)
