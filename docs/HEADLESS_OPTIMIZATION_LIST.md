@@ -8,7 +8,7 @@
 ## Phase 1：核心可用（必須先做到，能真正拿來做事）
 
 ### 1.1 基本執行穩定性
-- 避免長時間無效 reflection 迴圈（reflection 迴圈保護機制）
+- [x] 避免長時間無效 reflection 迴圈（reflection 迴圈保護機制） — Micro-task 20 已實作（AgentSession consecutive_reflections + guard 警告 + 重置邏輯 + 單元測試 + prompt 提及）
 - 更好的錯誤恢復策略
 - 清晰的 exit code 設計
 
@@ -52,3 +52,15 @@
 - session dir：`~/Documents/agent-council/2026-05-16-agentx-headless-plan-mode/OPTIMIZATION_LIST.md`
 
 **建立者**：Claude（依據本次長時段 session 與 Maki 的討論）
+
+**Progress Update (Micro-task 21, 2026-05)**：
+- [x] 1.5 Task List 完整體驗（Phase A + B 完成）
+  - Phase A: 持久化基礎（`tasks.py` + `AgentSession` 自動載入/儲存 + 真實驗證）
+  - Phase B: 降低使用門檻（初始 prompt 自動注入 + `task_list` 工具優化 + 自動 Reflection 注入）
+- Codex review 後已處理主要問題：
+  - 修復 `format_task_list_summary` 的 `max_active` 切片 bug
+  - 強化 `task_update`（字串 task_id 容錯 + status 白名單）
+  - 加強 `load_tasks` schema 保護
+  - 修復驗證腳本（改用 TemporaryDirectory）
+  - 調整 Reflection 流程中的誤導性指令為誠實版本
+- 其餘 Phase 1 項目持續推進中（下一個建議：錯誤恢復策略）

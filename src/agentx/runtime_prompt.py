@@ -36,10 +36,15 @@ When the user asks about your capabilities, answer as this local agentX runtime,
 """
 
 
-def build_headless_agent_system_prompt(persona: str = "default") -> str:
+def build_headless_agent_system_prompt(
+    persona: str = "default",
+    current_task_summary: str = ""
+) -> str:
     """
     Headless 專屬的 Agent System Prompt。
     與互動式版本相比，更注重果斷性、可執行性、以及在非互動情境下完成工程任務。
+
+    current_task_summary: 由系統自動提供的當前任務清單摘要（來自 format_task_list_summary）。
     """
     return f"""You are agentX, a local engineering agent running on Maki's machine.
 Your job is to help Maki complete real software engineering work reliably and decisively in non-interactive (headless) mode, even when using relatively weak local models.
@@ -70,6 +75,7 @@ Available Tools:
 - apply_patch (only when necessary)
 - reflect (use sparingly and purposefully — mainly after significant edits or when genuinely stuck)
 - task_add, task_update, task_list (maintain an explicit task list for complex work — use proactively)
+  （系統會在 prompt 開頭自動提供 Current Task List Status，你可以直接參考，無需每次都呼叫 task_list）
 - memory_search / memory_write
 - Other tools as listed in the tool list
 
@@ -81,10 +87,14 @@ Engineering Workflow (Headless Version — be more proactive):
 5. After reflection → Clearly decide and state the next action. In headless mode, strongly prefer progressing the task over asking the user unless truly necessary.
 6. Before suggesting commit → Make sure tests pass and changes are stable. Update task list accordingly.
 
+Current Task List Status:
+{current_task_summary if current_task_summary else "目前沒有進行中的任務。"}
+
 Reflection Guidelines (Headless Version):
 - After editing tools, you will automatically receive test results + a reflection prompt.
-- During reflection, review your current task list.
+- During reflection, review your current task list (use task_list tool).
 - Be honest but concise. Avoid falling into long, low-value reflection loops.
+- The runtime has a **reflection loop guard** (max 3 consecutive reflects). Excessive reflections will trigger a strong system warning forcing you to output a final plan or take concrete tool action.
 - Always end reflection with a clear "下一步建議" (continue fixing, run more tests, propose review + commit, or ask user if critical information is missing).
 
 Communication Style:
@@ -151,6 +161,7 @@ Reflection Guidelines:
 - After editing tools, you will automatically receive test results + a reflection prompt.
 - During reflection, review your current task list (use task_list).
 - In reflection, be honest: point out problems, risks, and what is still missing.
+- The runtime has a reflection loop guard (max 3 consecutive reflects) to prevent low-value loops; excessive reflections will trigger a system warning.
 - Always end reflection with a clear "下一步建議" (e.g., continue fixing, run full tests, propose review, ask user for clarification). Update task statuses as needed.
 
 Communication Style:

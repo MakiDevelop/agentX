@@ -12,6 +12,7 @@ from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
 from agentx.protocol import FinalAnswer, Reflect, ToolCall, ToolResult
 from agentx.runtime_prompt import build_agent_system_prompt
+from agentx.tasks import format_task_list_summary, get_next_task_id, load_tasks, save_tasks
 from agentx.tools import ToolRegistry
 
 EDITING_TOOLS = {"search_replace", "insert_code", "apply_patch"}
@@ -65,9 +66,15 @@ class AgentSession:
         self.trace = trace
         self.compaction_count = 0
         self.plan_only: bool = False
-        self.tasks: list[dict] = []  # id, description, status, notes
         self._custom_system_prompt = system_prompt
         self._has_completed_planning: bool = False
+        # Reflection loop guard for headless stability (Micro-task 20)
+        self.consecutive_reflections: int = 0
+        self.max_consecutive_reflections: int = 3
+
+        # Task List 持久化載入（Micro-task 21 A2）
+        self.tasks: list[dict] = load_tasks(self.settings.workspace)
+
         self.messages = self._initial_messages()
 
     def _initial_messages(self) -> list[dict[str, str]]:
@@ -142,6 +149,7 @@ class AgentSession:
                 return action.content
 
             if isinstance(action, Reflect):
+                self.consecutive_reflections += 1
                 reflection = self._reflect(action.focus)
                 self.messages.append({"role": "assistant", "content": action.model_dump_json()})
                 self.messages.append(
@@ -149,6 +157,32 @@ class AgentSession:
                 )
                 if effective_plan_only:
                     self._has_completed_planning = True
+
+                # Micro-task 20: Reflection loop guard
+                if self.consecutive_reflections >= self.max_consecutive_reflections:
+                    if effective_plan_only:
+                        guard_msg = (
+                            f"【Reflection Loop Guard 觸發 - PLAN MODE】\n"
+                            f"你已連續 {self.consecutive_reflections} 次輸出 reflect 而未產出 final 方案。\n"
+                            "plan mode 的目的是產生高品質規劃，請立即：\n"
+                            "- 使用 task_list 整理狀態\n"
+                            "- 輸出一個結構化、完整的 final 方案（清楚列出步驟、風險、驗證方式）\n"
+                            "- 不要再純粹 Reflection，也不要建議執行工具（plan mode 禁止）\n\n"
+                            "強制進度，停止無效迴圈。guard 已重置。"
+                        )
+                    else:
+                        guard_msg = (
+                            f"【Reflection Loop Guard 觸發】\n"
+                            f"你已連續 {self.consecutive_reflections} 次輸出 reflect 而未執行實質工具或 final。\n"
+                            "在 headless 模式中這會導致效率低下、token 浪費與無效迴圈。\n\n"
+                            "請立即採取行動：\n"
+                            "- 使用 task_list 快速整理目前所有任務狀態\n"
+                            "- 輸出一個有價值的 final 方案（即使不完美也先給出可執行建議）\n"
+                            "- 或執行下一個具體的工具行動（search_replace / run_tests 等）\n\n"
+                            "強制進度，停止純粹 Reflection。guard 已重置。"
+                        )
+                    self.messages.append({"role": "system", "content": guard_msg})
+                    self.consecutive_reflections = 0  # give one more chance after warning
                 continue
 
             if effective_plan_only and not self._has_completed_planning:
@@ -180,19 +214,26 @@ class AgentSession:
             self.messages.append({"role": "assistant", "content": action.model_dump_json()})
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
 
+            # Micro-task 20: reset reflection loop counter only on successful tool action
+            # (failed tool + reflect 迴圈應被 guard 捕捉，避免逃脫)
+            if result.ok:
+                self.consecutive_reflections = 0
+
             # Micro-task 12：編輯工具成功後，自動執行測試 + Reflection
             if action.tool in EDITING_TOOLS and result.ok:
                 # 自動跑測試
                 test_result = self.tools.run("run_tests", {})
                 self.messages.append({"role": "tool", "content": self._format_tool_result(test_result)})
 
-                # 要求模型先更新 Task List，再進行 Reflection（提升 headless 下的任務追蹤）
+                # 編輯後提醒模型更新 Task List（實際流程中模型會在下一輪有機會先呼叫 task_update）
+                task_summary = self._get_current_task_summary()
                 self.messages.append(
                     {
                         "role": "system",
                         "content": (
-                            "請根據剛剛的測試結果，更新你 Task List 中相關任務的狀態（使用 task_update 工具）。\n"
-                            "更新完成後，再進行 Reflection，並給出明確的下一步建議。"
+                            "如果你剛剛有修改任務，請記得在接下來的回應中先使用 task_update 工具更新 Task List 的狀態。\n"
+                            "之後再進行 Reflection，並給出明確的下一步建議。\n\n"
+                            f"目前任務狀態參考：\n{task_summary}"
                         ),
                     }
                 )
@@ -204,6 +245,7 @@ class AgentSession:
                 )
 
                 # Micro-task 14：Reflection 後主動建議 Review + Commit（當適當時機）
+                task_summary = self._get_current_task_summary()
                 self.messages.append(
                     {
                         "role": "system",
@@ -213,7 +255,8 @@ class AgentSession:
                             "1. 使用 /review 進行程式碼審查\n"
                             "2. 使用 /commit 進行逐檔 stage + 中文 commit + push\n\n"
                             "如果還不適合 commit，請清楚說明還需要做什麼。\n"
-                            "請給出明確的下一步建議。"
+                            "請給出明確的下一步建議。\n\n"
+                            f"目前任務狀態參考：\n{task_summary}"
                         ),
                     }
                 )
@@ -223,26 +266,40 @@ class AgentSession:
     def clear(self) -> None:
         self.messages = self._initial_messages()
         self.tasks = []
+        save_tasks(self.settings.workspace, self.tasks)  # Micro-task 21: 自動持久化
 
     # === Task Management (for complex long-horizon tasks) ===
 
     def add_task(self, description: str, notes: str = "") -> dict:
         task = {
-            "id": len(self.tasks) + 1,
+            "id": get_next_task_id(self.tasks),
             "description": description,
             "status": "pending",
             "notes": notes,
         }
         self.tasks.append(task)
+        save_tasks(self.settings.workspace, self.tasks)  # Micro-task 21: 自動持久化
         return task
 
-    def update_task(self, task_id: int, status: str | None = None, notes: str | None = None) -> dict | None:
+    def update_task(self, task_id: int | str, status: str | None = None, notes: str | None = None) -> dict | None:
+        # 對本地模型更寬容：允許 task_id 是字串或數字
+        try:
+            task_id = int(task_id)
+        except (TypeError, ValueError):
+            return None
+
+        # 限制 status 只能是合法值，避免污染持久化資料
+        valid_status = {"pending", "in_progress", "done"}
+        if status is not None and status not in valid_status:
+            return None
+
         for task in self.tasks:
             if task["id"] == task_id:
                 if status:
                     task["status"] = status
                 if notes is not None:
                     task["notes"] = notes
+                save_tasks(self.settings.workspace, self.tasks)  # Micro-task 21: 自動持久化
                 return task
         return None
 
@@ -253,6 +310,13 @@ class AgentSession:
 
     def clear_tasks(self) -> None:
         self.tasks = []
+        save_tasks(self.settings.workspace, self.tasks)  # Micro-task 21: 自動持久化
+
+    def _get_current_task_summary(self) -> str:
+        """取得目前任務清單摘要，用於 prompt 注入（B3）"""
+        if not self.tasks:
+            return "目前沒有任何任務。"
+        return format_task_list_summary(self.tasks)
 
     @property
     def message_count(self) -> int:
@@ -364,7 +428,15 @@ class AgentSession:
             elif tool == "task_list":
                 status = args.get("status")
                 tasks = self.get_tasks(status)
-                return ToolResult(tool=tool, ok=True, content=f"Current tasks: {tasks}")
+                # B2: 回傳結構化、易讀的任務摘要，而不是原始 dict list
+                # 讓本地模型更容易理解目前任務狀態
+                if tasks:
+                    content = format_task_list_summary(tasks)
+                else:
+                    content = "目前沒有任何任務。"
+                if status:
+                    content = f"篩選條件: status={status}\n{content}"
+                return ToolResult(tool=tool, ok=True, content=content)
 
             else:
                 return ToolResult(tool=tool, ok=False, content=f"Unknown task tool: {tool}")

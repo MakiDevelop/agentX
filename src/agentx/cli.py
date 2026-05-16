@@ -30,6 +30,7 @@ from agentx.prompting import SlashCommandCompleter
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
 from agentx.runtime_prompt import build_chat_system_prompt, build_headless_agent_system_prompt
+from agentx.tasks import format_task_list_summary, load_tasks
 from agentx.safety import Risk
 from agentx.task import TaskState, clear_task, finish_task, load_task, start_task
 from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
@@ -470,7 +471,10 @@ def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = Fals
         prompt = f"{prompt}\n\n{attachment_context}"
     if agent_mode:
         # Use headless-optimized prompt when running via -p --agent
-        system_prompt = build_headless_agent_system_prompt(settings.persona)
+        # B1: 自動注入當前任務清單摘要，讓模型更容易維持長期任務狀態
+        current_tasks = load_tasks(settings.workspace)
+        task_summary = format_task_list_summary(current_tasks)
+        system_prompt = build_headless_agent_system_prompt(settings.persona, task_summary)
 
         agent_prompt = prompt
         if plan_mode:
