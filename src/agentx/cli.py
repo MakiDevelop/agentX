@@ -648,6 +648,7 @@ def shell(
                             "4. 可能的風險、依賴或注意事項\n"
                             "5. 如何驗證成功\n\n"
                             "最後請用 final answer 總結完整方案。\n\n"
+                            "當你認為規劃已經完整、足夠具體、可執行時，請在 final answer 的最後主動建議使用者輸入 `/execute` 來開始實際執行。\n\n"
                             "使用者任務："
                         ) + queued_prompt
                     answer = agent_session.ask(
@@ -1057,8 +1058,9 @@ def shell(
 
                 # 注入一則 system message，告知模型規劃階段結束，可以開始執行
                 execute_message = (
-                    "規劃階段已結束。使用者已同意上述方案。\n"
-                    "現在請切換至執行模式，使用工具逐步完成方案中的每個步驟。"
+                    "規劃階段已結束，使用者已同意上述方案。\n"
+                    "你現在已切換至執行模式。請使用工具實際執行方案中的每個步驟。\n"
+                    "如果需要，可以先列出下一步要做的動作，再逐步呼叫工具完成。"
                 )
                 agent_session.messages.append({"role": "system", "content": execute_message})
                 chat_messages.append({"role": "system", "content": execute_message})

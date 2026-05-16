@@ -222,3 +222,17 @@ def test_execute_disables_plan_only_and_injects_message() -> None:
         assert last_msg["role"] == "system"
         assert "規劃階段已結束" in last_msg["content"]
         assert "執行模式" in last_msg["content"]
+
+
+def test_plan_mode_prompt_includes_execute_suggestion() -> None:
+    """The plan mode prompt should instruct the model to proactively suggest /execute when planning is complete."""
+    # We check that the key guidance string exists in the source (the prompt construction)
+    # This ensures the model is told to recommend /execute at the end of planning.
+    planning_guidance = (
+        "當你認為規劃已經完整、足夠具體、可執行時，請在 final answer 的最後主動建議使用者輸入 `/execute`"
+    )
+
+    # Directly check that the guidance string exists in the CLI module where the plan prompt is defined
+    from agentx import cli
+    cli_source = open(cli.__file__, encoding="utf-8").read()
+    assert planning_guidance in cli_source, "Plan mode prompt should contain suggestion to use /execute"
