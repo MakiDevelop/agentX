@@ -22,16 +22,17 @@ def test_chat_prompt_describes_agentx_runtime_without_generic_denial():
 
 
 def test_agent_prompt_states_ssh_limit_and_tool_evidence_rule():
-    assert "Use plain terminal text for final answers" in AGENT_SYSTEM_PROMPT
-    assert "Do not use Markdown formatting" in AGENT_SYSTEM_PROMPT
+    """驗證新版 agent prompt 的核心原則是否正確（配合 Micro-task 15 大改寫）。"""
     assert "search_replace" in AGENT_SYSTEM_PROMPT
     assert "insert_code" in AGENT_SYSTEM_PROMPT
-    assert "docker_compose_up" in AGENT_SYSTEM_PROMPT
-    assert "web_fetch" in AGENT_SYSTEM_PROMPT
     assert "小Ge" in AGENT_SYSTEM_PROMPT
-    assert "You cannot run arbitrary shell commands or SSH" in AGENT_SYSTEM_PROMPT
-    assert "Do not claim you used a tool unless the tool result is present" in AGENT_SYSTEM_PROMPT
-    assert "程式碼修改強烈建議使用 search_replace" in AGENT_SYSTEM_PROMPT
+    assert "arbitrary shell commands" in AGENT_SYSTEM_PROMPT or "You cannot run arbitrary" in AGENT_SYSTEM_PROMPT
+    assert "Do not overclaim progress" in AGENT_SYSTEM_PROMPT
+    assert "安全優先" in AGENT_SYSTEM_PROMPT or "Safety first" in AGENT_SYSTEM_PROMPT
+    assert "逐檔 stage" in AGENT_SYSTEM_PROMPT or "逐檔" in AGENT_SYSTEM_PROMPT
+    assert "Small steps" in AGENT_SYSTEM_PROMPT or "小步驟" in AGENT_SYSTEM_PROMPT
+    assert "中文 commit" in AGENT_SYSTEM_PROMPT
+    assert "engineering agent" in AGENT_SYSTEM_PROMPT.lower() or "local engineering agent" in AGENT_SYSTEM_PROMPT.lower()
 
 
 def test_tutor_persona_is_injected_into_prompts():

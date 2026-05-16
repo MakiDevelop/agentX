@@ -62,6 +62,7 @@ class AgentSession:
         self.trace = trace
         self.compaction_count = 0
         self.plan_only: bool = False
+        self.tasks: list[dict] = []  # id, description, status, notes
         self.messages = self._initial_messages()
 
     def _initial_messages(self) -> list[dict[str, str]]:
@@ -164,7 +165,12 @@ class AgentSession:
                 )
                 continue
 
-            result = self._run_tool(action)
+            # Special handling for internal task management tools
+            if action.tool.startswith("task_"):
+                result = self._handle_task_tool(action)
+            else:
+                result = self._run_tool(action)
+
             self.messages.append({"role": "assistant", "content": action.model_dump_json()})
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
 
@@ -199,6 +205,37 @@ class AgentSession:
 
     def clear(self) -> None:
         self.messages = self._initial_messages()
+        self.tasks = []
+
+    # === Task Management (for complex long-horizon tasks) ===
+
+    def add_task(self, description: str, notes: str = "") -> dict:
+        task = {
+            "id": len(self.tasks) + 1,
+            "description": description,
+            "status": "pending",
+            "notes": notes,
+        }
+        self.tasks.append(task)
+        return task
+
+    def update_task(self, task_id: int, status: str | None = None, notes: str | None = None) -> dict | None:
+        for task in self.tasks:
+            if task["id"] == task_id:
+                if status:
+                    task["status"] = status
+                if notes is not None:
+                    task["notes"] = notes
+                return task
+        return None
+
+    def get_tasks(self, status: str | None = None) -> list[dict]:
+        if status:
+            return [t for t in self.tasks if t["status"] == status]
+        return self.tasks
+
+    def clear_tasks(self) -> None:
+        self.tasks = []
 
     @property
     def message_count(self) -> int:
@@ -284,6 +321,39 @@ class AgentSession:
         summary = result.content.replace("\n", "\\n")[:240]
         self._emit_trace(f"tool_result {action.tool} ok={result.ok} content={summary}")
         return result
+
+    def _handle_task_tool(self, action: ToolCall) -> ToolResult:
+        """Internal task management for the agent."""
+        tool = action.tool
+        args = action.args
+
+        try:
+            if tool == "task_add":
+                desc = args.get("description", "")
+                notes = args.get("notes", "")
+                task = self.add_task(desc, notes)
+                return ToolResult(tool=tool, ok=True, content=f"Task added: {task}")
+
+            elif tool == "task_update":
+                task_id = args.get("task_id")
+                status = args.get("status")
+                notes = args.get("notes")
+                task = self.update_task(task_id, status, notes)
+                if task:
+                    return ToolResult(tool=tool, ok=True, content=f"Task updated: {task}")
+                else:
+                    return ToolResult(tool=tool, ok=False, content=f"Task {task_id} not found")
+
+            elif tool == "task_list":
+                status = args.get("status")
+                tasks = self.get_tasks(status)
+                return ToolResult(tool=tool, ok=True, content=f"Current tasks: {tasks}")
+
+            else:
+                return ToolResult(tool=tool, ok=False, content=f"Unknown task tool: {tool}")
+
+        except Exception as e:
+            return ToolResult(tool=tool, ok=False, content=str(e))
 
     def _reflect(self, focus: str | None = None) -> str:
         """讓模型對最近的行為進行自我檢討，並明確建議下一步。"""
