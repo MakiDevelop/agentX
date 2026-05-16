@@ -161,11 +161,10 @@ class AgentSession:
                         "content": (
                             "你目前處於 PLAN MODE（Headless）。\n"
                             "請先進行認真的 Reflection，檢討你的規劃是否完整、風險是否清楚、驗證方式是否可行。\n"
-                            "請用結構化方式思考步驟。\n"
-                            "完成 Reflection 後，你可以選擇：\n"
-                            "- 繼續優化規劃\n"
-                            "- 輸出 final answer 描述完整方案\n"
-                            "- 開始使用工具進入執行階段\n\n"
+                            "請用結構化方式思考步驟。\n\n"
+                            "完成 Reflection 後，請明確判斷：\n"
+                            "- 如果規劃還不夠好 → 繼續優化規劃\n"
+                            "- 如果規劃已經完整且風險可控 → 建議或直接開始使用工具進入執行階段\n\n"
                             "請輸出 reflect 或 final。"
                         ),
                     }
@@ -187,7 +186,18 @@ class AgentSession:
                 test_result = self.tools.run("run_tests", {})
                 self.messages.append({"role": "tool", "content": self._format_tool_result(test_result)})
 
-                # 再自動 Reflection（此時 Reflection 會看到測試結果）
+                # 要求模型先更新 Task List，再進行 Reflection（提升 headless 下的任務追蹤）
+                self.messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "請根據剛剛的測試結果，更新你 Task List 中相關任務的狀態（使用 task_update 工具）。\n"
+                            "更新完成後，再進行 Reflection，並給出明確的下一步建議。"
+                        ),
+                    }
+                )
+
+                # 再自動 Reflection
                 reflection = self._reflect(f"剛剛使用了 {action.tool} 工具，測試結果如下")
                 self.messages.append(
                     {"role": "system", "content": f"=== 自動 Reflection（編輯 + 測試後） ===\n{reflection}"}
