@@ -77,6 +77,7 @@ SLASH_COMMANDS = [
     ("/review", "收集 git diff 與測試結果，輸出 findings-first review"),
     ("/commit [MESSAGE]", "跑測試後逐檔 stage、中文 commit 並 push"),
     ("/plan", "切換 plan 模式；plan 模式只討論方案，不使用工具"),
+    ("/execute", "從 plan 模式切換至執行模式，後續將可使用工具實際執行方案"),
     ("/mode chat", "切換到純聊天模式，不使用工具，速度較快"),
     ("/mode agent", "切換到 agent 工具模式，可使用 repo / git / Memory Hall 工具"),
     ("/models", "列出 Ollama 目前可用模型"),
@@ -1045,6 +1046,24 @@ def shell(
                 transcript.write("slash_command", {"command": prompt, "plan": plan_mode})
                 status = format_plan_status(plan_mode)
                 console.print(f"plan mode: {status}")
+                continue
+            if prompt == "/execute":
+                if not plan_mode and not agent_session.plan_only:
+                    console.print("目前不在 plan 模式中")
+                    continue
+                plan_mode = False
+                agent_session.plan_only = False
+                transcript.write("slash_command", {"command": prompt, "plan": False, "action": "execute"})
+
+                # 注入一則 system message，告知模型規劃階段結束，可以開始執行
+                execute_message = (
+                    "規劃階段已結束。使用者已同意上述方案。\n"
+                    "現在請切換至執行模式，使用工具逐步完成方案中的每個步驟。"
+                )
+                agent_session.messages.append({"role": "system", "content": execute_message})
+                chat_messages.append({"role": "system", "content": execute_message})
+
+                console.print("已切換至執行模式。後續提示將可使用工具實際執行方案。")
                 continue
             if prompt.startswith("/remember "):
                 content = prompt.removeprefix("/remember ").strip()

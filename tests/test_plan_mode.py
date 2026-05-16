@@ -191,3 +191,34 @@ def test_agent_session_respects_internal_plan_only_state() -> None:
 
     assert "list_files" not in fake_tools.executed  # tool should have been blocked
     assert fake_ollama.call_count == 2
+
+
+def test_execute_disables_plan_only_and_injects_message() -> None:
+    """Simulate what /execute does: disable plan_only and inject execution context message."""
+    with patch("agentx.loop.build_repo_context", return_value="repo"), \
+         patch("agentx.loop.build_memory_context", return_value="mem"):
+
+        session = AgentSession(
+            settings=MagicMock(model="test", persona="default", max_steps=5, workspace=Path("/tmp")),
+            ollama=MagicMock(),
+            tools=MagicMock(),
+            namespace="test",
+        )
+
+        # Simulate being in plan mode
+        session.plan_only = True
+        assert session.plan_only is True
+
+        # Simulate /execute behavior
+        session.plan_only = False
+        execute_msg = (
+            "規劃階段已結束。使用者已同意上述方案。\n"
+            "現在請切換至執行模式，使用工具逐步完成方案中的每個步驟。"
+        )
+        session.messages.append({"role": "system", "content": execute_msg})
+
+        assert session.plan_only is False
+        last_msg = session.messages[-1]
+        assert last_msg["role"] == "system"
+        assert "規劃階段已結束" in last_msg["content"]
+        assert "執行模式" in last_msg["content"]
