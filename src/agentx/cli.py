@@ -474,16 +474,20 @@ def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = Fals
 
         agent_prompt = prompt
         if plan_mode:
-            # Prepend strong planning instruction for headless plan mode
+            # Stronger planning instruction for headless plan mode
             agent_prompt = (
-                "你目前處於 PLAN MODE（Headless）。請輸出結構化方案，不要呼叫任何工具。\n"
-                "請按照以下格式組織你的思考與回覆：\n"
+                "你目前處於 PLAN MODE（Headless 模式）。\n"
+                "請先進行深入且結構化的規劃，絕對不要急著呼叫工具。\n\n"
+                "請嚴格按照以下格式輸出規劃：\n"
                 "1. 目標（Goal）\n"
-                "2. 執行步驟（用編號清楚列出）\n"
+                "2. 執行步驟（用編號清楚列出，每一步都要可驗證）\n"
                 "3. 每個步驟預計使用的工具或指令\n"
                 "4. 可能的風險、依賴或注意事項\n"
                 "5. 如何驗證成功\n\n"
-                "規劃完成後，請在 final answer 中清楚說明是否建議進入執行階段，以及建議的使用者下一步動作。\n\n"
+                "規劃完成後，請先進行 Reflection，檢討規劃的完整性與可行性。\n"
+                "Reflection 結束後，你可以選擇：\n"
+                "- 繼續優化規劃\n"
+                "- 在 final answer 中清楚描述完整方案，並建議是否可以進入執行階段\n\n"
                 "使用者任務："
             ) + prompt
 

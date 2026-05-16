@@ -67,6 +67,7 @@ class AgentSession:
         self.plan_only: bool = False
         self.tasks: list[dict] = []  # id, description, status, notes
         self._custom_system_prompt = system_prompt
+        self._has_completed_planning: bool = False
         self.messages = self._initial_messages()
 
     def _initial_messages(self) -> list[dict[str, str]]:
@@ -146,25 +147,26 @@ class AgentSession:
                 self.messages.append(
                     {"role": "system", "content": f"=== Reflection ===\n{reflection}"}
                 )
+                if effective_plan_only:
+                    self._has_completed_planning = True
                 continue
 
-            if effective_plan_only:
-                # Real enforcement: do not execute tools in plan mode.
-                # Force the model to produce a final answer describing the plan.
+            if effective_plan_only and not self._has_completed_planning:
+                # In headless plan mode, we require at least one reflection before allowing tool execution.
+                # This ensures the model has seriously thought through the plan.
                 self.messages.append({"role": "assistant", "content": action.model_dump_json()})
                 self.messages.append(
                     {
                         "role": "user",
                         "content": (
-                            "你目前處於 PLAN MODE，工具呼叫已被停用。\n"
-                            "請不要再輸出 tool_call JSON。\n"
-                            "請改用結構化方式描述方案：\n"
-                            "1. 目標\n"
-                            "2. 執行步驟（編號）\n"
-                            "3. 每個步驟會用到的工具\n"
-                            "4. 風險與依賴\n"
-                            "5. 驗證方式\n\n"
-                            "最後請輸出 final answer。"
+                            "你目前處於 PLAN MODE（Headless）。\n"
+                            "請先進行認真的 Reflection，檢討你的規劃是否完整、風險是否清楚、驗證方式是否可行。\n"
+                            "請用結構化方式思考步驟。\n"
+                            "完成 Reflection 後，你可以選擇：\n"
+                            "- 繼續優化規劃\n"
+                            "- 輸出 final answer 描述完整方案\n"
+                            "- 開始使用工具進入執行階段\n\n"
+                            "請輸出 reflect 或 final。"
                         ),
                     }
                 )
