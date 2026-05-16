@@ -312,6 +312,11 @@ def print_task(task: TaskState) -> None:
     console.print(table)
 
 
+def format_plan_status(enabled: bool) -> str:
+    """Return user-friendly plan mode status string."""
+    return "on（只討論方案，不使用工具）" if enabled else "off"
+
+
 def print_config(
     settings: Settings,
     namespace: str,
@@ -1020,7 +1025,8 @@ def shell(
             if prompt == "/plan":
                 plan_mode = not plan_mode
                 transcript.write("slash_command", {"command": prompt, "plan": plan_mode})
-                console.print(f"plan={'on' if plan_mode else 'off'}")
+                status = format_plan_status(plan_mode)
+                console.print(f"plan mode: {status}")
                 continue
             if prompt.startswith("/remember "):
                 content = prompt.removeprefix("/remember ").strip()
@@ -1101,9 +1107,11 @@ def shell(
             if prompt == "/status":
                 transcript.write("slash_command", {"command": prompt})
                 approx_tokens = agent_session.context_chars // 4
+                plan_status = format_plan_status(plan_mode)
                 console.print(
                     f"model={settings.model} mode={mode} namespace={namespace} "
-                    f"persona={settings.persona} agent_messages={agent_session.message_count} "
+                    f"persona={settings.persona} plan={plan_status} "
+                    f"agent_messages={agent_session.message_count} "
                     f"agent_context~{approx_tokens} tokens chat_messages={len(chat_messages)}"
                 )
                 continue
