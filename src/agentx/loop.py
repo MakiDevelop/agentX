@@ -10,7 +10,7 @@ from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
 from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
-from agentx.protocol import FinalAnswer, ToolCall, ToolResult
+from agentx.protocol import FinalAnswer, Reflect, ToolCall, ToolResult
 from agentx.runtime_prompt import build_agent_system_prompt
 from agentx.tools import ToolRegistry
 
@@ -132,6 +132,14 @@ class AgentSession:
                 self.messages.append({"role": "assistant", "content": action.content})
                 return action.content
 
+            if isinstance(action, Reflect):
+                reflection = self._reflect(action.focus)
+                self.messages.append({"role": "assistant", "content": action.model_dump_json()})
+                self.messages.append(
+                    {"role": "system", "content": f"=== Reflection ===\n{reflection}"}
+                )
+                continue
+
             if effective_plan_only:
                 # Real enforcement: do not execute tools in plan mode.
                 # Force the model to produce a final answer describing the plan.
@@ -224,7 +232,7 @@ class AgentSession:
             f"目前約 {self.context_tokens_estimate} tokens。"
         )
 
-    def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | "InvalidAction":
+    def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | Reflect | "InvalidAction":
         data = extract_json_object(raw)
         if data is None:
             return InvalidAction.NON_JSON
@@ -232,6 +240,8 @@ class AgentSession:
         try:
             if data.get("type") == "tool_call":
                 return ToolCall.model_validate(data)
+            if data.get("type") == "reflect":
+                return Reflect.model_validate(data)
             return FinalAnswer.model_validate(data)
         except (AttributeError, ValidationError):
             return InvalidAction.BAD_SCHEMA
@@ -245,6 +255,33 @@ class AgentSession:
         summary = result.content.replace("\n", "\\n")[:240]
         self._emit_trace(f"tool_result {action.tool} ok={result.ok} content={summary}")
         return result
+
+    def _reflect(self, focus: str | None = None) -> str:
+        """讓模型對最近的行為進行自我檢討。"""
+        focus_text = f"\n特別關注：{focus}" if focus else ""
+
+        reflection_prompt = (
+            "你剛剛執行了一些工具呼叫。請誠實地進行自我檢討：\n"
+            f"{focus_text}\n\n"
+            "請回答以下問題：\n"
+            "1. 最近的工具結果是否符合預期？\n"
+            "2. 有沒有發現潛在的問題、風險或遺漏？\n"
+            "3. 下一步最該做什麼？\n\n"
+            "請用清晰的 bullet points 回覆。"
+        )
+
+        # 暫時把 reflection_prompt 當成 user message 丟給模型
+        reflection_messages = self.messages + [
+            {"role": "user", "content": reflection_prompt}
+        ]
+
+        try:
+            reflection = self.ollama.chat(
+                reflection_messages, json_mode=False, cancel_event=None
+            )
+            return reflection.strip()
+        except Exception as e:
+            return f"Reflection 失敗: {str(e)}"
 
     def _emit_trace(self, message: str) -> None:
         if self.trace is not None:
