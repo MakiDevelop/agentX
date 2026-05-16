@@ -180,17 +180,17 @@ class AgentSession:
                     {"role": "system", "content": f"=== 自動 Reflection（編輯 + 測試後） ===\n{reflection}"}
                 )
 
-                # Micro-task 13：Reflection 後強迫模型主動決定下一步
+                # Micro-task 14：Reflection 後主動建議 Review + Commit（當適當時機）
                 self.messages.append(
                     {
                         "role": "system",
                         "content": (
-                            "根據剛剛的 Reflection，請現在明確輸出你建議的下一步行動。\n"
-                            "你可以：\n"
-                            "- 呼叫工具繼續執行\n"
-                            "- 輸出 final answer\n"
-                            "- 再次 reflect 更深入的問題\n\n"
-                            "請直接給出清晰的下一步，不要猶豫。"
+                            "根據剛剛的 Reflection，請評估目前變更是否已經穩定（測試通過、風險可控）。\n"
+                            "如果變更已經足夠好，請主動建議使用者執行以下流程：\n"
+                            "1. 使用 /review 進行程式碼審查\n"
+                            "2. 使用 /commit 進行逐檔 stage + 中文 commit + push\n\n"
+                            "如果還不適合 commit，請清楚說明還需要做什麼。\n"
+                            "請給出明確的下一步建議。"
                         ),
                     }
                 )
