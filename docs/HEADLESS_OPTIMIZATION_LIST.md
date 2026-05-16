@@ -1,0 +1,54 @@
+# agentX Headless 模式 未來優化清單
+
+**建立日期**：2026-05-16
+**來源**：本次長時段 session 對 Headless 模式（`agentx -p --agent`）的系統性討論與實作
+
+本清單以「讓 Headless 模式能穩定承接中大型工程任務，作為 Claude CLI / Codex CLI / Gemini CLI 的暫時代理」為核心目標，分為三個等級。
+
+## Phase 1：核心可用（必須先做到，能真正拿來做事）
+
+### 1.1 基本執行穩定性
+- 避免長時間無效 reflection 迴圈（reflection 迴圈保護機制）
+- 更好的錯誤恢復策略
+- 清晰的 exit code 設計
+
+### 1.2 Plan Mode 完整支援（--plan）
+- Headless 下的規劃品質提升（更結構化、更 actionable）
+- 規劃完成後的自然轉執行機制（plan-then-execute）
+- 更好的「規劃品質評估」引導
+
+### 1.3 精準編輯與驗證閉環
+- 編輯後的自動測試 + Reflection 機制在 headless 下的穩定度
+- Reflection 品質優化（更結構化）
+- 模型在 Reflection 後更清楚下一步
+
+### 1.4 基本工程流程支援
+- 自然走完「規劃 → 實作 → 驗證 → 建議 review → 建議 commit」
+- 模型主動建議 commit 的時機與品質
+
+### 1.5 Task List 管理
+- Task List 在 headless 長任務中的完整體驗
+- 模型更習慣主動使用 Task List
+
+## Phase 2：應該具備（好用程度）
+
+- Headless 專屬行為模式（已部分完成）
+- Plan → Execute 順暢轉換（--plan-then-execute 等）
+- 更好的決策與主動性
+- 錯誤恢復與穩定性強化
+
+## Phase 3：進階優化
+
+- 結構化輸出支援（JSON mode）
+- 日誌與可觀測性
+- 從 transcript / handoff 繼續執行
+- 更細的行為控制參數
+- Context 管理優化
+- 效能與 token 使用優化
+
+**記錄位置**：
+- Git：`docs/HEADLESS_OPTIMIZATION_LIST.md`
+- memhall：已寫入（namespace: project:agentx）
+- session dir：`~/Documents/agent-council/2026-05-16-agentx-headless-plan-mode/OPTIMIZATION_LIST.md`
+
+**建立者**：Claude（依據本次長時段 session 與 Maki 的討論）
