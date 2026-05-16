@@ -24,13 +24,14 @@ def test_chat_prompt_describes_agentx_runtime_without_generic_denial():
 def test_agent_prompt_states_ssh_limit_and_tool_evidence_rule():
     assert "Use plain terminal text for final answers" in AGENT_SYSTEM_PROMPT
     assert "Do not use Markdown formatting" in AGENT_SYSTEM_PROMPT
-    assert "You may create Docker site files through approved patches" in AGENT_SYSTEM_PROMPT
+    assert "search_replace" in AGENT_SYSTEM_PROMPT
+    assert "insert_code" in AGENT_SYSTEM_PROMPT
     assert "docker_compose_up" in AGENT_SYSTEM_PROMPT
     assert "web_fetch" in AGENT_SYSTEM_PROMPT
-    assert "Docker push is not enabled" in AGENT_SYSTEM_PROMPT
     assert "小Ge" in AGENT_SYSTEM_PROMPT
     assert "You cannot run arbitrary shell commands or SSH" in AGENT_SYSTEM_PROMPT
     assert "Do not claim you used a tool unless the tool result is present" in AGENT_SYSTEM_PROMPT
+    assert "程式碼修改強烈建議使用 search_replace" in AGENT_SYSTEM_PROMPT
 
 
 def test_tutor_persona_is_injected_into_prompts():

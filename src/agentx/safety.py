@@ -25,6 +25,8 @@ READ_ONLY_TOOLS = {
 
 YELLOW_TOOLS = {
     "apply_patch",
+    "search_replace",
+    "insert_code",
     "docker_compose_build",
     "docker_compose_down",
     "docker_compose_up",

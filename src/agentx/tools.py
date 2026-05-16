@@ -28,6 +28,8 @@ TOOL_DESCRIPTIONS = {
     "web_fetch": "讀取指定外部 http/https 網頁文字，會阻擋 localhost 與私有網段",
     "run_tests": "執行固定 allowlist 驗證：ruff check 與 pytest",
     "apply_patch": "套用 unified diff patch，需 approval",
+    "search_replace": "精準搜尋替換（支援單檔多處或單處），比 apply_patch 更安全精確，需 approval",
+    "insert_code": "在指定位置插入程式碼（after 某段文字後），適合新增函式、import 等，需 approval",
     "docker_compose_build": "執行 docker compose build，需 approval",
     "docker_compose_down": "執行 docker compose down，需 approval",
     "docker_compose_logs": "查看 docker compose logs",
@@ -328,6 +330,60 @@ class ToolRegistry:
         if applied.returncode != 0:
             return f"git apply failed\n{output}".strip()
         return output or "patch applied"
+
+    def _tool_search_replace(
+        self,
+        path: str,
+        old_string: str,
+        new_string: str,
+        replace_all: bool = False,
+    ) -> str:
+        """精準字串替換，適合本地模型使用，比大範圍 patch 更可靠。"""
+        target = self._resolve_inside_workspace(path)
+        if not target.is_file():
+            raise FileNotFoundError(f"File not found: {path}")
+
+        content = target.read_text(encoding="utf-8", errors="replace")
+
+        if old_string not in content:
+            return f"未找到要替換的內容（old_string）\n檔案：{path}"
+
+        if replace_all:
+            new_content = content.replace(old_string, new_string)
+            count = content.count(old_string)
+        else:
+            new_content = content.replace(old_string, new_string, 1)
+            count = 1
+
+        target.write_text(new_content, encoding="utf-8")
+
+        return (
+            f"search_replace 成功\n"
+            f"檔案：{path}\n"
+            f"替換次數：{count}\n"
+            f"replace_all：{replace_all}"
+        )
+
+    def _tool_insert_code(
+        self,
+        path: str,
+        content: str,
+        insert_after: str,
+    ) -> str:
+        """在指定文字後插入程式碼。適合新增函式、方法、import 等。"""
+        target = self._resolve_inside_workspace(path)
+        if not target.is_file():
+            raise FileNotFoundError(f"File not found: {path}")
+
+        file_content = target.read_text(encoding="utf-8", errors="replace")
+
+        if insert_after not in file_content:
+            return f"找不到插入基準點（insert_after）\n檔案：{path}"
+
+        new_content = file_content.replace(insert_after, insert_after + content, 1)
+        target.write_text(new_content, encoding="utf-8")
+
+        return f"insert_code 成功\n檔案：{path}\n已插入內容於指定位置後方"
 
     def _tool_docker_compose_ps(self, compose_file: str | None = None) -> str:
         return self._run_docker_compose("ps", compose_file=compose_file)
