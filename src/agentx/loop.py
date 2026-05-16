@@ -37,7 +37,7 @@ class AgentLoop:
         prompt: str,
         namespace: str = "project:agentX",
         cancel_event: threading.Event | None = None,
-        plan_only: bool = False,
+        plan_only: bool | None = None,
     ) -> str:
         return self.session.ask(
             prompt, namespace=namespace, cancel_event=cancel_event, plan_only=plan_only
@@ -59,6 +59,7 @@ class AgentSession:
         self.namespace = namespace
         self.trace = trace
         self.compaction_count = 0
+        self.plan_only: bool = False
         self.messages = self._initial_messages()
 
     def _initial_messages(self) -> list[dict[str, str]]:
@@ -81,8 +82,10 @@ class AgentSession:
         prompt: str,
         namespace: str = "project:agentX",
         cancel_event: threading.Event | None = None,
-        plan_only: bool = False,
+        plan_only: bool | None = None,
     ) -> str:
+        effective_plan_only = plan_only if plan_only is not None else self.plan_only
+
         direct = self._direct_tool_call(prompt)
         if direct is not None:
             result = self._run_tool(direct)
@@ -129,7 +132,7 @@ class AgentSession:
                 self.messages.append({"role": "assistant", "content": action.content})
                 return action.content
 
-            if plan_only:
+            if effective_plan_only:
                 # Real enforcement: do not execute tools in plan mode.
                 # Force the model to produce a final answer describing the plan.
                 self.messages.append({"role": "assistant", "content": action.model_dump_json()})

@@ -162,3 +162,32 @@ def test_build_status_line_shows_plan_marker() -> None:
     assert "gemma4:31b | PLAN | context 45%" == plan
     assert "context 45%" in normal
     assert "context 45%" in plan
+
+
+def test_agent_session_respects_internal_plan_only_state() -> None:
+    """AgentSession should use self.plan_only when plan_only is not explicitly passed to ask()."""
+    fake_ollama = FakeOllama(
+        [
+            '{"type":"tool_call","tool":"list_files","args":{}}',
+            '{"type":"final","content":"Plan acknowledged."}',
+        ]
+    )
+    fake_tools = FakeToolRegistry()
+
+    with patch("agentx.loop.build_repo_context", return_value="repo"), \
+         patch("agentx.loop.build_memory_context", return_value="mem"):
+
+        session = AgentSession(
+            settings=MagicMock(model="test", persona="default", max_steps=5, workspace=Path("/tmp")),
+            ollama=fake_ollama,  # type: ignore[arg-type]
+            tools=fake_tools,  # type: ignore[arg-type]
+            namespace="test",
+        )
+
+        # Set internal state instead of passing parameter
+        session.plan_only = True
+
+        session.ask("規劃一下", plan_only=None)  # explicitly not overriding
+
+    assert "list_files" not in fake_tools.executed  # tool should have been blocked
+    assert fake_ollama.call_count == 2

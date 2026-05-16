@@ -653,7 +653,6 @@ def shell(
                         agent_prompt,
                         namespace=namespace,
                         cancel_event=current_cancel,
-                        plan_only=plan_mode,
                     )
                     transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
                     if tui is not None:
@@ -1042,6 +1041,7 @@ def shell(
                 continue
             if prompt == "/plan":
                 plan_mode = not plan_mode
+                agent_session.plan_only = plan_mode
                 transcript.write("slash_command", {"command": prompt, "plan": plan_mode})
                 status = format_plan_status(plan_mode)
                 console.print(f"plan mode: {status}")
