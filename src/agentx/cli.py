@@ -29,7 +29,7 @@ from agentx.persona import list_personas, normalize_persona
 from agentx.prompting import SlashCommandCompleter
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
-from agentx.runtime_prompt import build_chat_system_prompt
+from agentx.runtime_prompt import build_chat_system_prompt, build_headless_agent_system_prompt
 from agentx.safety import Risk
 from agentx.task import TaskState, clear_task, finish_task, load_task, start_task
 from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
@@ -469,23 +469,31 @@ def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = Fals
     if attachment_context:
         prompt = f"{prompt}\n\n{attachment_context}"
     if agent_mode:
-        agent_loop = AgentLoop(settings=settings, ollama=ollama, tools=tools, namespace=namespace)
+        # Use headless-optimized prompt when running via -p --agent
+        system_prompt = build_headless_agent_system_prompt(settings.persona)
 
         agent_prompt = prompt
         if plan_mode:
-            # Use the same rich planning instruction as interactive /plan
+            # Prepend strong planning instruction for headless plan mode
             agent_prompt = (
-                "你目前處於 PLAN MODE。請輸出結構化方案，不要呼叫任何工具。\n"
+                "你目前處於 PLAN MODE（Headless）。請輸出結構化方案，不要呼叫任何工具。\n"
                 "請按照以下格式組織你的思考與回覆：\n"
                 "1. 目標（Goal）\n"
                 "2. 執行步驟（用編號清楚列出）\n"
                 "3. 每個步驟預計使用的工具或指令\n"
                 "4. 可能的風險、依賴或注意事項\n"
                 "5. 如何驗證成功\n\n"
-                "當你認為規劃已經完整、足夠具體、可執行時，請在 final answer 的最後主動建議使用者輸入 `/execute` 來開始實際執行。\n\n"
+                "規劃完成後，請在 final answer 中清楚說明是否建議進入執行階段，以及建議的使用者下一步動作。\n\n"
                 "使用者任務："
             ) + prompt
 
+        agent_loop = AgentLoop(
+            settings=settings,
+            ollama=ollama,
+            tools=tools,
+            namespace=namespace,
+            system_prompt=system_prompt,
+        )
         return agent_loop.run(agent_prompt, namespace=namespace, plan_only=plan_mode)
     return ollama.chat(
         [

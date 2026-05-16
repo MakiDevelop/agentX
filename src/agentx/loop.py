@@ -25,6 +25,7 @@ class AgentLoop:
         tools: ToolRegistry,
         namespace: str = "project:agentX",
         trace: Callable[[str], None] | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         self.session = AgentSession(
             settings=settings,
@@ -32,6 +33,7 @@ class AgentLoop:
             tools=tools,
             namespace=namespace,
             trace=trace,
+            system_prompt=system_prompt,
         )
 
     def run(
@@ -54,6 +56,7 @@ class AgentSession:
         tools: ToolRegistry,
         namespace: str = "project:agentX",
         trace: Callable[[str], None] | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         self.settings = settings
         self.ollama = ollama
@@ -63,11 +66,13 @@ class AgentSession:
         self.compaction_count = 0
         self.plan_only: bool = False
         self.tasks: list[dict] = []  # id, description, status, notes
+        self._custom_system_prompt = system_prompt
         self.messages = self._initial_messages()
 
     def _initial_messages(self) -> list[dict[str, str]]:
+        system_prompt = self._custom_system_prompt or build_agent_system_prompt(self.settings.persona)
         return [
-            {"role": "system", "content": build_agent_system_prompt(self.settings.persona)},
+            {"role": "system", "content": system_prompt},
             {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(self.settings.workspace)},
             {
                 "role": "system",
