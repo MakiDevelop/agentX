@@ -63,4 +63,13 @@
   - 加強 `load_tasks` schema 保護
   - 修復驗證腳本（改用 TemporaryDirectory）
   - 調整 Reflection 流程中的誤導性指令為誠實版本
-- 其餘 Phase 1 項目持續推進中（下一個建議：錯誤恢復策略）
+
+**Progress Update (錯誤恢復策略, 2026-05)**：
+- 階段一：錯誤分類 + 基礎恢復框架（已完成）
+  - 建立 `ErrorType` 與 `ErrorContext`
+  - 實作規則為主的 `ErrorClassifier`
+  - 在 `AgentSession` 實作有限次自動重試 + 錯誤發生時自動引導結構化 Reflection
+- 階段二步驟1：STUCK 偵測 + 恢復策略建議（已完成）
+  - 實作 `_detect_stuck`（同工具 + 同錯誤類型連續失敗即判定為 STUCK）
+  - 實作 `_generate_recovery_suggestions`，可自動產生 BACKTRACK、CHANGE_STRATEGY、ESCALATE_TO_USER 等具體建議
+  - STUCK 發生時會插入強烈介入訊息並附上恢復建議，強制模型進行深度 Reflection

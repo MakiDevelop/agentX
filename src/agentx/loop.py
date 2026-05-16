@@ -10,6 +10,8 @@ from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
 from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
+from agentx.errors import ErrorContext, ErrorType, RecoveryAction, RecoverySuggestion
+from agentx.error_classifier import ErrorClassifier
 from agentx.protocol import FinalAnswer, Reflect, ToolCall, ToolResult
 from agentx.runtime_prompt import build_agent_system_prompt
 from agentx.tasks import format_task_list_summary, get_next_task_id, load_tasks, save_tasks
@@ -74,6 +76,11 @@ class AgentSession:
 
         # Task List 持久化載入（Micro-task 21 A2）
         self.tasks: list[dict] = load_tasks(self.settings.workspace)
+
+        # 錯誤恢復相關狀態（階段一）
+        self.error_classifier = ErrorClassifier()
+        self.error_history: list[ErrorContext] = []
+        self.current_error: ErrorContext | None = None
 
         self.messages = self._initial_messages()
 
@@ -214,6 +221,46 @@ class AgentSession:
             self.messages.append({"role": "assistant", "content": action.model_dump_json()})
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
 
+            # === 錯誤分類與基礎恢復處理（階段一 + 步驟 4） ===
+            if not result.ok:
+                error_type = self.error_classifier.classify(action.tool, result)
+                self.current_error = ErrorContext(
+                    error_type=error_type,
+                    tool_name=action.tool,
+                    error_message=result.content or "",
+                )
+                self.error_history.append(self.current_error)
+
+                # === STUCK 偵測（階段二步驟 1） ===
+                if self._detect_stuck(self.current_error):
+                    self.current_error.error_type = ErrorType.STUCK
+                    stuck_msg = self._build_stuck_intervention_message(self.current_error)
+                    self.messages.append({"role": "system", "content": stuck_msg})
+                    # STUCK 時強烈建議進行 Reflection
+                    self.messages.append({
+                        "role": "system",
+                        "content": "請立即輸出 reflect，專注解決當前卡住的問題。"
+                    })
+                    continue  # 跳過後續執行，讓模型在下一輪有機會回應 STUCK 訊息
+
+                if error_type in (ErrorType.TRANSIENT, ErrorType.CALL_ERROR):
+                    # 有限次重試引導
+                    retry_guidance = self._build_retry_guidance(action.tool, result.content, error_type)
+                    self.messages.append({"role": "system", "content": retry_guidance})
+                else:
+                    # 較嚴重錯誤 → 強烈引導進行結構化錯誤 Reflection
+                    reflection_guidance = self._build_error_reflection_guidance(self.current_error)
+                    self.messages.append({"role": "system", "content": reflection_guidance})
+
+                    # 額外鼓勵模型主動輸出 reflect
+                    self.messages.append({
+                        "role": "system",
+                        "content": "請現在輸出 reflect，專注分析這個錯誤並提出恢復策略。"
+                    })
+
+            else:
+                self.current_error = None
+
             # Micro-task 20: reset reflection loop counter only on successful tool action
             # (failed tool + reflect 迴圈應被 guard 捕捉，避免逃脫)
             if result.ok:
@@ -268,6 +315,10 @@ class AgentSession:
         self.tasks = []
         save_tasks(self.settings.workspace, self.tasks)  # Micro-task 21: 自動持久化
 
+        # 重置錯誤狀態
+        self.error_history = []
+        self.current_error = None
+
     # === Task Management (for complex long-horizon tasks) ===
 
     def add_task(self, description: str, notes: str = "") -> dict:
@@ -317,6 +368,117 @@ class AgentSession:
         if not self.tasks:
             return "目前沒有任何任務。"
         return format_task_list_summary(self.tasks)
+
+    def _build_retry_guidance(self, tool_name: str, error_message: str, error_type: ErrorType) -> str:
+        """為暫時性或呼叫錯誤產生重試引導訊息"""
+        if error_type == ErrorType.TRANSIENT:
+            return (
+                f"【暫時性錯誤】工具 `{tool_name}` 執行失敗：{error_message}\n"
+                "這看起來是暫時性問題（例如超時、連線問題）。\n"
+                "建議：稍等一下或直接重試同樣參數。如果連續失敗，請考慮改用其他方式或進行 Reflection。"
+            )
+        elif error_type == ErrorType.CALL_ERROR:
+            return (
+                f"【呼叫錯誤】工具 `{tool_name}` 執行失敗：{error_message}\n"
+                "這通常是因為參數有誤（路徑不存在、參數型別錯誤等）。\n"
+                "建議：檢查參數後重新呼叫工具。如果不確定，請先使用 list_files 或 read_file 確認環境。"
+            )
+        return f"工具 `{tool_name}` 發生錯誤：{error_message}"
+
+    def _build_error_reflection_guidance(self, error_ctx: ErrorContext) -> str:
+        """當發生較嚴重錯誤時，產生引導模型進行結構化錯誤 Reflection 的訊息"""
+        return (
+            f"【錯誤 Reflection 引導】\n"
+            f"工具 `{error_ctx.tool_name}` 發生錯誤（類型：{error_ctx.error_type.value}）。\n"
+            f"錯誤訊息：{error_ctx.error_message}\n\n"
+            "請現在進行一次**結構化的錯誤 Reflection**，回答以下問題：\n"
+            "1. 這個錯誤的根本原因是什麼？\n"
+            "2. 這屬於哪一類錯誤（暫時性 / 呼叫錯誤 / 執行錯誤 / 需求誤解）？\n"
+            "3. 建議的恢復策略是什麼？（重試 / 修正參數 / 回退修改 / 調整任務 / 詢問使用者）\n"
+            "4. 是否需要更新 Task List？\n\n"
+            "請輸出 reflect，並在 focus 中寫明「錯誤分析與恢復策略」。"
+        )
+
+    def _detect_stuck(self, new_error: ErrorContext, threshold: int = 3) -> bool:
+        """
+        簡單的 STUCK 偵測：
+        如果最近 N 次錯誤都是「同一個工具」且「同一類錯誤」，則視為 STUCK。
+        """
+        if len(self.error_history) < threshold:
+            return False
+
+        recent_errors = self.error_history[-threshold:]
+        same_tool = all(e.tool_name == new_error.tool_name for e in recent_errors)
+        same_type = all(e.error_type == new_error.error_type for e in recent_errors)
+
+        return same_tool and same_type
+
+    def _build_stuck_intervention_message(self, error_ctx: ErrorContext) -> str:
+        """當偵測到 STUCK 時，給予強烈介入訊息，並附上恢復建議"""
+        suggestions = self._generate_recovery_suggestions(error_ctx)
+
+        suggestion_text = ""
+        if suggestions:
+            suggestion_text = "\n\n系統建議的恢復方向：\n"
+            for i, s in enumerate(suggestions, 1):
+                suggestion_text += f"{i}. [{s.action.value}] {s.description}\n"
+
+        return (
+            f"【⚠️ STUCK 偵測】\n"
+            f"你已經連續多次在工具 `{error_ctx.tool_name}` 上遇到相同類型的錯誤（{error_ctx.error_type.value}）。\n"
+            f"這表示目前的做法很可能有問題。\n\n"
+            "請立即停止重複相同行為，並進行深度 Reflection：\n"
+            "- 為什麼一直失敗？\n"
+            "- 是否需要大幅改變策略？\n"
+            "- 是否應該回退之前的修改？\n"
+            "- 是否需要請求人類協助？"
+            f"{suggestion_text}\n"
+            "建議現在輸出 reflect，並認真思考恢復方案。"
+        )
+
+    def _generate_recovery_suggestions(self, error_ctx: ErrorContext) -> list[RecoverySuggestion]:
+        """根據錯誤上下文產生恢復建議（階段二初始版本）"""
+        suggestions: list[RecoverySuggestion] = []
+        recent_errors = self.error_history[-5:] if self.error_history else []
+
+        # 情況 1: 同一個工具連續失敗多次 → 建議回退
+        same_tool_failures = sum(1 for e in recent_errors if e.tool_name == error_ctx.tool_name)
+        if same_tool_failures >= 3:
+            suggestions.append(RecoverySuggestion(
+                action=RecoveryAction.BACKTRACK,
+                description=f"建議回退最近對 `{error_ctx.tool_name}` 的修改，檢查是否有破壞性變更。",
+                rationale="同一個工具連續失敗多次，通常表示最後幾次修改有問題。",
+                confidence=0.8
+            ))
+
+        # 情況 2: EXECUTION_ERROR + 多次失敗 → 建議改變策略
+        if error_ctx.error_type == ErrorType.EXECUTION_ERROR and same_tool_failures >= 2:
+            suggestions.append(RecoverySuggestion(
+                action=RecoveryAction.CHANGE_STRATEGY,
+                description="目前直接修改程式碼的方式似乎不順利，建議先寫測試或先做更小的步驟再修改。",
+                rationale="執行錯誤連續發生時，直接修改容易陷入試錯迴圈。",
+                confidence=0.7
+            ))
+
+        # 情況 3: 錯誤次數很多 → 建議人類介入
+        if len(self.error_history) >= 6:
+            suggestions.append(RecoverySuggestion(
+                action=RecoveryAction.ESCALATE_TO_USER,
+                description="系統已多次嘗試恢復但未成功，建議將目前任務狀態、錯誤歷史摘要整理後請求人類協助。",
+                rationale="長時間卡住且多次恢復失敗時，人類介入通常是最有效的方式。",
+                confidence=0.9
+            ))
+
+        # 預設建議（如果上面都沒觸發）
+        if not suggestions:
+            suggestions.append(RecoverySuggestion(
+                action=RecoveryAction.REFLECT_AND_ADJUST,
+                description="請進行深度 Reflection，分析為什麼會持續失敗，並提出明確的下一步策略。",
+                rationale="一般情況下的保守建議。",
+                confidence=0.5
+            ))
+
+        return suggestions[:3]  # 最多給 3 個建議，避免提示過長
 
     @property
     def message_count(self) -> int:
