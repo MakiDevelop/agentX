@@ -168,11 +168,16 @@ class AgentSession:
             self.messages.append({"role": "assistant", "content": action.model_dump_json()})
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
 
-            # 編輯類工具執行成功後，自動觸發 Reflection（Micro-task 11）
+            # Micro-task 12：編輯工具成功後，自動執行測試 + Reflection
             if action.tool in EDITING_TOOLS and result.ok:
-                reflection = self._reflect(f"剛剛使用了 {action.tool} 工具進行程式碼修改")
+                # 自動跑測試
+                test_result = self.tools.run("run_tests", {})
+                self.messages.append({"role": "tool", "content": self._format_tool_result(test_result)})
+
+                # 再自動 Reflection（此時 Reflection 會看到測試結果）
+                reflection = self._reflect(f"剛剛使用了 {action.tool} 工具，測試結果如下")
                 self.messages.append(
-                    {"role": "system", "content": f"=== 自動 Reflection（編輯後） ===\n{reflection}"}
+                    {"role": "system", "content": f"=== 自動 Reflection（編輯 + 測試後） ===\n{reflection}"}
                 )
 
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
