@@ -324,6 +324,18 @@ def build_status_line(model: str, plan_mode: bool, context_pct: int) -> str:
     return f"{model}{plan_marker} | context {context_pct}%"
 
 
+EXECUTE_TRIGGERS = [
+    "現在執行", "執行吧", "開始執行", "go ahead",
+    "執行這個方案", "執行剛剛的", "現在就做", "proceed",
+    "照這個做", "照這個方案做", "這個方案做",
+]
+
+def is_natural_execute_trigger(text: str) -> bool:
+    """Check if the user input looks like a natural language request to start execution."""
+    text_lower = text.lower().strip()
+    return any(trigger.lower() in text_lower for trigger in EXECUTE_TRIGGERS)
+
+
 def print_config(
     settings: Settings,
     namespace: str,
@@ -1164,6 +1176,22 @@ def shell(
                 ]
                 transcript.write("slash_command", {"command": prompt})
                 console.print("cleared")
+                continue
+
+            # Natural language trigger for execute when in plan mode
+            if (plan_mode or agent_session.plan_only) and is_natural_execute_trigger(prompt):
+                plan_mode = False
+                agent_session.plan_only = False
+                transcript.write("slash_command", {"command": "natural_execute", "original": prompt})
+
+                execute_message = (
+                    "使用者已透過自然語言要求開始執行。\n"
+                    "規劃階段結束，現在切換至執行模式。請使用工具逐步完成方案。"
+                )
+                agent_session.messages.append({"role": "system", "content": execute_message})
+                chat_messages.append({"role": "system", "content": execute_message})
+
+                console.print("已透過自然語言切換至執行模式。後續將可使用工具實際執行。")
                 continue
 
             job = job_queue.submit(prompt)
