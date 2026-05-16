@@ -180,6 +180,21 @@ class AgentSession:
                     {"role": "system", "content": f"=== 自動 Reflection（編輯 + 測試後） ===\n{reflection}"}
                 )
 
+                # Micro-task 13：Reflection 後強迫模型主動決定下一步
+                self.messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "根據剛剛的 Reflection，請現在明確輸出你建議的下一步行動。\n"
+                            "你可以：\n"
+                            "- 呼叫工具繼續執行\n"
+                            "- 輸出 final answer\n"
+                            "- 再次 reflect 更深入的問題\n\n"
+                            "請直接給出清晰的下一步，不要猶豫。"
+                        ),
+                    }
+                )
+
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
 
     def clear(self) -> None:
@@ -271,17 +286,17 @@ class AgentSession:
         return result
 
     def _reflect(self, focus: str | None = None) -> str:
-        """讓模型對最近的行為進行自我檢討。"""
+        """讓模型對最近的行為進行自我檢討，並明確建議下一步。"""
         focus_text = f"\n特別關注：{focus}" if focus else ""
 
         reflection_prompt = (
             "你剛剛執行了一些工具呼叫。請誠實地進行自我檢討：\n"
             f"{focus_text}\n\n"
             "請回答以下問題：\n"
-            "1. 最近的工具結果是否符合預期？\n"
-            "2. 有沒有發現潛在的問題、風險或遺漏？\n"
-            "3. 下一步最該做什麼？\n\n"
-            "請用清晰的 bullet points 回覆。"
+            "1. 最近的工具結果是否符合預期？有什麼問題或風險？\n"
+            "2. 目前任務的進度如何？\n"
+            "3. **下一步最建議做什麼？**（請給出明確的行動建議，例如：繼續修復、執行更多測試、輸出最終方案、需要更多資訊等）\n\n"
+            "請用清晰的 bullet points 回覆，並在最後一段清楚寫出「下一步建議」。"
         )
 
         # 暫時把 reflection_prompt 當成 user message 丟給模型

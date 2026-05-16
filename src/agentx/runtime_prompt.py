@@ -69,7 +69,7 @@ Available tools:
 - apply_patch(patch)
 - search_replace(path, old_string, new_string, replace_all=False)
 - insert_code(path, content, insert_after)
-- reflect(focus)  # 自我檢討，系統會在使用 search_replace / insert_code / apply_patch 後自動跑測試 + 觸發 Reflection
+- reflect(focus)  # 自我檢討，系統會在使用 search_replace / insert_code / apply_patch 後自動跑測試 + 觸發 Reflection。Reflection 後請主動給出清晰的「下一步建議」
 
 Capabilities and limits:
 - You run inside the agentX CLI on the user's machine and operate against the configured workspace.
