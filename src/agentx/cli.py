@@ -636,6 +636,7 @@ def shell(
                         agent_prompt,
                         namespace=namespace,
                         cancel_event=current_cancel,
+                        plan_only=plan_mode,
                     )
                     transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
                     if tui is not None:

@@ -37,8 +37,11 @@ class AgentLoop:
         prompt: str,
         namespace: str = "project:agentX",
         cancel_event: threading.Event | None = None,
+        plan_only: bool = False,
     ) -> str:
-        return self.session.ask(prompt, namespace=namespace, cancel_event=cancel_event)
+        return self.session.ask(
+            prompt, namespace=namespace, cancel_event=cancel_event, plan_only=plan_only
+        )
 
 
 class AgentSession:
@@ -78,6 +81,7 @@ class AgentSession:
         prompt: str,
         namespace: str = "project:agentX",
         cancel_event: threading.Event | None = None,
+        plan_only: bool = False,
     ) -> str:
         direct = self._direct_tool_call(prompt)
         if direct is not None:
@@ -124,6 +128,23 @@ class AgentSession:
             if isinstance(action, FinalAnswer):
                 self.messages.append({"role": "assistant", "content": action.content})
                 return action.content
+
+            if plan_only:
+                # Real enforcement: do not execute tools in plan mode.
+                # Force the model to produce a final answer describing the plan.
+                self.messages.append({"role": "assistant", "content": action.model_dump_json()})
+                self.messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "You are currently in PLAN MODE. Tool calls are disabled. "
+                            "Do not output any more tool_call JSON. "
+                            "Please describe your plan in clear steps and finish with "
+                            'a final answer using the format {"type":"final","content":"..."}.'
+                        ),
+                    }
+                )
+                continue
 
             result = self._run_tool(action)
             self.messages.append({"role": "assistant", "content": action.model_dump_json()})
