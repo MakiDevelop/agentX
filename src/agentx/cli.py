@@ -317,6 +317,12 @@ def format_plan_status(enabled: bool) -> str:
     return "on（只討論方案，不使用工具）" if enabled else "off"
 
 
+def build_status_line(model: str, plan_mode: bool, context_pct: int) -> str:
+    """Build the bottom status line text shown in TUI and classic prompt mode."""
+    plan_marker = " | PLAN" if plan_mode else ""
+    return f"{model}{plan_marker} | context {context_pct}%"
+
+
 def print_config(
     settings: Settings,
     namespace: str,
@@ -589,7 +595,8 @@ def shell(
     original_console = console
 
     def status_line() -> str:
-        return f"{settings.model} | context {context_percent(settings, agent_session, chat_messages)}%"
+        pct = context_percent(settings, agent_session, chat_messages)
+        return build_status_line(settings.model, plan_mode, pct)
 
     ui_mode = os.getenv("AGENTX_TUI", "1").lower()
     if sys.stdin.isatty() and ui_mode not in {"0", "false", "classic"}:

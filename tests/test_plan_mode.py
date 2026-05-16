@@ -148,3 +148,17 @@ def test_plan_only_corrective_message_contains_structured_guidance() -> None:
     assert "結構化" in corrective or "步驟" in corrective
     assert "風險" in corrective or "依賴" in corrective
     assert "驗證" in corrective
+
+
+def test_build_status_line_shows_plan_marker() -> None:
+    """build_status_line should clearly indicate PLAN mode in the status bar."""
+    from agentx.cli import build_status_line
+
+    normal = build_status_line("gemma4:31b", False, 45)
+    plan = build_status_line("gemma4:31b", True, 45)
+
+    assert "PLAN" not in normal
+    assert "PLAN" in plan
+    assert "gemma4:31b | PLAN | context 45%" == plan
+    assert "context 45%" in normal
+    assert "context 45%" in plan
