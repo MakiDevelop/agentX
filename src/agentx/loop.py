@@ -14,6 +14,8 @@ from agentx.protocol import FinalAnswer, Reflect, ToolCall, ToolResult
 from agentx.runtime_prompt import build_agent_system_prompt
 from agentx.tools import ToolRegistry
 
+EDITING_TOOLS = {"search_replace", "insert_code", "apply_patch"}
+
 
 class AgentLoop:
     def __init__(
@@ -165,6 +167,13 @@ class AgentSession:
             result = self._run_tool(action)
             self.messages.append({"role": "assistant", "content": action.model_dump_json()})
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
+
+            # 編輯類工具執行成功後，自動觸發 Reflection（Micro-task 11）
+            if action.tool in EDITING_TOOLS and result.ok:
+                reflection = self._reflect(f"剛剛使用了 {action.tool} 工具進行程式碼修改")
+                self.messages.append(
+                    {"role": "system", "content": f"=== 自動 Reflection（編輯後） ===\n{reflection}"}
+                )
 
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
 
