@@ -137,10 +137,15 @@ class AgentSession:
                     {
                         "role": "user",
                         "content": (
-                            "You are currently in PLAN MODE. Tool calls are disabled. "
-                            "Do not output any more tool_call JSON. "
-                            "Please describe your plan in clear steps and finish with "
-                            'a final answer using the format {"type":"final","content":"..."}.'
+                            "你目前處於 PLAN MODE，工具呼叫已被停用。\n"
+                            "請不要再輸出 tool_call JSON。\n"
+                            "請改用結構化方式描述方案：\n"
+                            "1. 目標\n"
+                            "2. 執行步驟（編號）\n"
+                            "3. 每個步驟會用到的工具\n"
+                            "4. 風險與依賴\n"
+                            "5. 驗證方式\n\n"
+                            "最後請輸出 final answer。"
                         ),
                     }
                 )

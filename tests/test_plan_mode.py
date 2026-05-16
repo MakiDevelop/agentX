@@ -29,8 +29,10 @@ class FakeOllama:
     def __init__(self, responses: list[str]) -> None:
         self.responses = responses
         self.call_count = 0
+        self.last_messages: list[dict] = []
 
     def chat(self, messages, json_mode=False, cancel_event=None):  # noqa: ANN001
+        self.last_messages = list(messages)
         resp = self.responses[self.call_count]
         self.call_count += 1
         return resp
@@ -110,3 +112,39 @@ def test_agent_session_normal_mode_still_executes_tools() -> None:
         session.ask("git status 一下", plan_only=False)
 
     assert "git_status" in fake_tools.executed
+
+
+def test_plan_only_corrective_message_contains_structured_guidance() -> None:
+    """
+    When plan_only=True and the model attempts a tool call,
+    the corrective message fed back to the model must contain structured planning guidance.
+    """
+    fake_ollama = FakeOllama(
+        [
+            # First response tries to call a tool → should be blocked
+            '{"type":"tool_call","tool":"list_files","args":{}}',
+            # Second response finally gives a final answer
+            '{"type":"final","content":"已產出結構化方案。"}',
+        ]
+    )
+    fake_tools = FakeToolRegistry()
+
+    with patch("agentx.loop.build_repo_context", return_value="repo"), \
+         patch("agentx.loop.build_memory_context", return_value="mem"):
+
+        session = AgentSession(
+            settings=MagicMock(model="test", persona="default", max_steps=5, workspace=Path("/tmp")),
+            ollama=fake_ollama,  # type: ignore[arg-type]
+            tools=fake_tools,  # type: ignore[arg-type]
+            namespace="test",
+        )
+
+        session.ask("規劃重構", plan_only=True)
+
+    # The second message sent back should be the corrective structured guidance
+    assert len(fake_ollama.last_messages) >= 2
+    corrective = fake_ollama.last_messages[-1].get("content", "")
+    assert "PLAN MODE" in corrective
+    assert "結構化" in corrective or "步驟" in corrective
+    assert "風險" in corrective or "依賴" in corrective
+    assert "驗證" in corrective

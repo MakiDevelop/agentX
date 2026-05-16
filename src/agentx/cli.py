@@ -631,7 +631,17 @@ def shell(
                     transcript.write("user", {"mode": mode, "content": queued_prompt})
                     agent_prompt = queued_prompt
                     if plan_mode:
-                        agent_prompt = "Plan only. Do not call tools. " + agent_prompt
+                        agent_prompt = (
+                            "你目前處於 PLAN MODE。請輸出結構化方案，不要呼叫任何工具。\n"
+                            "請按照以下格式組織你的思考與回覆：\n"
+                            "1. 目標（Goal）\n"
+                            "2. 執行步驟（用編號清楚列出）\n"
+                            "3. 每個步驟預計使用的工具或指令\n"
+                            "4. 可能的風險、依賴或注意事項\n"
+                            "5. 如何驗證成功\n\n"
+                            "最後請用 final answer 總結完整方案。\n\n"
+                            "使用者任務："
+                        ) + queued_prompt
                     answer = agent_session.ask(
                         agent_prompt,
                         namespace=namespace,
