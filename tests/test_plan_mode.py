@@ -244,3 +244,84 @@ def test_natural_execute_trigger_detection() -> None:
     assert is_natural_execute_trigger("照這個方案做")
     assert not is_natural_execute_trigger("繼續討論")
     assert not is_natural_execute_trigger("plan 一下")
+
+
+def test_reflection_loop_guard_triggers_warning() -> None:
+    """
+    When the model outputs 3+ consecutive Reflect actions without tool calls in between,
+    the Reflection Loop Guard should inject a strong system warning message forcing progress.
+    This is critical for headless stability with local models.
+    """
+    # Model keeps reflecting → each reflect triggers 2 ollama calls (action + _reflect free-text)
+    # Provide plenty of responses so 3+ consecutive model reflects can complete without IndexError
+    responses = ['{"type":"reflect","focus":"loop test"}'] * 10 + [
+        '{"type":"final","content":"最終方案：先讀取關鍵檔案再決定。"}'
+    ]
+    fake_ollama = FakeOllama(responses)
+    fake_tools = FakeToolRegistry()
+
+    with patch("agentx.loop.build_repo_context", return_value="repo"), \
+         patch("agentx.loop.build_memory_context", return_value="mem"):
+
+        session = AgentSession(
+            settings=MagicMock(model="test", persona="default", max_steps=10, workspace=Path("/tmp")),
+            ollama=fake_ollama,  # type: ignore[arg-type]
+            tools=fake_tools,  # type: ignore[arg-type]
+            namespace="test",
+        )
+
+        # Normal mode (not plan_only) to avoid extra plan forcing logic
+        result = session.ask("請規劃一個複雜的重構任務", plan_only=False)
+
+    # Guard should have fired (injected system message with the text)
+    guard_triggered = any(
+        "Reflection Loop Guard" in (m.get("content", "") if isinstance(m, dict) else str(m))
+        for m in session.messages
+    )
+    assert guard_triggered, "Reflection loop guard message was not injected to session.messages after 3+ consecutive reflects"
+
+    # Final result should still be produced
+    assert "最終方案" in result
+
+
+def test_reflection_loop_guard_in_plan_only_uses_plan_specific_message() -> None:
+    """
+    In plan_only mode, when guard triggers, the injected message must:
+    - Contain 'PLAN MODE' variant text
+    - Encourage producing 'final 方案' (structured plan)
+    - NOT encourage executing tools (e.g. no 'search_replace' or '執行工具')
+    This addresses Codex review feedback on plan mode semantics.
+    """
+    responses = ['{"type":"reflect","focus":"plan loop"}'] * 8 + [
+        '{"type":"final","content":"完整規劃方案已產出。"}'
+    ]
+    fake_ollama = FakeOllama(responses)
+    fake_tools = FakeToolRegistry()
+
+    with patch("agentx.loop.build_repo_context", return_value="repo"), \
+         patch("agentx.loop.build_memory_context", return_value="mem"):
+
+        session = AgentSession(
+            settings=MagicMock(model="test", persona="default", max_steps=15, workspace=Path("/tmp")),
+            ollama=fake_ollama,  # type: ignore[arg-type]
+            tools=fake_tools,  # type: ignore[arg-type]
+            namespace="test",
+        )
+
+        session.ask("規劃複雜任務", plan_only=True)
+
+    # Find the guard message(s)
+    guard_messages = [
+        m.get("content", "") for m in session.messages
+        if isinstance(m, dict) and "Reflection Loop Guard" in m.get("content", "")
+    ]
+    assert len(guard_messages) >= 1, "No guard message found in plan_only run"
+
+    guard_text = guard_messages[0]
+    assert "PLAN MODE" in guard_text or "plan mode" in guard_text.lower()
+    assert "final 方案" in guard_text or "完整" in guard_text
+    # Should explicitly tell model NOT to suggest tool execution in plan mode
+    assert "不要建議執行工具" in guard_text or "plan mode 禁止" in guard_text
+    # Should NOT contain the positive "execute tool" encouragement from normal mode
+    assert "或執行下一個具體的工具行動" not in guard_text
+    assert "search_replace" not in guard_text
