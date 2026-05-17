@@ -5,6 +5,13 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
+# === DEPRECATION NOTICE (MT22 / Phase A) ===
+# 單一任務系統（task.py + TaskState）正在退場。
+# 新的真相來源是 tasks.py 的多任務清單（.agentx/tasks.json）。
+# 啟動時會自動把進行中的舊任務遷移過去。
+# 請改用 load_tasks / save_tasks / task_add 等工具與 API。
+# 預計在後續版本移除本模組。
+
 
 @dataclass
 class TaskState:

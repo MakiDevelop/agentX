@@ -47,7 +47,8 @@
 - 效能與 token 使用優化
 
 **記錄位置**：
-- Git：`docs/HEADLESS_OPTIMIZATION_LIST.md`
+- Git：`docs/HEADLESS_OPTIMIZATION_LIST.md`（戰術清單）
+- Git：`docs/OPTIMIZATION_ROADMAP.md`（2026-05 起正式實作順序與決策，由 Claude 全權決定順序後建立）
 - memhall：已寫入（namespace: project:agentx）
 - session dir：`~/Documents/agent-council/2026-05-16-agentx-headless-plan-mode/OPTIMIZATION_LIST.md`
 
@@ -66,10 +67,17 @@
 
 **Progress Update (錯誤恢復策略, 2026-05)**：
 - 階段一：錯誤分類 + 基礎恢復框架（已完成）
-  - 建立 `ErrorType` 與 `ErrorContext`
-  - 實作規則為主的 `ErrorClassifier`
-  - 在 `AgentSession` 實作有限次自動重試 + 錯誤發生時自動引導結構化 Reflection
+  - 建立 `ErrorType` 與 `ErrorContext`（`src/agentx/errors.py`）
+  - 實作規則為主的 `ErrorClassifier`（`src/agentx/error_classifier.py`）
+  - 在 `AgentSession` 整合有限次自動重試（TRANSIENT / CALL_ERROR）與錯誤發生時的結構化 Reflection 引導
 - 階段二步驟1：STUCK 偵測 + 恢復策略建議（已完成）
-  - 實作 `_detect_stuck`（同工具 + 同錯誤類型連續失敗即判定為 STUCK）
-  - 實作 `_generate_recovery_suggestions`，可自動產生 BACKTRACK、CHANGE_STRATEGY、ESCALATE_TO_USER 等具體建議
-  - STUCK 發生時會插入強烈介入訊息並附上恢復建議，強制模型進行深度 Reflection
+  - 實作 `_detect_stuck`：同工具連續同類錯誤達到門檻即判定為 STUCK
+  - 實作 `_generate_recovery_suggestions`：根據錯誤歷史自動產生具體建議（BACKTRACK、CHANGE_STRATEGY、ESCALATE_TO_USER 等）
+  - STUCK 時自動插入強烈介入訊息 + 恢復建議，並強制模型進行深度 Reflection
+- 相關測試：新增 `tests/test_error_classifier.py`（8 個測試全通過）
+- 已 commit 並 push（commit 2fd440c）
+
+**2026-05 正式實作 Roadmap 啟動**：
+- 建立 `docs/OPTIMIZATION_ROADMAP.md`，由 Claude 全權決定 5 Phase 實作順序（風險優先、基礎優先）。
+- Phase A（雙任務系統統一）即將啟動（MT22）。這是 Codex review 當初點名的最高風險項目，解決後才能安全推進後續所有 scaffolding。
+- 後續 Phase 將依序解鎖 Context Compaction、錯誤恢復成熟化、Prompt 統一等。

@@ -30,7 +30,13 @@ from agentx.prompting import SlashCommandCompleter
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
 from agentx.runtime_prompt import build_chat_system_prompt, build_headless_agent_system_prompt
-from agentx.tasks import format_task_list_summary, load_tasks
+from agentx.tasks import (
+    format_task_list_summary,
+    get_next_task_id,
+    load_tasks,
+    migrate_single_task_if_needed,
+    save_tasks,
+)
 from agentx.safety import Risk
 from agentx.task import TaskState, clear_task, finish_task, load_task, start_task
 from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
@@ -48,7 +54,7 @@ ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 SLASH_COMMANDS = [
     ("/help", "列出所有 slash command 與中文說明"),
     ("/init", "掃描 repo 並寫入 project profile 到 Memory Hall"),
-    ("/task [TEXT|status|done|clear]", "設定或查看目前任務狀態"),
+    ("/task [TEXT|status|list|add ...|update <id> ...|done <id>|clear]", "多任務清單管理（已統一為真相來源）"),
     ("/doctor", "檢查 Ollama、模型、Memory Hall、git、uv 狀態"),
     ("/config", "顯示目前 agentX 設定"),
     ("/config set KEY VALUE", "寫入 .agentx/config.toml"),
@@ -465,6 +471,10 @@ def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = Fals
     settings = Settings()
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
+
+    # Phase A (MT22): 自動從舊單一任務遷移到多任務清單
+    migrate_single_task_if_needed(settings.workspace)
+
     ollama, _, tools = build_runtime(settings)
     attachment_context, _ = build_attachment_context(prompt, settings.workspace)
     if attachment_context:
@@ -618,6 +628,9 @@ def shell(
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
     mode = mode or project_config.mode or "chat"
+
+    # Phase A (MT22): 自動從舊單一任務遷移到多任務清單（只在第一次需要時發生）
+    migrate_single_task_if_needed(settings.workspace)
     approval_policy = ApprovalPolicy(
         mode=ApprovalMode(project_config.approval) if project_config.approval else ApprovalMode.ASK
     )
@@ -839,23 +852,92 @@ def shell(
                 console.print(f"config updated: {key}")
                 print_raw(updated)
                 continue
-            if prompt == "/task":
+            if prompt == "/task" or prompt.startswith("/task "):
                 transcript.write("slash_command", {"command": prompt})
-                task = load_task(settings.workspace)
-                print_task(task)
-                continue
-            if prompt.startswith("/task "):
-                value = prompt.removeprefix("/task ").strip()
-                if value == "status":
-                    task = load_task(settings.workspace)
-                elif value == "done":
-                    task = finish_task(settings.workspace)
-                elif value == "clear":
-                    task = clear_task(settings.workspace)
-                else:
-                    task = start_task(settings.workspace, value)
-                transcript.write("task", {"title": task.title, "status": task.status})
-                print_task(task)
+                value = prompt.removeprefix("/task ").strip() if prompt.startswith("/task ") else ""
+
+                tasks = load_tasks(settings.workspace)
+
+                # Phase A (MT22): 多任務清單為主，舊單一任務已自動遷移
+                if not value or value == "status" or value == "list":
+                    # 顯示豐富摘要
+                    summary = format_task_list_summary(tasks)
+                    console.print(Panel(summary, title="Task List (多任務清單)", border_style="cyan"))
+                    if tasks:
+                        console.print("[dim]提示：使用 /task update <id> done|in_progress [notes] 來更新[/dim]")
+                    continue
+
+                if value.startswith("add "):
+                    desc = value.removeprefix("add ").strip()
+                    if desc:
+                        new_task = {
+                            "id": get_next_task_id(tasks),
+                            "description": desc[:200],
+                            "status": "in_progress",
+                            "notes": "",
+                        }
+                        tasks.append(new_task)
+                        save_tasks(settings.workspace, tasks)
+                        console.print(f"[green]已新增任務 #{new_task['id']}: {desc}[/green]")
+                    continue
+
+                if value.startswith("update "):
+                    # /task update 3 done "已實作 search_replace"
+                    parts = value.removeprefix("update ").strip().split(maxsplit=2)
+                    if len(parts) >= 2:
+                        try:
+                            tid = int(parts[0])
+                            new_status = parts[1]
+                            new_notes = parts[2] if len(parts) > 2 else None
+                            for t in tasks:
+                                if t["id"] == tid:
+                                    t["status"] = new_status if new_status in {"pending", "in_progress", "done"} else t["status"]
+                                    if new_notes is not None:
+                                        t["notes"] = new_notes[:500]
+                                    break
+                            save_tasks(settings.workspace, tasks)
+                            console.print(f"[green]已更新任務 #{tid}[/green]")
+                        except ValueError:
+                            console.print("[red]task id 必須是數字[/red]")
+                    continue
+
+                if value.startswith("done "):
+                    try:
+                        tid = int(value.removeprefix("done ").strip())
+                        for t in tasks:
+                            if t["id"] == tid:
+                                t["status"] = "done"
+                                break
+                        save_tasks(settings.workspace, tasks)
+                        console.print(f"[green]已完成任務 #{tid}[/green]")
+                    except ValueError:
+                        console.print("[red]task id 必須是數字[/red]")
+                    continue
+
+                if value == "clear":
+                    save_tasks(settings.workspace, [])
+                    console.print("[yellow]已清空所有任務清單[/yellow]")
+                    continue
+
+                if value == "done":
+                    console.print("[yellow]請指定任務 id，例如：/task done 3[/yellow]")
+                    continue
+
+                # 相容舊用法：/task 一些描述文字 → 直接當成新增 in_progress 任務
+                if value and not value.startswith(("add", "update", "done", "clear", "status", "list")):
+                    new_task = {
+                        "id": get_next_task_id(tasks),
+                        "description": value[:200],
+                        "status": "in_progress",
+                        "notes": "[來自 /task 舊式語法]",
+                    }
+                    tasks.append(new_task)
+                    save_tasks(settings.workspace, tasks)
+                    console.print(f"[green]已新增任務 #{new_task['id']}: {value}[/green]（建議之後用 /task add 或 /task update 管理）")
+                    continue
+
+                # fallback
+                console.print(Panel(format_task_list_summary(tasks), title="Task List", border_style="cyan"))
                 continue
             if prompt == "/doctor":
                 transcript.write("slash_command", {"command": prompt})

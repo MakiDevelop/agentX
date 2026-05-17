@@ -123,3 +123,54 @@ def format_task_list_summary(tasks: list[dict[str, Any]], max_active: int = 8) -
 
     return "\n".join(lines)
 
+
+# === 單任務 → 多任務清單 自動遷移（Phase A / MT22） ===
+
+def single_task_path(workspace: Path) -> Path:
+    """舊的單一任務檔案路徑（即將退場）"""
+    return workspace / ".agentx" / "task.json"
+
+
+def migrate_single_task_if_needed(workspace: Path) -> bool:
+    """
+    如果存在舊的 .agentx/task.json（單一任務）且目前多任務清單為空，
+    自動將其轉成多任務清單中的一個 in_progress 任務。
+
+    這是雙任務系統統一的過渡措施（MT22）。
+    遷移成功後回傳 True；沒有需要遷移或失敗則回傳 False。
+    """
+    multi = load_tasks(workspace)
+    if multi:
+        # 已經有多任務清單，優先使用它，不再碰舊檔
+        return False
+
+    old_path = single_task_path(workspace)
+    if not old_path.exists():
+        return False
+
+    try:
+        data = json.loads(old_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+
+    title = (data.get("title") or "").strip()
+    status = data.get("status", "")
+    if not title or status != "active":
+        # 只有真正進行中的單一任務才值得遷移
+        return False
+
+    # 轉成多任務格式
+    new_task = {
+        "id": 1,
+        "description": title[:200],
+        "status": "in_progress",
+        "notes": f"[自動遷移自舊單一任務] created_at={data.get('created_at', '')}",
+    }
+
+    save_tasks(workspace, [new_task])
+
+    # 為了安全，先不刪舊檔。後續版本可再決定是否自動移除。
+    # 這裡只做單向遷移，避免雙寫。
+
+    return True
+

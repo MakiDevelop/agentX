@@ -4,7 +4,9 @@ from agentx.tasks import (
     find_task,
     get_next_task_id,
     load_tasks,
+    migrate_single_task_if_needed,
     save_tasks,
+    single_task_path,
     tasks_path,
 )
 
@@ -69,3 +71,41 @@ def test_save_tasks_creates_agentx_directory(tmp_path: Path):
 
     assert agentx_dir.exists()
     assert (agentx_dir / "tasks.json").exists()
+
+
+def test_migrate_single_task_creates_multi_task(tmp_path: Path):
+    """舊的單一進行中任務應能自動遷移成多任務清單的第一筆"""
+    from agentx.task import start_task
+
+    # 先建立一個舊的單一任務
+    old_task = start_task(tmp_path, "重構認證模組")
+    assert old_task.status == "active"
+
+    # 多任務清單本來是空的
+    assert load_tasks(tmp_path) == []
+
+    # 觸發遷移
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is True
+
+    multi = load_tasks(tmp_path)
+    assert len(multi) == 1
+    assert multi[0]["description"] == "重構認證模組"
+    assert multi[0]["status"] == "in_progress"
+    assert "自動遷移" in multi[0]["notes"]
+
+
+def test_migrate_does_nothing_if_multi_already_exists(tmp_path: Path):
+    """如果已經有多任務清單，就不要再從舊單一任務遷移"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "舊任務")
+    # 先手動建立一個多任務
+    save_tasks(tmp_path, [{"id": 99, "description": "新任務", "status": "pending", "notes": ""}])
+
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is False
+
+    multi = load_tasks(tmp_path)
+    assert len(multi) == 1
+    assert multi[0]["id"] == 99  # 沒有被舊任務覆蓋
