@@ -967,6 +967,13 @@ def shell(
 
     register_handler("/history", handle_history)
 
+    def handle_jobs(state: ShellState, prompt: str):
+        """顯示目前 jobs 佇列狀態"""
+        transcript.write("slash_command", {"command": prompt})
+        print_jobs(job_queue)
+
+    register_handler("/jobs", handle_jobs)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1172,10 +1179,6 @@ def shell(
                 result = agent_session.compact()
                 transcript.write("compact", {"result": result})
                 print_raw(result)
-                continue
-            if prompt == "/jobs":
-                transcript.write("slash_command", {"command": prompt})
-                print_jobs(job_queue)
                 continue
             if prompt.startswith("/cancel"):
                 value = prompt.removeprefix("/cancel").strip() or None
