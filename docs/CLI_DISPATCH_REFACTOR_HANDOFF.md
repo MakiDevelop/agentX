@@ -190,7 +190,11 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - `build_handoff` / `write_handoff` 已改寫為接受 `tasks: list[dict]`，優先顯示新多任務清單。
 - 三處 handoff 寫入點（含 auto-handoff）已更新傳入 `current_tasks`。
 
-下一步建議：處理 shell 啟動流程中的 `task = load_task(...)` 變數，以及 `build_runtime` 的回傳型別。
+**Step 4 已完成**：
+- Shell 啟動流程已調整說明：明確將 `current_tasks` 視為主要來源，`task = load_task(...)` 僅作為 legacy 相容物件保留。
+- Transcript 同時記錄 legacy 與新格式，方便過渡追蹤。
+
+下一步建議：開始調整 `build_runtime` 的回傳型別，減少它對 `TaskState` 的依賴。
 
 **目標**：解決雙任務系統分裂問題，讓 `tasks.py` 多任務清單成為唯一真相來源（Single Source of Truth）。
 

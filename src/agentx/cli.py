@@ -734,17 +734,23 @@ def shell(
         mode=mode,
     )
 
-    # Phase A (MT22): 自動從舊單一任務遷移到多任務清單（只在第一次需要時發生）
+    # Phase A (MT22): 優先使用新多任務系統作為真相來源
     migrate_single_task_if_needed(settings.workspace)
     approval_policy = ApprovalPolicy(
         mode=ApprovalMode(project_config.approval) if project_config.approval else ApprovalMode.ASK
     )
     ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
-    task = load_task(settings.workspace)
+
+    # 主要使用新多任務清單
     current_tasks = load_tasks(settings.workspace)
     task_summary = format_task_list_summary(current_tasks)
 
+    # 僅保留舊的 TaskState 物件是為了相容尚未完全清理的 legacy 函式（build_runtime 等）
+    # 後續步驟會逐步移除對它的依賴
+    task = load_task(settings.workspace)
+
     transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
+    # 同時寫入 legacy 與新格式，方便過渡期追蹤
     transcript.write("task", {"title": task.title, "status": task.status})
     if current_tasks:
         transcript.write("tasks", {"count": len(current_tasks), "summary": task_summary})
