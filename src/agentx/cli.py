@@ -1082,6 +1082,25 @@ def shell(
 
     register_handler("/fetch", handle_fetch)
 
+    def handle_attach(state: ShellState, prompt: str):
+        """附加檔案內容到上下文"""
+        nonlocal chat_messages
+        attachment_text = prompt.removeprefix("/attach ").strip()
+        attachment_context, attachment_paths = build_attachment_context(
+            attachment_text,
+            state.settings.workspace,
+        )
+        if not attachment_context:
+            print_raw("no readable attachment found")
+            return
+        if state.agent_session:
+            state.agent_session.messages.append({"role": "system", "content": attachment_context})
+        chat_messages.append({"role": "system", "content": attachment_context})
+        transcript.write("attachments", {"paths": attachment_paths})
+        print_raw("attached files:\n" + "\n".join(attachment_paths))
+
+    register_handler("/attach", handle_attach)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1287,20 +1306,6 @@ def shell(
                 result = agent_session.compact()
                 transcript.write("compact", {"result": result})
                 print_raw(result)
-                continue
-            if prompt.startswith("/attach "):
-                attachment_text = prompt.removeprefix("/attach ").strip()
-                attachment_context, attachment_paths = build_attachment_context(
-                    attachment_text,
-                    settings.workspace,
-                )
-                if not attachment_context:
-                    print_raw("no readable attachment found")
-                    continue
-                agent_session.messages.append({"role": "system", "content": attachment_context})
-                chat_messages.append({"role": "system", "content": attachment_context})
-                transcript.write("attachments", {"paths": attachment_paths})
-                print_raw("attached files:\n" + "\n".join(attachment_paths))
                 continue
             if prompt == "/git":
                 result = tools.run("git_status", {})
