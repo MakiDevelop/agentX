@@ -207,23 +207,22 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - 同步移除 `TaskState` 的 import（cli.py 中對舊單一任務系統的靜態型別依賴進一步降低）。
 
 **Step 8 已完成**（本次 - H）：
-- 改善 `print_config` 和 `build_handoff` 的 legacy fallback 邏輯：
-  - 改為先檢查舊 `.agentx/task.json` 是否真的存在，才進行 fallback。
-  - 加上清晰、一致的 MT22 過渡期註解，說明什麼時候可以移除這些分支。
-- 避免在常見情況下無意義地呼叫 `load_task`。
+- 改善 `print_config` 和 `build_handoff` 的 legacy fallback 邏輯。
 
 **Step 9 已完成**（本次 - I）：
-- 建立「剩餘 `load_task` 呼叫點完整清單」。
-- 發現目前生產程式碼中只剩 3 處**有意設計的過渡期 fallback**，且都已集中。
+- 建立完整剩餘依賴清單。
 
 **Step 10 已完成**（本次 - K）：
-- 抽出統一的 `_get_legacy_task_if_exists()` helper。
-- 三處 fallback 全部改用此 helper，邏輯一致、註解集中。
-- 移除重複的路徑檢查與 load 程式碼。
+- 抽出 `_get_legacy_task_if_exists()` helper。
 
-目前對舊單一任務系統的依賴已經非常收斂且結構化。
+**Step 11 已完成**（本次 - L）：
+- 在 `build_runtime` 函式加上明確的 MT22 說明，宣告它已完全與舊單一任務系統解耦。
+- 確認程式碼中已無任何「為了相容 build_runtime 而保留 TaskState」的過時說法。
+- 相關 legacy 敘述已在手冊中同步清除。
 
-下一步建議：開始處理 `build_runtime` 相關呼叫者，或規劃最終移除 `task.py` 的條件清單。
+`build_runtime` 相關的 legacy 相依已清理完畢。
+
+下一步建議：規劃最終移除舊 `task.py` 的完整條件清單（M）。
 
 **目標**：解決雙任務系統分裂問題，讓 `tasks.py` 多任務清單成為唯一真相來源（Single Source of Truth）。
 

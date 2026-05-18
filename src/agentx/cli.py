@@ -523,6 +523,11 @@ def build_runtime(
     *,
     approval_policy: ApprovalPolicy | None = None,
 ) -> tuple[OllamaClient, MemoryHallClient, ToolRegistry]:
+    """建立執行時需要的核心物件（Ollama、Memory Hall、Tool Registry）。
+
+    注意（MT22）：此函式已完全與舊的單一任務系統（TaskState）解耦，
+    不再回傳或依賴舊的 task 物件。所有任務相關狀態請改用新多任務清單。
+    """
     ollama = OllamaClient(
         base_url=settings.ollama_url,
         model=settings.model,
