@@ -741,7 +741,6 @@ def shell(
         {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)}
     ]
     history: list[tuple[str, str]] = []
-    plan_mode = False
     job_queue = PromptJobQueue()
     prompt_active = threading.Event()
     current_cancel = threading.Event()
@@ -750,8 +749,8 @@ def shell(
     original_console = console
 
     def status_line() -> str:
-        pct = context_percent(settings, agent_session, chat_messages)
-        return build_status_line(settings.model, plan_mode, pct)
+        pct = context_percent(state.settings, state.agent_session or agent_session, chat_messages)
+        return build_status_line(state.settings.model, state.plan_mode, pct)
 
     ui_mode = os.getenv("AGENTX_TUI", "1").lower()
     if sys.stdin.isatty() and ui_mode not in {"0", "false", "classic"}:
@@ -792,7 +791,7 @@ def shell(
                     history.append((mode, queued_prompt))
                     transcript.write("user", {"mode": mode, "content": queued_prompt})
                     agent_prompt = queued_prompt
-                    if plan_mode:
+                    if state.plan_mode:
                         agent_prompt = (
                             "你目前處於 PLAN MODE。請輸出結構化方案，不要呼叫任何工具。\n"
                             "請按照以下格式組織你的思考與回覆：\n"
@@ -819,7 +818,7 @@ def shell(
                 history.append((mode, queued_prompt))
                 transcript.write("user", {"mode": mode, "content": queued_prompt})
                 chat_prompt = queued_prompt
-                if plan_mode:
+                if state.plan_mode:
                     chat_prompt = "Plan only. Do not claim actions were performed. " + chat_prompt
                 chat_messages.append({"role": "user", "content": chat_prompt})
                 streamed: list[str] = []
@@ -1466,16 +1465,16 @@ def shell(
                 continue
 
             # Natural language trigger for execute when in plan mode
-            if (plan_mode or agent_session.plan_only) and is_natural_execute_trigger(prompt):
-                plan_mode = False
-                agent_session.plan_only = False
+            if state.plan_mode and is_natural_execute_trigger(prompt):
+                state.set_plan_mode(False)
                 transcript.write("slash_command", {"command": "natural_execute", "original": prompt})
 
                 execute_message = (
                     "使用者已透過自然語言要求開始執行。\n"
                     "規劃階段結束，現在切換至執行模式。請使用工具逐步完成方案。"
                 )
-                agent_session.messages.append({"role": "system", "content": execute_message})
+                if state.agent_session:
+                    state.agent_session.messages.append({"role": "system", "content": execute_message})
                 chat_messages.append({"role": "system", "content": execute_message})
 
                 console.print("已透過自然語言切換至執行模式。後續將可使用工具實際執行。")
