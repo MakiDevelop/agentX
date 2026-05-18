@@ -787,9 +787,9 @@ def shell(
                 if attachment_context:
                     queued_prompt = f"{queued_prompt}\n\n{attachment_context}"
                     transcript.write("attachments", {"paths": attachment_paths})
-                if mode == "agent":
-                    history.append((mode, queued_prompt))
-                    transcript.write("user", {"mode": mode, "content": queued_prompt})
+                if state.mode == "agent":
+                    history.append((state.mode, queued_prompt))
+                    transcript.write("user", {"mode": state.mode, "content": queued_prompt})
                     agent_prompt = queued_prompt
                     if state.plan_mode:
                         agent_prompt = (
@@ -815,8 +815,8 @@ def shell(
                     print_block(answer)
                     continue
 
-                history.append((mode, queued_prompt))
-                transcript.write("user", {"mode": mode, "content": queued_prompt})
+                history.append((state.mode, queued_prompt))
+                transcript.write("user", {"mode": state.mode, "content": queued_prompt})
                 chat_prompt = queued_prompt
                 if state.plan_mode:
                     chat_prompt = "Plan only. Do not claim actions were performed. " + chat_prompt
