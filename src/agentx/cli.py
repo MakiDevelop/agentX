@@ -428,7 +428,8 @@ def main(
     ctx: typer.Context,
     print_prompt: str | None = typer.Option(None, "-p", "--print", help="Print one response and exit."),
     agent: bool = typer.Option(False, "--agent", help="Use agent/tool mode with -p."),
-    plan: bool = typer.Option(False, "--plan", help="Start in planning mode for -p (model will plan thoroughly first; can suggest execution)."),
+    plan: bool = typer.Option(False, "--plan", help="Start in pure planning mode for -p (only produce high-quality plan + reflection, no tools)."),
+    plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan thoroughly first, then seamlessly continue into execution in the same run (recommended for complex tasks)."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
 ) -> None:
     """Run local Ollama agent workflows."""
@@ -436,7 +437,13 @@ def main(
         return
     if ctx.invoked_subcommand is not None:
         return
-    print_raw(run_print_prompt(print_prompt, namespace=namespace, agent_mode=agent, plan_mode=plan))
+    print_raw(run_print_prompt(
+        print_prompt,
+        namespace=namespace,
+        agent_mode=agent,
+        plan_mode=plan,
+        plan_then_execute=plan_then_execute,
+    ))
     raise typer.Exit()
 
 
@@ -467,7 +474,13 @@ def build_runtime(
     return ollama, memory, tools
 
 
-def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = False, plan_mode: bool = False) -> str:
+def run_print_prompt(
+    prompt: str,
+    namespace: str | None,
+    agent_mode: bool = False,
+    plan_mode: bool = False,
+    plan_then_execute: bool = False,
+) -> str:
     settings = Settings()
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
@@ -487,27 +500,32 @@ def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = Fals
         system_prompt = build_headless_agent_system_prompt(settings.persona, task_summary)
 
         agent_prompt = prompt
-        if plan_mode:
-            # Headless plan mode — high-quality planning + clear transition to execution
-            agent_prompt = (
-                "你目前處於 PLAN MODE（Headless 模式）。\n"
-                "這次你需要先進行**完整、深入且高品質的結構化規劃**，**強烈建議不要急著呼叫工具**。\n\n"
-                "請嚴格按照以下格式輸出你的規劃：\n"
-                "1. 目標（Goal）\n"
-                "2. 執行步驟（用編號清楚列出，每一步都要可驗證）\n"
-                "3. 每個步驟預計使用的工具或指令\n"
-                "4. 可能的風險、依賴或注意事項\n"
-                "5. 如何驗證成功\n\n"
-                "規劃完成後，**請務必先進行一次認真的 Reflection**，誠實檢討以下幾點：\n"
-                "- 這個規劃是否完整？\n"
-                "- 風險是否被充分考慮？\n"
-                "- 驗證方式是否可行？\n"
-                "- 是否有遺漏的重要步驟？\n\n"
-                "Reflection 結束後，請明確判斷：\n"
-                "- 如果規劃還不夠好 → 繼續優化規劃並再次 Reflection\n"
-                "- 如果規劃已經完整且風險可控 → 在 final answer 中清楚輸出完整方案，並建議可以開始執行\n\n"
-                "使用者任務："
-            ) + prompt
+        if plan_mode or plan_then_execute:
+            # Headless planning (pure plan or plan-then-execute)
+            if plan_then_execute:
+                agent_prompt = (
+                    "你目前處於 PLAN-THEN-EXECUTE 模式（Headless）。\n"
+                    "請先進行**完整、深入、高品質的結構化規劃**，並進行認真 Reflection。\n\n"
+                    "當你認為規劃已經足夠好且風險可控時：\n"
+                    "1. 先輸出一個結構化的 final answer，清楚描述完整方案（目標、步驟、風險、驗證方式）。\n"
+                    "2. 然後**立即開始執行**，使用工具逐步實現規劃。\n\n"
+                    "規劃格式建議：\n"
+                    "1. 目標（Goal）\n"
+                    "2. 執行步驟（編號清楚，每步可驗證）\n"
+                    "3. 每個步驟預計工具\n"
+                    "4. 風險與注意事項\n"
+                    "5. 驗證方式\n\n"
+                    "使用者任務："
+                ) + prompt
+            else:
+                # Pure plan mode
+                agent_prompt = (
+                    "你目前處於純 PLAN MODE（Headless）。\n"
+                    "這次你只需要產生高品質規劃，**不要使用任何工具**。\n\n"
+                    "請先進行完整規劃與認真 Reflection，然後在 final answer 中輸出結構化方案。\n"
+                    "規劃完成後不要繼續執行。\n\n"
+                    "使用者任務："
+                ) + prompt
 
         agent_loop = AgentLoop(
             settings=settings,
@@ -516,7 +534,8 @@ def run_print_prompt(prompt: str, namespace: str | None, agent_mode: bool = Fals
             namespace=namespace,
             system_prompt=system_prompt,
         )
-        return agent_loop.run(agent_prompt, namespace=namespace, plan_only=plan_mode)
+        effective_plan_only = plan_mode or plan_then_execute
+        return agent_loop.run(agent_prompt, namespace=namespace, plan_only=effective_plan_only)
     return ollama.chat(
         [
             {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)},

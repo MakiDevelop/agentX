@@ -12,7 +12,7 @@ from agentx.context_compactor import ContextCompactor, HeuristicContextCompactor
 from agentx.recovery import RecoveryPlaybook
 from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
-from agentx.errors import ErrorContext, ErrorType, RecoveryAction, RecoverySuggestion
+from agentx.errors import ErrorContext, ErrorType, RecoverySuggestion
 from agentx.error_classifier import ErrorClassifier
 from agentx.protocol import FinalAnswer, Reflect, ToolCall, ToolResult
 from agentx.runtime_prompt import build_agent_system_prompt
@@ -211,9 +211,16 @@ class AgentSession:
                 continue
 
             if effective_plan_only and not self._has_completed_planning:
-                # In headless plan mode, we require at least one reflection before allowing tool execution.
-                # This ensures the model has seriously thought through the plan.
+                # Plan mode: require at least one reflection, and treat a good final plan as planning complete.
                 self.messages.append({"role": "assistant", "content": action.model_dump_json()})
+
+                if isinstance(action, FinalAnswer):
+                    # Planning phase considered complete once a final plan is delivered.
+                    # Subsequent turns (if any) can use tools.
+                    self._has_completed_planning = True
+                    # For plan-then-execute, we allow the model to continue into execution in the same session.
+                    continue
+
                 self.messages.append(
                     {
                         "role": "user",
