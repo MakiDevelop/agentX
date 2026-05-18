@@ -1101,6 +1101,51 @@ def shell(
 
     register_handler("/attach", handle_attach)
 
+    def handle_git(state: ShellState, prompt: str):
+        """顯示 git status --short --branch"""
+        result = tools.run("git_status", {})
+        transcript.write(
+            "tool",
+            {"command": "/git", "ok": result.ok, "content": result.content[:2000]},
+        )
+        print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
+
+    register_handler("/git", handle_git)
+
+    def handle_diff(state: ShellState, prompt: str):
+        """顯示 git diff，可指定單一檔案"""
+        path = prompt.removeprefix("/diff").strip()
+        args = {"path": path} if path else {}
+        result = tools.run("git_diff", args)
+        transcript.write(
+            "tool",
+            {"command": "/diff", "path": path, "ok": result.ok, "content": result.content[:2000]},
+        )
+        print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
+
+    register_handler("/diff", handle_diff)
+
+    def handle_apply(state: ShellState, prompt: str):
+        """套用 patch 檔案（YELLOW 工具，會經過 approval gate）"""
+        path = prompt.removeprefix("/apply ").strip()
+        # 基本安全檢查（與舊邏輯一致）
+        patch_path = (state.settings.workspace / path).resolve()
+        if state.settings.workspace != patch_path and state.settings.workspace not in patch_path.parents:
+            print_raw("patch path escapes workspace")
+            return
+        if not patch_path.is_file():
+            print_raw(f"patch file not found: {path}")
+            return
+        patch = patch_path.read_text(encoding="utf-8", errors="replace")
+        result = tools.run("apply_patch", {"patch": patch})
+        transcript.write(
+            "tool",
+            {"command": "/apply", "path": path, "ok": result.ok, "content": result.content[:2000]},
+        )
+        print_tool_result(result.content if result.ok else f"patch failed: {result.content}")
+
+    register_handler("/apply", handle_apply)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:

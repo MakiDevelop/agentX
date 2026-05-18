@@ -121,17 +121,61 @@
 - 其他觀察：prefix 匹配安全、lint/test 全過（96 passed）、底部 `/status` 殘留為 dead code 可刪、目前階段「不要一次全搬 40+ 指令」是正確策略。
 - 結論：本次改動 **無 P0**，已通過 Codex 審查；P1 列為已知 technical debt，後續遷移時同步處理。
 
+**2026-05-18 更新（Wave 0 Codex Review 完成）**：
+- 已為 `ShellState` 新增 `set_plan_mode`、`set_chat_mode`、`update_settings`、`set_persona` 等明確方法。
+- 主要狀態切換點（/plan、/execute、/mode、/model、/persona、自然語言 trigger、/clear）已全部改用新方法。
+- 本地 `plan_mode` 變數已在 main interactive loop 中移除。
+- `status_line()` 與 `/status` handler 已完全讀取 `state.*`。
+- **Wave 0 Codex Review 結論**（新一批）：
+  - **P1**：`/clear` 會連帶清掉 tasks（因為呼叫 `AgentSession.clear()` 會清 tasks + persist）。建議拆分 `clear_context()` 與 `clear_tasks()`。
+  - **P2**：`/execute` 只關 plan mode，但未確保切到 `mode=agent`，導致「可以呼叫工具」的訊息可能誤導仍在 chat 模式的用戶。
+  - **Good**：API 層級設計正確；把重建 client / 清 context 等副作用留在 handler 是對的；不要急著搬更多指令。
+  - **Before Wave 1 建議**：
+    1. 把互動路徑剩餘的 `mode`/`settings`/`namespace`/`agent_session` 讀取都改成 `state.*`
+    2. 修 dispatch 順序（slash command 應先 drain queued prompt）
+    3. 拆分 AgentSession.clear()
+    4. 補關鍵轉換的 regression test
+
+**2026-05-18 執行完成**：
+- A、B、C 三項硬化已逐一完成並 commit。
+- 互動 shell 主要路徑的 state 讀取已大幅統一。
+- Wave 0 硬化階段結束。
+
+**Wave 1 進行中（已完成 15 個）**：
+- /doctor
+- /init
+- /tools
+- /context
+- /history
+- /jobs
+- /cancel
+- /clear
+- /handoff
+- /resume
+- /files
+- /read
+- /search
+- /fetch
+- /attach
+- /git
+- /diff
+- /apply   ← Wave 1.3（本次新增，Git 工程工作流核心）
+
+模式良好。已完成 18 個。下一批建議繼續 /review、/commit、/approval（同屬 Git 閉環），或 /plan /execute 模式切換群。
+
 ---
 
-## 八、建議的下一個動作
+## 八、建議的下一個動作（2026-05-18 更新）
 
-1. 繼續逐一遷移下一批簡單指令（從 `/handoff` 開始）。
-2. 每遷移 4~5 個指令就考慮 commit 一次（本次已做 3 個 + dispatch 強化）。
-3. 後續可考慮把 `/clear`、`/doctor` 等舊 if 也抽出 handler（目前 doc 列為「已完成」但實際仍走 fallback）。
-4. 等第一批全部完成後，再評估是否要處理 ToolRegistry 的部分。
-5. 完成階段性 commit 後，依 §2 規則交由 Codex 審查本次 dispatch 改動（已完成，見 §七 P1 紀錄，無 P0）。
-6. 後續每當遷移涉及 plan_mode / mode / settings 切換的 handler 時，順手補 state 同步（解決 Codex P1）。
-7. 小清理：刪除底部已成 dead code 的 `/status` 殘留 if（可併入下一批 commit）。
+**當前進度**：Wave 1 進行中（已 18 個）。Wave 0 狀態統一已基本完成（ShellState 作為主要讀寫來源）。
+
+**下一波推薦**（符合「對標合格 Agent CLI」目標）：
+- **Git 閉環群**（最高 ROI）：/review、/commit、/approval、/test — 讓 agent 能真正完成「看 diff → review → 安全 apply → 測試 → 中文 commit + push」完整工程流程。
+- 之後再做模式切換群（/plan、/execute、/mode*、/model、/persona）。
+- /task 因為子命令複雜，預留最後處理。
+- 每波 3~6 個就 commit + 更新本文件 + 執行一次輕量 Codex review。
+
+**大目標對齊**：完成 Dispatch 全遷移後，立即進入 Optimization Roadmap Phase A（雙任務系統統一 MT22），這是 Codex 點名的最大架構債，也是讓 agentX 真正能可靠跑長時段 headless 任務的關鍵。
 
 ---
 
