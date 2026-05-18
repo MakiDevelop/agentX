@@ -1046,6 +1046,18 @@ def shell(
 
     register_handler("/files", handle_files)
 
+    def handle_read(state: ShellState, prompt: str):
+        """讀取 repo 內指定檔案"""
+        path = prompt.removeprefix("/read ").strip()
+        result = tools.run("read_file", {"path": path})
+        transcript.write(
+            "tool",
+            {"command": "/read", "path": path, "ok": result.ok, "content": result.content[:2000]},
+        )
+        print_tool_result(result.content if result.ok else f"讀取失敗：{result.content}")
+
+    register_handler("/read", handle_read)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1251,15 +1263,6 @@ def shell(
                 result = agent_session.compact()
                 transcript.write("compact", {"result": result})
                 print_raw(result)
-                continue
-            if prompt.startswith("/read "):
-                path = prompt.removeprefix("/read ").strip()
-                result = tools.run("read_file", {"path": path})
-                transcript.write(
-                    "tool",
-                    {"command": "/read", "path": path, "ok": result.ok, "content": result.content[:2000]},
-                )
-                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
                 continue
             if prompt.startswith("/attach "):
                 attachment_text = prompt.removeprefix("/attach ").strip()
