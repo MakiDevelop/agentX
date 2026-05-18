@@ -40,7 +40,7 @@ from agentx.tasks import (
     save_tasks,
 )
 from agentx.safety import Risk
-from agentx.task import load_task
+from agentx.task import TaskState, load_task
 from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
 from agentx.transcript import Transcript, find_transcript, list_transcripts, summarize_transcript
 from agentx.tui import AgentXTui, format_assistant_header
@@ -385,6 +385,24 @@ def is_natural_execute_trigger(text: str) -> bool:
     return any(trigger.lower() in text_lower for trigger in EXECUTE_TRIGGERS)
 
 
+def _get_legacy_task_if_exists(workspace: Path) -> TaskState | None:
+    """MT22 過渡期 helper。
+
+    只在舊的 .agentx/task.json 仍然存在，且內容有意義時，才回傳舊的單一任務物件。
+    否則回傳 None，讓呼叫端優先走新多任務清單。
+
+    這是為了在過渡期間保留相容性，當舊系統完全退場後，此函式與其呼叫者可移除。
+    """
+    legacy_path = workspace / ".agentx" / "task.json"
+    if not legacy_path.exists():
+        return None
+
+    task = load_task(workspace)
+    if not task.title:
+        return None
+    return task
+
+
 def print_config(
     settings: Settings,
     namespace: str,
@@ -419,17 +437,10 @@ def print_config(
         summary = format_task_list_summary(current_tasks, max_active=5)
         table.add_row("tasks (multi)", summary[:400] if summary else "(none)")
     else:
-        # MT22 過渡期 fallback：
-        # 只有在新多任務清單為空，且舊的 .agentx/task.json 仍然存在時，才顯示 legacy 單一任務。
-        # 這是為了相容尚未完全遷移完成的環境。當舊系統完全退場後，此分支可移除。
-        legacy_path = settings.workspace / ".agentx" / "task.json"
-        if legacy_path.exists():
-            legacy = load_task(settings.workspace)
-            if legacy.title:
-                table.add_row("task (legacy)", legacy.title)
-                table.add_row("task_status (legacy)", legacy.status)
-            else:
-                table.add_row("tasks", "(none)")
+        legacy = _get_legacy_task_if_exists(settings.workspace)
+        if legacy:
+            table.add_row("task (legacy)", legacy.title)
+            table.add_row("task_status (legacy)", legacy.status)
         else:
             table.add_row("tasks", "(none)")
 
@@ -625,13 +636,9 @@ def build_handoff(
     elif task_summary:
         task_section = f"多任務清單摘要：\n{task_summary}\n"
     else:
-        # MT22 過渡期 fallback：
-        # 只有在新多任務清單為空，且舊的 .agentx/task.json 仍然存在時，才顯示 legacy 單一任務。
-        # 這是為了相容尚未完全遷移完成的環境。當舊系統完全退場後，此分支可移除。
-        legacy_path = settings.workspace / ".agentx" / "task.json"
-        if legacy_path.exists():
-            legacy = load_task(settings.workspace)
-            task_section = f"task（legacy）：{legacy.title or '(none)'} [{legacy.status}]\n"
+        legacy = _get_legacy_task_if_exists(settings.workspace)
+        if legacy:
+            task_section = f"task（legacy）：{legacy.title} [{legacy.status}]\n"
         else:
             task_section = "tasks：(none)\n"
 
@@ -747,10 +754,10 @@ def shell(
     task_summary = format_task_list_summary(current_tasks)
 
     transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
-    # 過渡期仍記錄 legacy 單一任務（如果存在的話），方便除錯與遷移驗證
-    legacy_task = load_task(settings.workspace)
-    if legacy_task.title:
-        transcript.write("task_legacy", {"title": legacy_task.title, "status": legacy_task.status})
+    # 過渡期記錄：如果舊的單一任務還存在，寫入 legacy 記錄方便遷移驗證
+    legacy = _get_legacy_task_if_exists(settings.workspace)
+    if legacy:
+        transcript.write("task_legacy", {"title": legacy.title, "status": legacy.status})
     if current_tasks:
         transcript.write("tasks", {"count": len(current_tasks), "summary": task_summary})
     agent_session = AgentSession(

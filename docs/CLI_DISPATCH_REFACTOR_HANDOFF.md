@@ -212,9 +212,18 @@ Git 閉環群（review → commit → approval）已完整遷移。
   - 加上清晰、一致的 MT22 過渡期註解，說明什麼時候可以移除這些分支。
 - 避免在常見情況下無意義地呼叫 `load_task`。
 
-目前 `cli.py` 對舊單一任務系統的依賴已大幅收斂，主要只剩過渡期的 fallback 讀取。
+**Step 9 已完成**（本次 - I）：
+- 建立「剩餘 `load_task` 呼叫點完整清單」。
+- 發現目前生產程式碼中只剩 3 處**有意設計的過渡期 fallback**，且都已集中。
 
-下一步建議：繼續收斂剩餘的 `load_task` 呼叫點（建立完整清單），或處理 `build_runtime` 呼叫者。
+**Step 10 已完成**（本次 - K）：
+- 抽出統一的 `_get_legacy_task_if_exists()` helper。
+- 三處 fallback 全部改用此 helper，邏輯一致、註解集中。
+- 移除重複的路徑檢查與 load 程式碼。
+
+目前對舊單一任務系統的依賴已經非常收斂且結構化。
+
+下一步建議：開始處理 `build_runtime` 相關呼叫者，或規劃最終移除 `task.py` 的條件清單。
 
 **目標**：解決雙任務系統分裂問題，讓 `tasks.py` 多任務清單成為唯一真相來源（Single Source of Truth）。
 
