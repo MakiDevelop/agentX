@@ -11,10 +11,12 @@ from pathlib import Path
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 import typer
-from rich.console import Console
+from rich.console import Console, Group
+from rich.columns import Columns
 from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from agentx.approval import ApprovalMode, ApprovalPolicy
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
@@ -121,8 +123,13 @@ def print_trace(message: str) -> None:
     console.print(f"[dim][trace] {escape(message)}[/dim]")
 
 
-def slash_command_hint() -> str:
-    return "Commands: " + " ".join(command for command, _ in SLASH_COMMANDS)
+def slash_command_hint() -> Columns:
+    """回傳用 Columns 自動排版的指令列表（更漂亮）"""
+    commands = [command for command, _ in SLASH_COMMANDS]
+    # 轉成帶樣式的 Text
+    texts = [Text(cmd, style="cyan") for cmd in commands]
+    # equal=True 讓每欄寬度一致，expand=True 讓它盡量填滿
+    return Columns(texts, equal=True, expand=True, column_first=True)
 
 
 def print_slash_help() -> None:
@@ -830,11 +837,16 @@ def shell(
 
     console.print(
         Panel.fit(
-            (
-                f"model={settings.model} mode={mode} namespace={namespace}\n"
-                + escape(slash_command_hint())
+            Group(
+                Text("agentX v0.2.0", style="bold cyan") + "  ·  你的本地工程小幫手（Powered by Ollama）",
+                "",
+                f"model: [bold]{settings.model}[/bold]   |   mode: [bold]{mode}[/bold]   |   workspace: [bold]{namespace}[/bold]",
+                "",
+                "輸入 [bold cyan]/help[/bold cyan] 查看可用指令",
             ),
             title="agentX shell",
+            border_style="dim",
+            padding=(0, 1),
         )
     )
 
