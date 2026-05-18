@@ -161,8 +161,9 @@
 - /diff
 - /apply
 - /review   ← Wave 1.4（Git 閉環群第一個：findings-first review）
+- /commit   ← Wave 1.5（Git 閉環核心：測試 → stage → 中文 commit + push）
 
-已完成 19 個。Git 閉環群進行中（review 已上，接下來 /commit + /approval）。
+已完成 20 個。Git 閉環群接近完成（剩 /approval）。
 
 ---
 

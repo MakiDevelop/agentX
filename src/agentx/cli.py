@@ -1155,6 +1155,16 @@ def shell(
 
     register_handler("/review", handle_review)
 
+    def handle_commit(state: ShellState, prompt: str):
+        """執行 /commit：跑測試、逐檔 stage、中文 commit 並 push"""
+        message = prompt.removeprefix("/commit").strip() or None
+        transcript.write("slash_command", {"command": prompt})
+        output = run_commit_flow(state.settings, tools, message)
+        transcript.write("commit", {"message": message, "content": output[:4000]})
+        print_raw(output)
+
+    register_handler("/commit", handle_commit)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
