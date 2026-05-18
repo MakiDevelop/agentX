@@ -937,6 +937,15 @@ def shell(
 
     register_handler("/doctor", handle_doctor)
 
+    def handle_init(state: ShellState, prompt: str):
+        """執行 /init：掃描 repo 並寫入 project profile 到 Memory Hall"""
+        transcript.write("slash_command", {"command": prompt})
+        output = run_init(state.settings, tools, state.namespace)
+        transcript.write("init", {"content": output[:4000]})
+        print_raw(output)
+
+    register_handler("/init", handle_init)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1136,12 +1145,6 @@ def shell(
 
                 # fallback
                 console.print(Panel(format_task_list_summary(tasks), title="Task List", border_style="cyan"))
-                continue
-            if prompt == "/init":
-                transcript.write("slash_command", {"command": prompt})
-                output = run_init(state.settings, tools, state.namespace)
-                transcript.write("init", {"content": output[:4000]})
-                print_raw(output)
                 continue
             if prompt == "/tools":
                 transcript.write("slash_command", {"command": prompt})
