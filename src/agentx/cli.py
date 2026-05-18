@@ -1058,6 +1058,18 @@ def shell(
 
     register_handler("/read", handle_read)
 
+    def handle_search(state: ShellState, prompt: str):
+        """在 repo 內搜尋文字"""
+        pattern = prompt.removeprefix("/search ").strip()
+        result = tools.run("search_text", {"pattern": pattern})
+        transcript.write(
+            "tool",
+            {"command": "/search", "ok": result.ok, "content": result.content[:2000]},
+        )
+        print_tool_result(result.content if result.ok else f"搜尋失敗：{result.content}")
+
+    register_handler("/search", handle_search)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1277,15 +1289,6 @@ def shell(
                 chat_messages.append({"role": "system", "content": attachment_context})
                 transcript.write("attachments", {"paths": attachment_paths})
                 print_raw("attached files:\n" + "\n".join(attachment_paths))
-                continue
-            if prompt.startswith("/search "):
-                pattern = prompt.removeprefix("/search ").strip()
-                result = tools.run("search_text", {"pattern": pattern})
-                transcript.write(
-                    "tool",
-                    {"command": "/search", "pattern": pattern, "ok": result.ok, "content": result.content[:2000]},
-                )
-                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
                 continue
             if prompt.startswith("/fetch "):
                 url = prompt.removeprefix("/fetch ").strip()
