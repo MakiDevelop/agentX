@@ -960,6 +960,13 @@ def shell(
 
     register_handler("/context", handle_context)
 
+    def handle_history(state: ShellState, prompt: str):
+        """顯示本輪 shell 互動歷史"""
+        transcript.write("slash_command", {"command": prompt})
+        print_history(history)
+
+    register_handler("/history", handle_history)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1165,10 +1172,6 @@ def shell(
                 result = agent_session.compact()
                 transcript.write("compact", {"result": result})
                 print_raw(result)
-                continue
-            if prompt == "/history":
-                transcript.write("slash_command", {"command": prompt})
-                print_history(history)
                 continue
             if prompt == "/jobs":
                 transcript.write("slash_command", {"command": prompt})
