@@ -1358,8 +1358,14 @@ def shell(
                 if not state.plan_mode and not (state.agent_session and state.agent_session.plan_only):
                     console.print("目前不在 plan 模式中")
                     continue
+
                 state.set_plan_mode(False)
-                transcript.write("slash_command", {"command": prompt, "plan": False, "action": "execute"})
+
+                # 從 plan 模式執行時，預設切到 agent 模式，讓使用者真的可以用工具
+                if state.mode == "chat":
+                    state.set_chat_mode("agent")
+
+                transcript.write("slash_command", {"command": prompt, "plan": False, "mode": state.mode, "action": "execute"})
 
                 # 注入一則 system message，告知模型規劃階段結束，可以開始執行
                 execute_message = (
@@ -1371,7 +1377,7 @@ def shell(
                     state.agent_session.messages.append({"role": "system", "content": execute_message})
                 chat_messages.append({"role": "system", "content": execute_message})
 
-                console.print("已切換至執行模式。後續提示將可使用工具實際執行方案。")
+                console.print(f"已切換至執行模式（mode={state.mode}）。後續提示將可使用工具實際執行方案。")
                 continue
             if prompt.startswith("/remember "):
                 content = prompt.removeprefix("/remember ").strip()
