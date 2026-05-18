@@ -1008,7 +1008,7 @@ def shell(
                 continue
             if prompt == "/config":
                 transcript.write("slash_command", {"command": prompt})
-                print_config(settings, namespace, mode, approval_policy, task)
+                print_config(state.settings, state.namespace, state.mode, approval_policy, task)
                 continue
             if prompt.startswith("/config set "):
                 parts = prompt.split(maxsplit=3)
@@ -1017,7 +1017,7 @@ def shell(
                     continue
                 _, _, key, value = parts
                 try:
-                    updated = set_project_config(settings.workspace, key, value)
+                    updated = set_project_config(state.settings.workspace, key, value)
                 except ValueError as exc:
                     console.print(str(exc))
                     continue
@@ -1029,7 +1029,7 @@ def shell(
                 transcript.write("slash_command", {"command": prompt})
                 value = prompt.removeprefix("/task ").strip() if prompt.startswith("/task ") else ""
 
-                tasks = load_tasks(settings.workspace)
+                tasks = load_tasks(state.settings.workspace)
 
                 # Phase A (MT22): 多任務清單為主，舊單一任務已自動遷移
                 if not value or value == "status" or value == "list":
