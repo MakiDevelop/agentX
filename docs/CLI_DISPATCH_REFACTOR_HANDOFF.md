@@ -164,7 +164,12 @@
 - /commit   ← Wave 1.5
 - /approval ← Wave 1.6（Git 閉環群最後一個：YELLOW 工具審核政策切換）
 
-Git 閉環群（review → commit → approval）已完整遷移。已完成 21 個。
+Git 閉環群（review → commit → approval）已完整遷移。
+
+**Wave 1.7 開始（模式切換群）**：
+- /plan + /execute 已遷移（核心 plan-then-execute 體驗）
+
+已完成 23 個。下一批：/mode、/model、/persona。
 
 ---
 
