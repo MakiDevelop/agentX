@@ -1070,6 +1070,18 @@ def shell(
 
     register_handler("/search", handle_search)
 
+    def handle_fetch(state: ShellState, prompt: str):
+        """讀取指定外部網頁文字"""
+        url = prompt.removeprefix("/fetch ").strip()
+        result = tools.run("web_fetch", {"url": url})
+        transcript.write(
+            "tool",
+            {"command": "/fetch", "url": url, "ok": result.ok, "content": result.content[:4000]},
+        )
+        print_tool_result(result.content if result.ok else f"fetch failed: {result.content}")
+
+    register_handler("/fetch", handle_fetch)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1289,15 +1301,6 @@ def shell(
                 chat_messages.append({"role": "system", "content": attachment_context})
                 transcript.write("attachments", {"paths": attachment_paths})
                 print_raw("attached files:\n" + "\n".join(attachment_paths))
-                continue
-            if prompt.startswith("/fetch "):
-                url = prompt.removeprefix("/fetch ").strip()
-                result = tools.run("web_fetch", {"url": url})
-                transcript.write(
-                    "tool",
-                    {"command": "/fetch", "url": url, "ok": result.ok, "content": result.content[:4000]},
-                )
-                print_tool_result(result.content if result.ok else f"fetch failed: {result.content}")
                 continue
             if prompt == "/git":
                 result = tools.run("git_status", {})
