@@ -1398,6 +1398,113 @@ def shell(
 
     register_handler("/docker", handle_docker)
 
+    def handle_task(state: ShellState, prompt: str):
+        """多任務清單管理（/task 複雜子命令）"""
+        transcript.write("slash_command", {"command": prompt})
+        value = prompt.removeprefix("/task ").strip() if prompt.startswith("/task ") else ""
+
+        tasks = load_tasks(state.settings.workspace)
+
+        # 顯示狀態
+        if not value or value == "status" or value == "list":
+            summary = format_task_list_summary(tasks)
+            console.print(Panel(summary, title="Task List (多任務清單)", border_style="cyan"))
+            if tasks:
+                console.print("[dim]提示：使用 /task update <id> done|in_progress [notes] 來更新[/dim]")
+            return
+
+        # 新增任務
+        if value.startswith("add "):
+            desc = value.removeprefix("add ").strip()
+            if desc:
+                new_task = {
+                    "id": get_next_task_id(tasks),
+                    "description": desc[:200],
+                    "status": "in_progress",
+                    "notes": "",
+                }
+                tasks.append(new_task)
+                save_tasks(state.settings.workspace, tasks)
+                console.print(f"[green]已新增任務 #{new_task['id']}: {desc}[/green]")
+            return
+
+        # 更新任務
+        if value.startswith("update "):
+            parts = value.removeprefix("update ").strip().split(maxsplit=2)
+            if len(parts) >= 2:
+                try:
+                    tid = int(parts[0])
+                    new_status = parts[1]
+                    new_notes = parts[2] if len(parts) > 2 else None
+
+                    valid_status = {"pending", "in_progress", "done"}
+                    if new_status not in valid_status:
+                        console.print(f"[yellow]無效的 status '{new_status}'，允許值：{valid_status}[/yellow]")
+                        return
+
+                    found = False
+                    for t in tasks:
+                        if t["id"] == tid:
+                            t["status"] = new_status
+                            if new_notes is not None:
+                                t["notes"] = new_notes[:500]
+                            found = True
+                            break
+
+                    if found:
+                        save_tasks(state.settings.workspace, tasks)
+                        console.print(f"[green]已更新任務 #{tid}[/green]")
+                    else:
+                        console.print(f"[yellow]找不到任務 #{tid}[/yellow]")
+                except ValueError:
+                    console.print("[red]task id 必須是數字[/red]")
+            return
+
+        # 快速完成
+        if value.startswith("done "):
+            try:
+                tid = int(value.removeprefix("done ").strip())
+                found = False
+                for t in tasks:
+                    if t["id"] == tid:
+                        t["status"] = "done"
+                        found = True
+                        break
+
+                if found:
+                    save_tasks(state.settings.workspace, tasks)
+                    console.print(f"[green]已完成任務 #{tid}[/green]")
+                else:
+                    console.print(f"[yellow]找不到任務 #{tid}[/yellow]")
+            except ValueError:
+                console.print("[red]task id 必須是數字[/red]")
+            return
+
+        # 清空
+        if value == "clear":
+            save_tasks(state.settings.workspace, [])
+            console.print("[yellow]已清空所有任務清單[/yellow]")
+            return
+
+        if value == "done":
+            console.print("[yellow]請指定任務 id，例如：/task done 3[/yellow]")
+            return
+
+        # 相容舊用法：直接文字當成新增任務
+        if value and not value.startswith(("add", "update", "done", "clear", "status", "list")):
+            new_task = {
+                "id": get_next_task_id(tasks),
+                "description": value[:200],
+                "status": "in_progress",
+                "notes": "[來自 /task 舊式語法]",
+            }
+            tasks.append(new_task)
+            save_tasks(state.settings.workspace, tasks)
+            console.print(f"[green]已新增任務 #{new_task['id']}: {value}[/green]（建議之後用 /task add 或 /task update 管理）")
+            return
+
+    register_handler("/task", handle_task)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
