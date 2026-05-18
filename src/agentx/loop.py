@@ -30,6 +30,7 @@ class AgentLoop:
         namespace: str = "project:agentX",
         trace: Callable[[str], None] | None = None,
         system_prompt: str | None = None,
+        compactor: ContextCompactor | None = None,
     ) -> None:
         self.session = AgentSession(
             settings=settings,
@@ -38,6 +39,7 @@ class AgentLoop:
             namespace=namespace,
             trace=trace,
             system_prompt=system_prompt,
+            compactor=compactor,
         )
 
     def run(
@@ -61,6 +63,7 @@ class AgentSession:
         namespace: str = "project:agentX",
         trace: Callable[[str], None] | None = None,
         system_prompt: str | None = None,
+        compactor: ContextCompactor | None = None,
     ) -> None:
         self.settings = settings
         self.ollama = ollama
@@ -84,7 +87,7 @@ class AgentSession:
         self.current_error: ErrorContext | None = None
 
         # Context Compaction v2（Phase B1）
-        self.compactor: ContextCompactor = HeuristicContextCompactor()
+        self.compactor: ContextCompactor = compactor or HeuristicContextCompactor()
 
         self.messages = self._initial_messages()
 
@@ -139,6 +142,13 @@ class AgentSession:
         )
 
         for _ in range(self.settings.max_steps):
+            # Context Compaction v2 自動觸發（穩定性強化）
+            limit = getattr(self.settings, "context_limit_tokens", 8192)
+            if isinstance(limit, (int, float)) and limit > 0:
+                if self.context_tokens_estimate > limit * 0.82:
+                    compact_result = self.compact(keep_last=5)
+                    self._emit_trace(f"auto_compact triggered: {compact_result}")
+
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
             action = self._parse_action(raw)
             if isinstance(action, InvalidAction):

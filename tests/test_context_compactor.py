@@ -21,10 +21,15 @@ def test_heuristic_compactor_basic():
 
     new_msgs, result = compactor.compact(messages, tasks, keep_last=3)
 
-    # 摘要會被放在 bootstrap 之後、tail 之前的那個 system message
-    summary_msg = new_msgs[-4] if len(new_msgs) > 3 else new_msgs[-1]
-    assert "【目前任務清單】" in summary_msg.get("content", "")
-    assert "重構認證" in summary_msg.get("content", "")
+    # 找包含任務清單的 system message（v2 一定會有）
+    summary_content = ""
+    for m in new_msgs:
+        if "目前任務清單" in m.get("content", ""):
+            summary_content = m.get("content", "")
+            break
+
+    assert "【目前任務清單（最重要）】" in summary_content
+    assert "重構認證" in summary_content
     assert "已執行 Context Compaction v2" in result
 
 
