@@ -172,10 +172,15 @@ Git 閉環群（review → commit → approval）已完整遷移。
 
 模式切換群全部完成（已 push）。
 
-已完成 27 個。下一波可考慮：
-- `/task`（複雜，建議晚做）
-- `/docker`、`/run`、`/remember`、`/config` 等剩餘指令
-- 或暫停 dispatch，切入 Phase A 雙任務統一（MT22）
+已完成 27 個。**Wave 1.8（剩餘指令第一批）**：
+- /remember、/run、/config 已遷移
+
+剩餘主要項目：
+- /docker 系列
+- /task（最複雜）
+- 其他小指令收尾
+
+A 目標：把剩餘 dispatch 指令盡量遷移完，再進入 B（Phase A）。
 
 ---
 

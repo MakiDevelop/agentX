@@ -1312,6 +1312,58 @@ def shell(
 
     register_handler("/persona", handle_persona)
 
+    def handle_remember(state: ShellState, prompt: str):
+        """寫入 Memory Hall"""
+        content = prompt.removeprefix("/remember ").strip()
+        if not content:
+            print_raw("usage: /remember 要寫入 Memory Hall 的內容")
+            return
+        result = tools.run("memory_write", {"content": content, "namespace": state.namespace})
+        transcript.write("tool", {"command": "/remember", "ok": result.ok, "content": content})
+        if result.ok:
+            console.print(f"remembered in {state.namespace}")
+        else:
+            print_raw(f"remember failed: {result.content}")
+
+    register_handler("/remember", handle_remember)
+
+    def handle_run(state: ShellState, prompt: str):
+        """執行 allowlist 指令"""
+        command = prompt.removeprefix("/run ").strip()
+        result = tools.run("run_command", {"command": command})
+        transcript.write(
+            "tool",
+            {"command": "/run", "input": command, "ok": result.ok, "content": result.content[:4000]},
+        )
+        print_tool_result(result.content if result.ok else f"run failed: {result.content}")
+
+    register_handler("/run", handle_run)
+
+    def handle_config(state: ShellState, prompt: str):
+        """查看或設定專案 config"""
+        if prompt == "/config":
+            transcript.write("slash_command", {"command": prompt})
+            print_config(state.settings, state.namespace, state.mode, approval_policy, load_task(state.settings.workspace))
+            return
+
+        if prompt.startswith("/config set "):
+            parts = prompt.split(maxsplit=3)
+            if len(parts) != 4:
+                print_raw("usage: /config set KEY VALUE")
+                return
+            _, _, key, value = parts
+            try:
+                updated = set_project_config(state.settings.workspace, key, value)
+            except ValueError as exc:
+                print_raw(str(exc))
+                return
+            transcript.write("slash_command", {"command": prompt, "config": key})
+            console.print(f"config updated: {key}")
+            print_raw(updated)
+            return
+
+    register_handler("/config", handle_config)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
