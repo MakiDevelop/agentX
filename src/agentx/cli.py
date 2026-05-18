@@ -51,6 +51,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from agentx.loop import AgentSession
     from agentx.config import Settings
+    from collections.abc import Callable
 
 
 @dataclass
@@ -874,6 +875,48 @@ def shell(
 
     register_handler("/status", handle_status)
 
+    def handle_memory(state: ShellState, prompt: str):
+        """查詢目前 namespace 的 Memory Hall 記憶（支援 /memory QUERY）"""
+        transcript.write("slash_command", {"command": prompt})
+        query = prompt.removeprefix("/memory ").strip()
+        if not query:
+            console.print("usage: /memory QUERY")
+            return
+        result = tools.run("memory_search", {"query": query, "namespace": state.namespace})
+        transcript.write(
+            "tool",
+            {"command": "/memory", "query": query, "ok": result.ok, "content": result.content[:2000]},
+        )
+        print_tool_result(result.content if result.ok else f"memory search failed: {result.content}")
+
+    register_handler("/memory", handle_memory)
+
+    def handle_sessions(state: ShellState, prompt: str):
+        """列出最近 transcript，可搭配 /resume"""
+        transcript.write("slash_command", {"command": prompt})
+        print_sessions(state.settings)
+
+    register_handler("/sessions", handle_sessions)
+
+    def handle_transcript(state: ShellState, prompt: str):
+        """顯示本輪 JSONL transcript 檔案路徑"""
+        transcript.write("slash_command", {"command": prompt})
+        console.print(str(transcript.path))
+
+    register_handler("/transcript", handle_transcript)
+
+    # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
+    def _try_dispatch(p: str) -> bool:
+        if p in SLASH_HANDLERS:
+            SLASH_HANDLERS[p](state, p)
+            return True
+        # 由長到短比對 prefix（避免 /me 誤配 /memory）
+        for cmd, handler in sorted(SLASH_HANDLERS.items(), key=lambda kv: -len(kv[0])):
+            if p.startswith(cmd + " "):
+                handler(state, p)
+                return True
+        return False
+
     try:
         while True:
             try:
@@ -907,9 +950,8 @@ def shell(
             if prompt_session is not None:
                 print_block(f"agentX: {prompt}")
 
-            # Dispatch 機制 (階段一)
-            if prompt in SLASH_HANDLERS:
-                SLASH_HANDLERS[prompt](state, prompt)
+            # Dispatch 機制 (階段一) — 支援帶參數指令
+            if _try_dispatch(prompt):
                 continue
 
             if prompt in {"/exit", "/quit"}:
@@ -932,9 +974,8 @@ def shell(
             if prompt.startswith("/") and not prompt.startswith(("/jobs", "/cancel")):
                 wait_for_prompt_worker()
 
-            # Dispatch 機制 (階段一)
-            if prompt in SLASH_HANDLERS:
-                SLASH_HANDLERS[prompt](state, prompt)
+            # Dispatch 機制 (階段一) — 支援帶參數指令
+            if _try_dispatch(prompt):
                 continue
             if prompt == "/help":
                 transcript.write("slash_command", {"command": prompt})
@@ -1101,14 +1142,6 @@ def shell(
                 transcript.write("slash_command", {"command": prompt})
                 print_raw(cancel_jobs(job_queue, value, current_cancel))
                 continue
-            if prompt == "/sessions":
-                transcript.write("slash_command", {"command": prompt})
-                print_sessions(settings)
-                continue
-            if prompt == "/transcript":
-                transcript.write("slash_command", {"command": prompt})
-                console.print(str(transcript.path))
-                continue
             if prompt.startswith("/handoff"):
                 note = prompt.removeprefix("/handoff").strip() or None
                 message = write_handoff(
@@ -1232,15 +1265,6 @@ def shell(
                     continue
                 transcript.write("slash_command", {"command": prompt, "approval": approval_policy.mode.value})
                 print_approval(approval_policy)
-                continue
-            if prompt.startswith("/memory "):
-                query = prompt.removeprefix("/memory ").strip()
-                result = tools.run("memory_search", {"query": query, "namespace": namespace})
-                transcript.write(
-                    "tool",
-                    {"command": "/memory", "query": query, "ok": result.ok, "content": result.content[:2000]},
-                )
-                print_tool_result(result.content if result.ok else f"memory search failed: {result.content}")
                 continue
             if prompt.startswith("/run "):
                 command = prompt.removeprefix("/run ").strip()
