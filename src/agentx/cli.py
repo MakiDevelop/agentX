@@ -1424,10 +1424,6 @@ def shell(
                 transcript.write("slash_command", {"command": prompt, "persona": settings.persona})
                 console.print(f"persona={settings.persona}")
                 continue
-            if prompt == "/status":
-                if "/status" in SLASH_HANDLERS:
-                    SLASH_HANDLERS["/status"](state, prompt)
-                continue
             if prompt == "/clear":
                 agent_session.clear()
                 chat_messages = [

@@ -112,6 +112,15 @@
 - `/task` 指令因為子命令複雜，建議最後再處理。
 - 目前還沒有為 dispatch 寫單元測試，之後建議補上。
 
+### Codex 審查結論（2026-05-18 ff46ffe 批次，review id 019e397e-3535...）
+- **P1（唯一標記）**：`ShellState` 目前不是單一真相來源。
+  - `plan_mode`、`mode`、`settings` 仍是 closure 變數。
+  - `/plan`、`/mode`、`/model`、`/persona` 切換後沒有同步回 `state`，導致後續 handler 依賴 `state.*` 會看到 stale 值。
+  - 影響範圍：`/status` 顯示錯誤 + 未來更多 handler 遷移。
+  - Codex 建議：短期在變更點補 `state.plan_mode = ...` 等同步；中期把 shell runtime 狀態讀寫統一收斂到 `ShellState`。
+- 其他觀察：prefix 匹配安全、lint/test 全過（96 passed）、底部 `/status` 殘留為 dead code 可刪、目前階段「不要一次全搬 40+ 指令」是正確策略。
+- 結論：本次改動 **無 P0**，已通過 Codex 審查；P1 列為已知 technical debt，後續遷移時同步處理。
+
 ---
 
 ## 八、建議的下一個動作
@@ -120,7 +129,9 @@
 2. 每遷移 4~5 個指令就考慮 commit 一次（本次已做 3 個 + dispatch 強化）。
 3. 後續可考慮把 `/clear`、`/doctor` 等舊 if 也抽出 handler（目前 doc 列為「已完成」但實際仍走 fallback）。
 4. 等第一批全部完成後，再評估是否要處理 ToolRegistry 的部分。
-5. 完成階段性 commit 後，依 §2 規則交由 Codex 審查本次 dispatch 改動。
+5. 完成階段性 commit 後，依 §2 規則交由 Codex 審查本次 dispatch 改動（已完成，見 §七 P1 紀錄，無 P0）。
+6. 後續每當遷移涉及 plan_mode / mode / settings 切換的 handler 時，順手補 state 同步（解決 Codex P1）。
+7. 小清理：刪除底部已成 dead code 的 `/status` 殘留 if（可併入下一批 commit）。
 
 ---
 
