@@ -148,10 +148,14 @@
 
 ---
 
-## 目前狀態（啟動時）
+## 目前狀態（2026-05 後更新）
 
-- Phase A 即將啟動（MT22 設計中）。
-- 其餘項目依序解鎖。
+- **Phase A 已完成**：
+  - MT22-A2：Codex review 後的安全修復（遷移守衛 + /task 命令正確性 + ruff 清理）
+  - MT22-A3：handoff、transcript、/status 開始輸出多任務清單摘要（build_handoff 增加 task_summary 參數，所有呼叫點已傳入）
+- 多任務清單現在是互動命令 + 啟動遷移 + 交接摘要的主要來源。
+- Codex review 意見已全部處理並記錄在 `CODEX-REVIEW-MT22-Dual-Task-Unification.md`。
+- 其餘 Phase 依序解鎖。
 - 任何新發現的優化項目，優先塞進對應 Phase，而非破壞順序。
 
 **本 roadmap 由 Claude 負責維護與執行，直到 Maki 另有指示。**

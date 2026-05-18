@@ -535,9 +535,14 @@ def build_handoff(
     transcript: Transcript,
     task: TaskState,
     note: str | None = None,
+    task_summary: str | None = None,
 ) -> str:
     recent = "\n".join(f"- [{item_mode}] {prompt}" for item_mode, prompt in history[-10:])
     note_section = f"\n人類補充：{note}\n" if note else ""
+    task_section = f"task：{task.title or '(none)'} [{task.status}]\n"
+    if task_summary:
+        task_section += f"多任務清單摘要：\n{task_summary}\n"
+
     return (
         f"agentX session handoff\n"
         f"時間：{datetime.now().isoformat(timespec='seconds')}\n"
@@ -545,7 +550,7 @@ def build_handoff(
         f"model：{settings.model}\n"
         f"mode：{mode}\n"
         f"namespace：{namespace}\n"
-        f"task：{task.title or '(none)'} [{task.status}]\n"
+        f"{task_section}"
         f"transcript：{transcript.path}\n"
         f"{note_section}"
         f"最近互動：\n{recent if recent else '- 無使用者任務'}"
@@ -562,6 +567,7 @@ def write_handoff(
     transcript: Transcript,
     task: TaskState,
     note: str | None = None,
+    task_summary: str | None = None,
 ) -> str:
     content = build_handoff(
         settings=settings,
@@ -571,6 +577,7 @@ def write_handoff(
         transcript=transcript,
         task=task,
         note=note,
+        task_summary=task_summary,
     )
     result = tools.run("memory_write", {"content": content, "namespace": namespace})
     if result.ok:
@@ -636,8 +643,13 @@ def shell(
     )
     ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
     task = load_task(settings.workspace)
+    current_tasks = load_tasks(settings.workspace)
+    task_summary = format_task_list_summary(current_tasks)
+
     transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
     transcript.write("task", {"title": task.title, "status": task.status})
+    if current_tasks:
+        transcript.write("tasks", {"count": len(current_tasks), "summary": task_summary})
     agent_session = AgentSession(
         settings=settings,
         ollama=ollama,
@@ -801,6 +813,7 @@ def shell(
                         history=history,
                         transcript=transcript,
                         task=task,
+                        task_summary=task_summary,
                     )
                     transcript.write("handoff", {"auto": True, "result": message})
                     print_raw(f"\n{message}")
@@ -822,6 +835,7 @@ def shell(
                         history=history,
                         transcript=transcript,
                         task=task,
+                        task_summary=task_summary,
                     )
                     transcript.write("handoff", {"auto": True, "result": message})
                     print_raw(message)
@@ -1013,6 +1027,7 @@ def shell(
                     transcript=transcript,
                     task=task,
                     note=note,
+                    task_summary=task_summary,
                 )
                 transcript.write("handoff", {"auto": False, "note": note, "result": message})
                 print_raw(message)
