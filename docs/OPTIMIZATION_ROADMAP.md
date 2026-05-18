@@ -91,25 +91,23 @@
 
 ---
 
-## Phase C: 維護性與一致性
+## Phase C: 維護性與一致性（已完成）
 
 ### C1. 系統 Prompt 統一（MT25）
 
-**問題**：三份極相似的 prompt 分散在 `runtime_prompt.py`，差異只在「headless 要更果斷」等少數段落。
+**已完成**：抽取出多個 `_base_*` 共用區塊 + `_interactive_delta` / `_headless_delta`。
+- 互動與 headless agent prompt 大量共用同一套原則
+- 未來任何工程文化、Reflection Guard、task 原則修改只需改一處
+- Chat prompt 保持獨立（本質不同）
+- 測試 96 passed，行為完全一致（只有刻意差異）
 
-**目標**：
-- 抽 `BASE_AGENT_PRINCIPLES` + `HEADLESS_DELTA` + `INTERACTIVE_DELTA`。
-- 單一函數根據模式產生最終 prompt。
-- 所有原則（安全、workflow、reflection guard、task 使用）只寫一次。
+### C2. Plan Mode → Execute 順暢流程（已完成）
 
-**成功標準**：
-- 任何原則修改只需改一處。
-- 現有 headless / 互動行為完全一致（除了刻意差異）。
-
-### C2. Plan Mode → Execute 順暢流程（MT25 延伸）
-
-- 支援 `--plan-then-execute` 或從 plan transcript 繼續執行。
-- Plan 完成後的 final answer 能被後續執行階段自動解析為初始任務清單。
+- 新增 `--plan-then-execute` flag（headless 最推薦用法）
+- 模型先規劃 + Reflection，規劃足夠好後可直接在同 session 開始執行工具
+- loop 內自動偵測 final plan 並解除 plan guard
+- 互動式 `/plan` + `/execute` + 自然語言觸發已順暢運作
+- 使用者現在可以用單一指令完成「規劃 → 執行」的完整流程
 
 ---
 
