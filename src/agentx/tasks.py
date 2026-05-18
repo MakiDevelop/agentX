@@ -138,13 +138,19 @@ def migrate_single_task_if_needed(workspace: Path) -> bool:
 
     這是雙任務系統統一的過渡措施（MT22）。
     遷移成功後回傳 True；沒有需要遷移或失敗則回傳 False。
+
+    安全守衛（Codex review 後修復）：
+    - 若 tasks.json 已存在（即使 load 後為空），視為「已有新系統」，不進行遷移。
+      這避免 tasks.json 損壞時被舊單一任務覆寫的風險。
     """
-    multi = load_tasks(workspace)
-    if multi:
-        # 已經有多任務清單，優先使用它，不再碰舊檔
+    tasks_file = tasks_path(workspace)
+    old_path = single_task_path(workspace)
+
+    # 關鍵守衛：如果新檔案已經存在（無論內容是否可讀），都不再從舊檔遷移
+    if tasks_file.exists():
         return False
 
-    old_path = single_task_path(workspace)
+    # 此時新檔案完全不存在，才考慮從舊單一任務遷移
     if not old_path.exists():
         return False
 

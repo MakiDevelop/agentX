@@ -38,7 +38,7 @@ from agentx.tasks import (
     save_tasks,
 )
 from agentx.safety import Risk
-from agentx.task import TaskState, clear_task, finish_task, load_task, start_task
+from agentx.task import TaskState, load_task
 from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
 from agentx.transcript import Transcript, find_transcript, list_transcripts, summarize_transcript
 from agentx.tui import AgentXTui, format_assistant_header
@@ -889,14 +889,26 @@ def shell(
                             tid = int(parts[0])
                             new_status = parts[1]
                             new_notes = parts[2] if len(parts) > 2 else None
+
+                            valid_status = {"pending", "in_progress", "done"}
+                            if new_status not in valid_status:
+                                console.print(f"[yellow]無效的 status '{new_status}'，允許值：{valid_status}[/yellow]")
+                                continue
+
+                            found = False
                             for t in tasks:
                                 if t["id"] == tid:
-                                    t["status"] = new_status if new_status in {"pending", "in_progress", "done"} else t["status"]
+                                    t["status"] = new_status
                                     if new_notes is not None:
                                         t["notes"] = new_notes[:500]
+                                    found = True
                                     break
-                            save_tasks(settings.workspace, tasks)
-                            console.print(f"[green]已更新任務 #{tid}[/green]")
+
+                            if found:
+                                save_tasks(settings.workspace, tasks)
+                                console.print(f"[green]已更新任務 #{tid}[/green]")
+                            else:
+                                console.print(f"[yellow]找不到任務 #{tid}[/yellow]")
                         except ValueError:
                             console.print("[red]task id 必須是數字[/red]")
                     continue
@@ -904,12 +916,18 @@ def shell(
                 if value.startswith("done "):
                     try:
                         tid = int(value.removeprefix("done ").strip())
+                        found = False
                         for t in tasks:
                             if t["id"] == tid:
                                 t["status"] = "done"
+                                found = True
                                 break
-                        save_tasks(settings.workspace, tasks)
-                        console.print(f"[green]已完成任務 #{tid}[/green]")
+
+                        if found:
+                            save_tasks(settings.workspace, tasks)
+                            console.print(f"[green]已完成任務 #{tid}[/green]")
+                        else:
+                            console.print(f"[yellow]找不到任務 #{tid}[/yellow]")
                     except ValueError:
                         console.print("[red]task id 必須是數字[/red]")
                     continue

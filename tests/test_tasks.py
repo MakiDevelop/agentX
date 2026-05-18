@@ -6,7 +6,6 @@ from agentx.tasks import (
     load_tasks,
     migrate_single_task_if_needed,
     save_tasks,
-    single_task_path,
     tasks_path,
 )
 
@@ -109,3 +108,31 @@ def test_migrate_does_nothing_if_multi_already_exists(tmp_path: Path):
     multi = load_tasks(tmp_path)
     assert len(multi) == 1
     assert multi[0]["id"] == 99  # 沒有被舊任務覆蓋
+
+
+def test_migrate_bails_if_tasks_json_exists_even_if_corrupt(tmp_path: Path):
+    """即使 tasks.json 存在但損壞，也絕對不要用舊單一任務覆寫（Codex 安全守衛）"""
+    from agentx.task import start_task
+
+    # 建立舊單一任務
+    start_task(tmp_path, "舊任務")
+
+    # 建立一個損壞的 tasks.json
+    tasks_file = tasks_path(tmp_path)
+    tasks_file.parent.mkdir(parents=True, exist_ok=True)
+    tasks_file.write_text("{ this is not valid json", encoding="utf-8")
+
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is False
+
+    # 損壞的檔案必須被保留，不能被覆寫
+    assert tasks_file.exists()
+    # 內容依然是損壞的（我們沒有去修它）
+    assert "not valid json" in tasks_file.read_text()
+
+
+def test_migrate_does_nothing_when_no_old_task(tmp_path: Path):
+    """沒有舊單一任務時不做任何事"""
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is False
+    assert load_tasks(tmp_path) == []
