@@ -194,7 +194,12 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - Shell 啟動流程已調整說明：明確將 `current_tasks` 視為主要來源，`task = load_task(...)` 僅作為 legacy 相容物件保留。
 - Transcript 同時記錄 legacy 與新格式，方便過渡追蹤。
 
-下一步建議：開始調整 `build_runtime` 的回傳型別，減少它對 `TaskState` 的依賴。
+**Step 5 已完成**（本次）：
+- 移除頂層 `task = load_task(settings.workspace)` 變數。
+- 改為局部 `legacy_task` 僅用於過渡期 transcript 記錄。
+- 進一步降低 shell 啟動流程對舊單一任務系統的依賴。
+
+下一步建議：繼續清理 `build_runtime` 相關的 legacy 相依，並考慮移除已無呼叫者的 `print_task` 函式。
 
 **目標**：解決雙任務系統分裂問題，讓 `tasks.py` 多任務清單成為唯一真相來源（Single Source of Truth）。
 

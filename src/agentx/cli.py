@@ -741,17 +741,15 @@ def shell(
     )
     ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
 
-    # 主要使用新多任務清單
+    # 主要使用新多任務清單（MT22）
     current_tasks = load_tasks(settings.workspace)
     task_summary = format_task_list_summary(current_tasks)
 
-    # 僅保留舊的 TaskState 物件是為了相容尚未完全清理的 legacy 函式（build_runtime 等）
-    # 後續步驟會逐步移除對它的依賴
-    task = load_task(settings.workspace)
-
     transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
-    # 同時寫入 legacy 與新格式，方便過渡期追蹤
-    transcript.write("task", {"title": task.title, "status": task.status})
+    # 過渡期仍記錄 legacy 單一任務（如果存在的話），方便除錯與遷移驗證
+    legacy_task = load_task(settings.workspace)
+    if legacy_task.title:
+        transcript.write("task_legacy", {"title": legacy_task.title, "status": legacy_task.status})
     if current_tasks:
         transcript.write("tasks", {"count": len(current_tasks), "summary": task_summary})
     agent_session = AgentSession(
