@@ -201,10 +201,14 @@ Git 閉環群（review → commit → approval）已完整遷移。
 
 **Step 6 已完成**（本次 - F）：
 - 清理 `build_runtime` 相關的 legacy 敘述與心智模型。
-- `build_runtime` 本身早已不回傳 `TaskState`，啟動流程也不再強制建立它。
-- 相關過時註解與 handoff 文件中的建議已同步清除，讓程式碼與文件一致反映「新系統為主」的現況。
 
-下一步建議：移除已無呼叫者的 `print_task` 函式（它仍然帶 `TaskState` 型別，是剩餘的靜態依賴之一）。
+**Step 7 已完成**（本次 - G）：
+- 移除已無呼叫者的 `print_task` 函式。
+- 同步移除 `TaskState` 的 import（cli.py 中對舊單一任務系統的靜態型別依賴進一步降低）。
+
+目前 `cli.py` 對 `TaskState` 的剩餘依賴主要是過渡期的 `load_task` fallback 呼叫。
+
+下一步建議：繼續收斂 fallback 邏輯，或開始處理 `build_runtime` 呼叫者的剩餘 legacy 相依。
 
 **目標**：解決雙任務系統分裂問題，讓 `tasks.py` 多任務清單成為唯一真相來源（Single Source of Truth）。
 

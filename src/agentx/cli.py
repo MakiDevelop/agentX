@@ -40,7 +40,7 @@ from agentx.tasks import (
     save_tasks,
 )
 from agentx.safety import Risk
-from agentx.task import TaskState, load_task
+from agentx.task import load_task
 from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
 from agentx.transcript import Transcript, find_transcript, list_transcripts, summarize_transcript
 from agentx.tui import AgentXTui, format_assistant_header
@@ -359,17 +359,6 @@ def print_approval(policy: ApprovalPolicy) -> None:
     table.add_row("GREEN", "auto allow")
     table.add_row("YELLOW", "ask / auto / off")
     table.add_row("RED", "always block")
-    console.print(table)
-
-
-def print_task(task: TaskState) -> None:
-    table = Table(title="agentX task", show_header=False)
-    table.add_column("Key", style="cyan")
-    table.add_column("Value")
-    table.add_row("title", task.title or "(none)")
-    table.add_row("status", task.status)
-    table.add_row("created_at", task.created_at or "(none)")
-    table.add_row("updated_at", task.updated_at or "(none)")
     console.print(table)
 
 
