@@ -1146,6 +1146,15 @@ def shell(
 
     register_handler("/apply", handle_apply)
 
+    def handle_review(state: ShellState, prompt: str):
+        """收集 git diff + 測試結果，請模型做 findings-first review（繁體中文）"""
+        transcript.write("slash_command", {"command": prompt})
+        output = run_review(ollama, tools)
+        transcript.write("review", {"content": output[:4000]})
+        print_raw(output)
+
+    register_handler("/review", handle_review)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:

@@ -159,9 +159,10 @@
 - /attach
 - /git
 - /diff
-- /apply   ← Wave 1.3（本次新增，Git 工程工作流核心）
+- /apply
+- /review   ← Wave 1.4（Git 閉環群第一個：findings-first review）
 
-模式良好。已完成 18 個。下一批建議繼續 /review、/commit、/approval（同屬 Git 閉環），或 /plan /execute 模式切換群。
+已完成 19 個。Git 閉環群進行中（review 已上，接下來 /commit + /approval）。
 
 ---
 
