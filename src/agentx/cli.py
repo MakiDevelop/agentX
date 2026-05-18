@@ -1453,11 +1453,12 @@ def shell(
                 console.print(f"persona={state.settings.persona}")
                 continue
             if prompt == "/clear":
-                agent_session.clear()
+                if state.agent_session:
+                    state.agent_session.clear()
                 chat_messages = [
                     {
                         "role": "system",
-                        "content": build_chat_system_prompt(settings.workspace, settings.persona),
+                        "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona),
                     }
                 ]
                 transcript.write("slash_command", {"command": prompt})
