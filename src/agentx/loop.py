@@ -336,11 +336,14 @@ class AgentSession:
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
 
     def clear(self) -> None:
-        self.messages = self._initial_messages()
+        """完整重置（包含 tasks）。僅供需要完全重置的場合使用。"""
+        self.clear_context()
         self.tasks = []
-        save_tasks(self.settings.workspace, self.tasks)  # Micro-task 21: 自動持久化
+        save_tasks(self.settings.workspace, self.tasks)
 
-        # 重置錯誤狀態
+    def clear_context(self) -> None:
+        """只重置對話上下文與錯誤狀態，不影響 tasks。/clear slash command 應使用此方法。"""
+        self.messages = self._initial_messages()
         self.error_history = []
         self.current_error = None
 

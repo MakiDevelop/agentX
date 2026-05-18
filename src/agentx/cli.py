@@ -1454,7 +1454,7 @@ def shell(
                 continue
             if prompt == "/clear":
                 if state.agent_session:
-                    state.agent_session.clear()
+                    state.agent_session.clear_context()   # 只清上下文，不清 tasks（符合 /clear 常見語意）
                 chat_messages = [
                     {
                         "role": "system",
