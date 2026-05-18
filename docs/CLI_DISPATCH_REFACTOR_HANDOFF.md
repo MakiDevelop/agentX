@@ -160,10 +160,11 @@
 - /git
 - /diff
 - /apply
-- /review   ← Wave 1.4（Git 閉環群第一個：findings-first review）
-- /commit   ← Wave 1.5（Git 閉環核心：測試 → stage → 中文 commit + push）
+- /review   ← Wave 1.4
+- /commit   ← Wave 1.5
+- /approval ← Wave 1.6（Git 閉環群最後一個：YELLOW 工具審核政策切換）
 
-已完成 20 個。Git 閉環群接近完成（剩 /approval）。
+Git 閉環群（review → commit → approval）已完整遷移。已完成 21 個。
 
 ---
 

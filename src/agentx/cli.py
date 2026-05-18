@@ -1165,6 +1165,24 @@ def shell(
 
     register_handler("/commit", handle_commit)
 
+    def handle_approval(state: ShellState, prompt: str):
+        """查看或切換 YELLOW 工具的 approval policy（ask / auto / off）"""
+        if prompt == "/approval":
+            transcript.write("slash_command", {"command": prompt})
+            print_approval(approval_policy)
+            return
+
+        mode_value = prompt.removeprefix("/approval ").strip()
+        try:
+            approval_policy.mode = ApprovalMode(mode_value)
+        except ValueError:
+            print_raw("usage: /approval ask|auto|off")
+            return
+        transcript.write("slash_command", {"command": prompt, "approval": approval_policy.mode.value})
+        print_approval(approval_policy)
+
+    register_handler("/approval", handle_approval)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
