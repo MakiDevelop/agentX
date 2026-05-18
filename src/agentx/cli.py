@@ -974,6 +974,14 @@ def shell(
 
     register_handler("/jobs", handle_jobs)
 
+    def handle_cancel(state: ShellState, prompt: str):
+        """取消 queued 或 current job"""
+        value = prompt.removeprefix("/cancel").strip() or None
+        transcript.write("slash_command", {"command": prompt})
+        print_raw(cancel_jobs(job_queue, value, current_cancel))
+
+    register_handler("/cancel", handle_cancel)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1179,11 +1187,6 @@ def shell(
                 result = agent_session.compact()
                 transcript.write("compact", {"result": result})
                 print_raw(result)
-                continue
-            if prompt.startswith("/cancel"):
-                value = prompt.removeprefix("/cancel").strip() or None
-                transcript.write("slash_command", {"command": prompt})
-                print_raw(cancel_jobs(job_queue, value, current_cancel))
                 continue
             if prompt.startswith("/handoff"):
                 note = prompt.removeprefix("/handoff").strip() or None
