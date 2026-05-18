@@ -43,6 +43,25 @@ from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_co
 from agentx.transcript import Transcript, find_transcript, list_transcripts, summarize_transcript
 from agentx.tui import AgentXTui, format_assistant_header
 
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from agentx.loop import AgentSession
+    from agentx.config import Settings
+
+
+@dataclass
+class ShellState:
+    """管理互動式 shell 的狀態（階段一基礎版）"""
+    settings: "Settings"
+    agent_session: "AgentSession | None" = None
+    plan_mode: bool = False
+    mode: str = "chat"           # "chat" 或 "agent"
+    namespace: str = "project:agentX"
+    compaction_count: int = 0
+
+
 app = typer.Typer(
     help="agentX local Ollama agent shell.",
     no_args_is_help=True,
@@ -655,6 +674,13 @@ def shell(
     namespace = namespace or project_config.namespace or "project:agentX"
     mode = mode or project_config.mode or "chat"
 
+    # === 階段一：建立 ShellState（必須在任何 command 處理之前） ===
+    state = ShellState(
+        settings=settings,
+        namespace=namespace,
+        mode=mode,
+    )
+
     # Phase A (MT22): 自動從舊單一任務遷移到多任務清單（只在第一次需要時發生）
     migrate_single_task_if_needed(settings.workspace)
     approval_policy = ApprovalPolicy(
@@ -676,6 +702,7 @@ def shell(
         namespace=namespace,
         trace=print_trace,
     )
+    state.agent_session = agent_session
     chat_messages = [
         {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)}
     ]
@@ -811,6 +838,30 @@ def shell(
         )
     )
 
+    # === 階段一 Dispatch 相關函數 ===
+    SLASH_HANDLERS: dict[str, Callable[[ShellState, str], None]] = {}
+
+    def register_handler(command: str, handler: Callable[[ShellState, str], None]):
+        SLASH_HANDLERS[command] = handler
+
+    def handle_status(state: ShellState, prompt: str):
+        """顯示目前 shell 狀態"""
+        transcript.write("slash_command", {"command": prompt})
+        approx_tokens = state.agent_session.context_chars // 4 if state.agent_session else 0
+        plan_status = format_plan_status(state.plan_mode)
+        console.print(
+            f"model={state.settings.model} "
+            f"mode={state.mode} "
+            f"namespace={state.namespace} "
+            f"persona={state.settings.persona} "
+            f"plan={plan_status} "
+            f"agent_messages={state.agent_session.message_count if state.agent_session else 0} "
+            f"agent_context~{approx_tokens} tokens "
+            f"chat_messages={len(chat_messages)}"
+        )
+
+    register_handler("/status", handle_status)
+
     try:
         while True:
             try:
@@ -843,6 +894,12 @@ def shell(
                 continue
             if prompt_session is not None:
                 print_block(f"agentX: {prompt}")
+
+            # Dispatch 機制 (階段一)
+            if prompt in SLASH_HANDLERS:
+                SLASH_HANDLERS[prompt](state, prompt)
+                continue
+
             if prompt in {"/exit", "/quit"}:
                 wait_for_prompt_worker()
                 if history and settings.auto_handoff:
@@ -862,6 +919,11 @@ def shell(
                 break
             if prompt.startswith("/") and not prompt.startswith(("/jobs", "/cancel")):
                 wait_for_prompt_worker()
+
+            # Dispatch 機制 (階段一)
+            if prompt in SLASH_HANDLERS:
+                SLASH_HANDLERS[prompt](state, prompt)
+                continue
             if prompt == "/help":
                 transcript.write("slash_command", {"command": prompt})
                 print_slash_help()
@@ -1327,15 +1389,8 @@ def shell(
                 console.print(f"persona={settings.persona}")
                 continue
             if prompt == "/status":
-                transcript.write("slash_command", {"command": prompt})
-                approx_tokens = agent_session.context_chars // 4
-                plan_status = format_plan_status(plan_mode)
-                console.print(
-                    f"model={settings.model} mode={mode} namespace={namespace} "
-                    f"persona={settings.persona} plan={plan_status} "
-                    f"agent_messages={agent_session.message_count} "
-                    f"agent_context~{approx_tokens} tokens chat_messages={len(chat_messages)}"
-                )
+                if "/status" in SLASH_HANDLERS:
+                    SLASH_HANDLERS["/status"](state, prompt)
                 continue
             if prompt == "/clear":
                 agent_session.clear()
