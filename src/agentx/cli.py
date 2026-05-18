@@ -982,6 +982,22 @@ def shell(
 
     register_handler("/cancel", handle_cancel)
 
+    def handle_clear(state: ShellState, prompt: str):
+        """清空目前 shell 上下文（不影響 tasks）"""
+        nonlocal chat_messages
+        if state.agent_session:
+            state.agent_session.clear_context()
+        chat_messages[:] = [
+            {
+                "role": "system",
+                "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona),
+            }
+        ]
+        transcript.write("slash_command", {"command": prompt})
+        console.print("cleared")
+
+    register_handler("/clear", handle_clear)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1479,19 +1495,6 @@ def shell(
                 transcript.write("slash_command", {"command": prompt, "persona": state.settings.persona})
                 console.print(f"persona={state.settings.persona}")
                 continue
-            if prompt == "/clear":
-                if state.agent_session:
-                    state.agent_session.clear_context()   # 只清上下文，不清 tasks（符合 /clear 常見語意）
-                chat_messages = [
-                    {
-                        "role": "system",
-                        "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona),
-                    }
-                ]
-                transcript.write("slash_command", {"command": prompt})
-                console.print("cleared")
-                continue
-
             # Natural language trigger for execute when in plan mode
             if state.plan_mode and is_natural_execute_trigger(prompt):
                 state.set_plan_mode(False)
