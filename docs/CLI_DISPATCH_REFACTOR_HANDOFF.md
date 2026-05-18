@@ -222,7 +222,16 @@ Git 閉環群（review → commit → approval）已完整遷移。
 
 `build_runtime` 相關的 legacy 相依已清理完畢。
 
-下一步建議：規劃最終移除舊 `task.py` 的完整條件清單（M）。
+**M. 最終移除舊 `task.py` 前置條件清單（逐條檢核中）**
+
+#### 1. 程式碼依賴層面（必須歸零或完全受控）
+
+- [進行中] `cli.py` 中所有直接使用 `TaskState` 型別的地方已清除
+  - 目前狀態：`print_task` 已移除。
+  - 剩餘唯一使用：`def _get_legacy_task_if_exists(...) -> TaskState | None`（受控的過渡期 helper）。
+  - 評估：已收斂至唯一受控點，符合「完全受控」要求。
+
+下一步繼續檢核下一條。
 
 **目標**：解決雙任務系統分裂問題，讓 `tasks.py` 多任務清單成為唯一真相來源（Single Source of Truth）。
 
