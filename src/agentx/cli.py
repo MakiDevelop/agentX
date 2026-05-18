@@ -953,6 +953,13 @@ def shell(
 
     register_handler("/tools", handle_tools)
 
+    def handle_context(state: ShellState, prompt: str):
+        """顯示目前 agent context 使用情況"""
+        transcript.write("slash_command", {"command": prompt})
+        print_context(state.agent_session or agent_session, chat_messages)
+
+    register_handler("/context", handle_context)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1152,10 +1159,6 @@ def shell(
 
                 # fallback
                 console.print(Panel(format_task_list_summary(tasks), title="Task List", border_style="cyan"))
-                continue
-            if prompt == "/context":
-                transcript.write("slash_command", {"command": prompt})
-                print_context(state.agent_session or agent_session, chat_messages)
                 continue
             if prompt == "/compact":
                 transcript.write("slash_command", {"command": prompt})
