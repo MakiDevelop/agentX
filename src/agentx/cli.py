@@ -954,12 +954,12 @@ def shell(
                         prompt = prompt_session.prompt("agentX: ").strip()
             except (EOFError, KeyboardInterrupt):
                 wait_for_prompt_worker()
-                if history and settings.auto_handoff:
+                if history and state.settings.auto_handoff:
                     message = write_handoff(
                         tools,
-                        settings=settings,
-                        namespace=namespace,
-                        mode=mode,
+                        settings=state.settings,
+                        namespace=state.namespace,
+                        mode=state.mode,
                         history=history,
                         transcript=transcript,
                         task=task,
@@ -981,12 +981,12 @@ def shell(
 
             if prompt in {"/exit", "/quit"}:
                 wait_for_prompt_worker()
-                if history and settings.auto_handoff:
+                if history and state.settings.auto_handoff:
                     message = write_handoff(
                         tools,
-                        settings=settings,
-                        namespace=namespace,
-                        mode=mode,
+                        settings=state.settings,
+                        namespace=state.namespace,
+                        mode=state.mode,
                         history=history,
                         transcript=transcript,
                         task=task,
