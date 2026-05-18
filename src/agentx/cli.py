@@ -617,15 +617,22 @@ def build_handoff(
     mode: str,
     history: list[tuple[str, str]],
     transcript: Transcript,
-    task: TaskState,
+    tasks: list[dict] | None = None,
     note: str | None = None,
     task_summary: str | None = None,
 ) -> str:
     recent = "\n".join(f"- [{item_mode}] {prompt}" for item_mode, prompt in history[-10:])
     note_section = f"\n人類補充：{note}\n" if note else ""
-    task_section = f"task：{task.title or '(none)'} [{task.status}]\n"
-    if task_summary:
-        task_section += f"多任務清單摘要：\n{task_summary}\n"
+
+    # MT22: 優先使用新多任務清單
+    if tasks:
+        task_section = f"多任務清單：\n{format_task_list_summary(tasks, max_active=8)}\n"
+    elif task_summary:
+        task_section = f"多任務清單摘要：\n{task_summary}\n"
+    else:
+        # 過渡期相容舊單一任務
+        legacy = load_task(settings.workspace)
+        task_section = f"task（legacy）：{legacy.title or '(none)'} [{legacy.status}]\n"
 
     return (
         f"agentX session handoff\n"
@@ -649,7 +656,7 @@ def write_handoff(
     mode: str,
     history: list[tuple[str, str]],
     transcript: Transcript,
-    task: TaskState,
+    tasks: list[dict] | None = None,
     note: str | None = None,
     task_summary: str | None = None,
 ) -> str:
@@ -659,7 +666,7 @@ def write_handoff(
         mode=mode,
         history=history,
         transcript=transcript,
-        task=task,
+        tasks=tasks,
         note=note,
         task_summary=task_summary,
     )
@@ -1020,7 +1027,7 @@ def shell(
             mode=state.mode,
             history=history,
             transcript=transcript,
-            task=task,
+            tasks=current_tasks,
             note=note,
             task_summary=task_summary,
         )
@@ -1549,7 +1556,7 @@ def shell(
                         mode=state.mode,
                         history=history,
                         transcript=transcript,
-                        task=task,
+                        tasks=current_tasks,
                         task_summary=task_summary,
                     )
                     transcript.write("handoff", {"auto": True, "result": message})
@@ -1576,7 +1583,7 @@ def shell(
                         mode=state.mode,
                         history=history,
                         transcript=transcript,
-                        task=task,
+                        tasks=current_tasks,
                         task_summary=task_summary,
                     )
                     transcript.write("handoff", {"auto": True, "result": message})

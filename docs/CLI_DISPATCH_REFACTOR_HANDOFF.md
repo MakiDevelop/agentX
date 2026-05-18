@@ -184,11 +184,13 @@ Git 閉環群（review → commit → approval）已完整遷移。
 ## 進入 B 階段：Phase A 雙任務統一（MT22）
 
 **Step 2 已完成**：
-- `print_config` 已改寫為主要依賴新多任務清單（`load_tasks` + `format_task_list_summary`）。
-- 保留過渡期對舊單一任務的相容顯示。
-- 兩個 `/config` 呼叫點已更新，不再傳入 `TaskState`。
+- `print_config` 已改寫為主要依賴新多任務清單。
 
-下一步建議：繼續清理其他依賴 `TaskState` 的地方（`build_handoff`、啟動流程中的 `task` 變數、`print_task` 等）。
+**Step 3 已完成**：
+- `build_handoff` / `write_handoff` 已改寫為接受 `tasks: list[dict]`，優先顯示新多任務清單。
+- 三處 handoff 寫入點（含 auto-handoff）已更新傳入 `current_tasks`。
+
+下一步建議：處理 shell 啟動流程中的 `task = load_task(...)` 變數，以及 `build_runtime` 的回傳型別。
 
 **目標**：解決雙任務系統分裂問題，讓 `tasks.py` 多任務清單成為唯一真相來源（Single Source of Truth）。
 
