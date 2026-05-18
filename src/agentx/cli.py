@@ -1106,7 +1106,7 @@ def shell(
                     continue
 
                 if value == "clear":
-                    save_tasks(settings.workspace, [])
+                    save_tasks(state.settings.workspace, [])
                     console.print("[yellow]已清空所有任務清單[/yellow]")
                     continue
 
@@ -1123,7 +1123,7 @@ def shell(
                         "notes": "[來自 /task 舊式語法]",
                     }
                     tasks.append(new_task)
-                    save_tasks(settings.workspace, tasks)
+                    save_tasks(state.settings.workspace, tasks)
                     console.print(f"[green]已新增任務 #{new_task['id']}: {value}[/green]（建議之後用 /task add 或 /task update 管理）")
                     continue
 
@@ -1132,11 +1132,11 @@ def shell(
                 continue
             if prompt == "/doctor":
                 transcript.write("slash_command", {"command": prompt})
-                print_doctor(settings, memory, ollama)
+                print_doctor(state.settings, memory, ollama)
                 continue
             if prompt == "/init":
                 transcript.write("slash_command", {"command": prompt})
-                output = run_init(settings, tools, namespace)
+                output = run_init(state.settings, tools, state.namespace)
                 transcript.write("init", {"content": output[:4000]})
                 print_raw(output)
                 continue
@@ -1146,7 +1146,7 @@ def shell(
                 continue
             if prompt == "/context":
                 transcript.write("slash_command", {"command": prompt})
-                print_context(agent_session, chat_messages)
+                print_context(state.agent_session or agent_session, chat_messages)
                 continue
             if prompt == "/compact":
                 transcript.write("slash_command", {"command": prompt})
@@ -1171,9 +1171,9 @@ def shell(
                 note = prompt.removeprefix("/handoff").strip() or None
                 message = write_handoff(
                     tools,
-                    settings=settings,
-                    namespace=namespace,
-                    mode=mode,
+                    settings=state.settings,
+                    namespace=state.namespace,
+                    mode=state.mode,
                     history=history,
                     transcript=transcript,
                     task=task,
@@ -1185,7 +1185,7 @@ def shell(
                 continue
             if prompt.startswith("/resume"):
                 name = prompt.removeprefix("/resume").strip() or "latest"
-                resume_path = find_transcript(settings.workspace, name)
+                resume_path = find_transcript(state.settings.workspace, name)
                 if resume_path is None:
                     console.print(f"transcript not found: {name}")
                     continue
