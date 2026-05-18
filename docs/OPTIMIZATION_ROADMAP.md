@@ -154,12 +154,12 @@
   - 雙任務統一 + Codex 修復 + handoff 豐富化
 - **Phase B1 已完成**（MT23）：
   - Context Compaction v2 基礎 + 穩定性打磨（自動觸發、DI、bootstrap 保護）
-- **Phase B2 已開路**（MT24）：
-  - 新增獨立 `RecoveryPlaybook` 模組
-  - 擴充 RecoveryAction（新增 SIMPLIFY_SCOPE、VERIFY_ASSUMPTION、ABANDON_AND_RESTART 等）
-  - STUCK 介入訊息大幅結構化，建議更有優先序與信心值
-  - 恢復策略從「散落經驗法則」變成可維護的 playbook
-  - 測試從 91 → 94 passed
+- **Phase B2 已大幅完成**（MT24）：
+  - `RecoveryPlaybook` 成熟化：支援同檔案連續失敗、工具震盪偵測、任務感知建議
+  - 擴充 RecoveryAction + RecoveryRecord（可觀測上次建議）
+  - STUCK 訊息極度結構化，對弱模型更友好
+  - 測試 96 passed（5 個恢復專用測試）
+  - 為未來「記錄恢復效果 → 學習 playbook」鋪好基礎
 - 測試 91 passed，ruff 乾淨。
 - Codex review 意見已全部處理並記錄在 `CODEX-REVIEW-MT22-Dual-Task-Unification.md`。
 - 其餘 Phase 依序解鎖。

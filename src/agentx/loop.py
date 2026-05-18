@@ -492,6 +492,13 @@ class AgentSession:
             "compactions": self.compaction_count,
         }
 
+    @property
+    def last_recovery_suggestions(self) -> list[str]:
+        """Phase B2：上次錯誤恢復建議（供 /status 或 transcript 觀測）"""
+        if self.recovery_playbook.last_record:
+            return self.recovery_playbook.last_record.suggested_actions
+        return []
+
     def compact(self, keep_last: int = 6) -> str:
         """
         Context Compaction v2（Phase B1）。
