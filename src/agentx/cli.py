@@ -998,6 +998,25 @@ def shell(
 
     register_handler("/clear", handle_clear)
 
+    def handle_handoff(state: ShellState, prompt: str):
+        """寫入 Memory Hall 交接摘要"""
+        note = prompt.removeprefix("/handoff").strip() or None
+        message = write_handoff(
+            tools,
+            settings=state.settings,
+            namespace=state.namespace,
+            mode=state.mode,
+            history=history,
+            transcript=transcript,
+            task=task,
+            note=note,
+            task_summary=task_summary,
+        )
+        transcript.write("handoff", {"auto": False, "note": note, "result": message})
+        print_raw(message)
+
+    register_handler("/handoff", handle_handoff)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1203,22 +1222,6 @@ def shell(
                 result = agent_session.compact()
                 transcript.write("compact", {"result": result})
                 print_raw(result)
-                continue
-            if prompt.startswith("/handoff"):
-                note = prompt.removeprefix("/handoff").strip() or None
-                message = write_handoff(
-                    tools,
-                    settings=state.settings,
-                    namespace=state.namespace,
-                    mode=state.mode,
-                    history=history,
-                    transcript=transcript,
-                    task=task,
-                    note=note,
-                    task_summary=task_summary,
-                )
-                transcript.write("handoff", {"auto": False, "note": note, "result": message})
-                print_raw(message)
                 continue
             if prompt.startswith("/resume"):
                 name = prompt.removeprefix("/resume").strip() or "latest"
