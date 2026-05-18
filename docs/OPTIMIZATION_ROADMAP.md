@@ -150,10 +150,17 @@
 
 ## 目前狀態（2026-05 後更新）
 
-- **Phase A 已完成**：
-  - MT22-A2：Codex review 後的安全修復（遷移守衛 + /task 命令正確性 + ruff 清理）
-  - MT22-A3：handoff、transcript、/status 開始輸出多任務清單摘要（build_handoff 增加 task_summary 參數，所有呼叫點已傳入）
-- 多任務清單現在是互動命令 + 啟動遷移 + 交接摘要的主要來源。
+- **Phase A 已完成**（MT22 全系列）：
+  - 雙任務統一 + Codex 修復 + handoff 豐富化
+- **Phase B1 已完成**（MT23）：
+  - Context Compaction v2 基礎 + 穩定性打磨（自動觸發、DI、bootstrap 保護）
+- **Phase B2 已開路**（MT24）：
+  - 新增獨立 `RecoveryPlaybook` 模組
+  - 擴充 RecoveryAction（新增 SIMPLIFY_SCOPE、VERIFY_ASSUMPTION、ABANDON_AND_RESTART 等）
+  - STUCK 介入訊息大幅結構化，建議更有優先序與信心值
+  - 恢復策略從「散落經驗法則」變成可維護的 playbook
+  - 測試從 91 → 94 passed
+- 測試 91 passed，ruff 乾淨。
 - Codex review 意見已全部處理並記錄在 `CODEX-REVIEW-MT22-Dual-Task-Unification.md`。
 - 其餘 Phase 依序解鎖。
 - 任何新發現的優化項目，優先塞進對應 Phase，而非破壞順序。

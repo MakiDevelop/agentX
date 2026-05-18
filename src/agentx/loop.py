@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
 from agentx.context_compactor import ContextCompactor, HeuristicContextCompactor
+from agentx.recovery import RecoveryPlaybook
 from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
 from agentx.errors import ErrorContext, ErrorType, RecoveryAction, RecoverySuggestion
@@ -88,6 +89,9 @@ class AgentSession:
 
         # Context Compaction v2（Phase B1）
         self.compactor: ContextCompactor = compactor or HeuristicContextCompactor()
+
+        # Phase B2：錯誤恢復策略成熟化
+        self.recovery_playbook = RecoveryPlaybook()
 
         self.messages = self._initial_messages()
 
@@ -428,71 +432,44 @@ class AgentSession:
         return same_tool and same_type
 
     def _build_stuck_intervention_message(self, error_ctx: ErrorContext) -> str:
-        """當偵測到 STUCK 時，給予強烈介入訊息，並附上恢復建議"""
+        """
+        Phase B2 成熟化版本：
+        當偵測到 STUCK 時，給予更結構化、更有行動力的介入訊息。
+        """
         suggestions = self._generate_recovery_suggestions(error_ctx)
 
-        suggestion_text = ""
+        suggestion_block = ""
         if suggestions:
-            suggestion_text = "\n\n系統建議的恢復方向：\n"
+            suggestion_block = "\n\n【系統建議的恢復選項（由高到低優先）】\n"
             for i, s in enumerate(suggestions, 1):
-                suggestion_text += f"{i}. [{s.action.value}] {s.description}\n"
+                suggestion_block += (
+                    f"{i}. **{s.action.value}**（信心 {s.confidence:.0%}）\n"
+                    f"   {s.description}\n"
+                    f"   理由：{s.rationale}\n\n"
+                )
 
         return (
-            f"【⚠️ STUCK 偵測】\n"
-            f"你已經連續多次在工具 `{error_ctx.tool_name}` 上遇到相同類型的錯誤（{error_ctx.error_type.value}）。\n"
-            f"這表示目前的做法很可能有問題。\n\n"
-            "請立即停止重複相同行為，並進行深度 Reflection：\n"
-            "- 為什麼一直失敗？\n"
-            "- 是否需要大幅改變策略？\n"
-            "- 是否應該回退之前的修改？\n"
-            "- 是否需要請求人類協助？"
-            f"{suggestion_text}\n"
-            "建議現在輸出 reflect，並認真思考恢復方案。"
+            f"【⚠️ STUCK 偵測 - 請立即介入】\n"
+            f"你已經在工具 `{error_ctx.tool_name}` 上連續遇到相同類型錯誤（{error_ctx.error_type.value}）多次。\n"
+            f"這強烈表示目前的策略有根本問題。\n\n"
+            "請**立刻停止**重複相同操作，並進行一次認真的 Reflection。\n"
+            "在 Reflection 中請明確回答：\n"
+            "1. 目前卡住的核心假設是什麼？\n"
+            "2. 你接下來要採取哪一個恢復動作？\n"
+            f"{suggestion_block}"
+            "強烈建議現在輸出 reflect，並在 focus 中寫明你選擇的恢復方向。"
         )
 
     def _generate_recovery_suggestions(self, error_ctx: ErrorContext) -> list[RecoverySuggestion]:
-        """根據錯誤上下文產生恢復建議（階段二初始版本）"""
-        suggestions: list[RecoverySuggestion] = []
-        recent_errors = self.error_history[-5:] if self.error_history else []
-
-        # 情況 1: 同一個工具連續失敗多次 → 建議回退
-        same_tool_failures = sum(1 for e in recent_errors if e.tool_name == error_ctx.tool_name)
-        if same_tool_failures >= 3:
-            suggestions.append(RecoverySuggestion(
-                action=RecoveryAction.BACKTRACK,
-                description=f"建議回退最近對 `{error_ctx.tool_name}` 的修改，檢查是否有破壞性變更。",
-                rationale="同一個工具連續失敗多次，通常表示最後幾次修改有問題。",
-                confidence=0.8
-            ))
-
-        # 情況 2: EXECUTION_ERROR + 多次失敗 → 建議改變策略
-        if error_ctx.error_type == ErrorType.EXECUTION_ERROR and same_tool_failures >= 2:
-            suggestions.append(RecoverySuggestion(
-                action=RecoveryAction.CHANGE_STRATEGY,
-                description="目前直接修改程式碼的方式似乎不順利，建議先寫測試或先做更小的步驟再修改。",
-                rationale="執行錯誤連續發生時，直接修改容易陷入試錯迴圈。",
-                confidence=0.7
-            ))
-
-        # 情況 3: 錯誤次數很多 → 建議人類介入
-        if len(self.error_history) >= 6:
-            suggestions.append(RecoverySuggestion(
-                action=RecoveryAction.ESCALATE_TO_USER,
-                description="系統已多次嘗試恢復但未成功，建議將目前任務狀態、錯誤歷史摘要整理後請求人類協助。",
-                rationale="長時間卡住且多次恢復失敗時，人類介入通常是最有效的方式。",
-                confidence=0.9
-            ))
-
-        # 預設建議（如果上面都沒觸發）
-        if not suggestions:
-            suggestions.append(RecoverySuggestion(
-                action=RecoveryAction.REFLECT_AND_ADJUST,
-                description="請進行深度 Reflection，分析為什麼會持續失敗，並提出明確的下一步策略。",
-                rationale="一般情況下的保守建議。",
-                confidence=0.5
-            ))
-
-        return suggestions[:3]  # 最多給 3 個建議，避免提示過長
+        """
+        Phase B2 成熟化版本：委派給 RecoveryPlaybook。
+        產生更有系統性、更有優先序的恢復建議。
+        """
+        return self.recovery_playbook.generate_suggestions(
+            error_ctx,
+            self.error_history,
+            tasks=self.tasks,
+        )  # 最多給 3 個建議，避免提示過長
 
     @property
     def message_count(self) -> int:
