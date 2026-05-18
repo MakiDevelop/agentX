@@ -166,10 +166,11 @@
 
 Git 閉環群（review → commit → approval）已完整遷移。
 
-**Wave 1.7 開始（模式切換群）**：
-- /plan + /execute 已遷移（核心 plan-then-execute 體驗）
+**Wave 1.7（模式切換群）**：
+- /plan + /execute 已遷移
+- /mode、/models、/model、/persona 已遷移
 
-已完成 23 個。下一批：/mode、/model、/persona。
+模式切換群全部完成。已完成 27 個。
 
 ---
 

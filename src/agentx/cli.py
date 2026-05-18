@@ -1221,6 +1221,97 @@ def shell(
 
     register_handler("/execute", handle_execute)
 
+    def handle_mode(state: ShellState, prompt: str):
+        """切換 chat / agent 模式"""
+        next_mode = prompt.removeprefix("/mode ").strip()
+        try:
+            state.set_chat_mode(next_mode)
+        except ValueError:
+            print_raw("mode must be chat or agent")
+            return
+        transcript.write("slash_command", {"command": prompt, "mode": state.mode})
+        console.print(f"mode={state.mode}")
+
+    register_handler("/mode", handle_mode)
+
+    def handle_models(state: ShellState, prompt: str):
+        """列出目前 Ollama 可用模型"""
+        transcript.write("slash_command", {"command": prompt})
+        try:
+            models = ollama.list_models()
+        except Exception as exc:
+            print_raw(f"models failed: {type(exc).__name__}: {exc}")
+            return
+        print_tool_result("\n".join(models))
+
+    register_handler("/models", handle_models)
+
+    def handle_model(state: ShellState, prompt: str):
+        """查看或切換目前使用的模型"""
+        if prompt == "/model":
+            transcript.write("slash_command", {"command": prompt, "model": state.settings.model})
+            console.print(f"model={state.settings.model}")
+            console.print("usage: /model MODEL")
+            console.print("example: /model gemma4:31b")
+            console.print("list models: /models")
+            return
+
+        # /model <name>
+        model = prompt.removeprefix("/model ").strip()
+        if not model:
+            print_raw("usage: /model gemma4:e2b")
+            return
+
+        new_settings = state.update_settings(model=model)
+
+        # 切換模型需要重建 OllamaClient（外部相依）
+        nonlocal ollama
+        ollama = OllamaClient(
+            base_url=new_settings.ollama_url,
+            model=new_settings.model,
+            timeout=new_settings.ollama_timeout,
+        )
+        if state.agent_session:
+            state.agent_session.ollama = ollama
+
+        transcript.write("slash_command", {"command": prompt, "model": new_settings.model})
+        console.print(f"model={new_settings.model}")
+
+    register_handler("/model", handle_model)
+
+    def handle_persona(state: ShellState, prompt: str):
+        """查看或切換人格（default / tutor）"""
+        if prompt == "/persona":
+            transcript.write("slash_command", {"command": prompt, "persona": state.settings.persona})
+            console.print(f"persona={state.settings.persona}")
+            print_raw(list_personas())
+            return
+
+        value = prompt.removeprefix("/persona ").strip()
+        try:
+            persona = normalize_persona(value)
+        except ValueError as exc:
+            print_raw(str(exc))
+            return
+
+        state.set_persona(persona)
+
+        if state.agent_session:
+            state.agent_session.clear()
+
+        nonlocal chat_messages
+        chat_messages = [
+            {
+                "role": "system",
+                "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona),
+            }
+        ]
+
+        transcript.write("slash_command", {"command": prompt, "persona": state.settings.persona})
+        console.print(f"persona={state.settings.persona}")
+
+    register_handler("/persona", handle_persona)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
