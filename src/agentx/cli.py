@@ -64,6 +64,32 @@ class ShellState:
     namespace: str = "project:agentX"
     compaction_count: int = 0
 
+    # === Wave 0：狀態統一方法（ShellState 成為單一真相來源）===
+
+    def set_plan_mode(self, enabled: bool) -> None:
+        """切換 plan / execute 模式，並同步到 agent_session。"""
+        self.plan_mode = enabled
+        if self.agent_session is not None:
+            self.agent_session.plan_only = enabled
+
+    def set_chat_mode(self, new_mode: str) -> None:
+        """切換 chat / agent 模式。"""
+        if new_mode not in {"chat", "agent"}:
+            raise ValueError("mode must be 'chat' or 'agent'")
+        self.mode = new_mode
+
+    def update_settings(self, **kwargs) -> "Settings":
+        """更新 settings 並回傳新設定（同時更新 agent_session 上的引用）。"""
+        new_settings = self.settings.with_updates(**kwargs)
+        self.settings = new_settings
+        if self.agent_session is not None:
+            self.agent_session.settings = new_settings
+        return new_settings
+
+    def set_persona(self, persona: str) -> None:
+        """切換人格，並同步更新 agent_session + 強制清空上下文（由呼叫端決定是否重建 chat_messages）。"""
+        self.update_settings(persona=persona)
+
 
 app = typer.Typer(
     help="agentX local Ollama agent shell.",
@@ -1323,18 +1349,17 @@ def shell(
                 print_raw(output)
                 continue
             if prompt == "/plan":
-                plan_mode = not plan_mode
-                agent_session.plan_only = plan_mode
-                transcript.write("slash_command", {"command": prompt, "plan": plan_mode})
-                status = format_plan_status(plan_mode)
+                new_plan = not state.plan_mode
+                state.set_plan_mode(new_plan)
+                transcript.write("slash_command", {"command": prompt, "plan": new_plan})
+                status = format_plan_status(state.plan_mode)
                 console.print(f"plan mode: {status}")
                 continue
             if prompt == "/execute":
-                if not plan_mode and not agent_session.plan_only:
+                if not state.plan_mode and not (state.agent_session and state.agent_session.plan_only):
                     console.print("目前不在 plan 模式中")
                     continue
-                plan_mode = False
-                agent_session.plan_only = False
+                state.set_plan_mode(False)
                 transcript.write("slash_command", {"command": prompt, "plan": False, "action": "execute"})
 
                 # 注入一則 system message，告知模型規劃階段結束，可以開始執行
@@ -1343,7 +1368,8 @@ def shell(
                     "你現在已切換至執行模式。請使用工具實際執行方案中的每個步驟。\n"
                     "如果需要，可以先列出下一步要做的動作，再逐步呼叫工具完成。"
                 )
-                agent_session.messages.append({"role": "system", "content": execute_message})
+                if state.agent_session:
+                    state.agent_session.messages.append({"role": "system", "content": execute_message})
                 chat_messages.append({"role": "system", "content": execute_message})
 
                 console.print("已切換至執行模式。後續提示將可使用工具實際執行方案。")
@@ -1362,12 +1388,13 @@ def shell(
                 continue
             if prompt.startswith("/mode "):
                 next_mode = prompt.removeprefix("/mode ").strip()
-                if next_mode not in {"chat", "agent"}:
+                try:
+                    state.set_chat_mode(next_mode)
+                except ValueError:
                     console.print("mode must be chat or agent")
                     continue
-                mode = next_mode
-                transcript.write("slash_command", {"command": prompt, "mode": mode})
-                console.print(f"mode={mode}")
+                transcript.write("slash_command", {"command": prompt, "mode": state.mode})
+                console.print(f"mode={state.mode}")
                 continue
             if prompt == "/models":
                 transcript.write("slash_command", {"command": prompt})
