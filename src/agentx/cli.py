@@ -33,6 +33,7 @@ from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
 from agentx.runtime_prompt import build_chat_system_prompt, build_headless_agent_system_prompt
 from agentx.tasks import (
+    _get_legacy_task_if_exists,
     format_task_list_summary,
     get_next_task_id,
     load_tasks,
@@ -40,7 +41,7 @@ from agentx.tasks import (
     save_tasks,
 )
 from agentx.safety import Risk
-from agentx.task import TaskState, load_task
+
 from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
 from agentx.transcript import Transcript, find_transcript, list_transcripts, summarize_transcript
 from agentx.tui import AgentXTui, format_assistant_header
@@ -383,24 +384,6 @@ def is_natural_execute_trigger(text: str) -> bool:
     """Check if the user input looks like a natural language request to start execution."""
     text_lower = text.lower().strip()
     return any(trigger.lower() in text_lower for trigger in EXECUTE_TRIGGERS)
-
-
-def _get_legacy_task_if_exists(workspace: Path) -> TaskState | None:
-    """MT22 過渡期 helper。
-
-    只在舊的 .agentx/task.json 仍然存在，且內容有意義時，才回傳舊的單一任務物件。
-    否則回傳 None，讓呼叫端優先走新多任務清單。
-
-    這是為了在過渡期間保留相容性，當舊系統完全退場後，此函式與其呼叫者可移除。
-    """
-    legacy_path = workspace / ".agentx" / "task.json"
-    if not legacy_path.exists():
-        return None
-
-    task = load_task(workspace)
-    if not task.title:
-        return None
-    return task
 
 
 def print_config(

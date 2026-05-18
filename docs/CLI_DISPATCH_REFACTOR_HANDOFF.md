@@ -220,6 +220,11 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - 確認程式碼中已無任何「為了相容 build_runtime 而保留 TaskState」的過時說法。
 - 相關 legacy 敘述已在手冊中同步清除。
 
+**Step 12 已完成**（本次）：
+- 將 `_get_legacy_task_if_exists` helper 從 `cli.py` 搬到 `tasks.py`。
+- `cli.py` 已移除 `from agentx.task import ...`。
+- 這是讓生產程式碼完全脫離舊單一任務模組的重要一步。
+
 `build_runtime` 相關的 legacy 相依已清理完畢。
 
 **M. 最終移除舊 `task.py` 前置條件清單（逐條檢核中）**

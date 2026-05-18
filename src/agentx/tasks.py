@@ -180,3 +180,23 @@ def migrate_single_task_if_needed(workspace: Path) -> bool:
 
     return True
 
+
+def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
+    """MT22 過渡期 helper。
+
+    只在舊的 .agentx/task.json 仍然存在，且內容有意義時，才回傳舊的單一任務物件。
+    否則回傳 None，讓呼叫端優先走新多任務清單。
+
+    這是為了在過渡期間保留相容性，當舊系統完全退場後，此函式與其呼叫者可移除。
+    """
+    from .task import TaskState, load_task
+
+    legacy_path = workspace / ".agentx" / "task.json"
+    if not legacy_path.exists():
+        return None
+
+    task = load_task(workspace)
+    if not task.title:
+        return None
+    return task
+
