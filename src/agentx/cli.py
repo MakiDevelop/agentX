@@ -930,6 +930,13 @@ def shell(
 
     register_handler("/transcript", handle_transcript)
 
+    def handle_doctor(state: ShellState, prompt: str):
+        """執行 doctor 檢查（Ollama、Memory Hall、git 等）"""
+        transcript.write("slash_command", {"command": prompt})
+        print_doctor(state.settings, memory, ollama)
+
+    register_handler("/doctor", handle_doctor)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1129,10 +1136,6 @@ def shell(
 
                 # fallback
                 console.print(Panel(format_task_list_summary(tasks), title="Task List", border_style="cyan"))
-                continue
-            if prompt == "/doctor":
-                transcript.write("slash_command", {"command": prompt})
-                print_doctor(state.settings, memory, ollama)
                 continue
             if prompt == "/init":
                 transcript.write("slash_command", {"command": prompt})
