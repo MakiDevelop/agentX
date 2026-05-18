@@ -419,11 +419,17 @@ def print_config(
         summary = format_task_list_summary(current_tasks, max_active=5)
         table.add_row("tasks (multi)", summary[:400] if summary else "(none)")
     else:
-        # 過渡期相容舊單一任務
-        legacy = load_task(settings.workspace)
-        if legacy.title:
-            table.add_row("task (legacy)", legacy.title)
-            table.add_row("task_status (legacy)", legacy.status)
+        # MT22 過渡期 fallback：
+        # 只有在新多任務清單為空，且舊的 .agentx/task.json 仍然存在時，才顯示 legacy 單一任務。
+        # 這是為了相容尚未完全遷移完成的環境。當舊系統完全退場後，此分支可移除。
+        legacy_path = settings.workspace / ".agentx" / "task.json"
+        if legacy_path.exists():
+            legacy = load_task(settings.workspace)
+            if legacy.title:
+                table.add_row("task (legacy)", legacy.title)
+                table.add_row("task_status (legacy)", legacy.status)
+            else:
+                table.add_row("tasks", "(none)")
         else:
             table.add_row("tasks", "(none)")
 
@@ -619,9 +625,15 @@ def build_handoff(
     elif task_summary:
         task_section = f"多任務清單摘要：\n{task_summary}\n"
     else:
-        # 過渡期相容舊單一任務
-        legacy = load_task(settings.workspace)
-        task_section = f"task（legacy）：{legacy.title or '(none)'} [{legacy.status}]\n"
+        # MT22 過渡期 fallback：
+        # 只有在新多任務清單為空，且舊的 .agentx/task.json 仍然存在時，才顯示 legacy 單一任務。
+        # 這是為了相容尚未完全遷移完成的環境。當舊系統完全退場後，此分支可移除。
+        legacy_path = settings.workspace / ".agentx" / "task.json"
+        if legacy_path.exists():
+            legacy = load_task(settings.workspace)
+            task_section = f"task（legacy）：{legacy.title or '(none)'} [{legacy.status}]\n"
+        else:
+            task_section = "tasks：(none)\n"
 
     return (
         f"agentX session handoff\n"

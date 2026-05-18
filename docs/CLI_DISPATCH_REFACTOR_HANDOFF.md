@@ -206,9 +206,15 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - 移除已無呼叫者的 `print_task` 函式。
 - 同步移除 `TaskState` 的 import（cli.py 中對舊單一任務系統的靜態型別依賴進一步降低）。
 
-目前 `cli.py` 對 `TaskState` 的剩餘依賴主要是過渡期的 `load_task` fallback 呼叫。
+**Step 8 已完成**（本次 - H）：
+- 改善 `print_config` 和 `build_handoff` 的 legacy fallback 邏輯：
+  - 改為先檢查舊 `.agentx/task.json` 是否真的存在，才進行 fallback。
+  - 加上清晰、一致的 MT22 過渡期註解，說明什麼時候可以移除這些分支。
+- 避免在常見情況下無意義地呼叫 `load_task`。
 
-下一步建議：繼續收斂 fallback 邏輯，或開始處理 `build_runtime` 呼叫者的剩餘 legacy 相依。
+目前 `cli.py` 對舊單一任務系統的依賴已大幅收斂，主要只剩過渡期的 fallback 讀取。
+
+下一步建議：繼續收斂剩餘的 `load_task` 呼叫點（建立完整清單），或處理 `build_runtime` 呼叫者。
 
 **目標**：解決雙任務系統分裂問題，讓 `tasks.py` 多任務清單成為唯一真相來源（Single Source of Truth）。
 
