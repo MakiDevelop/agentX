@@ -401,7 +401,6 @@ def print_config(
     namespace: str,
     mode: str,
     approval_policy: ApprovalPolicy,
-    task: TaskState,
 ) -> None:
     table = Table(title="agentX config", show_header=False)
     table.add_column("Key", style="cyan")
@@ -424,8 +423,21 @@ def print_config(
     table.add_row("config_file_approval", str(project_config.approval))
     table.add_row("config_file_persona", str(project_config.persona))
     table.add_row("config_file_auto_handoff", str(project_config.auto_handoff))
-    table.add_row("task", task.title or "(none)")
-    table.add_row("task_status", task.status)
+
+    # MT22: 優先顯示新多任務清單
+    current_tasks = load_tasks(settings.workspace)
+    if current_tasks:
+        summary = format_task_list_summary(current_tasks, max_active=5)
+        table.add_row("tasks (multi)", summary[:400] if summary else "(none)")
+    else:
+        # 過渡期相容舊單一任務
+        legacy = load_task(settings.workspace)
+        if legacy.title:
+            table.add_row("task (legacy)", legacy.title)
+            table.add_row("task_status (legacy)", legacy.status)
+        else:
+            table.add_row("tasks", "(none)")
+
     console.print(table)
 
 
@@ -1343,7 +1355,7 @@ def shell(
         """查看或設定專案 config"""
         if prompt == "/config":
             transcript.write("slash_command", {"command": prompt})
-            print_config(state.settings, state.namespace, state.mode, approval_policy, load_task(state.settings.workspace))
+            print_config(state.settings, state.namespace, state.mode, approval_policy)
             return
 
         if prompt.startswith("/config set "):
@@ -1583,7 +1595,7 @@ def shell(
                 continue
             if prompt == "/config":
                 transcript.write("slash_command", {"command": prompt})
-                print_config(state.settings, state.namespace, state.mode, approval_policy, task)
+                print_config(state.settings, state.namespace, state.mode, approval_policy)
                 continue
             if prompt.startswith("/config set "):
                 parts = prompt.split(maxsplit=3)
