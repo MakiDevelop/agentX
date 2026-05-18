@@ -1017,6 +1017,23 @@ def shell(
 
     register_handler("/handoff", handle_handoff)
 
+    def handle_resume(state: ShellState, prompt: str):
+        """從 transcript 恢復上下文"""
+        nonlocal chat_messages
+        name = prompt.removeprefix("/resume").strip() or "latest"
+        resume_path = find_transcript(state.settings.workspace, name)
+        if resume_path is None:
+            console.print(f"transcript not found: {name}")
+            return
+        summary = summarize_transcript(resume_path)
+        if state.agent_session:
+            state.agent_session.messages.append({"role": "system", "content": summary})
+        chat_messages.append({"role": "system", "content": summary})
+        transcript.write("resume", {"source": str(resume_path), "summary": summary[:2000]})
+        console.print(f"resumed {resume_path}")
+
+    register_handler("/resume", handle_resume)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1222,18 +1239,6 @@ def shell(
                 result = agent_session.compact()
                 transcript.write("compact", {"result": result})
                 print_raw(result)
-                continue
-            if prompt.startswith("/resume"):
-                name = prompt.removeprefix("/resume").strip() or "latest"
-                resume_path = find_transcript(state.settings.workspace, name)
-                if resume_path is None:
-                    console.print(f"transcript not found: {name}")
-                    continue
-                summary = summarize_transcript(resume_path)
-                agent_session.messages.append({"role": "system", "content": summary})
-                chat_messages.append({"role": "system", "content": summary})
-                transcript.write("resume", {"source": str(resume_path), "summary": summary[:2000]})
-                console.print(f"resumed {resume_path}")
                 continue
             if prompt.startswith("/files"):
                 path = prompt.removeprefix("/files").strip() or "."
