@@ -1262,8 +1262,8 @@ def shell(
                 continue
             if prompt.startswith("/apply "):
                 path = prompt.removeprefix("/apply ").strip()
-                patch_path = (settings.workspace / path).resolve()
-                if settings.workspace != patch_path and settings.workspace not in patch_path.parents:
+                patch_path = (state.settings.workspace / path).resolve()
+                if state.settings.workspace != patch_path and state.settings.workspace not in patch_path.parents:
                     console.print("patch path escapes workspace")
                     continue
                 if not patch_path.is_file():
@@ -1308,7 +1308,7 @@ def shell(
                 action = str(docker_args.pop("action"))
                 try:
                     command = docker_compose_command(
-                        settings.workspace,
+                        state.settings.workspace,
                         action,
                         service=str(docker_args["service"]) if "service" in docker_args else None,
                     )
@@ -1343,7 +1343,7 @@ def shell(
             if prompt.startswith("/commit"):
                 message = prompt.removeprefix("/commit").strip() or None
                 transcript.write("slash_command", {"command": prompt})
-                output = run_commit_flow(settings, tools, message)
+                output = run_commit_flow(state.settings, tools, message)
                 transcript.write("commit", {"message": message, "content": output[:4000]})
                 print_raw(output)
                 continue
