@@ -170,7 +170,12 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - /plan + /execute 已遷移
 - /mode、/models、/model、/persona 已遷移
 
-模式切換群全部完成。已完成 27 個。
+模式切換群全部完成（已 push）。
+
+已完成 27 個。下一波可考慮：
+- `/task`（複雜，建議晚做）
+- `/docker`、`/run`、`/remember`、`/config` 等剩餘指令
+- 或暫停 dispatch，切入 Phase A 雙任務統一（MT22）
 
 ---
 
