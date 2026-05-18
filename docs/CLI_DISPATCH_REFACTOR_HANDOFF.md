@@ -177,9 +177,27 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - /docker 系列已遷移（已 push）
 - **/task 已遷移** ← A 最後一戰完成！
 
-**A 階段正式完成**（dispatch 主要指令已全部現代化）。
+**A 階段正式完成**（dispatch 主要指令已全部現代化，已 push）。
 
-下一步準備進入 B：Phase A 雙任務統一（MT22）。
+---
+
+## 進入 B 階段：Phase A 雙任務統一（MT22）
+
+**目標**：解決雙任務系統分裂問題，讓 `tasks.py` 多任務清單成為唯一真相來源（Single Source of Truth）。
+
+**當前狀態**：
+- 舊系統：`task.py` + `TaskState`（單一任務）
+- 新系統：`tasks.py` + `.agentx/tasks.json`（多任務清單，AgentSession 已使用）
+
+**計劃**（將逐步執行）：
+1. 分析兩個系統目前的使用點與差異
+2. 設計 migration 策略（舊 task.json → 新 tasks 清單）
+3. 重構 `/task` handler（已 dispatch 化，後續調整邏輯）
+4. 更新 handoff、status、AgentSession 等相依
+5. 移除/標記舊 `task.py` 為 deprecated
+6. 測試 + Codex review
+
+準備開始第一步：現況盤點。
 
 ---
 
