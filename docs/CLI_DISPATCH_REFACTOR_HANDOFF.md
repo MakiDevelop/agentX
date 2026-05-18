@@ -199,7 +199,12 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - 改為局部 `legacy_task` 僅用於過渡期 transcript 記錄。
 - 進一步降低 shell 啟動流程對舊單一任務系統的依賴。
 
-下一步建議：繼續清理 `build_runtime` 相關的 legacy 相依，並考慮移除已無呼叫者的 `print_task` 函式。
+**Step 6 已完成**（本次 - F）：
+- 清理 `build_runtime` 相關的 legacy 敘述與心智模型。
+- `build_runtime` 本身早已不回傳 `TaskState`，啟動流程也不再強制建立它。
+- 相關過時註解與 handoff 文件中的建議已同步清除，讓程式碼與文件一致反映「新系統為主」的現況。
+
+下一步建議：移除已無呼叫者的 `print_task` 函式（它仍然帶 `TaskState` 型別，是剩餘的靜態依賴之一）。
 
 **目標**：解決雙任務系統分裂問題，讓 `tasks.py` 多任務清單成為唯一真相來源（Single Source of Truth）。
 
