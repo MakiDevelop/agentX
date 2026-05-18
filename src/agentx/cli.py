@@ -1364,6 +1364,40 @@ def shell(
 
     register_handler("/config", handle_config)
 
+    def handle_docker(state: ShellState, prompt: str):
+        """Docker Compose 相關指令（部分需 approval）"""
+        docker_args = parse_docker_prompt(prompt)
+        if docker_args is None:
+            print_raw("usage: /docker ps|build|up|logs [SERVICE]|down")
+            return
+
+        action = str(docker_args.pop("action"))
+        try:
+            command = docker_compose_command(
+                state.settings.workspace,
+                action,
+                service=str(docker_args["service"]) if "service" in docker_args else None,
+            )
+        except Exception as exc:
+            print_raw(f"docker command rejected: {type(exc).__name__}: {exc}")
+            return
+
+        print_command_preview(command)
+        result = tools.run(f"docker_compose_{action}", docker_args)
+        transcript.write(
+            "tool",
+            {
+                "command": "/docker",
+                "action": action,
+                "args": docker_args,
+                "ok": result.ok,
+                "content": result.content[:4000],
+            },
+        )
+        print_tool_result(result.content if result.ok else f"docker failed: {result.content}")
+
+    register_handler("/docker", handle_docker)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
