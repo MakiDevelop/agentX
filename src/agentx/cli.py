@@ -1034,6 +1034,18 @@ def shell(
 
     register_handler("/resume", handle_resume)
 
+    def handle_files(state: ShellState, prompt: str):
+        """列出 repo 檔案（預設目前 workspace）"""
+        path = prompt.removeprefix("/files").strip() or "."
+        result = tools.run("list_files", {"path": path})
+        transcript.write(
+            "tool",
+            {"command": "/files", "ok": result.ok, "content": result.content[:2000]},
+        )
+        print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
+
+    register_handler("/files", handle_files)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1239,15 +1251,6 @@ def shell(
                 result = agent_session.compact()
                 transcript.write("compact", {"result": result})
                 print_raw(result)
-                continue
-            if prompt.startswith("/files"):
-                path = prompt.removeprefix("/files").strip() or "."
-                result = tools.run("list_files", {"path": path})
-                transcript.write(
-                    "tool",
-                    {"command": "/files", "ok": result.ok, "content": result.content[:2000]},
-                )
-                print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
                 continue
             if prompt.startswith("/read "):
                 path = prompt.removeprefix("/read ").strip()
