@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
+from agentx.context_compactor import ContextCompactor, HeuristicContextCompactor
 from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
 from agentx.errors import ErrorContext, ErrorType, RecoveryAction, RecoverySuggestion
@@ -81,6 +82,9 @@ class AgentSession:
         self.error_classifier = ErrorClassifier()
         self.error_history: list[ErrorContext] = []
         self.current_error: ErrorContext | None = None
+
+        # Context Compaction v2（Phase B1）
+        self.compactor: ContextCompactor = HeuristicContextCompactor()
 
         self.messages = self._initial_messages()
 
@@ -501,44 +505,26 @@ class AgentSession:
             "compactions": self.compaction_count,
         }
 
-    def compact(self, keep_last: int = 8) -> str:
-        bootstrap = self._initial_messages()
-        tail = self.messages[-keep_last:] if len(self.messages) > keep_last else self.messages
-        user_items = [m.get("content", "") for m in self.messages if m.get("role") == "user"]
-        tool_items = [m.get("content", "") for m in self.messages if m.get("role") == "tool"]
-        assistant_items = [m.get("content", "") for m in self.messages if m.get("role") == "assistant"]
+    def compact(self, keep_last: int = 6) -> str:
+        """
+        Context Compaction v2（Phase B1）。
 
-        summary_lines = [
-            "Session compacted. Continue from this structured summary.",
-            f"- Previous message count: {len(self.messages)}",
-            f"- Kept last messages: {len(tail)}",
-            "",
-            "Current goal / user requests:",
-        ]
-        for item in user_items[-5:]:
-            summary_lines.append(f"- {item.replace(chr(10), ' ')[:500]}")
+        使用 HeuristicContextCompactor 產生結構化摘要，
+        強制保留目前任務清單、重要 Reflection 與決策歷史。
+        """
+        new_messages, result = self.compactor.compact(
+            self.messages,
+            self.tasks,
+            keep_last=keep_last,
+            error_history=self.error_history,
+        )
 
-        summary_lines.extend(["", "Recent assistant conclusions:"])
-        for item in assistant_items[-5:]:
-            summary_lines.append(f"- {item.replace(chr(10), ' ')[:500]}")
-
-        summary_lines.extend(["", "Recent tool results:"])
-        for item in tool_items[-5:]:
-            summary_lines.append(f"- {item.replace(chr(10), ' ')[:500]}")
-
-        summary_lines.extend(["", "Recent raw messages:"])
-        for message in tail:
-            role = message.get("role", "unknown")
-            content = message.get("content", "").replace("\n", " ")[:300]
-            summary_lines.append(f"- {role}: {content}")
+        self.messages = new_messages
         self.compaction_count += 1
-        self.messages = [
-            *bootstrap,
-            {"role": "system", "content": "\n".join(summary_lines)},
-        ]
+
+        # 重新計算 token 估計
         return (
-            f"已壓縮上下文：保留最近 {len(tail)} 則訊息摘要，"
-            f"目前約 {self.context_tokens_estimate} tokens。"
+            f"{result} 目前約 {self.context_tokens_estimate} tokens。"
         )
 
     def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | Reflect | "InvalidAction":
