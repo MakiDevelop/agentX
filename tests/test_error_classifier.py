@@ -173,3 +173,51 @@ def test_build_error_reflection_guidance_contains_key_info():
         assert "AssertionError" in guidance
         assert "結構化的錯誤 Reflection" in guidance
         assert "恢復策略" in guidance
+
+
+def test_classifier_http_4xx_as_call_error():
+    """403/401/404 等客戶端 HTTP 錯誤應分類為 CALL_ERROR（不可重試）"""
+    classifier = ErrorClassifier()
+
+    test_cases = [
+        ("web_fetch", "HTTPStatusError: Client error '403 Forbidden' for url 'https://example.com/secret'"),
+        ("web_fetch", "HTTPStatusError: Client error '401 Unauthorized' for url 'https://api.x.com/v1'"),
+        ("web_fetch", "HTTPStatusError: Client error '404 Not Found' for url 'https://foo.bar/missing'"),
+        ("web_fetch", "Client error '403 Forbidden' for url ..."),  # 無 HTTPStatusError 前綴
+    ]
+
+    for tool, content in test_cases:
+        result = ToolResult(tool=tool, ok=False, content=content)
+        error_type = classifier.classify(tool, result)
+        assert error_type == ErrorType.CALL_ERROR, f"Expected CALL_ERROR for {tool}: {content}, got {error_type}"
+
+
+def test_classifier_http_5xx_as_transient():
+    """5xx 伺服器錯誤應分類為 TRANSIENT（可重試）"""
+    classifier = ErrorClassifier()
+
+    test_cases = [
+        ("web_fetch", "HTTPStatusError: Server error '502 Bad Gateway' for url 'https://example.com'"),
+        ("web_fetch", "HTTPStatusError: Server error '503 Service Unavailable' for url 'https://api'"),
+        ("some_tool", "status_code=500 Internal Server Error"),
+    ]
+
+    for tool, content in test_cases:
+        result = ToolResult(tool=tool, ok=False, content=content)
+        error_type = classifier.classify(tool, result)
+        assert error_type == ErrorType.TRANSIENT, f"Expected TRANSIENT for {tool}: {content}, got {error_type}"
+
+
+def test_classifier_no_substring_false_positive():
+    """避免 'blocked' 之類的詞誤配 'locked' transient keyword"""
+    classifier = ErrorClassifier()
+
+    # 這個錯誤訊息包含 "blocked"（會內含 "locked" 子字串），但不是真正的 locked 錯誤
+    result = ToolResult(
+        tool="web_fetch",
+        ok=False,
+        content="ValueError: blocked non-public address: 192.168.1.1"
+    )
+    error_type = classifier.classify("web_fetch", result)
+    # 現在應該是 CALL_ERROR（invalid path / value），而不是因為 substring 誤判 TRANSIENT
+    assert error_type == ErrorType.CALL_ERROR, f"Should not false-positive transient on 'blocked' substring, got {error_type}"

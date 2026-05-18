@@ -291,11 +291,15 @@ class ToolRegistry:
             headers={"User-Agent": "agentX/0.1 (+local engineering shell)"},
         ) as client:
             response = client.get(safe_url)
-            response.raise_for_status()
-        content = response.content[:WEB_MAX_BYTES].decode(
-            response.encoding or "utf-8",
-            errors="replace",
-        )
+        # 不 raise_for_status：4xx/5xx 也視為「成功取得回應」，讓模型看到真實 status 與錯誤頁內容
+        # 例如 403 Forbidden 時，模型可直接讀到站方拒絕理由，而非只拿到例外字串
+        try:
+            content = response.content[:WEB_MAX_BYTES].decode(
+                response.encoding or "utf-8",
+                errors="replace",
+            )
+        except Exception:
+            content = response.text[:WEB_MAX_BYTES] if hasattr(response, "text") else str(response.content[:WEB_MAX_BYTES])
         text = extract_web_text(content, response.headers.get("content-type", ""))
         if not text:
             text = f"[no extractable text from {safe_url}]"
