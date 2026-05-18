@@ -946,6 +946,13 @@ def shell(
 
     register_handler("/init", handle_init)
 
+    def handle_tools(state: ShellState, prompt: str):
+        """列出目前可用的工具與說明"""
+        transcript.write("slash_command", {"command": prompt})
+        print_tools(tools)
+
+    register_handler("/tools", handle_tools)
+
     # Dispatch 輔助：支援 exact match 與 prefix match（如 /memory foo、/remember bar）
     def _try_dispatch(p: str) -> bool:
         if p in SLASH_HANDLERS:
@@ -1145,10 +1152,6 @@ def shell(
 
                 # fallback
                 console.print(Panel(format_task_list_summary(tasks), title="Task List", border_style="cyan"))
-                continue
-            if prompt == "/tools":
-                transcript.write("slash_command", {"command": prompt})
-                print_tools(tools)
                 continue
             if prompt == "/context":
                 transcript.write("slash_command", {"command": prompt})
