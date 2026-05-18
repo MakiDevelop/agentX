@@ -1417,15 +1417,17 @@ def shell(
                 if not model:
                     console.print("usage: /model gemma4:e2b")
                     continue
-                settings = settings.with_updates(model=model)
+                new_settings = state.update_settings(model=model)
+                # model 切換需要重建 ollama client（這是外部相依，不適合全藏在 state）
                 ollama = OllamaClient(
-                    base_url=settings.ollama_url,
-                    model=settings.model,
-                    timeout=settings.ollama_timeout,
+                    base_url=new_settings.ollama_url,
+                    model=new_settings.model,
+                    timeout=new_settings.ollama_timeout,
                 )
-                agent_session.ollama = ollama
-                transcript.write("slash_command", {"command": prompt, "model": settings.model})
-                console.print(f"model={settings.model}")
+                if state.agent_session:
+                    state.agent_session.ollama = ollama
+                transcript.write("slash_command", {"command": prompt, "model": new_settings.model})
+                console.print(f"model={new_settings.model}")
                 continue
             if prompt == "/persona":
                 transcript.write("slash_command", {"command": prompt, "persona": settings.persona})
@@ -1439,17 +1441,17 @@ def shell(
                 except ValueError as exc:
                     console.print(str(exc))
                     continue
-                settings = settings.with_updates(persona=persona)
-                agent_session.settings = settings
-                agent_session.clear()
+                state.set_persona(persona)
+                if state.agent_session:
+                    state.agent_session.clear()
                 chat_messages = [
                     {
                         "role": "system",
-                        "content": build_chat_system_prompt(settings.workspace, settings.persona),
+                        "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona),
                     }
                 ]
-                transcript.write("slash_command", {"command": prompt, "persona": settings.persona})
-                console.print(f"persona={settings.persona}")
+                transcript.write("slash_command", {"command": prompt, "persona": state.settings.persona})
+                console.print(f"persona={state.settings.persona}")
                 continue
             if prompt == "/clear":
                 agent_session.clear()
