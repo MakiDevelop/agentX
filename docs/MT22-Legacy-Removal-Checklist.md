@@ -116,6 +116,7 @@ if has_legacy_single_task(settings.workspace):
 - `tests/test_doctor.py::test_check_task_migration_*`（驗證診斷工具能正確反映啟動時的 legacy 狀態）
 - 啟動流程相關測試（需確認 `task_legacy` transcript 寫入與過渡提示不再出現）
 - 建議新增：明確測試，驗證移除後帶有舊 `task.json` 的 workspace 啟動時完全沒有 legacy 相關行為
+- 額外建議：在 CI 中加入「無 legacy 環境」啟動測試，確保移除後不會有回歸
 
 ---
 
