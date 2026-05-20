@@ -98,6 +98,25 @@ def test_check_task_migration_with_corrupted_legacy_file(tmp_path: Path) -> None
     assert "legacy=True" in detail or "legacy_only" in detail or "mixed" in detail
 
 
+def test_check_task_migration_legacy_with_empty_multi_tasks(tmp_path: Path) -> None:
+    """有舊任務，但新 tasks.json 存在卻是空的，應正確顯示 mixed 狀態。"""
+    # 建立舊任務
+    legacy_dir = tmp_path / ".agentx"
+    legacy_dir.mkdir()
+    (legacy_dir / "task.json").write_text('{"title":"舊任務","status":"active"}', encoding="utf-8")
+
+    # 建立空的 tasks.json（模擬剛初始化但還沒加任務）
+    (legacy_dir / "tasks.json").write_text("[]", encoding="utf-8")
+
+    fake_settings = SimpleNamespace(workspace=tmp_path)
+    name, ok, detail = _check_task_migration(fake_settings)
+
+    assert name == "task_migration (MT22)"
+    assert ok is True
+    assert "mixed" in detail
+    assert "tasks=0" in detail
+
+
 def test_run_doctor_includes_task_migration_check(tmp_path: Path) -> None:
     """完整 run_doctor 應包含 task_migration (MT22) 檢查項目。"""
     # 建立一個帶有舊任務的 workspace
