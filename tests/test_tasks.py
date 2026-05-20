@@ -346,3 +346,24 @@ def test_migrate_always_uses_timestamped_backup(tmp_path: Path):
     bak_files = list(backup_dir.glob("task.json.bak*"))
     # 至少應該存在一個備份檔（可能是時間戳的）
     assert len(bak_files) >= 1
+
+def test_get_legacy_task_status_mapping_chinese(tmp_path: Path):
+    """中文舊 status 應正確映射到新系統值"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "中文狀態測試")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+
+    for old_status, expected in [
+        ("進行中", "in_progress"),
+        ("已完成", "done"),
+        ("待辦", "pending"),
+        ("未開始", "pending"),
+    ]:
+        data["status"] = old_status
+        old_file.write_text(json.dumps(data), encoding="utf-8")
+        result = _get_legacy_task_if_exists(tmp_path)
+        assert result is not None
+        assert result.status == expected, f"{old_status} 應映射為 {expected}"

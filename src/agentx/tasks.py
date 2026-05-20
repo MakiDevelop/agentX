@@ -285,12 +285,23 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
     if len(cleaned_title) < 2:
         return None
 
-    # status 標準化 + 輕量修復（舊→新系統）
+    # status 標準化 + 輕量修復（舊→新系統）—— A1-1e 逐一強化
     raw_status = (task.status or "").strip().lower()
     status_map = {
         "active": "in_progress",
+        "進行中": "in_progress",
+        "進行": "in_progress",
         "in progress": "in_progress",
         "ongoing": "in_progress",
+        "in_progress": "in_progress",
+        "done": "done",
+        "已完成": "done",
+        "完成": "done",
+        "finished": "done",
+        "pending": "pending",
+        "待辦": "pending",
+        "todo": "pending",
+        "未開始": "pending",
     }
     status = status_map.get(raw_status, raw_status)
     if status not in ("in_progress", "done", "pending"):
