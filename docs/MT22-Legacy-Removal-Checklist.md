@@ -65,10 +65,10 @@ else:
 
 **移除條件**：
 - [ ] `_get_legacy_task_if_exists()` 已被標記為 deprecated 且只在極少數測試中使用。
-- [ ] handoff 產出的內容已不再需要向後相容舊單一任務格式（新舊 handoff 格式已穩定）。
-- [ ] 所有使用 `build_handoff` 的呼叫者（目前主要是內部）都已能依賴 `tasks` 參數或 `task_summary`。
-- [ ] 遷移測試已涵蓋「有 legacy 時 handoff 的行為」且確認移除後行為正確。
-- [ ] 相關文件已更新，不再提及 legacy handoff 顯示。
+- [ ] 執行帶有舊 `task.json` 的 workspace，確認 `build_handoff` 產出不再包含 legacy 區塊。
+- [ ] 所有使用 `build_handoff` 的呼叫者已能依賴 `tasks` 參數或 `task_summary`。
+- [ ] `tests/test_tasks.py` 中的 migrate 系列測試 + `tests/test_doctor.py` 已涵蓋「有 legacy 時 handoff 的行為」。
+- [ ] `docs/MT22-Migration-Guide.md` 已清楚說明舊系統已退場，不再需要在 handoff 中顯示 legacy 資訊。
 
 **移除後動作**：
 - 刪除 legacy 分支。
