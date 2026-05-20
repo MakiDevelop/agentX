@@ -99,11 +99,11 @@ if has_legacy_single_task(settings.workspace):
 ```
 
 **移除條件**：
-- [ ] 啟動時的 legacy transcript 寫入與提示已不再有任何除錯或遷移追蹤價值（可由 `get_task_migration_status` 取代）。
-- [ ] 所有新使用者已預設使用多任務清單，沒有「首次啟動看到舊資料」的常見情境。
+- [ ] 執行 `agentx doctor` 確認不再顯示 `task_migration (MT22)` 項目。
+- [ ] 啟動帶有舊 `task.json` 的 workspace，確認完全沒有 `task_legacy` transcript 寫入與過渡提示。
 - [ ] transcript 相關測試已移除或隔離對 `task_legacy` 的依賴。
-- [ ] `has_legacy_single_task` 在啟動路徑的呼叫已無意義（診斷工具已足夠）。
-- [ ] Migration Guide 已明確說明啟動時不再有過渡提示。
+- [ ] `tests/test_tasks.py` + `tests/test_doctor.py` 已涵蓋啟動時 legacy 處理的主要情境。
+- [ ] `docs/MT22-Migration-Guide.md` 已清楚說明啟動時不再有過渡提示。
 
 **移除後動作**：
 - 刪除整個 `if has_legacy_single_task` 區塊（包含 transcript 寫入與 print_raw）。
