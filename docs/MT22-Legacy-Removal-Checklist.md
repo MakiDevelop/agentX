@@ -33,6 +33,10 @@ else:
 - [ ] 使用者文件（Migration Guide）已說明舊系統已完全退場，不再需要此顯示。
 - [ ] `/doctor` 輸出中已不再需要特別顯示 legacy 狀態（或已改為歷史記錄模式）。
 
+**建議驗證測試（逐步補充中）**：
+- `tests/test_tasks.py::test_migrate_single_task_creates_multi_task` 等系列（確認 legacy 建立與遷移行為）
+- 未來可加入 `test_config` 中對 legacy 顯示的負面測試。
+
 **移除後動作**：
 - 刪除該 `if has_legacy_single_task` 分支。
 - 移除對 `_format_legacy_task_note()` 的呼叫（若無其他用途）。
