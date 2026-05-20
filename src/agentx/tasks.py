@@ -174,21 +174,29 @@ def migrate_single_task_if_needed(workspace: Path) -> bool:
     save_tasks(workspace, [new_task])
 
     # === 務實策略（B）===
-    # 遷移成功後把舊檔改名備份，而不是直接刪除。
-    # 這樣既安全，又讓舊檔不會再被後續流程誤用。
-    try:
-        backup_path = workspace / ".agentx" / "task.json.bak"
-        if backup_path.exists():
-            # 如果備份已存在，加上時間戳避免覆蓋
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_path = workspace / ".agentx" / f"task.json.bak.{timestamp}"
-        old_path.rename(backup_path)
-    except Exception:
-        # 備份失敗不影響遷移結果，只記錄即可
-        # 後續可以考慮加上 logging
-        pass
+    # 遷移成功後把舊檔備份，而不是直接刪除。
+    # 採用時間戳命名，確保永遠不會覆蓋既有備份。
+    _backup_old_single_task_file(workspace, old_path)
 
     return True
+
+
+def _backup_old_single_task_file(workspace: Path, old_path: Path) -> None:
+    """MT22 備份策略（B）。
+
+    將舊的單一任務檔安全地備份為帶時間戳的 .bak 檔。
+    如果備份失敗，至少會嘗試刪除舊檔，避免它繼續被誤用。
+    """
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = workspace / ".agentx" / f"task.json.bak.{timestamp}"
+        old_path.rename(backup_path)
+    except Exception:
+        # 備份失敗時，盡力刪除舊檔（避免後續流程誤讀）
+        try:
+            old_path.unlink()
+        except Exception:
+            pass
 
 
 def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":

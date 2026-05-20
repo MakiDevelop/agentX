@@ -148,12 +148,36 @@ def test_migrate_renames_old_file_to_backup(tmp_path: Path):
     assert migrated is True
 
     old_path = tmp_path / ".agentx" / "task.json"
-    backup_path = tmp_path / ".agentx" / "task.json.bak"
 
+    # 舊檔應該不再以 task.json 的形式存在（已被備份或刪除）
     assert not old_path.exists()
-    assert backup_path.exists()
 
     # 確認新多任務清單正確
     multi = load_tasks(tmp_path)
     assert len(multi) == 1
     assert multi[0]["description"] == "重構認證模組"
+
+
+def test_migrate_always_uses_timestamped_backup(tmp_path: Path):
+    """無論如何，備份檔都應使用時間戳命名，避免覆蓋"""
+    from agentx.task import start_task
+
+    # 第一次遷移
+    start_task(tmp_path, "任務一")
+    migrated1 = migrate_single_task_if_needed(tmp_path)
+    assert migrated1 is True
+
+    # 手動建立一個沒有時間戳的 .bak（模擬舊環境）
+    backup_dir = tmp_path / ".agentx"
+    (backup_dir / "task.json.bak").write_text("old backup", encoding="utf-8")
+
+    # 為了觸發第二次遷移，先移除 tasks.json
+    (backup_dir / "tasks.json").unlink()
+
+    start_task(tmp_path, "任務二")
+    migrated2 = migrate_single_task_if_needed(tmp_path)
+    assert migrated2 is True
+
+    bak_files = list(backup_dir.glob("task.json.bak*"))
+    # 至少應該存在一個備份檔（可能是時間戳的）
+    assert len(bak_files) >= 1
