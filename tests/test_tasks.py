@@ -190,6 +190,37 @@ def test_get_legacy_task_normalizes_data(tmp_path: Path):
     assert result.status == "active"
 
 
+def test_normalize_legacy_date_various_formats(tmp_path: Path):
+    """日期欄位應能處理常見舊格式"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "日期測試任務")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+
+    # 各種常見舊格式
+    test_cases = [
+        ("2024-01-15T10:30:00", True),
+        ("2024-01-15T10:30:00Z", True),
+        ("2024-01-15T10:30:00.123456", True),
+        ("2024-01-15T10:30:00+08:00", True),
+        ("invalid-date", False),
+        ("", False),
+    ]
+
+    for date_val, should_keep in test_cases:
+        data["created_at"] = date_val
+        old_file.write_text(json.dumps(data), encoding="utf-8")
+
+        result = _get_legacy_task_if_exists(tmp_path)
+        assert result is not None
+        if should_keep:
+            assert result.created_at == date_val.strip()
+        else:
+            assert result.created_at == ""
+
+
 def test_get_legacy_task_removes_control_characters(tmp_path: Path):
     """應移除 title 中的控制字元與不可見字元"""
     from agentx.task import start_task

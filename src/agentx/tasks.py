@@ -199,6 +199,27 @@ def _backup_old_single_task_file(workspace: Path, old_path: Path) -> None:
             pass
 
 
+def _normalize_legacy_date(date_str: str) -> str:
+    """MT22 過渡期日期正規化。
+
+    對常見的舊日期格式做寬鬆驗證。
+    只要看起來像 ISO 格式，就保留原始字串；否則清空。
+    """
+    if not date_str or not isinstance(date_str, str):
+        return ""
+
+    s = date_str.strip()
+    if not s:
+        return ""
+
+    # 寬鬆檢查：是否包含日期時間基本結構
+    import re
+    if re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', s):
+        return date_str.strip()
+
+    return ""
+
+
 def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
     """MT22 過渡期 helper。
 
@@ -253,7 +274,7 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
     return TaskState(
         title=cleaned_title,
         status=status,
-        created_at=task.created_at or "",
-        updated_at=task.updated_at or "",
+        created_at=_normalize_legacy_date(task.created_at),
+        updated_at=_normalize_legacy_date(task.updated_at),
     )
 
