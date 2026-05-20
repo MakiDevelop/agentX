@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+import re
 
 
 def tasks_path(workspace: Path) -> Path:
@@ -200,10 +201,11 @@ def _backup_old_single_task_file(workspace: Path, old_path: Path) -> None:
 
 
 def _normalize_legacy_date(date_str: str) -> str:
-    """MT22 過渡期日期正規化。
+    """MT22 過渡期日期正規化（A1-1f 逐一強化）。
 
-    對常見的舊日期格式做寬鬆驗證。
-    只要看起來像 ISO 格式，就保留原始字串；否則清空。
+    使用穩健的 regex 快速判斷是否像常見的舊日期格式。
+    如果是，就保留原始字串（保留歷史資訊）。
+    否則清空。這比嚴格解析在真實 legacy 資料上更可靠。
     """
     if not date_str or not isinstance(date_str, str):
         return ""
@@ -212,12 +214,48 @@ def _normalize_legacy_date(date_str: str) -> str:
     if not s:
         return ""
 
-    # 寬鬆檢查：是否包含日期時間基本結構
     import re
-    if re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', s):
+    # 基本 ISO-like 結構（支援 T 或空格分隔）
+    if re.match(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}", s):
         return date_str.strip()
 
     return ""
+    s = date_str.strip()
+    if not s:
+        return ""
+
+    # 快速 regex 檢查
+    if not re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', s):
+        return ""
+
+    # 清理常見變形
+    s_clean = s.replace("Z", "+00:00")
+    if "." in s_clean:
+        s_clean = s_clean.split(".")[0]
+
+    try:
+        datetime.fromisoformat(s_clean)
+        return date_str.strip()
+    except Exception:
+        return ""
+    s = date_str.strip()
+    if not s:
+        return ""
+
+    # 快速 regex 檢查基本 ISO 結構
+    if not re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', s):
+        return ""
+
+    # 清理常見變形後再解析
+    s_clean = s.replace("Z", "+00:00")
+    if "." in s_clean:
+        s_clean = s_clean.split(".")[0]  # 去掉毫秒
+
+    try:
+        datetime.fromisoformat(s_clean)
+        return date_str.strip()  # 保留原始字串
+    except Exception:
+        return ""
 
 
 def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":

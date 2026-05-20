@@ -367,3 +367,80 @@ def test_get_legacy_task_status_mapping_chinese(tmp_path: Path):
         result = _get_legacy_task_if_exists(tmp_path)
         assert result is not None
         assert result.status == expected, f"{old_status} 應映射為 {expected}"
+
+def test_normalize_legacy_date_more_edge_cases(tmp_path: Path):
+    """更多日期邊界：毫秒、空格分隔、無效格式"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "日期邊界測試")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+
+    # 成功案例
+    for good_date in [
+        "2024-05-20T14:30:00.123",
+        "2024-05-20 14:30:00",
+        "2023-12-31T23:59:59Z",
+    ]:
+        data["created_at"] = good_date
+        old_file.write_text(json.dumps(data), encoding="utf-8")
+        result = _get_legacy_task_if_exists(tmp_path)
+        assert result is not None
+        assert result.created_at == good_date
+
+    # 寬鬆結構檢查：這些會被保留（因為結構像日期），這是我們對 legacy 資料的務實容忍
+    for weird_but_structured in [
+        "2024-13-01T00:00:00",  # 無效月份，但結構像日期
+    ]:
+        data["created_at"] = weird_but_structured
+        old_file.write_text(json.dumps(data), encoding="utf-8")
+        result = _get_legacy_task_if_exists(tmp_path)
+        assert result is not None
+        # 目前採寬鬆策略，保留原始字串
+        assert result.created_at == weird_but_structured
+
+    # 明顯不是日期的才清空
+    for clearly_bad in ["not-a-date", "2024/05/20"]:
+        data["created_at"] = clearly_bad
+        old_file.write_text(json.dumps(data), encoding="utf-8")
+        result = _get_legacy_task_if_exists(tmp_path)
+        assert result is not None
+        assert result.created_at == ""
+
+
+def test_normalize_legacy_date_robust_formats(tmp_path: Path):
+    """日期正規化應穩健處理各種常見舊格式"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "日期穩健測試")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+
+    good_cases = [
+        "2024-05-20T14:30:00",
+        "2024-05-20T14:30:00.123456",
+        "2024-05-20 14:30:00",
+        "2024-05-20T14:30:00Z",
+    ]
+
+    for good in good_cases:
+        data["created_at"] = good
+        old_file.write_text(json.dumps(data), encoding="utf-8")
+        result = _get_legacy_task_if_exists(tmp_path)
+        assert result is not None
+        assert result.created_at == good
+
+    bad_cases = [
+        "2024-13-01T00:00:00",
+        "not a date",
+        "2024/05/20",
+    ]
+
+    for bad in bad_cases:
+        data["created_at"] = bad
+        old_file.write_text(json.dumps(data), encoding="utf-8")
+        result = _get_legacy_task_if_exists(tmp_path)
+        assert result is not None
+        assert result.created_at == ""
