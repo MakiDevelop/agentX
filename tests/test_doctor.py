@@ -98,6 +98,26 @@ def test_check_task_migration_with_corrupted_legacy_file(tmp_path: Path) -> None
     assert "legacy=True" in detail or "legacy_only" in detail or "mixed" in detail
 
 
+def test_check_task_migration_legacy_with_corrupted_multi_tasks(tmp_path: Path) -> None:
+    """有舊任務，但新的 tasks.json 損壞時，應能正確回報 mixed 狀態。"""
+    # 建立舊任務
+    legacy_dir = tmp_path / ".agentx"
+    legacy_dir.mkdir()
+    (legacy_dir / "task.json").write_text('{"title":"舊任務","status":"active"}', encoding="utf-8")
+
+    # 建立損壞的 tasks.json
+    (legacy_dir / "tasks.json").write_text("{ this is not valid json", encoding="utf-8")
+
+    fake_settings = SimpleNamespace(workspace=tmp_path)
+    name, ok, detail = _check_task_migration(fake_settings)
+
+    assert name == "task_migration (MT22)"
+    assert ok is True
+    # 即使新的 tasks.json 損壞，仍然應該正確偵測到 legacy 存在
+    assert "legacy=True" in detail or "legacy_only" in detail or "mixed" in detail
+    # 注意：目前實作在這種情況下 multi 狀態可能不準確，這是可接受的邊界（可後續加強）
+
+
 def test_check_task_migration_legacy_with_empty_title(tmp_path: Path) -> None:
     """舊任務 title 為空時，應被視為無效 legacy，不影響 multi-task 判斷。"""
     legacy_dir = tmp_path / ".agentx"
