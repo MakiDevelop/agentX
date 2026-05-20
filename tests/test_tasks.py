@@ -274,8 +274,6 @@ def test_get_legacy_task_returns_none_for_oversized_file(tmp_path: Path):
 
 def test_get_legacy_task_normalizes_invalid_status(tmp_path: Path):
     """status 不合法時應被正規化成空字串，而不是直接丟棄任務"""
-    from agentx.task import start_task
-
     # 使用較長標題，確保通過「status 空 + title 太短」的最終品質守衛（A1-1l）
     _write_legacy_task(tmp_path, title="測試任務資料")
     # 手動修改舊檔，讓 status 變成無效值
@@ -324,8 +322,6 @@ def test_get_legacy_task_normalizes_data(tmp_path: Path):
 
 def test_normalize_legacy_date_various_formats(tmp_path: Path):
     """日期欄位應能處理常見舊格式"""
-    from agentx.task import start_task
-
     _write_legacy_task(tmp_path, title="日期測試任務")
 
     old_file = tmp_path / ".agentx" / "task.json"
@@ -355,9 +351,7 @@ def test_normalize_legacy_date_various_formats(tmp_path: Path):
 
 def test_get_legacy_task_removes_control_characters(tmp_path: Path):
     """應移除 title 中的控制字元與不可見字元"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "正常任務")
+    _write_legacy_task(tmp_path, title="正常任務")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
@@ -373,8 +367,6 @@ def test_get_legacy_task_removes_control_characters(tmp_path: Path):
 
 def test_get_legacy_task_rejects_too_short_title_after_cleanup(tmp_path: Path):
     """清理後 title 太短應被視為無效"""
-    from agentx.task import start_task
-
     _write_legacy_task(tmp_path, title="OK")
 
     old_file = tmp_path / ".agentx" / "task.json"
@@ -622,9 +614,7 @@ def test_get_legacy_task_strips_todo_fixme_prefix(tmp_path: Path):
 
 def test_get_legacy_task_rejects_symbol_only_title(tmp_path: Path):
     """清理後只剩符號/數字的 title 應被視為無效（A1-1l）"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "正常任務")
+    _write_legacy_task(tmp_path, title="正常任務")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
@@ -636,10 +626,7 @@ def test_get_legacy_task_rejects_symbol_only_title(tmp_path: Path):
 
 def test_migrate_handles_old_task_with_whitespace_only_title(tmp_path: Path):
     """舊任務標題全是空白時應安全跳過遷移"""
-    from agentx.task import TaskState, save_task
-
-    old_task = TaskState(title="   ", status="active")
-    save_task(tmp_path, old_task)
+    _write_legacy_task(tmp_path, title="   ", status="active")
 
     migrated = migrate_single_task_if_needed(tmp_path)
     assert migrated is False
