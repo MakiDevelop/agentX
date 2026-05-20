@@ -36,6 +36,7 @@ from agentx.tasks import (
     _get_legacy_task_if_exists,
     format_task_list_summary,
     get_next_task_id,
+    has_legacy_single_task,
     load_tasks,
     migrate_single_task_if_needed,
     save_tasks,
