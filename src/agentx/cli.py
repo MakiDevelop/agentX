@@ -424,6 +424,7 @@ def print_config(
         if legacy:
             table.add_row("task (legacy)", legacy.title)
             table.add_row("task_status (legacy)", legacy.status)
+            table.add_row("注意", "舊單一任務系統已棄用，建議改用新多任務清單（/task）")
         else:
             table.add_row("tasks", "(none)")
 
