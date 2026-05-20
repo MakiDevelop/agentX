@@ -68,13 +68,9 @@ class AgentXTui:
 
         # 輸入框加上線框 + 上方多一點 margin（使用者要求）
         input_frame = Frame(self.input)
-        input_area = HSplit(
-            [
-                Window(height=1),  # 額外上邊距，讓輸入框跟上方狀態列有呼吸空間
-                input_frame,
-            ],
-            height=3,  # Frame(1行內容) 會佔 3 行（上框 + 內容 + 下框）
-        )
+
+        # 注意：不要對包含 Frame 的容器強制小 height，否則 terminal 太小時會報 "Window too small..."
+
 
         key_bindings = KeyBindings()
 
@@ -87,7 +83,17 @@ class AgentXTui:
             self._input_queue.put("/exit")
 
         self.app: Application[None] = Application(
-            layout=Layout(HSplit([self.output, status, input_area]), focused_element=self.input),
+            layout=Layout(
+                HSplit(
+                    [
+                        self.output,
+                        status,
+                        Window(height=1),   # 額外 margin-up，讓輸入框跟狀態列有呼吸空間
+                        input_frame,
+                    ]
+                ),
+                focused_element=self.input,
+            ),
             key_bindings=key_bindings,
             full_screen=full_screen,
             refresh_interval=0.2,
