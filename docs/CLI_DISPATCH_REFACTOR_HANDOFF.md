@@ -500,3 +500,9 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - 讓三處受控 fallback 呼叫點的模式更一致。
 
 目前 legacy fallback 的呼叫模式已高度統一。
+
+**Step 25 已完成**（本次）：
+- 在 `print_config` 與 `build_handoff` 的 legacy 分支加入明確的 TODO 註解，標註移除時機（v0.3.0+ 舊系統退場後可移除）。
+- 這是讓「收斂」意圖在程式碼中可見的重要文件化動作。
+
+目前 legacy fallback 呼叫點的收斂工作已進入可規劃移除的階段。

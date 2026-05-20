@@ -426,6 +426,7 @@ def print_config(
                 table.add_row("task (legacy)", legacy.title)
                 table.add_row("task_status (legacy)", legacy.status)
             table.add_row("注意 (MT22)", "舊單一任務系統已棄用，建議改用新多任務清單（/task）")
+            # TODO (v0.3.0+): 當舊系統完全退場後，此分支可移除
         else:
             table.add_row("tasks", "(none)")
 
@@ -633,6 +634,7 @@ def build_handoff(
                     f"task（legacy）：{legacy.title} [{legacy.status}]\n"
                     "注意 (MT22)：舊單一任務系統已棄用，建議改用新多任務清單。"
                 )
+                # TODO (v0.3.0+): 當舊系統完全退場後，此分支可移除
             else:
                 task_section = "tasks：(none)\n"
         else:
