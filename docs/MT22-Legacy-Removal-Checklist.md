@@ -34,8 +34,10 @@ else:
 - [ ] `/doctor` 輸出中已不再需要特別顯示 legacy 狀態（或已改為歷史記錄模式）。
 
 **建議驗證測試（逐步補充中）**：
-- `tests/test_tasks.py::test_migrate_single_task_creates_multi_task` 等系列（確認 legacy 建立與遷移行為）
-- 未來可加入 `test_config` 中對 legacy 顯示的負面測試。
+- `tests/test_tasks.py` 中的所有 `_write_legacy_task` + migrate 系列測試（已全面替換舊 API，涵蓋 active/non-active、髒資料、日期處理等情境）
+- `tests/test_doctor.py::test_check_task_migration_*`（驗證診斷工具能正確區分 legacy_only / mixed / multi_only）
+- `tests/test_cli_dispatch.py` 中對 `/config` 的相關測試（需確認 legacy 分支不再被觸發）
+- 建議新增：明確的負面測試，驗證移除後 `/config` 在仍有舊 `task.json` 時的行為（或確認舊檔已被忽略）
 
 **移除後動作**：
 - 刪除該 `if has_legacy_single_task` 分支。
