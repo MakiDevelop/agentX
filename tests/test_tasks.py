@@ -512,9 +512,7 @@ def test_get_legacy_task_status_mapping_chinese(tmp_path: Path):
 
 def test_normalize_legacy_date_more_edge_cases(tmp_path: Path):
     """更多日期邊界：毫秒、空格分隔、無效格式"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "日期邊界測試")
+    _write_legacy_task(tmp_path, title="日期邊界測試")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
@@ -553,9 +551,7 @@ def test_normalize_legacy_date_more_edge_cases(tmp_path: Path):
 
 def test_normalize_legacy_date_robust_formats(tmp_path: Path):
     """日期正規化應穩健處理各種常見舊格式"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "日期穩健測試")
+    _write_legacy_task(tmp_path, title="日期穩健測試")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
@@ -589,9 +585,7 @@ def test_normalize_legacy_date_robust_formats(tmp_path: Path):
 
 def test_get_legacy_task_records_original_in_notes(tmp_path: Path):
     """當回傳 legacy 任務時，應把原始標題與狀態記錄到 notes 供追溯（A1-1f）"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "原始標題測試")
+    _write_legacy_task(tmp_path, title="原始標題測試")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
@@ -606,9 +600,7 @@ def test_get_legacy_task_records_original_in_notes(tmp_path: Path):
 
 def test_get_legacy_task_strips_todo_fixme_prefix(tmp_path: Path):
     """應移除 title 前面的 TODO/FIXME 等常見前綴"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "正常任務")
+    _write_legacy_task(tmp_path, title="正常任務")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
