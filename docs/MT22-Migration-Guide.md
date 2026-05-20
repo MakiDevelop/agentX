@@ -34,13 +34,36 @@
 - v0.4+：預計完全移除 `task.py` 模組及相關相容層。
 
 ### 使用者遷移建議流程（推薦做法）
-1. 升級到最新版本。
-2. 正常使用 agentX（新任務一律走 `/task` 多任務清單）。
-3. 觀察幾次啟動：
-   - 如果有舊的進行中任務，會自動遷移並備份舊檔。
-   - 啟動時會看到過渡提示。
-4. 確認遷移成功後（可用 `agentx doctor` 檢查），可選擇性手動刪除歷史備份（`.agentx/task.json.bak.*`）。
-5. 未來版本會提供更明確的清理提示與指令。
+
+**步驟 1：升級並切換習慣**
+- 升級到包含本次 MT22 改進的版本。
+- 從現在開始，所有新任務一律使用 `/task` 多任務清單相關指令（不要再用舊的單一任務指令）。
+
+**步驟 2：讓自動遷移自然發生**
+- 正常啟動與使用 agentX。
+- 如果 workspace 中有進行中的舊單一任務，啟動時會自動執行遷移，並把舊檔備份為 `task.json.bak.<timestamp>`。
+- 啟動畫面會出現明確的過渡提示。
+
+**步驟 3：驗證遷移結果**
+```bash
+agentx doctor
+```
+或在 Python 中：
+```python
+from agentx.tasks import get_task_migration_status
+print(get_task_migration_status(Path(".")))
+```
+建議狀態：
+- `has_legacy_single_task: false` 或 `legacy_system_active: false`
+- `has_multi_task_file: true`
+- 多任務清單中出現原本的任務
+
+**步驟 4：選擇性清理歷史資料（可選）**
+- 確認一切正常後，可手動刪除 `.agentx/task.json.bak.*` 歷史備份（建議先備份）。
+- 未來版本會提供更明確的一鍵清理指令。
+
+**步驟 5：持續觀察**
+- 連續幾次啟動都沒有舊系統提示，即表示過渡完成。
 
 ## 3. 常見問題
 
