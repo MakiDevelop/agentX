@@ -181,6 +181,31 @@ rm -f .agentx/task.json.bak.*
 
 ---
 
+## 8. 移除後如何驗證自己是否已完全切換
+
+移除舊系統後，建議用以下方式確認自己已經完全切換到新多任務系統：
+
+### 推薦檢查清單
+1. 執行 `agentx doctor`
+   - 應該完全看不到 `task_migration (MT22)` 相關項目。
+2. 正常啟動 agentX 幾次
+   - 啟動時不應再出現任何過渡提示或 `[MT22]` 相關訊息。
+3. 檢查 `.agentx/` 目錄
+   - 不應存在活躍的 `task.json`（只有 `.bak.*` 歷史備份是正常的）。
+4. 嘗試使用舊的單一任務相關指令（如果還記得的話）
+   - 應該會得到明確的提示，引導使用新指令。
+5. （進階）執行診斷
+   ```python
+   from agentx.tasks import get_task_migration_status
+   print(get_task_migration_status(Path(".")))
+   ```
+   - `has_legacy_single_task` 應為 `false`
+   - `legacy_system_active` 應為 `false`
+
+完成以上檢查後，即可認為過渡已完成。
+
+---
+
 **最後更新**：2026-05  
 **維護者**：Grok（自主推進中）
 
