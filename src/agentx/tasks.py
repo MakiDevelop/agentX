@@ -267,8 +267,34 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
         if ch.isprintable() or ch in ('\n', '\t')
     )
 
-    # status 標準化（舊系統可能有不標準的值）
-    status = task.status if task.status in ("active", "done") else ""
+    # 進一步激進清理（A1-1d）：移除 emoji、特殊符號、連續空白
+    import re
+    # 移除常見 emoji 與零寬字元
+    cleaned_title = re.sub(
+        r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF\u200B-\u200D\uFEFF]',
+        '',
+        cleaned_title
+    )
+    # 最後再收斂空白
+    cleaned_title = re.sub(r'\s+', ' ', cleaned_title).strip()
+
+    # 移除前後常見無意義標點（舊任務標題常見）
+    cleaned_title = re.sub(r'^[\s\-\:\.\,\!\?\(\)\[\]【】「」『』“”‘’]+|[\s\-\:\.\,\!\?\(\)\[\]【】「」『』“”‘’]+$', '', cleaned_title).strip()
+
+    # 品質守衛：清理後 title 太短或無意義則丟棄
+    if len(cleaned_title) < 2:
+        return None
+
+    # status 標準化 + 輕量修復（舊→新系統）
+    raw_status = (task.status or "").strip().lower()
+    status_map = {
+        "active": "in_progress",
+        "in progress": "in_progress",
+        "ongoing": "in_progress",
+    }
+    status = status_map.get(raw_status, raw_status)
+    if status not in ("in_progress", "done", "pending"):
+        status = ""
 
     # 重新組裝一個乾淨的 TaskState（舊系統只有這四個欄位）
     return TaskState(

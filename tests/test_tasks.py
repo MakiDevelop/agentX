@@ -170,6 +170,22 @@ def test_get_legacy_task_normalizes_invalid_status(tmp_path: Path):
     assert result.title == "測試任務"
 
 
+def test_get_legacy_task_status_mapping(tmp_path: Path):
+    """舊的 'active' 應被映射為 'in_progress'"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "狀態測試")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+    data["status"] = "active"
+    old_file.write_text(json.dumps(data), encoding="utf-8")
+
+    result = _get_legacy_task_if_exists(tmp_path)
+    assert result is not None
+    assert result.status == "in_progress"  # 被映射了
+
+
 def test_get_legacy_task_normalizes_data(tmp_path: Path):
     """應對舊資料做基本清理（去空白、截斷、長度限制）"""
     from agentx.task import start_task
@@ -187,7 +203,7 @@ def test_get_legacy_task_normalizes_data(tmp_path: Path):
     assert result is not None
     assert result.title == "A" * 200          # 有截斷
     assert result.title.strip() == result.title  # 已去空白
-    assert result.status == "active"
+    assert result.status == "in_progress"  # 被映射為新系統標準值
 
 
 def test_normalize_legacy_date_various_formats(tmp_path: Path):
@@ -237,6 +253,54 @@ def test_get_legacy_task_removes_control_characters(tmp_path: Path):
     assert result.title == "髒任務隱藏字元"  # 控制字元已被移除
     assert "\x00" not in result.title
     assert "\x1f" not in result.title
+
+
+def test_get_legacy_task_rejects_too_short_title_after_cleanup(tmp_path: Path):
+    """清理後 title 太短應被視為無效"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "OK")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+    data["title"] = "   a   "   # 清理後只剩 1 個字元
+    old_file.write_text(json.dumps(data), encoding="utf-8")
+
+    result = _get_legacy_task_if_exists(tmp_path)
+    assert result is None
+
+
+def test_get_legacy_task_aggressive_title_cleanup(tmp_path: Path):
+    """應移除 emoji、特殊符號與多餘空白"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "正常任務")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+    data["title"] = "  任務  🚀  測試   ！  "
+    old_file.write_text(json.dumps(data), encoding="utf-8")
+
+    result = _get_legacy_task_if_exists(tmp_path)
+    assert result is not None
+    # emoji 被移除，連續空白收斂為單一空白
+    assert result.title == "任務  測試 ！" or result.title == "任務 測試 ！"
+
+
+def test_get_legacy_task_strips_leading_trailing_punctuation(tmp_path: Path):
+    """應移除 title 前後的常見無意義標點"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "正常任務")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+    data["title"] = "  --- 【 重要任務 】 ---  "
+    old_file.write_text(json.dumps(data), encoding="utf-8")
+
+    result = _get_legacy_task_if_exists(tmp_path)
+    assert result is not None
+    assert result.title == "重要任務"  # 前後標點已被移除
 
 
 def test_migrate_renames_old_file_to_backup(tmp_path: Path):
