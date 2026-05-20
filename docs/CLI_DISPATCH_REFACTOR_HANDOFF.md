@@ -506,3 +506,9 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - 這是讓「收斂」意圖在程式碼中可見的重要文件化動作。
 
 目前 legacy fallback 呼叫點的收斂工作已進入可規劃移除的階段。
+
+**Step 26 已完成**（本次）：
+- 抽出小 helper `_format_legacy_task_note()`，讓 legacy 提示文字在 `print_config` 和 `build_handoff` 之間保持一致。
+- 這是進一步收斂 legacy 顯示邏輯的小步，讓未來移除更容易。
+
+目前三處受控 legacy fallback 呼叫點的模式已高度一致。

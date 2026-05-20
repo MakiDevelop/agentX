@@ -386,6 +386,11 @@ def is_natural_execute_trigger(text: str) -> bool:
     return any(trigger.lower() in text_lower for trigger in EXECUTE_TRIGGERS)
 
 
+def _format_legacy_task_note() -> str:
+    """回傳 legacy 任務的標準提示文字（MT22 過渡期）。"""
+    return "注意 (MT22)：舊單一任務系統已棄用，建議改用新多任務清單（/task）"
+
+
 def print_config(
     settings: Settings,
     namespace: str,
@@ -425,7 +430,7 @@ def print_config(
             if legacy:
                 table.add_row("task (legacy)", legacy.title)
                 table.add_row("task_status (legacy)", legacy.status)
-            table.add_row("注意 (MT22)", "舊單一任務系統已棄用，建議改用新多任務清單（/task）")
+            table.add_row("注意 (MT22)", _format_legacy_task_note())
             # TODO (v0.3.0+): 當舊系統完全退場後，此分支可移除
         else:
             table.add_row("tasks", "(none)")
@@ -632,7 +637,7 @@ def build_handoff(
             if legacy:
                 task_section = (
                     f"task（legacy）：{legacy.title} [{legacy.status}]\n"
-                    "注意 (MT22)：舊單一任務系統已棄用，建議改用新多任務清單。"
+                    f"{_format_legacy_task_note()}\n"
                 )
                 # TODO (v0.3.0+): 當舊系統完全退場後，此分支可移除
             else:
