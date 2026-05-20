@@ -198,6 +198,21 @@ def test_migrate_is_safe_to_call_multiple_times(tmp_path: Path):
     assert len(load_tasks(tmp_path)) == 1  # 不應該重複新增
 
 
+def test_migrate_preserves_migration_metadata(tmp_path: Path):
+    """遷移後的 notes 應包含有用的原始資訊"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "有時間戳的任務")
+
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is True
+
+    multi = load_tasks(tmp_path)
+    notes = multi[0]["notes"]
+    assert "自動遷移自舊單一任務系統" in notes
+    assert "原始標題" in notes
+
+
 def test_migrate_handles_very_long_old_title(tmp_path: Path):
     """舊任務標題極長時仍應能正常截斷並遷移"""
     from agentx.task import TaskState, save_task
@@ -630,3 +645,14 @@ def test_get_legacy_task_rejects_symbol_only_title(tmp_path: Path):
 
     result = _get_legacy_task_if_exists(tmp_path)
     assert result is None  # 應被整體品質守衛拒絕
+
+def test_migrate_handles_old_task_with_whitespace_only_title(tmp_path: Path):
+    """舊任務標題全是空白時應安全跳過遷移"""
+    from agentx.task import TaskState, save_task
+
+    old_task = TaskState(title="   ", status="active")
+    save_task(tmp_path, old_task)
+
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is False
+    assert load_tasks(tmp_path) == []
