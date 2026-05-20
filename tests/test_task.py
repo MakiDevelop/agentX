@@ -4,8 +4,8 @@
 # 該系統正在被新的多任務清單（tasks.py + tasks.json）取代。
 #
 # 狀態：
-# - 此檔案已被標記為技術債。
-# - 預計在 v0.3.0 後逐步廢棄或大幅重寫。
+# - 此檔案已被標記為主要技術債。
+# - 預計在 v0.3.0 後逐步廢棄、轉換或移除。
 # - 目前僅保留作為遷移相容測試與歷史參考。
 #
 # 請優先使用 tests/test_tasks.py 中的多任務相關測試。
@@ -13,6 +13,9 @@
 # 如果你正在新增測試，請改用新系統的 API。
 
 from agentx.task import clear_task, finish_task, load_task, start_task
+
+# TODO (MT22 / v0.3.0)：開始逐步將此檔案中的測試轉換為新系統測試，
+# 或明確標記為僅用於遷移驗證。
 
 
 def test_task_lifecycle(tmp_path):
