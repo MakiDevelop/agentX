@@ -1,3 +1,11 @@
+# === DEPRECATION NOTICE (MT22) ===
+# 此檔案測試的是舊的單一任務系統（task.py + TaskState），
+# 該系統正在被新的多任務清單（tasks.py）取代。
+# 這些測試僅作為過渡期相容與遷移驗證之用。
+# 預計在後續版本中大幅簡化或移除。
+#
+# 請改用 tests/test_tasks.py 中的多任務測試。
+
 from agentx.task import clear_task, finish_task, load_task, start_task
 
 

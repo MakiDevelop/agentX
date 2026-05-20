@@ -416,3 +416,9 @@ Git 閉環群（review → commit → approval）已完整遷移。
 **Step 17 已完成**（本次）：
 - 大幅改善 `migrate_single_task_if_needed` 的文件說明，讓 v0.3.0 使用者能清楚理解目前的保守但安全的遷移策略。
 - 這是讓過渡體驗更清晰的重要文件改善。
+
+**Step 18 已完成**（本次）：
+- 為 `tests/test_task.py` 加上明確的 MT22 deprecation header。
+- 這是處理最大技術債（舊系統測試）的第一步。
+
+目前對舊單一任務系統的依賴已進入可控的收尾階段。
