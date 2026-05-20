@@ -746,6 +746,11 @@ def shell(
     legacy = _get_legacy_task_if_exists(settings.workspace)
     if legacy:
         transcript.write("task_legacy", {"title": legacy.title, "status": legacy.status})
+        # v0.3.0 過渡期提示
+        print_raw(
+            "[MT22] 偵測到舊的單一任務系統資料。\n"
+            "      建議改用新的多任務清單（/task）。舊系統預計在後續版本移除。"
+        )
     if current_tasks:
         transcript.write("tasks", {"count": len(current_tasks), "summary": task_summary})
     agent_session = AgentSession(
