@@ -77,8 +77,10 @@ else:
 **風險**：舊環境下執行的 handoff 會失去對歷史任務的描述，影響極少數仍在使用舊資料的使用者。
 
 **建議驗證測試（逐步補充中）**：
-- 目前 handoff 相關測試（test_cli_dispatch 或類似）中對 legacy 分支的覆蓋較弱，建議新增明確的 `build_handoff` legacy 情境測試。
-- 確認移除後，帶有舊資料的 workspace 產出的 handoff 內容不再包含 legacy 區塊。
+- `tests/test_tasks.py` 中的 migrate 系列測試（已全面改用 `_write_legacy_task`，涵蓋各種 legacy 情境）
+- `tests/test_doctor.py::test_check_task_migration_*`（驗證診斷工具能正確反映 handoff 會看到的狀態）
+- 建議新增：明確的 `build_handoff` legacy 情境測試，驗證移除後帶有舊資料的 workspace 產出的 handoff 不再包含 legacy 區塊
+- 確認 `test_cli_dispatch.py` 或相關測試中，legacy 分支在 `build_handoff` 路徑不再被觸發
 
 ---
 
