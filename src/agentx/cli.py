@@ -420,10 +420,11 @@ def print_config(
         summary = format_task_list_summary(current_tasks, max_active=5)
         table.add_row("tasks (multi)", summary[:400] if summary else "(none)")
     else:
-        legacy = _get_legacy_task_if_exists(settings.workspace)
-        if legacy:
-            table.add_row("task (legacy)", legacy.title)
-            table.add_row("task_status (legacy)", legacy.status)
+        if has_legacy_single_task(settings.workspace):
+            legacy = _get_legacy_task_if_exists(settings.workspace)
+            if legacy:
+                table.add_row("task (legacy)", legacy.title)
+                table.add_row("task_status (legacy)", legacy.status)
             table.add_row("注意 (MT22)", "舊單一任務系統已棄用，建議改用新多任務清單（/task）")
         else:
             table.add_row("tasks", "(none)")
@@ -625,12 +626,15 @@ def build_handoff(
     elif task_summary:
         task_section = f"多任務清單摘要：\n{task_summary}\n"
     else:
-        legacy = _get_legacy_task_if_exists(settings.workspace)
-        if legacy:
-            task_section = (
-                "task（legacy）：{legacy.title} [{legacy.status}]\n"
-                "注意：舊單一任務系統已棄用，建議改用新多任務清單。"
-            )
+        if has_legacy_single_task(settings.workspace):
+            legacy = _get_legacy_task_if_exists(settings.workspace)
+            if legacy:
+                task_section = (
+                    f"task（legacy）：{legacy.title} [{legacy.status}]\n"
+                    "注意 (MT22)：舊單一任務系統已棄用，建議改用新多任務清單。"
+                )
+            else:
+                task_section = "tasks：(none)\n"
         else:
             task_section = "tasks：(none)\n"
 

@@ -493,3 +493,10 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - 這是持續改善過渡期使用者體驗的動作。
 
 目前舊系統的「使用者接觸面」已進入低存在感階段。
+
+**Step 24 已完成**（本次）：
+- 將 `print_config` 和 `build_handoff` 中的 legacy 檢查統一改用 `has_legacy_single_task()`。
+- 修復 `build_handoff` 中 legacy 顯示的 f-string bug。
+- 讓三處受控 fallback 呼叫點的模式更一致。
+
+目前 legacy fallback 的呼叫模式已高度統一。
