@@ -303,6 +303,30 @@ def test_get_legacy_task_strips_leading_trailing_punctuation(tmp_path: Path):
     assert result.title == "重要任務"  # 前後標點已被移除
 
 
+def test_get_legacy_task_strips_leading_id_and_number(tmp_path: Path):
+    """應移除 title 前面的常見編號或 ID（如 123 - 、BUG-456: ）"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "正常任務")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+
+    test_cases = [
+        "123 - 修復登入問題",
+        "BUG-456: 修復登入問題",
+        "456: 修復登入問題",
+        "   789 -   修復登入問題   ",
+    ]
+
+    for raw_title in test_cases:
+        data["title"] = raw_title
+        old_file.write_text(json.dumps(data), encoding="utf-8")
+        result = _get_legacy_task_if_exists(tmp_path)
+        assert result is not None
+        assert result.title == "修復登入問題", f"'{raw_title}' 應清理為 '修復登入問題'"
+
+
 def test_migrate_renames_old_file_to_backup(tmp_path: Path):
     """遷移成功後，舊的 task.json 應被改名為 task.json.bak（務實策略 B）"""
     from agentx.task import start_task

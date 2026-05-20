@@ -319,6 +319,9 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
     # 移除前後常見無意義標點（舊任務標題常見）
     cleaned_title = re.sub(r'^[\s\-\:\.\,\!\?\(\)\[\]【】「」『』“”‘’]+|[\s\-\:\.\,\!\?\(\)\[\]【】「」『』“”‘’]+$', '', cleaned_title).strip()
 
+    # 移除常見前置編號/ID（舊任務標題常見 "123 - " 或 "BUG-456: "）
+    cleaned_title = re.sub(r'^[\d\-:\s]+|^\w+-\d+[:\s]+', '', cleaned_title).strip()
+
     # 品質守衛：清理後 title 太短或無意義則丟棄
     if len(cleaned_title) < 2:
         return None
