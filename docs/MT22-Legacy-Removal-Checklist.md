@@ -108,18 +108,13 @@ if has_legacy_single_task(settings.workspace):
 - 刪除整個 `if has_legacy_single_task` 區塊（包含 transcript 寫入與 print_raw）。
 - 確認 `transcript` 模組不再需要 `task_legacy` 類型。
 
-**建議驗證測試（逐步補充中）**：
-- `tests/test_tasks.py` 中的 migrate 系列測試（驗證 legacy 資料在啟動時的處理）
-- `tests/test_doctor.py::test_check_task_migration_*`（驗證診斷工具能正確反映啟動時的 legacy 狀態）
-- 相關啟動流程測試（test_cli_dispatch 或類似）中對 `task_legacy` transcript 寫入的驗證
-- 建議新增：明確測試驗證移除後，帶有舊資料的 workspace 啟動時不再寫入 `task_legacy` transcript 且不顯示過渡提示
-- 移除相關的測試案例或明確標記為歷史情境。
-
 **風險**：少數仍在舊環境的使用者會突然失去啟動時的提醒，可能增加困惑（但若已到移除階段，此風險應已可接受）。
 
 **建議驗證測試（逐步補充中）**：
-- 目前對啟動流程中 `task_legacy` transcript 寫入的測試覆蓋不足。
-- 建議新增測試驗證：有 legacy 資料時啟動不再寫入 `task_legacy` transcript 且不印出過渡提示。
+- `tests/test_tasks.py` 中的 migrate 系列測試（驗證 legacy 資料在啟動時的處理邏輯）
+- `tests/test_doctor.py::test_check_task_migration_*`（驗證診斷工具能正確反映啟動時的 legacy 狀態）
+- 啟動流程相關測試（需確認 `task_legacy` transcript 寫入與過渡提示不再出現）
+- 建議新增：明確測試，驗證移除後帶有舊 `task.json` 的 workspace 啟動時完全沒有 legacy 相關行為
 
 ---
 
