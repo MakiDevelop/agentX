@@ -247,9 +247,7 @@ def test_migrate_handles_very_long_old_title(tmp_path: Path):
 
 def test_migrate_is_idempotent_after_first_run(tmp_path: Path):
     """第一次遷移後，後續呼叫不應再做任何事"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "測試任務")
+    _write_legacy_task(tmp_path, title="測試任務")
     migrated1 = migrate_single_task_if_needed(tmp_path)
     assert migrated1 is True
 
@@ -294,9 +292,7 @@ def test_get_legacy_task_normalizes_invalid_status(tmp_path: Path):
 
 def test_get_legacy_task_status_mapping(tmp_path: Path):
     """舊的 'active' 應被映射為 'in_progress'"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "狀態測試")
+    _write_legacy_task(tmp_path, title="狀態測試", status="active")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
@@ -310,9 +306,7 @@ def test_get_legacy_task_status_mapping(tmp_path: Path):
 
 def test_get_legacy_task_normalizes_data(tmp_path: Path):
     """應對舊資料做基本清理（去空白、截斷、長度限制）"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "   髒資料任務   ")
+    _write_legacy_task(tmp_path, title="   髒資料任務   ")
 
     # 手動修改舊檔，加上很長的 title 和 notes
     old_file = tmp_path / ".agentx" / "task.json"
@@ -423,9 +417,7 @@ def test_get_legacy_task_aggressive_title_cleanup(tmp_path: Path):
 
 def test_get_legacy_task_strips_leading_trailing_punctuation(tmp_path: Path):
     """應移除 title 前後的常見無意義標點"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "正常任務")
+    _write_legacy_task(tmp_path, title="正常任務")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
@@ -439,9 +431,7 @@ def test_get_legacy_task_strips_leading_trailing_punctuation(tmp_path: Path):
 
 def test_get_legacy_task_strips_leading_id_and_number(tmp_path: Path):
     """應移除 title 前面的常見編號或 ID（如 123 - 、BUG-456: ）"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "正常任務")
+    _write_legacy_task(tmp_path, title="正常任務")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
