@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import json
 
@@ -20,6 +21,7 @@ def _write_legacy_task(
     status: str = "active",
     created_at: str = "",
     updated_at: str = "",
+    **extra: Any,
 ) -> None:
     """
     MT22 測試輔助函式。
@@ -33,12 +35,14 @@ def _write_legacy_task(
     legacy_dir = workspace / ".agentx"
     legacy_dir.mkdir(parents=True, exist_ok=True)
 
-    data = {
+    data: dict[str, Any] = {
         "title": title,
         "status": status,
         "created_at": created_at,
         "updated_at": updated_at,
     }
+    data.update(extra)
+
     (legacy_dir / "task.json").write_text(
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
