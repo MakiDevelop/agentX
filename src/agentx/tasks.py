@@ -322,10 +322,6 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
     # 移除常見前置編號/ID（舊任務標題常見 "123 - " 或 "BUG-456: "）
     cleaned_title = re.sub(r'^[\d\-:\s]+|^\w+-\d+[:\s]+', '', cleaned_title).strip()
 
-    # 品質守衛：清理後 title 太短或無意義則丟棄
-    if len(cleaned_title) < 2:
-        return None
-
     # status 標準化 + 輕量修復（舊→新系統）—— A1-1e 逐一強化
     raw_status = (task.status or "").strip().lower()
     status_map = {
@@ -347,6 +343,14 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
     status = status_map.get(raw_status, raw_status)
     if status not in ("in_progress", "done", "pending"):
         status = ""
+
+    # 最終整體品質守衛（A1-1g 逐一強化）
+    # 如果清理後 title 極短 + status 無法有效映射，直接拒絕
+    # 避免把「幾乎空殼」的舊單一任務也硬塞進新多任務清單
+    if len(cleaned_title) < 3:
+        return None
+    if status == "" and len(cleaned_title) < 5:
+        return None
 
     # 重新組裝一個乾淨的 TaskState（舊系統只有這四個欄位）
     cleaned_task = TaskState(

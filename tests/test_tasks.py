@@ -270,6 +270,22 @@ def test_get_legacy_task_rejects_too_short_title_after_cleanup(tmp_path: Path):
     assert result is None
 
 
+def test_get_legacy_task_overall_quality_judgment(tmp_path: Path):
+    """整體品質判斷：清理後幾乎無有效資訊的任務應被拒絕（A1-1g）"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "OK")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+    data["title"] = "   x   "   # 清理後極短
+    data["status"] = "weird"    # 無法有效映射
+    old_file.write_text(json.dumps(data), encoding="utf-8")
+
+    result = _get_legacy_task_if_exists(tmp_path)
+    assert result is None  # 應被整體品質守衛拒絕
+
+
 def test_get_legacy_task_aggressive_title_cleanup(tmp_path: Path):
     """應移除 emoji、特殊符號與多餘空白"""
     from agentx.task import start_task
