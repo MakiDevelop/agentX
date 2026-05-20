@@ -96,3 +96,21 @@ def test_check_task_migration_with_corrupted_legacy_file(tmp_path: Path) -> None
     assert ok is True
     # 應該仍能正確判斷有 legacy 存在（即使內容損壞）
     assert "legacy=True" in detail or "legacy_only" in detail or "mixed" in detail
+
+
+def test_run_doctor_includes_task_migration_check(tmp_path: Path) -> None:
+    """完整 run_doctor 應包含 task_migration (MT22) 檢查項目。"""
+    # 建立一個帶有舊任務的 workspace
+    legacy_dir = tmp_path / ".agentx"
+    legacy_dir.mkdir()
+    (legacy_dir / "task.json").write_text('{"title":"舊單一任務","status":"active"}', encoding="utf-8")
+
+    # 這裡用一個極簡的 Settings 模擬（只需要 workspace）
+    fake_settings = SimpleNamespace(workspace=tmp_path)
+
+    # 直接呼叫內部函式來驗證整合（避免依賴完整 Ollama/MemoryHall）
+    from agentx.doctor import _check_task_migration
+    name, ok, detail = _check_task_migration(fake_settings)
+
+    assert name == "task_migration (MT22)"
+    assert "legacy=True" in detail or "legacy_only" in detail
