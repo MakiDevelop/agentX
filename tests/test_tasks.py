@@ -141,6 +141,97 @@ def test_migrate_does_nothing_when_no_old_task(tmp_path: Path):
     assert load_tasks(tmp_path) == []
 
 
+def test_migrate_does_nothing_for_non_active_old_task(tmp_path: Path):
+    """舊任務不是 active 狀態時不進行遷移"""
+    from agentx.task import TaskState, save_task
+
+    # 建立一個 done 的舊任務
+    done_task = TaskState(title="已完成的工作", status="done")
+    save_task(tmp_path, done_task)
+
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is False
+    assert load_tasks(tmp_path) == []
+
+
+def test_migrate_handles_corrupted_old_task_json(tmp_path: Path):
+    """舊 task.json 損壞時應安全失敗，不影響新系統"""
+    old_path = tmp_path / ".agentx" / "task.json"
+    old_path.parent.mkdir(parents=True, exist_ok=True)
+    old_path.write_text("{ invalid json content", encoding="utf-8")
+
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is False
+    assert load_tasks(tmp_path) == []
+
+
+def test_migrate_handles_old_task_without_created_at(tmp_path: Path):
+    """舊任務沒有 created_at 時仍應能正常遷移"""
+    from agentx.task import TaskState, save_task
+
+    old_task = TaskState(title="沒有時間的任務", status="active")
+    save_task(tmp_path, old_task)
+
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is True
+
+    multi = load_tasks(tmp_path)
+    assert len(multi) == 1
+    assert multi[0]["description"] == "沒有時間的任務"
+    assert "自動遷移自舊單一任務系統" in multi[0]["notes"]
+
+
+def test_migrate_is_safe_to_call_multiple_times(tmp_path: Path):
+    """多次呼叫遷移函式應該是安全的"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "重複測試任務")
+
+    # 第一次
+    result1 = migrate_single_task_if_needed(tmp_path)
+    assert result1 is True
+    assert len(load_tasks(tmp_path)) == 1
+
+    # 第二次
+    result2 = migrate_single_task_if_needed(tmp_path)
+    assert result2 is False
+    assert len(load_tasks(tmp_path)) == 1  # 不應該重複新增
+
+
+def test_migrate_handles_very_long_old_title(tmp_path: Path):
+    """舊任務標題極長時仍應能正常截斷並遷移"""
+    from agentx.task import TaskState, save_task
+
+    very_long_title = "這是一個非常非常非常長的舊單一任務標題" * 10  # 超過 200 字
+    old_task = TaskState(title=very_long_title, status="active")
+    save_task(tmp_path, old_task)
+
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is True
+
+    multi = load_tasks(tmp_path)
+    assert len(multi) == 1
+    assert len(multi[0]["description"]) <= 200
+    assert "自動遷移" in multi[0]["notes"]
+
+
+def test_migrate_is_idempotent_after_first_run(tmp_path: Path):
+    """第一次遷移後，後續呼叫不應再做任何事"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "測試任務")
+    migrated1 = migrate_single_task_if_needed(tmp_path)
+    assert migrated1 is True
+
+    # 第二次呼叫
+    migrated2 = migrate_single_task_if_needed(tmp_path)
+    assert migrated2 is False
+
+    # 應該只有一筆任務
+    multi = load_tasks(tmp_path)
+    assert len(multi) == 1
+
+
 def test_get_legacy_task_returns_none_for_oversized_file(tmp_path: Path):
     """檔案過大時應視為無效（防禦性設計）"""
     legacy_dir = tmp_path / ".agentx"
