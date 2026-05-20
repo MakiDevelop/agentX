@@ -240,6 +240,12 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
     # 對舊資料做輕量清理（舊 TaskState 沒有 notes 欄位）
     cleaned_title = task.title.strip()[:200]
 
+    # 移除控制字元與不可見字元（提升過渡期資料品質）
+    cleaned_title = ''.join(
+        ch for ch in cleaned_title 
+        if ch.isprintable() or ch in ('\n', '\t')
+    )
+
     # status 標準化（舊系統可能有不標準的值）
     status = task.status if task.status in ("active", "done") else ""
 

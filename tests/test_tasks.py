@@ -190,6 +190,24 @@ def test_get_legacy_task_normalizes_data(tmp_path: Path):
     assert result.status == "active"
 
 
+def test_get_legacy_task_removes_control_characters(tmp_path: Path):
+    """應移除 title 中的控制字元與不可見字元"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "正常任務")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+    data["title"] = "髒任務\x00\x01\x1f隱藏字元\x7f"
+    old_file.write_text(json.dumps(data), encoding="utf-8")
+
+    result = _get_legacy_task_if_exists(tmp_path)
+    assert result is not None
+    assert result.title == "髒任務隱藏字元"  # 控制字元已被移除
+    assert "\x00" not in result.title
+    assert "\x1f" not in result.title
+
+
 def test_migrate_renames_old_file_to_backup(tmp_path: Path):
     """遷移成功後，舊的 task.json 應被改名為 task.json.bak（務實策略 B）"""
     from agentx.task import start_task
