@@ -134,16 +134,18 @@ def single_task_path(workspace: Path) -> Path:
 
 def migrate_single_task_if_needed(workspace: Path) -> bool:
     """
-    MT22 遷移函式：將舊的單一任務系統（task.json）遷移到新多任務清單。
+    MT22 遷移函式（v0.3.0 過渡期）。
 
-    行為：
-    - 只有在「新 tasks.json 不存在」且「舊 task.json 存在且為 active 任務」時才執行遷移。
-    - 遷移成功後，會把舊的 task.json 改名為 task.json.bak（備份），避免重複遷移。
-    - 這是務實路線：保留備份但不再使用舊系統。
+    將舊的單一任務系統（.agentx/task.json）安全地遷移到新多任務清單（.agentx/tasks.json）。
 
-    回傳：
-    - True：成功執行遷移
-    - False：無需遷移或遷移失敗
+    行為與守衛：
+    - 只有在「新 tasks.json 不存在」且「舊 task.json 存在且為 active 任務」時才執行。
+    - 這是保守策略，避免覆蓋使用者已開始使用的新任務。
+    - 遷移成功後會把舊檔備份為 task.json.bak.*（策略 B）。
+    - 後續啟動若已存在 tasks.json，則永遠不會再從舊檔遷移。
+
+    這是為了讓使用者能平穩從舊系統過渡到新系統。
+    回傳 True 表示本次執行了遷移。
     """
     tasks_file = tasks_path(workspace)
     old_path = single_task_path(workspace)

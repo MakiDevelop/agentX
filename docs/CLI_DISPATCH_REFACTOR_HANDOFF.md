@@ -412,3 +412,7 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - 新增 `has_legacy_single_task()` 工具函式，方便後續在更多地方判斷是否還有舊資料（為移除舊系統做準備）。
 
 目前舊系統已進入正式 deprecation 階段，並有基本的使用者提示 + 工具支援。
+
+**Step 17 已完成**（本次）：
+- 大幅改善 `migrate_single_task_if_needed` 的文件說明，讓 v0.3.0 使用者能清楚理解目前的保守但安全的遷移策略。
+- 這是讓過渡體驗更清晰的重要文件改善。
