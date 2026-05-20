@@ -349,10 +349,18 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
         status = ""
 
     # 重新組裝一個乾淨的 TaskState（舊系統只有這四個欄位）
-    return TaskState(
+    cleaned_task = TaskState(
         title=cleaned_title,
         status=status,
         created_at=_normalize_legacy_date(task.created_at),
         updated_at=_normalize_legacy_date(task.updated_at),
     )
+
+    # A1-1f 逐一強化：當真的走 legacy 路徑時，把原始資料記錄到 notes 供追溯
+    original_title = getattr(task, 'title', '') or ''
+    original_status = getattr(task, 'status', '') or ''
+    if original_title or original_status:
+        cleaned_task.notes = f"[來自舊單一任務] 原始標題：{original_title} | 原始狀態：{original_status}"
+
+    return cleaned_task
 

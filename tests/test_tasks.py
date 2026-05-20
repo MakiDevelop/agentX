@@ -468,3 +468,20 @@ def test_normalize_legacy_date_robust_formats(tmp_path: Path):
         result = _get_legacy_task_if_exists(tmp_path)
         assert result is not None
         assert result.created_at == ""
+
+def test_get_legacy_task_records_original_in_notes(tmp_path: Path):
+    """當回傳 legacy 任務時，應把原始標題與狀態記錄到 notes 供追溯（A1-1f）"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "原始標題測試")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+    data["status"] = "進行中"
+    old_file.write_text(json.dumps(data), encoding="utf-8")
+
+    result = _get_legacy_task_if_exists(tmp_path)
+    assert result is not None
+    assert hasattr(result, 'notes')
+    assert "原始標題測試" in getattr(result, 'notes', '')
+    assert "進行中" in getattr(result, 'notes', '') or "in_progress" in getattr(result, 'notes', '')
