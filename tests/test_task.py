@@ -1,10 +1,16 @@
-# === DEPRECATION NOTICE (MT22) ===
-# 此檔案測試的是舊的單一任務系統（task.py + TaskState），
-# 該系統正在被新的多任務清單（tasks.py）取代。
-# 這些測試僅作為過渡期相容與遷移驗證之用。
-# 預計在後續版本中大幅簡化或移除。
+# === DEPRECATION NOTICE (MT22 / v0.3.0) ===
 #
-# 請改用 tests/test_tasks.py 中的多任務測試。
+# 此檔案幾乎完全在測試舊的單一任務系統（task.py + TaskState）。
+# 該系統正在被新的多任務清單（tasks.py + tasks.json）取代。
+#
+# 狀態：
+# - 此檔案已被標記為技術債。
+# - 預計在 v0.3.0 後逐步廢棄或大幅重寫。
+# - 目前僅保留作為遷移相容測試與歷史參考。
+#
+# 請優先使用 tests/test_tasks.py 中的多任務相關測試。
+#
+# 如果你正在新增測試，請改用新系統的 API。
 
 from agentx.task import clear_task, finish_task, load_task, start_task
 

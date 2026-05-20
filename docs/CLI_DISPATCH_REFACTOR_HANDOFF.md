@@ -450,3 +450,9 @@ Git 閉環群（review → commit → approval）已完整遷移。
 5. 正式把 `task.py` 整個模組標記為 deprecated，並提供移除時間表。
 
 我會持續小步前進，直到達到可發佈 v0.3.0 的標準。
+
+**Step 19 已完成**（本次）：
+- 為 `tests/test_task.py` 加強 deprecation header，並明確標記其為主要技術債。
+- 這是開始系統性處理最大舊系統測試債的第一步。
+
+目前舊系統的「存在感」已進入可控的收尾階段。
