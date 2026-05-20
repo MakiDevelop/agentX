@@ -205,9 +205,7 @@ def test_migrate_handles_old_task_without_created_at(tmp_path: Path):
 
 def test_migrate_is_safe_to_call_multiple_times(tmp_path: Path):
     """多次呼叫遷移函式應該是安全的"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "重複測試任務")
+    _write_legacy_task(tmp_path, title="重複測試任務")
 
     # 第一次
     result1 = migrate_single_task_if_needed(tmp_path)
@@ -222,9 +220,7 @@ def test_migrate_is_safe_to_call_multiple_times(tmp_path: Path):
 
 def test_migrate_preserves_migration_metadata(tmp_path: Path):
     """遷移後的 notes 應包含有用的原始資訊"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "有時間戳的任務")
+    _write_legacy_task(tmp_path, title="有時間戳的任務")
 
     migrated = migrate_single_task_if_needed(tmp_path)
     assert migrated is True
@@ -237,11 +233,8 @@ def test_migrate_preserves_migration_metadata(tmp_path: Path):
 
 def test_migrate_handles_very_long_old_title(tmp_path: Path):
     """舊任務標題極長時仍應能正常截斷並遷移"""
-    from agentx.task import TaskState, save_task
-
-    very_long_title = "這是一個非常非常非常長的舊單一任務標題" * 10  # 超過 200 字
-    old_task = TaskState(title=very_long_title, status="active")
-    save_task(tmp_path, old_task)
+    very_long_title = "這是一個非常非常非常長的舊單一任務標題" * 10
+    _write_legacy_task(tmp_path, title=very_long_title, status="active")
 
     migrated = migrate_single_task_if_needed(tmp_path)
     assert migrated is True
@@ -401,9 +394,7 @@ def test_get_legacy_task_rejects_too_short_title_after_cleanup(tmp_path: Path):
 
 def test_get_legacy_task_overall_quality_judgment(tmp_path: Path):
     """整體品質判斷：清理後幾乎無有效資訊的任務應被拒絕（A1-1g）"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "OK")
+    _write_legacy_task(tmp_path, title="OK")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
@@ -417,9 +408,7 @@ def test_get_legacy_task_overall_quality_judgment(tmp_path: Path):
 
 def test_get_legacy_task_aggressive_title_cleanup(tmp_path: Path):
     """應移除 emoji、特殊符號與多餘空白"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "正常任務")
+    _write_legacy_task(tmp_path, title="正常任務")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
