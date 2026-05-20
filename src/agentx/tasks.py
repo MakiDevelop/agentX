@@ -193,6 +193,23 @@ def has_legacy_single_task(workspace: Path) -> bool:
     return single_task_path(workspace).exists()
 
 
+def get_task_migration_status(workspace: Path) -> dict:
+    """
+    MT22 過渡期工具：回報目前任務系統的遷移狀態。
+    主要用於診斷與除錯。
+    """
+    has_old = has_legacy_single_task(workspace)
+    has_new = tasks_path(workspace).exists()
+    current_tasks = load_tasks(workspace)
+
+    return {
+        "has_legacy_single_task": has_old,
+        "has_multi_task_file": has_new,
+        "multi_task_count": len(current_tasks),
+        "legacy_system_active": has_old and not has_new,
+    }
+
+
 def _backup_old_single_task_file(workspace: Path, old_path: Path) -> None:
     """MT22 備份策略（B）。
 
