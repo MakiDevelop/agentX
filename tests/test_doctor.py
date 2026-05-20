@@ -261,6 +261,26 @@ def test_check_task_migration_legacy_with_very_long_notes_in_multi(tmp_path: Pat
     assert "tasks=1" in detail
 
 
+def test_check_task_migration_legacy_with_extreme_mixed_state(tmp_path: Path) -> None:
+    """有舊任務 + 新任務同時有 in_progress 和大量 done 時，應正確回報 mixed。"""
+    legacy_dir = tmp_path / ".agentx"
+    legacy_dir.mkdir()
+    (legacy_dir / "task.json").write_text('{"title":"舊任務","status":"active"}', encoding="utf-8")
+
+    tasks = [{"id": i, "description": f"任務 {i}", "status": "done", "notes": ""} for i in range(1, 6)]
+    tasks.append({"id": 6, "description": "進行中任務", "status": "in_progress", "notes": ""})
+    save_tasks(tmp_path, tasks)
+
+    fake_settings = SimpleNamespace(workspace=tmp_path)
+    name, ok, detail = _check_task_migration(fake_settings)
+
+    assert name == "task_migration (MT22)"
+    assert ok is True
+    assert "mixed" in detail
+    assert "legacy=True" in detail
+    assert "tasks=6" in detail
+
+
 def test_check_task_migration_legacy_with_very_long_title_in_multi(tmp_path: Path) -> None:
     """有舊任務 + 新任務 title 極長時，應能正確回報 mixed 而不受影響。"""
     legacy_dir = tmp_path / ".agentx"
