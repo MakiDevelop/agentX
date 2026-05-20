@@ -226,13 +226,13 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - 這是讓生產程式碼完全脫離舊單一任務模組的重要一步。
 
 **Step 13 已完成**（本次）：
-- 根據策略 B 調整 `migrate_single_task_if_needed`：
-  - 遷移成功後將舊 `task.json` 改名為帶時間戳的 `task.json.bak.*` 進行備份。
-  - 強化備份邏輯（備份失敗時盡力刪除舊檔，避免後續誤用）。
-  - 補充多個測試案例驗證備份行為與時間戳機制。
-- 整體遷移機制更 robust。
+- 根據策略 B 調整 `migrate_single_task_if_needed`。
 
-目前遷移機制已改為更乾淨且安全的處理方式。
+**Step 14 已完成**（本次）：
+- 在舊系統的所有公開函式（`load_task`, `save_task`, `start_task`, `finish_task`, `clear_task`）加入 `DeprecationWarning`。
+- 這讓使用者在實際使用舊 API 時能明確收到警告，大幅提升過渡期的可見度。
+
+目前舊系統已進入正式 deprecation 階段。
 
 **Step 14 已完成**（本次 - A 方向持續強化）：
 - 大幅強化 `_get_legacy_task_if_exists` 的防禦性與資料品質：
@@ -284,7 +284,13 @@ Git 閉環群（review → commit → approval）已完整遷移。
 
 ## 八、建議的下一個動作（2026-05-18 更新）
 
-**當前進度**：Wave 1 進行中（已 18 個）。Wave 0 狀態統一已基本完成（ShellState 作為主要讀寫來源）。
+**當前進度（2026-05 更新）**：
+- Dispatch Refactor (Wave 1)：已大幅完成（37 個 handler 已遷移）。
+- MT22 雙任務統一：核心清理已推進到較高階段。
+  - `cli.py` 已不再直接依賴 `TaskState`。
+  - Legacy 相容層已收斂到 `_get_legacy_task_if_exists`（位於新系統 `tasks.py`）。
+  - 多輪逐一強化後，防禦性、資料品質、可追溯性均有明顯提升。
+  - 舊系統尚未完全移除，仍處於受控過渡階段。
 
 **下一波推薦**（符合「對標合格 Agent CLI」目標）：
 - **Git 閉環群**（最高 ROI）：/review、/commit、/approval、/test — 讓 agent 能真正完成「看 diff → review → 安全 apply → 測試 → 中文 commit + push」完整工程流程。
@@ -293,6 +299,29 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - 每波 3~6 個就 commit + 更新本文件 + 執行一次輕量 Codex review。
 
 **大目標對齊**：完成 Dispatch 全遷移後，立即進入 Optimization Roadmap Phase A（雙任務系統統一 MT22），這是 Codex 點名的最大架構債，也是讓 agentX 真正能可靠跑長時段 headless 任務的關鍵。
+
+---
+
+## v0.3.0 Release Criteria（我的標準）
+
+為了讓 v0.3.0 成為一個「可用且有尊嚴的版本」，我設定以下最低門檻：
+
+### 必須達成
+- Dispatch refactor 實質完成（主要實用指令已遷移）。
+- MT22 達到「新多任務系統為主、舊系統明確被隔離」的狀態。
+- 使用者不會同時面對兩個互相衝突的任務模型。
+- 從舊單一任務遷移到新多任務的路徑是可靠的（至少對常見情境）。
+- 核心功能（包含 headless agent 模式）的測試穩定通過。
+- 文件清楚說明新的任務模型與舊系統的 deprecated 狀態。
+
+### 強烈建議達成
+- `task.py` 標記為 deprecated，並有清楚的移除時間表。
+- `test_task.py` 不再是主要測試負擔（至少標記或大幅簡化）。
+- 沒有容易讓人踩到的雙系統陷阱。
+
+**目前距離 v0.3.0 的距離**：中高。核心清理已大幅進展，但「舊系統正式退場」的感覺還不夠強烈。
+
+我會以這個標準為目標，持續修正與優化，直到達到可發佈狀態。
 
 ---
 
