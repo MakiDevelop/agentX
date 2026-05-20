@@ -88,6 +88,21 @@ A:
 3. 若想徹底移除歷史備份，可手動刪除 `.agentx/task.json.bak.*` 檔案（建議先備份）。
 4. 未來版本將提供更明確的一鍵清理指令（規劃中）。
 
+## 4. 如何在本地驗證移除舊系統的影響（給貢獻者）
+
+在準備移除 legacy 相關程式碼前，建議執行以下驗證：
+
+1. 確保 `tests/test_tasks.py` 中所有 legacy 建立都已改用 `_write_legacy_task`。
+2. 執行 `pytest tests/test_tasks.py -k "migrate or legacy" -q` 確認全綠。
+3. 執行 `pytest tests/test_doctor.py -q` 確認 migration 診斷測試通過。
+4. 在一個帶有舊 `task.json` 的 workspace 啟動 agentX，確認：
+   - 不再寫入 `task_legacy` transcript
+   - 不再顯示過渡提示
+   - `agentx doctor` 正確顯示狀態
+5. 檢查 `docs/MT22-Legacy-Removal-Checklist.md` 中的移除條件是否都已滿足。
+
+完成以上後再提出移除 PR。
+
 ---
 
 ## 4. 貢獻者注意事項
