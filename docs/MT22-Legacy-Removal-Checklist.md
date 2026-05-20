@@ -74,6 +74,10 @@ else:
 
 **風險**：舊環境下執行的 handoff 會失去對歷史任務的描述，影響極少數仍在使用舊資料的使用者。
 
+**建議驗證測試（逐步補充中）**：
+- 目前 handoff 相關測試（test_cli_dispatch 或類似）中對 legacy 分支的覆蓋較弱，建議新增明確的 `build_handoff` legacy 情境測試。
+- 確認移除後，帶有舊資料的 workspace 產出的 handoff 內容不再包含 legacy 區塊。
+
 ---
 
 ## 3. 啟動流程（shell 啟動區塊）
@@ -102,6 +106,10 @@ if has_legacy_single_task(settings.workspace):
 - 移除相關的測試案例或明確標記為歷史情境。
 
 **風險**：少數仍在舊環境的使用者會突然失去啟動時的提醒，可能增加困惑（但若已到移除階段，此風險應已可接受）。
+
+**建議驗證測試（逐步補充中）**：
+- 目前對啟動流程中 `task_legacy` transcript 寫入的測試覆蓋不足。
+- 建議新增測試驗證：有 legacy 資料時啟動不再寫入 `task_legacy` transcript 且不印出過渡提示。
 
 ---
 
