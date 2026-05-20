@@ -13,6 +13,38 @@ from agentx.tasks import (
 )
 
 
+def _write_legacy_task(
+    workspace: Path,
+    *,
+    title: str,
+    status: str = "active",
+    created_at: str = "",
+    updated_at: str = "",
+) -> None:
+    """
+    MT22 測試輔助函式。
+
+    直接寫入舊的單一任務 JSON（.agentx/task.json），
+    用於測試 migrate_single_task_if_needed 與 _get_legacy_task_if_exists。
+
+    目的：讓遷移測試不再依賴已經 deprecated 的 agentx.task API，
+    使「新系統測試新系統」的意圖更清楚。
+    """
+    legacy_dir = workspace / ".agentx"
+    legacy_dir.mkdir(parents=True, exist_ok=True)
+
+    data = {
+        "title": title,
+        "status": status,
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
+    (legacy_dir / "task.json").write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
 def test_load_tasks_when_no_file_returns_empty(tmp_path: Path):
     """當 .agentx/tasks.json 不存在時，應安全回傳空列表"""
     result = load_tasks(tmp_path)
@@ -77,11 +109,8 @@ def test_save_tasks_creates_agentx_directory(tmp_path: Path):
 
 def test_migrate_single_task_creates_multi_task(tmp_path: Path):
     """舊的單一進行中任務應能自動遷移成多任務清單的第一筆"""
-    from agentx.task import start_task
-
-    # 先建立一個舊的單一任務
-    old_task = start_task(tmp_path, "重構認證模組")
-    assert old_task.status == "active"
+    # 使用直接寫 JSON 的方式建立舊任務（避免依賴 deprecated API）
+    _write_legacy_task(tmp_path, title="重構認證模組", status="active")
 
     # 多任務清單本來是空的
     assert load_tasks(tmp_path) == []
@@ -99,9 +128,7 @@ def test_migrate_single_task_creates_multi_task(tmp_path: Path):
 
 def test_migrate_does_nothing_if_multi_already_exists(tmp_path: Path):
     """如果已經有多任務清單，就不要再從舊單一任務遷移"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "舊任務")
+    _write_legacy_task(tmp_path, title="舊任務")
     # 先手動建立一個多任務
     save_tasks(tmp_path, [{"id": 99, "description": "新任務", "status": "pending", "notes": ""}])
 
@@ -115,10 +142,7 @@ def test_migrate_does_nothing_if_multi_already_exists(tmp_path: Path):
 
 def test_migrate_bails_if_tasks_json_exists_even_if_corrupt(tmp_path: Path):
     """即使 tasks.json 存在但損壞，也絕對不要用舊單一任務覆寫（Codex 安全守衛）"""
-    from agentx.task import start_task
-
-    # 建立舊單一任務
-    start_task(tmp_path, "舊任務")
+    _write_legacy_task(tmp_path, title="舊任務")
 
     # 建立一個損壞的 tasks.json
     tasks_file = tasks_path(tmp_path)
@@ -143,11 +167,8 @@ def test_migrate_does_nothing_when_no_old_task(tmp_path: Path):
 
 def test_migrate_does_nothing_for_non_active_old_task(tmp_path: Path):
     """舊任務不是 active 狀態時不進行遷移"""
-    from agentx.task import TaskState, save_task
-
-    # 建立一個 done 的舊任務
-    done_task = TaskState(title="已完成的工作", status="done")
-    save_task(tmp_path, done_task)
+    # 直接寫入非 active 的舊任務（不再使用 deprecated save_task）
+    _write_legacy_task(tmp_path, title="已完成的工作", status="done")
 
     migrated = migrate_single_task_if_needed(tmp_path)
     assert migrated is False
@@ -167,10 +188,7 @@ def test_migrate_handles_corrupted_old_task_json(tmp_path: Path):
 
 def test_migrate_handles_old_task_without_created_at(tmp_path: Path):
     """舊任務沒有 created_at 時仍應能正常遷移"""
-    from agentx.task import TaskState, save_task
-
-    old_task = TaskState(title="沒有時間的任務", status="active")
-    save_task(tmp_path, old_task)
+    _write_legacy_task(tmp_path, title="沒有時間的任務", status="active")
 
     migrated = migrate_single_task_if_needed(tmp_path)
     assert migrated is True
@@ -452,9 +470,7 @@ def test_get_legacy_task_strips_leading_id_and_number(tmp_path: Path):
 
 def test_migrate_renames_old_file_to_backup(tmp_path: Path):
     """遷移成功後，舊的 task.json 應被改名為 task.json.bak（務實策略 B）"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "重構認證模組")
+    _write_legacy_task(tmp_path, title="重構認證模組")
 
     migrated = migrate_single_task_if_needed(tmp_path)
     assert migrated is True
@@ -472,10 +488,8 @@ def test_migrate_renames_old_file_to_backup(tmp_path: Path):
 
 def test_migrate_always_uses_timestamped_backup(tmp_path: Path):
     """無論如何，備份檔都應使用時間戳命名，避免覆蓋"""
-    from agentx.task import start_task
-
     # 第一次遷移
-    start_task(tmp_path, "任務一")
+    _write_legacy_task(tmp_path, title="任務一")
     migrated1 = migrate_single_task_if_needed(tmp_path)
     assert migrated1 is True
 
@@ -486,7 +500,7 @@ def test_migrate_always_uses_timestamped_backup(tmp_path: Path):
     # 為了觸發第二次遷移，先移除 tasks.json
     (backup_dir / "tasks.json").unlink()
 
-    start_task(tmp_path, "任務二")
+    _write_legacy_task(tmp_path, title="任務二")
     migrated2 = migrate_single_task_if_needed(tmp_path)
     assert migrated2 is True
 
@@ -496,9 +510,7 @@ def test_migrate_always_uses_timestamped_backup(tmp_path: Path):
 
 def test_get_legacy_task_status_mapping_chinese(tmp_path: Path):
     """中文舊 status 應正確映射到新系統值"""
-    from agentx.task import start_task
-
-    start_task(tmp_path, "中文狀態測試")
+    _write_legacy_task(tmp_path, title="中文狀態測試", status="進行中")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
