@@ -501,3 +501,27 @@ def test_get_legacy_task_records_original_in_notes(tmp_path: Path):
     assert hasattr(result, 'notes')
     assert "原始標題測試" in getattr(result, 'notes', '')
     assert "進行中" in getattr(result, 'notes', '') or "in_progress" in getattr(result, 'notes', '')
+
+def test_get_legacy_task_strips_todo_fixme_prefix(tmp_path: Path):
+    """應移除 title 前面的 TODO/FIXME 等常見前綴"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "正常任務")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+
+    test_cases = [
+        ("TODO: 修復登入問題", "修復登入問題"),
+        ("FIXME - 修復登入問題", "修復登入問題"),
+        ("BUG: 修復登入問題", "修復登入問題"),
+        ("HACK: 臨時解決方案", "臨時解決方案"),
+        ("   XXX: 待重構   ", "待重構"),
+    ]
+
+    for raw_title, expected in test_cases:
+        data["title"] = raw_title
+        old_file.write_text(json.dumps(data), encoding="utf-8")
+        result = _get_legacy_task_if_exists(tmp_path)
+        assert result is not None
+        assert result.title == expected, f"'{raw_title}' 應被清理為 '{expected}'"

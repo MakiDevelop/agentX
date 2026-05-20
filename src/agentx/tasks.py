@@ -322,6 +322,9 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
     # 移除常見前置編號/ID（舊任務標題常見 "123 - " 或 "BUG-456: "）
     cleaned_title = re.sub(r'^[\d\-:\s]+|^\w+-\d+[:\s]+', '', cleaned_title).strip()
 
+    # 移除常見 TODO/FIXME 等前綴（舊任務標題非常常見）—— A1-1k 逐一強化
+    cleaned_title = re.sub(r'^(TODO|FIXME|BUG|FEATURE|HACK|XXX)[:\-\s]*', '', cleaned_title, flags=re.IGNORECASE).strip()
+
     # status 標準化 + 輕量修復（舊→新系統）—— A1-1e 逐一強化
     raw_status = (task.status or "").strip().lower()
     status_map = {
