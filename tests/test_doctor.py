@@ -81,3 +81,18 @@ def test_check_task_migration_handles_error_gracefully() -> None:
     assert name == "task_migration (MT22)"
     assert ok is False
     assert "Error" in detail or "Exception" in detail or "NoneType" in detail
+
+
+def test_check_task_migration_with_corrupted_legacy_file(tmp_path: Path) -> None:
+    """舊 task.json 損壞時仍應能安全回報狀態，而非崩潰。"""
+    legacy_dir = tmp_path / ".agentx"
+    legacy_dir.mkdir()
+    (legacy_dir / "task.json").write_text("{ invalid json", encoding="utf-8")
+
+    fake_settings = SimpleNamespace(workspace=tmp_path)
+    name, ok, detail = _check_task_migration(fake_settings)
+
+    assert name == "task_migration (MT22)"
+    assert ok is True
+    # 應該仍能正確判斷有 legacy 存在（即使內容損壞）
+    assert "legacy=True" in detail or "legacy_only" in detail or "mixed" in detail
