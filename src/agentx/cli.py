@@ -1591,27 +1591,31 @@ def shell(
             if prompt_session is not None:
                 print_block(f"agentX: {prompt}")
 
+            # 退出指令最高優先，永遠最先處理（避免 dispatch 重構或 job 等待導致「退不出來」）
+            if prompt in {"/exit", "/quit"}:
+                job_queue.stop()  # 立即發送 sentinel 喚醒 worker thread，不阻塞使用者
+                # 只在沒有進行中 job 時才嘗試 auto handoff，避免無限等待
+                if not (job_queue.current is not None or job_queue.pending_count() > 0):
+                    if history and state.settings.auto_handoff:
+                        message = write_handoff(
+                            tools,
+                            settings=state.settings,
+                            namespace=state.namespace,
+                            mode=state.mode,
+                            history=history,
+                            transcript=transcript,
+                            tasks=current_tasks,
+                            task_summary=task_summary,
+                        )
+                        transcript.write("handoff", {"auto": True, "result": message})
+                        print_raw(message)
+                transcript.write("session_end", {"reason": prompt, "forced": bool(job_queue.current is not None or job_queue.pending_count() > 0)})
+                console.print("\nbye")
+                break
+
             # Dispatch 機制 (階段一) — 支援帶參數指令
             if _try_dispatch(prompt):
                 continue
-
-            if prompt in {"/exit", "/quit"}:
-                wait_for_prompt_worker()
-                if history and state.settings.auto_handoff:
-                    message = write_handoff(
-                        tools,
-                        settings=state.settings,
-                        namespace=state.namespace,
-                        mode=state.mode,
-                        history=history,
-                        transcript=transcript,
-                        tasks=current_tasks,
-                        task_summary=task_summary,
-                    )
-                    transcript.write("handoff", {"auto": True, "result": message})
-                    print_raw(message)
-                transcript.write("session_end", {"reason": prompt})
-                break
             if prompt.startswith("/") and not prompt.startswith(("/jobs", "/cancel")):
                 wait_for_prompt_worker()
 
