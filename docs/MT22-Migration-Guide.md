@@ -88,25 +88,31 @@ A:
 3. 若想徹底移除歷史備份，可手動刪除 `.agentx/task.json.bak.*` 檔案（建議先備份）。
 4. 未來版本將提供更明確的一鍵清理指令（規劃中）。
 
-## 4. 如何在本地驗證移除舊系統的影響（給貢獻者）
-
-在準備移除 legacy 相關程式碼前，建議執行以下驗證：
-
-1. 確保 `tests/test_tasks.py` 中所有 legacy 建立都已改用 `_write_legacy_task`。
-2. 執行 `pytest tests/test_tasks.py -k "migrate or legacy" -q` 確認全綠。
-3. 執行 `pytest tests/test_doctor.py -q` 確認 migration 診斷測試通過。
-4. 在一個帶有舊 `task.json` 的 workspace 啟動 agentX，確認：
-   - 不再寫入 `task_legacy` transcript
-   - 不再顯示過渡提示
-   - `agentx doctor` 正確顯示狀態
-5. 檢查 `docs/MT22-Legacy-Removal-Checklist.md` 中的移除條件是否都已滿足。
-
-完成以上後再提出移除 PR。
-
----
-
 ## 4. 貢獻者注意事項
 
+### 移除舊系統前的準備清單
+
+在提出移除 legacy 相關程式碼的 PR 前，請確認以下事項：
+
+1. **測試覆蓋**
+   - `tests/test_tasks.py` 中所有 legacy 建立都已改用 `_write_legacy_task`。
+   - 執行 `pytest tests/test_tasks.py -k "migrate or legacy" -q` 全綠。
+   - `tests/test_doctor.py` 中 migration 診斷測試已涵蓋主要情境（包含損壞檔、錯誤處理）。
+
+2. **本地驗證**
+   - 在帶有舊 `task.json` 的 workspace 啟動，確認：
+     - 不再寫入 `task_legacy` transcript
+     - 不再顯示過渡提示
+     - `agentx doctor` 正確顯示 `legacy_only` / `mixed` 狀態
+   - 檢查 `docs/MT22-Legacy-Removal-Checklist.md` 中三處呼叫點的移除條件是否都已滿足。
+
+3. **文件同步**
+   - 更新或確認 `docs/MT22-Migration-Guide.md` 已說明過渡完成後的使用者體驗。
+   - 確認 Removal Checklist 中的驗證建議仍然準確。
+
+完成以上檢查後再提交移除 PR。
+
+### 一般貢獻原則
 - 任何新功能請優先使用新多任務 API。
 - 測試中建立 legacy 狀態請使用 `tests/test_tasks.py` 中的 `_write_legacy_task` helper。
 - 移除舊系統相關程式碼前，請先確認 `docs/MT22-Legacy-Removal-Checklist.md` 中的條件已滿足。
