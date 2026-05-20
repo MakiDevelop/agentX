@@ -277,7 +277,7 @@ def test_get_legacy_task_normalizes_invalid_status(tmp_path: Path):
     from agentx.task import start_task
 
     # 使用較長標題，確保通過「status 空 + title 太短」的最終品質守衛（A1-1l）
-    start_task(tmp_path, "測試任務資料")
+    _write_legacy_task(tmp_path, title="測試任務資料")
     # 手動修改舊檔，讓 status 變成無效值
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
@@ -326,7 +326,7 @@ def test_normalize_legacy_date_various_formats(tmp_path: Path):
     """日期欄位應能處理常見舊格式"""
     from agentx.task import start_task
 
-    start_task(tmp_path, "日期測試任務")
+    _write_legacy_task(tmp_path, title="日期測試任務")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
@@ -375,7 +375,7 @@ def test_get_legacy_task_rejects_too_short_title_after_cleanup(tmp_path: Path):
     """清理後 title 太短應被視為無效"""
     from agentx.task import start_task
 
-    start_task(tmp_path, "OK")
+    _write_legacy_task(tmp_path, title="OK")
 
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
