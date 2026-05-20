@@ -742,10 +742,11 @@ def shell(
     task_summary = format_task_list_summary(current_tasks)
 
     transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
-    # 過渡期記錄：如果舊的單一任務還存在，寫入 legacy 記錄方便遷移驗證
-    legacy = _get_legacy_task_if_exists(settings.workspace)
-    if legacy:
-        transcript.write("task_legacy", {"title": legacy.title, "status": legacy.status})
+    # 過渡期記錄：如果舊的單一任務還存在，寫入 legacy 記錄方便除錯與遷移驗證
+    if has_legacy_single_task(settings.workspace):
+        legacy = _get_legacy_task_if_exists(settings.workspace)
+        if legacy:
+            transcript.write("task_legacy", {"title": legacy.title, "status": legacy.status})
         # v0.3.0 過渡期提示
         print_raw(
             "[MT22] 偵測到舊的單一任務系統資料。\n"
