@@ -347,12 +347,16 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
     if status not in ("in_progress", "done", "pending"):
         status = ""
 
-    # 最終整體品質守衛（A1-1g 逐一強化）
+    # 最終整體品質守衛（A1-1l 逐一強化）
     # 如果清理後 title 極短 + status 無法有效映射，直接拒絕
     # 避免把「幾乎空殼」的舊單一任務也硬塞進新多任務清單
     if len(cleaned_title) < 3:
         return None
     if status == "" and len(cleaned_title) < 5:
+        return None
+
+    # 額外強化：如果 title 清理後只剩下數字或符號，也視為無意義
+    if re.match(r'^[\d\s\-\:\.\,\!\?\(\)\[\]【】「」『』“”‘’]+$', cleaned_title):
         return None
 
     # 重新組裝一個乾淨的 TaskState（舊系統只有這四個欄位）

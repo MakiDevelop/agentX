@@ -525,3 +525,17 @@ def test_get_legacy_task_strips_todo_fixme_prefix(tmp_path: Path):
         result = _get_legacy_task_if_exists(tmp_path)
         assert result is not None
         assert result.title == expected, f"'{raw_title}' 應被清理為 '{expected}'"
+
+def test_get_legacy_task_rejects_symbol_only_title(tmp_path: Path):
+    """清理後只剩符號/數字的 title 應被視為無效（A1-1l）"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "正常任務")
+
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+    data["title"] = "   123 --- !!!   "
+    old_file.write_text(json.dumps(data), encoding="utf-8")
+
+    result = _get_legacy_task_if_exists(tmp_path)
+    assert result is None  # 應被整體品質守衛拒絕
