@@ -51,6 +51,13 @@ from agentx.tasks import get_task_migration_status
 print(get_task_migration_status(Path(".")))
 ```
 
+**Q: 我想手動清理舊系統資料，該怎麼做？**
+A: 
+1. 確認目前狀態：`agentx doctor` 或使用 `get_task_migration_status`。
+2. 如果舊任務已遷移，舊 `task.json` 會被備份為 `task.json.bak.*`。
+3. 若想徹底移除歷史備份，可手動刪除 `.agentx/task.json.bak.*` 檔案（建議先備份）。
+4. 未來版本將提供更明確的一鍵清理指令（規劃中）。
+
 ---
 
 ## 4. 貢獻者注意事項
