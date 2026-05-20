@@ -71,3 +71,13 @@ def test_check_task_migration_mixed_state(tmp_path: Path) -> None:
     assert name == "task_migration (MT22)"
     assert ok is True
     assert "mixed (legacy + multi 並存)" in detail
+
+
+def test_check_task_migration_handles_error_gracefully() -> None:
+    """當無法取得 workspace 資訊時應安全回報錯誤而不崩潰。"""
+    bad_settings = SimpleNamespace(workspace=None)  # 故意製造錯誤情境
+    name, ok, detail = _check_task_migration(bad_settings)
+
+    assert name == "task_migration (MT22)"
+    assert ok is False
+    assert "Error" in detail or "Exception" in detail or "NoneType" in detail
