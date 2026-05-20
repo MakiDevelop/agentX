@@ -225,6 +225,14 @@ Git 閉環群（review → commit → approval）已完整遷移。
 - `cli.py` 已移除 `from agentx.task import ...`。
 - 這是讓生產程式碼完全脫離舊單一任務模組的重要一步。
 
+**Step 13 已完成**（本次）：
+- 根據策略 B 調整 `migrate_single_task_if_needed`：
+  - 遷移成功後將舊 `task.json` 改名為 `task.json.bak` 進行備份（而非直接刪除）。
+  - 補充對應測試驗證備份行為。
+- 更新函式文件與註解，清楚說明新的務實備份策略。
+
+目前遷移機制已改為更乾淨且安全的處理方式。
+
 `build_runtime` 相關的 legacy 相依已清理完畢。
 
 **M. 最終移除舊 `task.py` 前置條件清單（逐條檢核中）**

@@ -136,3 +136,24 @@ def test_migrate_does_nothing_when_no_old_task(tmp_path: Path):
     migrated = migrate_single_task_if_needed(tmp_path)
     assert migrated is False
     assert load_tasks(tmp_path) == []
+
+
+def test_migrate_renames_old_file_to_backup(tmp_path: Path):
+    """遷移成功後，舊的 task.json 應被改名為 task.json.bak（務實策略 B）"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "重構認證模組")
+
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is True
+
+    old_path = tmp_path / ".agentx" / "task.json"
+    backup_path = tmp_path / ".agentx" / "task.json.bak"
+
+    assert not old_path.exists()
+    assert backup_path.exists()
+
+    # 確認新多任務清單正確
+    multi = load_tasks(tmp_path)
+    assert len(multi) == 1
+    assert multi[0]["description"] == "重構認證模組"

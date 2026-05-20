@@ -133,24 +133,24 @@ def single_task_path(workspace: Path) -> Path:
 
 def migrate_single_task_if_needed(workspace: Path) -> bool:
     """
-    如果存在舊的 .agentx/task.json（單一任務）且目前多任務清單為空，
-    自動將其轉成多任務清單中的一個 in_progress 任務。
+    MT22 遷移函式：將舊的單一任務系統（task.json）遷移到新多任務清單。
 
-    這是雙任務系統統一的過渡措施（MT22）。
-    遷移成功後回傳 True；沒有需要遷移或失敗則回傳 False。
+    行為：
+    - 只有在「新 tasks.json 不存在」且「舊 task.json 存在且為 active 任務」時才執行遷移。
+    - 遷移成功後，會把舊的 task.json 改名為 task.json.bak（備份），避免重複遷移。
+    - 這是務實路線：保留備份但不再使用舊系統。
 
-    安全守衛（Codex review 後修復）：
-    - 若 tasks.json 已存在（即使 load 後為空），視為「已有新系統」，不進行遷移。
-      這避免 tasks.json 損壞時被舊單一任務覆寫的風險。
+    回傳：
+    - True：成功執行遷移
+    - False：無需遷移或遷移失敗
     """
     tasks_file = tasks_path(workspace)
     old_path = single_task_path(workspace)
 
-    # 關鍵守衛：如果新檔案已經存在（無論內容是否可讀），都不再從舊檔遷移
+    # 關鍵守衛：新系統已存在就不遷移（避免覆蓋）
     if tasks_file.exists():
         return False
 
-    # 此時新檔案完全不存在，才考慮從舊單一任務遷移
     if not old_path.exists():
         return False
 
@@ -162,21 +162,31 @@ def migrate_single_task_if_needed(workspace: Path) -> bool:
     title = (data.get("title") or "").strip()
     status = data.get("status", "")
     if not title or status != "active":
-        # 只有真正進行中的單一任務才值得遷移
         return False
 
-    # 轉成多任務格式
+    # 執行遷移
     new_task = {
         "id": 1,
         "description": title[:200],
         "status": "in_progress",
         "notes": f"[自動遷移自舊單一任務] created_at={data.get('created_at', '')}",
     }
-
     save_tasks(workspace, [new_task])
 
-    # 為了安全，先不刪舊檔。後續版本可再決定是否自動移除。
-    # 這裡只做單向遷移，避免雙寫。
+    # === 務實策略（B）===
+    # 遷移成功後把舊檔改名備份，而不是直接刪除。
+    # 這樣既安全，又讓舊檔不會再被後續流程誤用。
+    try:
+        backup_path = workspace / ".agentx" / "task.json.bak"
+        if backup_path.exists():
+            # 如果備份已存在，加上時間戳避免覆蓋
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = workspace / ".agentx" / f"task.json.bak.{timestamp}"
+        old_path.rename(backup_path)
+    except Exception:
+        # 備份失敗不影響遷移結果，只記錄即可
+        # 後續可以考慮加上 logging
+        pass
 
     return True
 
