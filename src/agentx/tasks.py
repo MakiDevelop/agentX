@@ -170,7 +170,11 @@ def migrate_single_task_if_needed(workspace: Path) -> bool:
         "id": 1,
         "description": title[:200],
         "status": "in_progress",
-        "notes": f"[自動遷移自舊單一任務] created_at={data.get('created_at', '')}",
+        "notes": (
+            "[自動遷移自舊單一任務系統]\n"
+            f"原始標題：{title}\n"
+            f"原始建立時間：{data.get('created_at', '未知')}"
+        ),
     }
     save_tasks(workspace, [new_task])
 
@@ -180,6 +184,11 @@ def migrate_single_task_if_needed(workspace: Path) -> bool:
     _backup_old_single_task_file(workspace, old_path)
 
     return True
+
+
+def has_legacy_single_task(workspace: Path) -> bool:
+    """檢查是否還存在舊的單一任務資料（MT22 過渡期工具）。"""
+    return single_task_path(workspace).exists()
 
 
 def _backup_old_single_task_file(workspace: Path, old_path: Path) -> None:
