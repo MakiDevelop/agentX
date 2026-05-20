@@ -627,7 +627,10 @@ def build_handoff(
     else:
         legacy = _get_legacy_task_if_exists(settings.workspace)
         if legacy:
-            task_section = f"task（legacy）：{legacy.title} [{legacy.status}]\n"
+            task_section = (
+                "task（legacy）：{legacy.title} [{legacy.status}]\n"
+                "注意：舊單一任務系統已棄用，建議改用新多任務清單。"
+            )
         else:
             task_section = "tasks：(none)\n"
 
