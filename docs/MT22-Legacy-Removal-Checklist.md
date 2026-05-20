@@ -28,10 +28,11 @@ else:
 
 **移除條件（必須全部滿足）**：
 - [ ] `has_legacy_single_task()` 在整個 codebase 中不再被任何生產路徑呼叫（僅剩測試或診斷）。
+- [ ] 執行 `agentx doctor` 確認不再顯示 `task_migration (MT22)` 項目。
 - [ ] 所有現存的 `.agentx/task.json` 都已被遷移或明確標記為歷史備份（可透過 `get_task_migration_status` 驗證）。
-- [ ] `test_config` 或相關 CLI 測試已移除對 legacy 分支的依賴，或明確標記為「legacy 歷史情境測試」。
-- [ ] 使用者文件（Migration Guide）已說明舊系統已完全退場，不再需要此顯示。
-- [ ] `/doctor` 輸出中已不再需要特別顯示 legacy 狀態（或已改為歷史記錄模式）。
+- [ ] `tests/test_cli_dispatch.py` 及相關測試已移除或隔離對 print_config legacy 分支的依賴。
+- [ ] `docs/MT22-Migration-Guide.md` 已清楚說明舊系統已退場。
+- [ ] 移除後，在帶有舊 `task.json` 的 workspace 執行 `/config` 不會再顯示 legacy 資訊。
 
 **建議驗證測試（逐步補充中）**：
 - `tests/test_tasks.py` 中的所有 `_write_legacy_task` + migrate 系列測試（已全面替換舊 API，涵蓋 active/non-active、髒資料、日期處理等情境）
