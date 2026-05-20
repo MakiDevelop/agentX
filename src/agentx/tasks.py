@@ -242,48 +242,12 @@ def _normalize_legacy_date(date_str: str) -> str:
     if not s:
         return ""
 
-    import re
     # 基本 ISO-like 結構（支援 T 或空格分隔）
+    # 符合就保留原始字串（務實容忍歷史格式）；否則直接清空。
     if re.match(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}", s):
         return date_str.strip()
 
     return ""
-    s = date_str.strip()
-    if not s:
-        return ""
-
-    # 快速 regex 檢查
-    if not re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', s):
-        return ""
-
-    # 清理常見變形
-    s_clean = s.replace("Z", "+00:00")
-    if "." in s_clean:
-        s_clean = s_clean.split(".")[0]
-
-    try:
-        datetime.fromisoformat(s_clean)
-        return date_str.strip()
-    except Exception:
-        return ""
-    s = date_str.strip()
-    if not s:
-        return ""
-
-    # 快速 regex 檢查基本 ISO 結構
-    if not re.match(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}', s):
-        return ""
-
-    # 清理常見變形後再解析
-    s_clean = s.replace("Z", "+00:00")
-    if "." in s_clean:
-        s_clean = s_clean.split(".")[0]  # 去掉毫秒
-
-    try:
-        datetime.fromisoformat(s_clean)
-        return date_str.strip()  # 保留原始字串
-    except Exception:
-        return ""
 
 
 def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":

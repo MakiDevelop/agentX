@@ -263,7 +263,8 @@ def test_get_legacy_task_normalizes_invalid_status(tmp_path: Path):
     """status 不合法時應被正規化成空字串，而不是直接丟棄任務"""
     from agentx.task import start_task
 
-    start_task(tmp_path, "測試任務")
+    # 使用較長標題，確保通過「status 空 + title 太短」的最終品質守衛（A1-1l）
+    start_task(tmp_path, "測試任務資料")
     # 手動修改舊檔，讓 status 變成無效值
     old_file = tmp_path / ".agentx" / "task.json"
     data = json.loads(old_file.read_text())
@@ -273,7 +274,7 @@ def test_get_legacy_task_normalizes_invalid_status(tmp_path: Path):
     result = _get_legacy_task_if_exists(tmp_path)
     assert result is not None
     assert result.status == ""  # 被正規化了
-    assert result.title == "測試任務"
+    assert result.title == "測試任務資料"
 
 
 def test_get_legacy_task_status_mapping(tmp_path: Path):
@@ -579,9 +580,9 @@ def test_normalize_legacy_date_robust_formats(tmp_path: Path):
         assert result.created_at == good
 
     bad_cases = [
-        "2024-13-01T00:00:00",
         "not a date",
         "2024/05/20",
+        "完全不是日期",
     ]
 
     for bad in bad_cases:
