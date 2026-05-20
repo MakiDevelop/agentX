@@ -153,8 +153,8 @@ def test_get_legacy_task_returns_none_for_oversized_file(tmp_path: Path):
     assert result is None
 
 
-def test_get_legacy_task_returns_none_for_invalid_status(tmp_path: Path):
-    """status 不在白名單時應視為無效"""
+def test_get_legacy_task_normalizes_invalid_status(tmp_path: Path):
+    """status 不合法時應被正規化成空字串，而不是直接丟棄任務"""
     from agentx.task import start_task
 
     start_task(tmp_path, "測試任務")
@@ -165,7 +165,29 @@ def test_get_legacy_task_returns_none_for_invalid_status(tmp_path: Path):
     old_file.write_text(json.dumps(data), encoding="utf-8")
 
     result = _get_legacy_task_if_exists(tmp_path)
-    assert result is None
+    assert result is not None
+    assert result.status == ""  # 被正規化了
+    assert result.title == "測試任務"
+
+
+def test_get_legacy_task_normalizes_data(tmp_path: Path):
+    """應對舊資料做基本清理（去空白、截斷、長度限制）"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "   髒資料任務   ")
+
+    # 手動修改舊檔，加上很長的 title 和 notes
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+    data["title"] = "   " + "A" * 300
+    data["notes"] = "B" * 800
+    old_file.write_text(json.dumps(data), encoding="utf-8")
+
+    result = _get_legacy_task_if_exists(tmp_path)
+    assert result is not None
+    assert result.title == "A" * 200          # 有截斷
+    assert result.title.strip() == result.title  # 已去空白
+    assert result.status == "active"
 
 
 def test_migrate_renames_old_file_to_backup(tmp_path: Path):

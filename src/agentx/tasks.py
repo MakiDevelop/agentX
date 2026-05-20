@@ -233,13 +233,21 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
         # 任何解析或讀取異常都視為無效
         return None
 
-    # 基本有效性檢查
-    if not task.title or not isinstance(task.title, str):
+    # 基本有效性檢查 + 資料品質正規化（MT22 過渡期）
+    if not isinstance(task.title, str) or not task.title.strip():
         return None
 
-    # 可選：對 status 做白名單檢查（增加防禦性）
-    if task.status not in ("", "active", "done", "none"):
-        return None
+    # 對舊資料做輕量清理（舊 TaskState 沒有 notes 欄位）
+    cleaned_title = task.title.strip()[:200]
 
-    return task
+    # status 標準化（舊系統可能有不標準的值）
+    status = task.status if task.status in ("active", "done") else ""
+
+    # 重新組裝一個乾淨的 TaskState（舊系統只有這四個欄位）
+    return TaskState(
+        title=cleaned_title,
+        status=status,
+        created_at=task.created_at or "",
+        updated_at=task.updated_at or "",
+    )
 

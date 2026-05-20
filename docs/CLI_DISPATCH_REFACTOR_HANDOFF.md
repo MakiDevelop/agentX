@@ -235,12 +235,13 @@ Git 閉環群（review → commit → approval）已完整遷移。
 目前遷移機制已改為更乾淨且安全的處理方式。
 
 **Step 14 已完成**（本次 - A 方向持續強化）：
-- 大幅強化 `_get_legacy_task_if_exists` 的防禦性：
-  - 增加檔案大小上限檢查（>1MB 視為無效）。
+- 大幅強化 `_get_legacy_task_if_exists` 的防禦性與資料品質：
+  - 增加檔案大小上限檢查。
   - 增加 status 白名單驗證。
-  - 加強異常捕獲（任何解析錯誤都回 None）。
-- 補充對應的邊界測試（過大檔案、無效 status）。
-- 整體過渡期 legacy 讀取邏輯更安全。
+  - 加強異常捕獲。
+  - **新增資料正規化**：title 自動 strip + 長度限制、status 自動標準化。
+- 補充對應的正規化測試。
+- 整體 legacy 讀取在防禦性和資料品質上都有明顯提升。
 
 `build_runtime` 相關的 legacy 相依已清理完畢。
 
