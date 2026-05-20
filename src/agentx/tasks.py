@@ -202,8 +202,15 @@ def _backup_old_single_task_file(workspace: Path, old_path: Path) -> None:
 def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
     """MT22 過渡期 helper。
 
-    只在舊的 .agentx/task.json 仍然存在，且內容有意義時，才回傳舊的單一任務物件。
-    否則回傳 None，讓呼叫端優先走新多任務清單。
+    安全地嘗試讀取舊的單一任務系統（如果還存在）。
+    只有在檔案存在、內容可解析、且有意義的任務資料時才回傳 TaskState。
+    否則一律回傳 None，讓呼叫端優先使用新多任務清單。
+
+    防禦性設計：
+    - 檔案不存在 → None
+    - 檔案過大（> 1MB）→ None（避免惡意或異常檔案）
+    - 解析失敗 → None
+    - 沒有有效 title → None
 
     這是為了在過渡期間保留相容性，當舊系統完全退場後，此函式與其呼叫者可移除。
     """
@@ -213,8 +220,26 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
     if not legacy_path.exists():
         return None
 
-    task = load_task(workspace)
-    if not task.title:
+    # 簡單的大小防禦，避免讀取異常大的檔案
+    try:
+        if legacy_path.stat().st_size > 1 * 1024 * 1024:  # 1MB
+            return None
+    except OSError:
         return None
+
+    try:
+        task = load_task(workspace)
+    except Exception:
+        # 任何解析或讀取異常都視為無效
+        return None
+
+    # 基本有效性檢查
+    if not task.title or not isinstance(task.title, str):
+        return None
+
+    # 可選：對 status 做白名單檢查（增加防禦性）
+    if task.status not in ("", "active", "done", "none"):
+        return None
+
     return task
 

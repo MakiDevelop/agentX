@@ -1,6 +1,9 @@
 from pathlib import Path
 
+import json
+
 from agentx.tasks import (
+    _get_legacy_task_if_exists,
     find_task,
     get_next_task_id,
     load_tasks,
@@ -136,6 +139,33 @@ def test_migrate_does_nothing_when_no_old_task(tmp_path: Path):
     migrated = migrate_single_task_if_needed(tmp_path)
     assert migrated is False
     assert load_tasks(tmp_path) == []
+
+
+def test_get_legacy_task_returns_none_for_oversized_file(tmp_path: Path):
+    """檔案過大時應視為無效（防禦性設計）"""
+    legacy_dir = tmp_path / ".agentx"
+    legacy_dir.mkdir(parents=True, exist_ok=True)
+    large_file = legacy_dir / "task.json"
+    # 寫入超過 1MB 的檔案
+    large_file.write_bytes(b"x" * (1024 * 1024 + 100))
+
+    result = _get_legacy_task_if_exists(tmp_path)
+    assert result is None
+
+
+def test_get_legacy_task_returns_none_for_invalid_status(tmp_path: Path):
+    """status 不在白名單時應視為無效"""
+    from agentx.task import start_task
+
+    start_task(tmp_path, "測試任務")
+    # 手動修改舊檔，讓 status 變成無效值
+    old_file = tmp_path / ".agentx" / "task.json"
+    data = json.loads(old_file.read_text())
+    data["status"] = "weird_status"
+    old_file.write_text(json.dumps(data), encoding="utf-8")
+
+    result = _get_legacy_task_if_exists(tmp_path)
+    assert result is None
 
 
 def test_migrate_renames_old_file_to_backup(tmp_path: Path):
