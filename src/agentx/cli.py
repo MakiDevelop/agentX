@@ -32,6 +32,7 @@ from agentx.ollama import OllamaCancelledError, OllamaClient
 from agentx.persona import list_personas, normalize_persona
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
+from agentx.project_state import mark_guide_hint_seen, should_show_guide_hint
 from agentx.prompting import SlashCommandCompleter
 from agentx.runtime_prompt import build_chat_system_prompt, build_headless_agent_system_prompt
 from agentx.safety import Risk
@@ -1180,19 +1181,19 @@ def shell(
         )
     )
 
-    # Post-welcome Quick Orientation (continuous momentum, visual pop)
-    console.print()
-    orientation = Panel(
-        "[bold cyan]想快速掌握 agentX 的感覺？[/bold cyan]\n"
-        "  [cyan]/guide[/cyan]   60 秒掌握模式、工作流、安全與記憶\n"
-        "  [cyan]/help[/cyan]    查看所有指令（已分類 + 安全提示）\n"
-        "  [cyan]/tools[/cyan]   查看工具（清楚標示 GREEN/YELLOW/RED 風險）\n"
-        "  [cyan]/doctor[/cyan]  檢查目前狀態 + 安全姿勢\n"
-        "[dim]核心：功能強大，但你永遠是主人。[/dim]",
-        border_style="dim",
-        padding=(0, 1),
-    )
-    console.print(orientation)
+    if should_show_guide_hint(settings.workspace):
+        console.print()
+        orientation = Panel(
+            "[bold cyan]第一次使用這個 repo 的 agentX？[/bold cyan]\n"
+            "  [cyan]/guide[/cyan]   60 秒掌握模式、工作流、安全與記憶\n"
+            "  [cyan]/help[/cyan]    查看所有指令（已分類 + 安全提示）\n"
+            "  [cyan]/tools[/cyan]   查看工具（清楚標示 GREEN/YELLOW/RED 風險）\n"
+            "[dim]這個提示只會在本 repo 顯示一次；之後隨時可輸入 /guide。[/dim]",
+            border_style="dim",
+            padding=(0, 1),
+        )
+        console.print(orientation)
+        mark_guide_hint_seen(settings.workspace)
 
     # === 階段一 Dispatch 相關函數 ===
     SLASH_HANDLERS: dict[str, Callable[[ShellState, str], None]] = {}
@@ -1233,6 +1234,7 @@ def shell(
     def handle_guide(state: ShellState, prompt: str):
         """顯示 60 秒快速導覽"""
         transcript.write("slash_command", {"command": prompt})
+        mark_guide_hint_seen(state.settings.workspace)
         print_guide()
 
     register_handler("/guide", handle_guide)

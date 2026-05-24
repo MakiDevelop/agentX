@@ -47,6 +47,7 @@ AGENTX_WORKSPACE="$PWD" uv --directory /Users/maki/GitHub/agentX run agentx shel
 ```
 
 `ax` 會使用你目前所在的目錄當 workspace，所以可以在任何 repo 裡直接啟動 agentX。
+第一次在某個 repo 啟動時，agentX 會顯示一次 `/guide` 提示；之後可隨時手動輸入 `/guide` 重新查看。
 
 指定模型：
 

@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-25  
 **Purpose**: Track the gap between the 5 product-vision images and the current CLI implementation.  
-**Status**: Phase 1 product-surface pass completed in commit `4463c71`; `/guide` and richer `/sessions` added in the next pass.
+**Status**: Phase 1 product-surface pass completed in commit `4463c71`; `/guide`, richer `/sessions`, resume/handoff continuity, and one-time guide hint added in follow-up passes.
 
 ## Summary
 
@@ -26,7 +26,7 @@ The largest remaining gap is product experience: discoverability, onboarding, an
 | Feature completeness | 75-80% | Most pictured functions exist in some form. |
 | Safety communication | 70-75% | Improved in `/help`, `/tools`, `/doctor`, `/status`, welcome UI. |
 | Memory continuity feeling | 65-70% | Handoff/resume exist; UX can still feel technical. |
-| Onboarding / first 60 seconds | 60-70% | Better welcome/help surfaces; no true first-run wizard yet. |
+| Onboarding / first 60 seconds | 70-75% | `/guide` plus one-time local hint covers first orientation. |
 | Visual polish | 55-65% | Rich panels help, but this is still terminal-first. |
 
 Overall: roughly **75-80% on the read-heavy / guarded MVP vision**, with the next gains coming from onboarding and continuity rather than more tools.
@@ -36,6 +36,7 @@ Overall: roughly **75-80% on the read-heavy / guarded MVP vision**, with the nex
 Recent product-surface passes moved the daily UX surfaces closer to the images:
 
 - `/guide` gives a 60-second orientation across modes, workflows, safety, and Memory Hall.
+- First repo launch shows a one-time local `/guide` hint, then stores dismissal in `.agentx/state.json`.
 - `/help` is categorized by workflow instead of a flat list.
 - `/tools` groups tools by GREEN / YELLOW / RED risk.
 - `/doctor` now shows both technical health and product posture.
@@ -68,7 +69,7 @@ New users still need to infer the best entry point.
 Recommended next work:
 
 - Keep refining `/guide` with real user feedback.
-- Add a first-run hint that does not repeat every launch once dismissed.
+- Consider a `/guide --full` or docs-linked extended version if users need more depth.
 
 ### P1: Memory Hall Felt Continuity
 
@@ -108,9 +109,8 @@ Recommended next work:
 
 ## Recommended Next Unit
 
-Improve first-run orientation persistence as a small, testable unit:
+Improve approval UX as a small, testable unit:
 
-- Add a first-run hint that points to `/guide`.
-- Persist dismissal in `.agentx/config.toml` or a small local state file.
-- Avoid repeating onboarding once the user has used the shell.
-- Keep this local-only and outside Memory Hall.
+- Add `strict` / `deny` aliases while preserving `ask` / `auto` / `off`.
+- Update `/approval` output and docs with short examples.
+- Keep RED behavior unchanged.

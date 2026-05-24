@@ -9,6 +9,7 @@ GEMINI.md
 .agentx/patches/
 .agentx/task.json
 .agentx/tasks.json
+.agentx/state.json
 .agentx/*.md
 .agentx/handoff/
 tmp/
