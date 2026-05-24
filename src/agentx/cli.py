@@ -45,7 +45,13 @@ from agentx.tasks import (
     save_tasks,
 )
 from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
-from agentx.transcript import Transcript, find_transcript, list_transcripts, summarize_transcript
+from agentx.transcript import (
+    Transcript,
+    find_transcript,
+    list_transcripts,
+    summarize_transcript,
+    transcript_overview,
+)
 from agentx.tui import AgentXTui, format_assistant_header
 
 if TYPE_CHECKING:
@@ -102,6 +108,7 @@ ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 SLASH_COMMANDS = [
     ("/help", "列出所有 slash command 與中文說明"),
+    ("/guide", "60 秒快速導覽：模式選擇、常用工作流、安全與記憶"),
     ("/init", "掃描 repo 並寫入 project profile 到 Memory Hall"),
     ("/task [TEXT|status|list|add ...|update <id> ...|done <id>|clear]", "多任務清單管理（已統一為真相來源）"),
     ("/doctor", "檢查 Ollama、模型、Memory Hall、git、uv 狀態"),
@@ -146,6 +153,19 @@ SLASH_COMMANDS = [
     ("/quit", "離開 agentX shell，同 /exit"),
 ]
 
+GUIDE_MODE_ROWS = [
+    ("chat", "純聊天 / 解釋概念", "uv run agentx chat \"只回一句話：你是什麼？\""),
+    ("ask", "單次 agent 任務", "uv run agentx ask \"幫我找出這個 repo 的測試指令\""),
+    ("shell", "長時間協作 CLI", "ax"),
+]
+
+GUIDE_WORKFLOW_ROWS = [
+    ("了解專案", "/files  →  /read README.md  →  /search 關鍵字"),
+    ("檢查變更", "/git  →  /diff  →  /test  →  /review"),
+    ("安全執行", "/tools 看風險  →  /approval ask  →  /run allowlist 指令"),
+    ("延續工作", "/sessions  →  /resume latest  →  /handoff 本輪重點"),
+]
+
 
 def print_trace(message: str) -> None:
     console.print(f"[dim][trace] {escape(message)}[/dim]")
@@ -170,7 +190,7 @@ def print_slash_help() -> None:
     # Category definitions (vision-aligned grouping)
     categories = [
         ("核心與模式", [
-            "/help", "/status", "/mode", "/plan", "/execute", "/clear", "/exit",
+            "/help", "/guide", "/status", "/mode", "/plan", "/execute", "/clear", "/exit",
         ]),
         ("檔案與內容", [
             "/files", "/read", "/search", "/attach", "/fetch",
@@ -226,6 +246,47 @@ def print_slash_help() -> None:
         console.print()  # spacing between sections
 
     console.print("[dim]安全是 agentX 的核心 —— 你永遠可以透過 /approval 隨時調整。輸入 /doctor 查看目前姿勢。[/dim]")
+
+
+def print_guide() -> None:
+    """Print the 60-second orientation guide for new or returning users."""
+    console.print(
+        Panel(
+            "[bold]agentX 60 秒導覽[/bold]\n"
+            "本地 Ollama agent shell：用清楚模式、受控工具、Memory Hall 交接，"
+            "把本地模型變成可長時間協作的 CLI 助手。",
+            border_style="cyan",
+            padding=(0, 1),
+        )
+    )
+    console.print()
+
+    mode_table = Table(title="先選模式", show_header=True, header_style="bold")
+    mode_table.add_column("模式", style="cyan", no_wrap=True)
+    mode_table.add_column("適合情境")
+    mode_table.add_column("啟動範例")
+    for mode_name, scenario, example in GUIDE_MODE_ROWS:
+        mode_table.add_row(mode_name, scenario, example)
+    console.print(mode_table)
+    console.print()
+
+    workflow_table = Table(title="常用工作流", show_header=True, header_style="bold")
+    workflow_table.add_column("目標", style="cyan", no_wrap=True)
+    workflow_table.add_column("建議路徑")
+    for goal, path in GUIDE_WORKFLOW_ROWS:
+        workflow_table.add_row(goal, path)
+    console.print(workflow_table)
+    console.print()
+
+    safety = Table(title="安全與記憶", show_header=False)
+    safety.add_column("項目", style="bold cyan", no_wrap=True)
+    safety.add_column("說明")
+    safety.add_row("GREEN", "讀取、搜尋、git status/diff 等低風險操作會自動執行。")
+    safety.add_row("YELLOW", "改檔、Docker build/up/down、Memory write 依 /approval 策略確認。")
+    safety.add_row("RED", "危險操作與敏感路徑預設受保護。")
+    safety.add_row("Memory Hall", "用 /remember 寫入重點，用 /handoff 交接，用 /resume 延續上一輪。")
+    console.print(safety)
+    console.print("[dim]下一步：輸入 /help 看全部指令，或 /tools 看工具與風險分級。[/dim]")
 
 
 def print_tools(tools: ToolRegistry) -> None:
@@ -363,10 +424,23 @@ def cancel_jobs(
 def print_sessions(settings: Settings) -> None:
     table = Table(title="agentX sessions", show_header=True, header_style="bold")
     table.add_column("Name", style="cyan")
-    table.add_column("Path")
+    table.add_column("Start")
+    table.add_column("Model")
+    table.add_column("Namespace")
+    table.add_column("Turns", justify="right")
+    table.add_column("Last")
     for path in list_transcripts(settings.workspace):
-        table.add_row(path.stem, str(path))
+        overview = transcript_overview(path)
+        table.add_row(
+            str(overview["name"]),
+            str(overview["started"]),
+            str(overview["model"]),
+            str(overview["namespace"]),
+            str(overview["turns"]),
+            str(overview["last"]),
+        )
     console.print(table)
+    console.print("[dim]使用 /resume latest 或 /resume SESSION_NAME 載入上一輪摘要。[/dim]")
 
 
 def print_tool_result(result_text: str) -> None:
@@ -1079,7 +1153,7 @@ def shell(
                 f"namespace: [bold]{namespace}[/bold]",
                 "",
                 "安全： [green]GREEN 自動[/green] ｜ [yellow]YELLOW 依策略[/yellow] ｜ [red]RED 受保護[/red]",
-                "輸入 [bold cyan]/help[/bold cyan] 查看指令  ·  [bold cyan]/tools[/bold cyan] 查看工具  ·  [bold cyan]/doctor[/bold cyan] 查看狀態",
+                "輸入 [bold cyan]/guide[/bold cyan] 快速導覽  ·  [bold cyan]/help[/bold cyan] 查看指令  ·  [bold cyan]/tools[/bold cyan] 查看工具",
                 "",
                 "[dim]功能強大，但控制權永遠在你手上。[/dim]",
             ),
@@ -1093,6 +1167,7 @@ def shell(
     console.print()
     orientation = Panel(
         "[bold cyan]想快速掌握 agentX 的感覺？[/bold cyan]\n"
+        "  [cyan]/guide[/cyan]   60 秒掌握模式、工作流、安全與記憶\n"
         "  [cyan]/help[/cyan]    查看所有指令（已分類 + 安全提示）\n"
         "  [cyan]/tools[/cyan]   查看工具（清楚標示 GREEN/YELLOW/RED 風險）\n"
         "  [cyan]/doctor[/cyan]  檢查目前狀態 + 安全姿勢\n"
@@ -1137,6 +1212,13 @@ def shell(
         print_slash_help()
 
     register_handler("/help", handle_help)
+
+    def handle_guide(state: ShellState, prompt: str):
+        """顯示 60 秒快速導覽"""
+        transcript.write("slash_command", {"command": prompt})
+        print_guide()
+
+    register_handler("/guide", handle_guide)
 
     def handle_memory(state: ShellState, prompt: str):
         """查詢目前 namespace 的 Memory Hall 記憶（支援 /memory QUERY）"""

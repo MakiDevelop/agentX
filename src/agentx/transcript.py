@@ -79,6 +79,43 @@ def summarize_transcript(path: Path, limit: int = 12) -> str:
     return "\n".join(lines)
 
 
+def transcript_overview(path: Path) -> dict[str, str | int]:
+    """Return compact metadata for a transcript list view."""
+    started = path.stem
+    model = ""
+    namespace = ""
+    turns = 0
+    last_event = ""
+    last_text = ""
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            event = str(record.get("event", ""))
+            if event == "session_start":
+                model = str(record.get("model", ""))
+                namespace = str(record.get("namespace", ""))
+                started = str(record.get("ts", started))
+            if event in {"user", "assistant"}:
+                turns += 1
+                last_event = event
+                last_text = str(record.get("content", "")).replace("\n", " ")[:120]
+            elif event in {"handoff", "resume", "compact"}:
+                last_event = event
+                last_text = str(record.get("result") or record.get("summary") or "").replace("\n", " ")[:120]
+    return {
+        "name": path.stem,
+        "started": started,
+        "model": model or "-",
+        "namespace": namespace or "-",
+        "turns": turns,
+        "last": f"{last_event}: {last_text}" if last_event else "-",
+        "path": str(path),
+    }
+
+
 def list_transcripts(workspace: Path, limit: int = 10) -> list[Path]:
     directory = workspace / ".agentx" / "sessions"
     if not directory.exists():

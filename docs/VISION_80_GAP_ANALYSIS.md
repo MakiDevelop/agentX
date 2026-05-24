@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-25  
 **Purpose**: Track the gap between the 5 product-vision images and the current CLI implementation.  
-**Status**: Phase 1 product-surface pass completed in commit `4463c71`.
+**Status**: Phase 1 product-surface pass completed in commit `4463c71`; `/guide` and richer `/sessions` added in the next pass.
 
 ## Summary
 
@@ -33,8 +33,9 @@ Overall: roughly **75-80% on the read-heavy / guarded MVP vision**, with the nex
 
 ## What Was Completed
 
-Commit `4463c71` moved the daily UX surfaces closer to the images:
+Recent product-surface passes moved the daily UX surfaces closer to the images:
 
+- `/guide` gives a 60-second orientation across modes, workflows, safety, and Memory Hall.
 - `/help` is categorized by workflow instead of a flat list.
 - `/tools` groups tools by GREEN / YELLOW / RED risk.
 - `/doctor` now shows both technical health and product posture.
@@ -64,8 +65,7 @@ New users still need to infer the best entry point.
 
 Recommended next work:
 
-- Add a concise `/guide` or `/quickstart` command.
-- Show mode choice examples: `chat`, `ask`, `shell`.
+- Keep refining `/guide` with real user feedback.
 - Add a first-run hint that does not repeat every launch once dismissed.
 
 ### P1: Memory Hall Felt Continuity
@@ -74,7 +74,7 @@ The mechanics exist, but the experience is still technical.
 
 Recommended next work:
 
-- Make `/sessions` show useful summaries, not just file paths.
+- Continue improving `/sessions` summaries and resume affordances.
 - Make `/resume latest` print what was loaded.
 - Improve `/handoff` output with clearer next-step sections.
 
@@ -107,9 +107,9 @@ Recommended next work:
 
 ## Recommended Next Unit
 
-Implement `/guide` as a small, testable command:
+Improve resume/handoff continuity as a small, testable unit:
 
-- Explains when to use `chat`, `ask`, and `shell`.
-- Shows 3-5 high-value workflows.
-- Mentions safety posture and Memory Hall in one concise screen.
-- Covered by a small formatting or registration test.
+- Make `/resume latest` print the transcript name and loaded summary size.
+- Add clearer "next steps" formatting to `/handoff`.
+- Keep output concise enough for narrow terminals.
+- Cover the transcript summary behavior with focused tests.
