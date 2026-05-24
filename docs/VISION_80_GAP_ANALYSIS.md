@@ -43,6 +43,8 @@ Recent product-surface passes moved the daily UX surfaces closer to the images:
 - Shell welcome text now states the local Ollama agent-shell positioning and safety model.
 - `/run` output includes final command and per-argument listing.
 - `/resume latest` no longer resumes the current empty transcript.
+- `/resume` reports which transcript was loaded and the summary size.
+- `/handoff` includes a "next steps" section based on active tasks.
 - Handoff uses the latest task list snapshot.
 - Safety command classification catches sensitive paths and cross-absolute-path `mv`.
 - README now reflects `task`, `approval`, and `execute` behavior.
@@ -75,8 +77,7 @@ The mechanics exist, but the experience is still technical.
 Recommended next work:
 
 - Continue improving `/sessions` summaries and resume affordances.
-- Make `/resume latest` print what was loaded.
-- Improve `/handoff` output with clearer next-step sections.
+- Refine `/resume` and `/handoff` wording with real usage.
 
 ### P2: Approval Gate UX
 
@@ -107,9 +108,9 @@ Recommended next work:
 
 ## Recommended Next Unit
 
-Improve resume/handoff continuity as a small, testable unit:
+Improve first-run orientation persistence as a small, testable unit:
 
-- Make `/resume latest` print the transcript name and loaded summary size.
-- Add clearer "next steps" formatting to `/handoff`.
-- Keep output concise enough for narrow terminals.
-- Cover the transcript summary behavior with focused tests.
+- Add a first-run hint that points to `/guide`.
+- Persist dismissal in `.agentx/config.toml` or a small local state file.
+- Avoid repeating onboarding once the user has used the shell.
+- Keep this local-only and outside Memory Hall.

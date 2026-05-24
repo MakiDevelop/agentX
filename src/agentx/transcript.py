@@ -79,6 +79,18 @@ def summarize_transcript(path: Path, limit: int = 12) -> str:
     return "\n".join(lines)
 
 
+def resume_loaded_message(path: Path, summary: str) -> str:
+    """Return a concise user-facing confirmation for /resume."""
+    lines = [line for line in summary.splitlines() if line.strip()]
+    token_estimate = len(summary) // 4
+    return (
+        f"resumed {path.stem}\n"
+        f"source: {path}\n"
+        f"loaded summary: {len(lines)} lines, ~{token_estimate} tokens\n"
+        "next: continue your prompt, or use /context to inspect usage"
+    )
+
+
 def transcript_overview(path: Path) -> dict[str, str | int]:
     """Return compact metadata for a transcript list view."""
     started = path.stem

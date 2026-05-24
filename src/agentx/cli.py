@@ -49,6 +49,7 @@ from agentx.transcript import (
     Transcript,
     find_transcript,
     list_transcripts,
+    resume_loaded_message,
     summarize_transcript,
     transcript_overview,
 )
@@ -863,6 +864,7 @@ def build_handoff(
 ) -> str:
     recent = "\n".join(f"- [{item_mode}] {prompt}" for item_mode, prompt in history[-10:])
     note_section = f"\n人類補充：{note}\n" if note else ""
+    next_steps = _handoff_next_steps(tasks, task_summary)
 
     # MT22: 優先使用新多任務清單
     if tasks:
@@ -893,8 +895,23 @@ def build_handoff(
         f"{task_section}"
         f"transcript：{transcript.path}\n"
         f"{note_section}"
-        f"最近互動：\n{recent if recent else '- 無使用者任務'}"
+        f"最近互動：\n{recent if recent else '- 無使用者任務'}\n"
+        f"建議下一步：\n{next_steps}"
     )
+
+
+def _handoff_next_steps(tasks: list[dict] | None = None, task_summary: str | None = None) -> str:
+    if tasks:
+        active = [task for task in tasks if task.get("status") != "done"]
+        if active:
+            return "\n".join(
+                f"- #{task.get('id')}: {task.get('description')} [{task.get('status', 'pending')}]"
+                for task in active[:5]
+            )
+        return "- 所有目前任務已完成；下一輪先用 /task add 建立新工作。"
+    if task_summary and task_summary.strip() and "(none)" not in task_summary:
+        return "- 先用 /task status 確認任務清單，再接續未完成項目。"
+    return "- 下一輪先用 /resume latest 載入摘要，再用 /guide 或 /task add 開始。"
 
 
 def write_handoff(
@@ -1367,7 +1384,7 @@ def shell(
             state.agent_session.messages.append({"role": "system", "content": summary})
         chat_messages.append({"role": "system", "content": summary})
         transcript.write("resume", {"source": str(resume_path), "summary": summary[:2000]})
-        console.print(f"resumed {resume_path}")
+        print_raw(resume_loaded_message(resume_path, summary))
 
     register_handler("/resume", handle_resume)
 

@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from agentx.transcript import find_transcript, list_transcripts, transcript_overview
+from agentx.transcript import (
+    find_transcript,
+    list_transcripts,
+    resume_loaded_message,
+    transcript_overview,
+)
 
 
 def test_list_transcripts_returns_newest_first(tmp_path: Path) -> None:
@@ -45,3 +50,15 @@ def test_transcript_overview_returns_session_metadata(tmp_path: Path) -> None:
     assert overview["namespace"] == "project:agentX"
     assert overview["turns"] == 2
     assert "assistant" in str(overview["last"])
+
+
+def test_resume_loaded_message_includes_source_and_size(tmp_path: Path) -> None:
+    path = tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl"
+    summary = "Resumed transcript: demo\n- user: hello\n- assistant: hi"
+
+    message = resume_loaded_message(path, summary)
+
+    assert "resumed 20260102-000000" in message
+    assert f"source: {path}" in message
+    assert "loaded summary: 3 lines" in message
+    assert "/context" in message
