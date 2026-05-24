@@ -18,3 +18,13 @@ def test_destructive_commands_are_red() -> None:
     assert classify_command("rm -rf /tmp/demo") == Risk.RED
     assert classify_command("rsync --delete a b") == Risk.RED
     assert classify_command("chmod -R 777 .") == Risk.RED
+
+
+def test_sensitive_paths_are_red() -> None:
+    assert classify_command("cat ~/.ssh/config") == Risk.RED
+    assert classify_command("cat /Users/maki/.gnupg/pubring.kbx") == Risk.RED
+    assert classify_command("ls .secrets") == Risk.RED
+
+
+def test_absolute_multi_path_mv_is_red() -> None:
+    assert classify_command("mv /Volumes/A/file /Volumes/B/file") == Risk.RED

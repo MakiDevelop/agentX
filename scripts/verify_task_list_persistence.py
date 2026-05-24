@@ -14,12 +14,6 @@
 """
 
 from pathlib import Path
-import shutil
-
-from agentx.config import Settings
-from agentx.loop import AgentSession
-from agentx.ollama import OllamaClient
-from agentx.tools import ToolRegistry
 
 
 def main():

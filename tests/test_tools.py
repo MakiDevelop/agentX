@@ -28,6 +28,16 @@ def test_list_files(tmp_path: Path) -> None:
     assert result.content == "a.txt"
 
 
+def test_run_command_prints_final_command_and_args(tmp_path: Path) -> None:
+    registry = ToolRegistry(workspace=tmp_path, memory=FakeMemory())  # type: ignore[arg-type]
+    result = registry.run("run_command", {"command": "git status --short --branch"})
+
+    assert result.ok
+    assert "final command:" in result.content
+    assert "args:" in result.content
+    assert "0: git" in result.content
+
+
 def test_docker_compose_command_uses_workspace_compose(tmp_path: Path) -> None:
     compose = tmp_path / "compose.yaml"
     compose.write_text("services: {}\n", encoding="utf-8")

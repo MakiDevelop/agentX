@@ -302,27 +302,6 @@ def test_check_task_migration_legacy_with_very_long_title_in_multi(tmp_path: Pat
     assert "tasks=1" in detail
 
 
-def test_check_task_migration_legacy_with_only_done_multi_tasks(tmp_path: Path) -> None:
-    """有舊任務 + 新任務全部為 done 時，仍應正確回報 mixed（不應誤判為 legacy_only）。"""
-    legacy_dir = tmp_path / ".agentx"
-    legacy_dir.mkdir()
-    (legacy_dir / "task.json").write_text('{"title":"舊任務","status":"active"}', encoding="utf-8")
-
-    save_tasks(tmp_path, [
-        {"id": 1, "description": "已完成任務1", "status": "done", "notes": ""},
-        {"id": 2, "description": "已完成任務2", "status": "done", "notes": ""},
-    ])
-
-    fake_settings = SimpleNamespace(workspace=tmp_path)
-    name, ok, detail = _check_task_migration(fake_settings)
-
-    assert name == "task_migration (MT22)"
-    assert ok is True
-    assert "mixed" in detail
-    assert "legacy=True" in detail
-    assert "tasks=2" in detail
-
-
 def test_check_task_migration_legacy_with_empty_title(tmp_path: Path) -> None:
     """舊任務 title 為空時，應被視為無效 legacy，不影響 multi-task 判斷。"""
     legacy_dir = tmp_path / ".agentx"

@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import sys
 import threading
-import os
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+import typer
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
-import typer
-from rich.console import Console, Group
 from rich.columns import Columns
+from rich.console import Console, Group
 from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
@@ -28,10 +30,11 @@ from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaCancelledError, OllamaClient
 from agentx.persona import list_personas, normalize_persona
-from agentx.prompting import SlashCommandCompleter
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
+from agentx.prompting import SlashCommandCompleter
 from agentx.runtime_prompt import build_chat_system_prompt, build_headless_agent_system_prompt
+from agentx.safety import Risk
 from agentx.tasks import (
     _get_legacy_task_if_exists,
     format_task_list_summary,
@@ -41,19 +44,15 @@ from agentx.tasks import (
     migrate_single_task_if_needed,
     save_tasks,
 )
-from agentx.safety import Risk
-
 from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
 from agentx.transcript import Transcript, find_transcript, list_transcripts, summarize_transcript
 from agentx.tui import AgentXTui, format_assistant_header
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
-    from agentx.loop import AgentSession
-    from agentx.config import Settings
     from collections.abc import Callable
+
+    from agentx.config import Settings
+    from agentx.loop import AgentSession
 
 
 @dataclass
@@ -108,7 +107,7 @@ SLASH_COMMANDS = [
     ("/doctor", "檢查 Ollama、模型、Memory Hall、git、uv 狀態"),
     ("/config", "顯示目前 agentX 設定"),
     ("/config set KEY VALUE", "寫入 .agentx/config.toml"),
-    ("/tools", "列出 agent 模式可用工具與中文說明"),
+    ("/tools", "列出可用工具（已依 GREEN/YELLOW/RED 風險分組，符合安全視覺化）"),
     ("/context", "顯示目前 agent 上下文使用量與壓縮次數"),
     ("/compact", "壓縮目前 agent session 上下文，保留最近訊息摘要"),
     ("/history", "顯示本輪 shell 的簡短互動紀錄"),
@@ -162,21 +161,115 @@ def slash_command_hint() -> Columns:
 
 
 def print_slash_help() -> None:
-    table = Table(title="agentX slash commands", show_header=True, header_style="bold")
-    table.add_column("Command", style="cyan", no_wrap=True)
-    table.add_column("中文說明")
-    for command, description in SLASH_COMMANDS:
-        table.add_row(command, description)
-    console.print(table)
+    """Print slash commands grouped by category with risk/safety hints.
+
+    This is a direct step toward the vision in Image 02 & 03:
+    - Clear mental models and discoverability
+    - Risk awareness baked into the help experience
+    """
+    # Category definitions (vision-aligned grouping)
+    categories = [
+        ("核心與模式", [
+            "/help", "/status", "/mode", "/plan", "/execute", "/clear", "/exit",
+        ]),
+        ("檔案與內容", [
+            "/files", "/read", "/search", "/attach", "/fetch",
+        ]),
+        ("Git 與變更", [
+            "/git", "/diff", "/apply", "/commit",
+        ]),
+        ("記憶與交接 (Memory Hall)", [
+            "/memory", "/remember", "/handoff", "/resume", "/sessions", "/transcript",
+        ]),
+        ("安全與核准 (Safety)", [
+            "/approval", "/run", "/docker", "/test",
+        ]),
+        ("診斷與維護", [
+            "/doctor", "/init", "/config", "/context", "/compact", "/jobs", "/cancel",
+        ]),
+        ("其他", [
+            "/history", "/models", "/model", "/persona", "/review",
+        ]),
+    ]
+
+    # Build a quick lookup
+    cmd_to_desc = dict(SLASH_COMMANDS)
+
+    # Stronger visual header for slash help (vision polish)
+    header = Panel(
+        "[bold]agentX slash commands[/bold]\n"
+        "輸入指令即可使用，許多操作會依風險等級要求確認\n\n"
+        "[green]GREEN 自動執行[/green] ｜ [yellow]YELLOW 需注意[/yellow] ｜ [red]RED 預設受保護[/red]",
+        border_style="dim",
+        padding=(0, 1),
+    )
+    console.print(header)
+    console.print()
+
+    for cat_name, cmds in categories:
+        items = [(c, cmd_to_desc.get(c, "")) for c in cmds if c in cmd_to_desc]
+        if not items:
+            continue
+
+        # Use Panel for visual consistency with /tools (stronger card-like feel toward Image 03)
+        inner = Table(show_header=True, header_style="bold")
+        inner.add_column("Command", style="cyan", no_wrap=True)
+        inner.add_column("說明")
+
+        for cmd, desc in items:
+            if cmd in {"/approval", "/apply", "/commit", "/docker", "/run"}:
+                desc = f"[yellow]{desc}[/yellow]"
+            inner.add_row(cmd, desc)
+
+        panel = Panel(inner, title=cat_name, border_style="dim", padding=(0, 1))
+        console.print(panel)
+        console.print()  # spacing between sections
+
+    console.print("[dim]安全是 agentX 的核心 —— 你永遠可以透過 /approval 隨時調整。輸入 /doctor 查看目前姿勢。[/dim]")
 
 
 def print_tools(tools: ToolRegistry) -> None:
-    table = Table(title="agentX tools", show_header=True, header_style="bold")
-    table.add_column("Tool", style="cyan", no_wrap=True)
-    table.add_column("中文說明")
-    for name, description in tools.describe_tools().items():
-        table.add_row(name, description)
-    console.print(table)
+    """Print tools with risk level (GREEN / YELLOW / RED) for better discoverability.
+    This moves us closer to the vision in Image 03.
+    """
+    tool_infos = tools.describe_tools()
+
+    # Group by risk for clearer presentation (vision alignment)
+    by_risk: dict[str, list] = {"GREEN": [], "YELLOW": [], "RED": [], "UNKNOWN": []}
+    for t in tool_infos:
+        by_risk.get(t["risk"], by_risk["UNKNOWN"]).append(t)
+
+    # Render with risk color emphasis
+    for risk in ["GREEN", "YELLOW", "RED", "UNKNOWN"]:
+        items = by_risk.get(risk, [])
+        if not items:
+            continue
+
+        risk_style = {
+            "GREEN": "green",
+            "YELLOW": "yellow",
+            "RED": "red",
+            "UNKNOWN": "dim",
+        }.get(risk, "white")
+
+        # Use Panel for stronger visual separation (closer to Image 03 card-style feel)
+        inner_table = Table(show_header=True, header_style="bold")
+        inner_table.add_column("Tool", style="cyan", no_wrap=True)
+        inner_table.add_column("說明")
+
+        for t in items:
+            inner_table.add_row(t["name"], t["description"])
+
+        panel = Panel(
+            inner_table,
+            title=f"[{risk_style}]{risk}[/{risk_style}] 工具",
+            border_style=risk_style,
+            padding=(0, 1),
+        )
+        console.print(panel)
+        console.print()  # breathing room
+
+    console.print("[dim]風險由內建機制自動判斷。想調整 YELLOW 行為請用 /approval。[/dim]")
 
 
 def print_raw(text: object) -> None:
@@ -363,16 +456,34 @@ def print_approval(policy: ApprovalPolicy) -> None:
     table.add_row("RED", "always block")
     console.print(table)
 
+    # Educational note for better safety awareness
+    meaning = {
+        "auto": "YELLOW 工具現在會自動執行（適合熟悉後提高效率）",
+        "ask": "YELLOW 工具會詢問你是否執行（最平衡的模式）",
+        "off": "YELLOW 工具會被拒絕執行（最保守）",
+    }.get(policy.mode.value, "")
+
+    if meaning:
+        console.print(f"[dim]→ {meaning}[/dim]")
+
 
 def format_plan_status(enabled: bool) -> str:
     """Return user-friendly plan mode status string."""
     return "on（只討論方案，不使用工具）" if enabled else "off"
 
 
-def build_status_line(model: str, plan_mode: bool, context_pct: int) -> str:
-    """Build the bottom status line text shown in TUI and classic prompt mode."""
+def build_status_line(model: str, plan_mode: bool, context_pct: int, approval: str | None = None) -> str:
+    """Build the bottom status line text shown in TUI and classic prompt mode.
+
+    Now includes optional approval mode for constant safety awareness (vision alignment).
+    """
     plan_marker = " | PLAN" if plan_mode else ""
-    return f"{model}{plan_marker} | context {context_pct}%"
+    approval_marker = ""
+    if approval:
+        # More readable than single cryptic symbols (still compact)
+        short = {"auto": "auto", "ask": "ask", "off": "off"}.get(approval, approval)
+        approval_marker = f" | safe={short}"
+    return f"{model}{plan_marker}{approval_marker} | context {context_pct}%"
 
 
 EXECUTE_TRIGGERS = [
@@ -438,15 +549,67 @@ def print_config(
 
     console.print(table)
 
+    # Add safety posture explanation (vision alignment, consistent with doctor/status)
+    ap = approval_policy.mode.value
+    meaning = {
+        "auto": "YELLOW 操作會**自動執行**（較大膽，適合熟悉後使用）",
+        "ask": "YELLOW 操作會**詢問確認**（平衡模式，建議新手使用）",
+        "off": "YELLOW 操作會**被拒絕**（最保守）",
+    }.get(ap, ap)
 
-def print_doctor(settings: Settings, memory: MemoryHallClient, ollama: OllamaClient) -> None:
-    table = Table(title="agentX doctor", show_header=True, header_style="bold")
-    table.add_column("Check", style="cyan")
-    table.add_column("OK")
-    table.add_column("Detail")
+    console.print()
+    console.print(f"[bold cyan]目前核准策略[/bold cyan]: {ap} → {meaning}")
+    console.print(
+        "[dim]安全原則：GREEN 永遠自動允許 ｜ YELLOW 依上方策略 ｜ "
+        "RED 永遠受保護。你永遠可以透過 /approval 即時調整。[/dim]"
+    )
+
+
+def print_doctor(
+    settings: Settings,
+    memory: MemoryHallClient,
+    ollama: OllamaClient,
+    *,
+    approval_mode: str | None = None,
+    current_mode: str | None = None,
+) -> None:
+    """Enhanced doctor output that surfaces both technical health and product posture.
+
+    This improvement helps close the gap on Image 05 (Safety as a visible strength)
+    and Image 04 (Memory Hall as real continuity).
+    """
+
+    # === Technical health checks (original) ===
+    tech_table = Table(title="agentX doctor — 技術健康檢查", show_header=True, header_style="bold")
+    tech_table.add_column("Check", style="cyan")
+    tech_table.add_column("OK")
+    tech_table.add_column("Detail")
     for name, ok, detail in run_doctor(settings, memory, ollama):
-        table.add_row(name, "yes" if ok else "no", detail)
-    console.print(table)
+        tech_table.add_row(name, "yes" if ok else "no", detail)
+    console.print(tech_table)
+    console.print()
+
+    # === Product Posture Summary (new, vision-aligned) ===
+    posture = Table(title="agentX 目前狀態與使用建議", show_header=False)
+    posture.add_column("項目", style="bold cyan")
+    posture.add_column("內容")
+
+    mode_str = current_mode or "unknown"
+    approval_str = approval_mode or "ask (預設)"
+    approval_meaning = {
+        "auto": "YELLOW 操作會自動執行（較大膽）",
+        "ask": "YELLOW 操作會詢問確認（平衡）",
+        "off": "YELLOW 操作受限（最保守）",
+    }.get(approval_str.split()[0], "依設定")
+
+    posture.add_row("目前模式", f"{mode_str}（chat = 純聊天，agent = 可使用工具）")
+    posture.add_row("核准策略 (approval)", f"{approval_str} → {approval_meaning}")
+    posture.add_row("安全邊界", "GREEN 自動允許 ｜ YELLOW 依策略 ｜ RED 永遠受保護（設計如此）")
+    posture.add_row("Memory Hall", "跨 session 記憶與交接已啟用（/handoff /resume）")
+    posture.add_row("建議", "想更自主就輸入 /approval auto；想最安全就保持 ask 或 off")
+
+    console.print(posture)
+    console.print("[dim]這是 agentX 的「安全優先」設計 — 你始終是主人，agentX 是工具。[/dim]")
 
 
 def run_commit_flow(settings: Settings, tools: ToolRegistry, message: str | None) -> str:
@@ -791,7 +954,12 @@ def shell(
 
     def status_line() -> str:
         pct = context_percent(state.settings, state.agent_session or agent_session, chat_messages)
-        return build_status_line(state.settings.model, state.plan_mode, pct)
+        ap = approval_policy.mode.value if approval_policy else None
+        return build_status_line(state.settings.model, state.plan_mode, pct, ap)
+
+    def task_snapshot() -> tuple[list[dict], str]:
+        tasks = load_tasks(state.settings.workspace)
+        return tasks, format_task_list_summary(tasks)
 
     ui_mode = os.getenv("AGENTX_TUI", "1").lower()
     if sys.stdin.isatty() and ui_mode not in {"0", "false", "classic"}:
@@ -905,17 +1073,34 @@ def shell(
     console.print(
         Panel.fit(
             Group(
-                Text("agentX v0.2.0", style="bold cyan") + "  ·  你的本地工程小幫手（Powered by Ollama）",
+                Text("agentX", style="bold cyan") + " v0.2.0  ·  本地 Ollama agent shell",
                 "",
-                f"model: [bold]{settings.model}[/bold]   |   mode: [bold]{mode}[/bold]   |   workspace: [bold]{namespace}[/bold]",
+                f"model: [bold]{settings.model}[/bold]   |   mode: [bold]{mode}[/bold]   |   workspace: [bold]{settings.workspace}[/bold]",
+                f"namespace: [bold]{namespace}[/bold]",
                 "",
-                "輸入 [bold cyan]/help[/bold cyan] 查看可用指令",
+                "安全： [green]GREEN 自動[/green] ｜ [yellow]YELLOW 依策略[/yellow] ｜ [red]RED 受保護[/red]",
+                "輸入 [bold cyan]/help[/bold cyan] 查看指令  ·  [bold cyan]/tools[/bold cyan] 查看工具  ·  [bold cyan]/doctor[/bold cyan] 查看狀態",
+                "",
+                "[dim]功能強大，但控制權永遠在你手上。[/dim]",
             ),
             title="agentX shell",
             border_style="dim",
             padding=(0, 1),
         )
     )
+
+    # Post-welcome Quick Orientation (continuous momentum, visual pop)
+    console.print()
+    orientation = Panel(
+        "[bold cyan]想快速掌握 agentX 的感覺？[/bold cyan]\n"
+        "  [cyan]/help[/cyan]    查看所有指令（已分類 + 安全提示）\n"
+        "  [cyan]/tools[/cyan]   查看工具（清楚標示 GREEN/YELLOW/RED 風險）\n"
+        "  [cyan]/doctor[/cyan]  檢查目前狀態 + 安全姿勢\n"
+        "[dim]核心：功能強大，但你永遠是主人。[/dim]",
+        border_style="dim",
+        padding=(0, 1),
+    )
+    console.print(orientation)
 
     # === 階段一 Dispatch 相關函數 ===
     SLASH_HANDLERS: dict[str, Callable[[ShellState, str], None]] = {}
@@ -924,22 +1109,34 @@ def shell(
         SLASH_HANDLERS[command] = handler
 
     def handle_status(state: ShellState, prompt: str):
-        """顯示目前 shell 狀態"""
+        """顯示目前 shell 狀態（含安全姿勢）"""
         transcript.write("slash_command", {"command": prompt})
         approx_tokens = state.agent_session.context_chars // 4 if state.agent_session else 0
         plan_status = format_plan_status(state.plan_mode)
+
+        # Show approval posture for better safety awareness (vision alignment)
+        approval_display = approval_policy.mode.value if approval_policy else "ask"
+        safety_note = {
+            "auto": "YELLOW 自動執行",
+            "ask": "YELLOW 會詢問",
+            "off": "YELLOW 受限",
+        }.get(approval_display, approval_display)
+
         console.print(
-            f"model={state.settings.model} "
-            f"mode={state.mode} "
-            f"namespace={state.namespace} "
-            f"persona={state.settings.persona} "
-            f"plan={plan_status} "
-            f"agent_messages={state.agent_session.message_count if state.agent_session else 0} "
-            f"agent_context~{approx_tokens} tokens "
-            f"chat_messages={len(chat_messages)}"
+            f"model={state.settings.model}  mode={state.mode}  plan={plan_status}\n"
+            f"approval={approval_display} ({safety_note})  |  "
+            f"namespace={state.namespace}  persona={state.settings.persona}\n"
+            f"context ~{approx_tokens} tokens  |  messages={len(chat_messages)}"
         )
 
     register_handler("/status", handle_status)
+
+    def handle_help(state: ShellState, prompt: str):
+        """顯示 slash command 說明"""
+        transcript.write("slash_command", {"command": prompt})
+        print_slash_help()
+
+    register_handler("/help", handle_help)
 
     def handle_memory(state: ShellState, prompt: str):
         """查詢目前 namespace 的 Memory Hall 記憶（支援 /memory QUERY）"""
@@ -974,7 +1171,14 @@ def shell(
     def handle_doctor(state: ShellState, prompt: str):
         """執行 doctor 檢查（Ollama、Memory Hall、git 等）"""
         transcript.write("slash_command", {"command": prompt})
-        print_doctor(state.settings, memory, ollama)
+        # Pass current posture info so /doctor can show vision-aligned safety summary
+        print_doctor(
+            state.settings,
+            memory,
+            ollama,
+            approval_mode=approval_policy.mode.value if approval_policy else None,
+            current_mode=state.mode,
+        )
 
     register_handler("/doctor", handle_doctor)
 
@@ -1000,6 +1204,15 @@ def shell(
         print_context(state.agent_session or agent_session, chat_messages)
 
     register_handler("/context", handle_context)
+
+    def handle_compact(state: ShellState, prompt: str):
+        """壓縮目前 agent session context"""
+        transcript.write("slash_command", {"command": prompt})
+        result = (state.agent_session or agent_session).compact()
+        transcript.write("compact", {"result": result})
+        print_raw(result)
+
+    register_handler("/compact", handle_compact)
 
     def handle_history(state: ShellState, prompt: str):
         """顯示本輪 shell 互動歷史"""
@@ -1042,6 +1255,7 @@ def shell(
     def handle_handoff(state: ShellState, prompt: str):
         """寫入 Memory Hall 交接摘要"""
         note = prompt.removeprefix("/handoff").strip() or None
+        fresh_tasks, fresh_task_summary = task_snapshot()
         message = write_handoff(
             tools,
             settings=state.settings,
@@ -1049,9 +1263,9 @@ def shell(
             mode=state.mode,
             history=history,
             transcript=transcript,
-            tasks=current_tasks,
+            tasks=fresh_tasks,
             note=note,
-            task_summary=task_summary,
+            task_summary=fresh_task_summary,
         )
         transcript.write("handoff", {"auto": False, "note": note, "result": message})
         print_raw(message)
@@ -1062,7 +1276,7 @@ def shell(
         """從 transcript 恢復上下文"""
         nonlocal chat_messages
         name = prompt.removeprefix("/resume").strip() or "latest"
-        resume_path = find_transcript(state.settings.workspace, name)
+        resume_path = find_transcript(state.settings.workspace, name, exclude=transcript.path)
         if resume_path is None:
             console.print(f"transcript not found: {name}")
             return
@@ -1380,6 +1594,14 @@ def shell(
 
     register_handler("/run", handle_run)
 
+    def handle_test(state: ShellState, prompt: str):
+        """執行固定 allowlist 驗證"""
+        result = tools.run("run_tests", {})
+        transcript.write("tool", {"command": "/test", "ok": result.ok, "content": result.content[:4000]})
+        print_tool_result(result.content if result.ok else f"驗證失敗：{result.content}")
+
+    register_handler("/test", handle_test)
+
     def handle_config(state: ShellState, prompt: str):
         """查看或設定專案 config"""
         if prompt == "/config":
@@ -1571,6 +1793,7 @@ def shell(
             except (EOFError, KeyboardInterrupt):
                 wait_for_prompt_worker()
                 if history and state.settings.auto_handoff:
+                    fresh_tasks, fresh_task_summary = task_snapshot()
                     message = write_handoff(
                         tools,
                         settings=state.settings,
@@ -1578,8 +1801,8 @@ def shell(
                         mode=state.mode,
                         history=history,
                         transcript=transcript,
-                        tasks=current_tasks,
-                        task_summary=task_summary,
+                        tasks=fresh_tasks,
+                        task_summary=fresh_task_summary,
                     )
                     transcript.write("handoff", {"auto": True, "result": message})
                     print_raw(f"\n{message}")
@@ -1597,6 +1820,7 @@ def shell(
                 # 只在沒有進行中 job 時才嘗試 auto handoff，避免無限等待
                 if not (job_queue.current is not None or job_queue.pending_count() > 0):
                     if history and state.settings.auto_handoff:
+                        fresh_tasks, fresh_task_summary = task_snapshot()
                         message = write_handoff(
                             tools,
                             settings=state.settings,
@@ -1604,8 +1828,8 @@ def shell(
                             mode=state.mode,
                             history=history,
                             transcript=transcript,
-                            tasks=current_tasks,
-                            task_summary=task_summary,
+                            tasks=fresh_tasks,
+                            task_summary=fresh_task_summary,
                         )
                         transcript.write("handoff", {"auto": True, "result": message})
                         print_raw(message)

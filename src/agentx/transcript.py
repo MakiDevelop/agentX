@@ -30,20 +30,30 @@ class Transcript:
         return directory / f"{stamp}.jsonl"
 
 
-def find_transcript(workspace: Path, name: str = "latest") -> Path | None:
+def find_transcript(
+    workspace: Path,
+    name: str = "latest",
+    *,
+    exclude: Path | None = None,
+) -> Path | None:
     directory = workspace / ".agentx" / "sessions"
     if not directory.exists():
         return None
+    excluded = exclude.resolve() if exclude is not None else None
     if name == "latest":
-        candidates = sorted(directory.glob("*.jsonl"))
+        candidates = [
+            path
+            for path in sorted(directory.glob("*.jsonl"))
+            if excluded is None or path.resolve() != excluded
+        ]
         return candidates[-1] if candidates else None
 
     direct = (directory / name).resolve()
-    if direct.is_file() and directory.resolve() in direct.parents:
+    if direct.is_file() and directory.resolve() in direct.parents and direct != excluded:
         return direct
 
     with_suffix = (directory / f"{name}.jsonl").resolve()
-    if with_suffix.is_file() and directory.resolve() in with_suffix.parents:
+    if with_suffix.is_file() and directory.resolve() in with_suffix.parents and with_suffix != excluded:
         return with_suffix
     return None
 

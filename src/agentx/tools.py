@@ -15,7 +15,6 @@ from agentx.memory_hall import MemoryHallClient
 from agentx.protocol import ToolResult
 from agentx.safety import Risk, classify_tool, require_allowed
 
-
 TOOL_DESCRIPTIONS = {
     "list_files": "列出 workspace 內檔案，會跳過 .git/.venv/cache 目錄",
     "read_file": "讀取 workspace 內指定檔案內容",
@@ -167,8 +166,20 @@ class ToolRegistry:
         self.memory = memory
         self.approver = approver
 
-    def describe_tools(self) -> dict[str, str]:
-        return dict(TOOL_DESCRIPTIONS)
+    def describe_tools(self) -> list[dict[str, str]]:
+        """Return structured tool information including computed risk level."""
+        result = []
+        for name, desc in TOOL_DESCRIPTIONS.items():
+            try:
+                risk = classify_tool(name).value
+            except Exception:
+                risk = "UNKNOWN"
+            result.append({
+                "name": name,
+                "description": desc,
+                "risk": risk,
+            })
+        return result
 
     def run(self, tool: str, args: dict[str, Any]) -> ToolResult:
         require_allowed(tool)
@@ -272,8 +283,9 @@ class ToolRegistry:
             allowed = "\n".join(f"- {item}" for item in sorted(ALLOWED_COMMANDS))
             raise PermissionError(f"Command is not allowlisted: {command}\nAllowed:\n{allowed}")
 
+        args = ALLOWED_COMMANDS[command]
         completed = subprocess.run(
-            ALLOWED_COMMANDS[command],
+            args,
             cwd=self.workspace,
             text=True,
             capture_output=True,
@@ -281,7 +293,15 @@ class ToolRegistry:
             check=False,
         )
         output = completed.stdout or completed.stderr
-        return f"$ {command}\nexit={completed.returncode}\n{output.strip()}"
+        arg_lines = "\n".join(f"{index}: {part}" for index, part in enumerate(args))
+        return (
+            "final command:\n"
+            f"{command}\n"
+            "args:\n"
+            f"{arg_lines}\n"
+            f"exit={completed.returncode}\n"
+            f"{output.strip()}"
+        )
 
     def _tool_web_fetch(self, url: str, max_chars: int = 20000) -> str:
         safe_url = validate_external_url(url)

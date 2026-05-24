@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
-import re
+
+from agentx.task import TaskState
 
 
 def tasks_path(workspace: Path) -> Path:
@@ -265,7 +268,7 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
 
     這是為了在過渡期間保留相容性，當舊系統完全退場後，此函式與其呼叫者可移除。
     """
-    from .task import TaskState, load_task
+    from .task import load_task
 
     legacy_path = workspace / ".agentx" / "task.json"
     if not legacy_path.exists():
@@ -366,4 +369,3 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
         cleaned_task.notes = f"[來自舊單一任務] 原始標題：{original_title} | 原始狀態：{original_status}"
 
     return cleaned_task
-

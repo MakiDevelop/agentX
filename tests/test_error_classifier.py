@@ -1,6 +1,10 @@
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from agentx.errors import ErrorContext, ErrorType
 from agentx.error_classifier import ErrorClassifier
+from agentx.loop import AgentSession
 from agentx.protocol import ToolResult
-from agentx.errors import ErrorType
 
 
 def test_classifier_transient_errors():
@@ -86,13 +90,6 @@ def test_classifier_empty_content():
 # AgentSession 層級錯誤處理整合測試（A 階段驗證）
 # ============================================================
 
-from unittest.mock import MagicMock, patch
-from pathlib import Path
-
-from agentx.loop import AgentSession
-from agentx.errors import ErrorType
-
-
 def test_agent_session_records_error_context_on_tool_failure():
     """測試工具失敗時，AgentSession 是否正確記錄 ErrorContext"""
     settings = MagicMock()
@@ -114,8 +111,6 @@ def test_agent_session_records_error_context_on_tool_failure():
         )
 
         # 模擬一個失敗的工具結果
-        from agentx.protocol import ToolCall, ToolResult
-
         # 直接測試分類 + 記錄流程
         failing_result = ToolResult(
             tool="search_replace",
@@ -128,7 +123,6 @@ def test_agent_session_records_error_context_on_tool_failure():
         # 手動模擬主流程中會做的事
         if not failing_result.ok:
             session.current_error = session.error_classifier.classify  # 簡化
-            from agentx.errors import ErrorContext
             session.current_error = ErrorContext(
                 error_type=error_type,
                 tool_name="search_replace",
@@ -143,8 +137,6 @@ def test_agent_session_records_error_context_on_tool_failure():
 
 def test_build_error_reflection_guidance_contains_key_info():
     """測試錯誤 Reflection 引導訊息是否包含必要資訊"""
-    from agentx.errors import ErrorContext
-
     settings = MagicMock()
     settings.workspace = Path("/tmp")
     settings.persona = "default"
