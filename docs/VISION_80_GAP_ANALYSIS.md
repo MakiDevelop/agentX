@@ -1,116 +1,252 @@
-# agentX Vision 80% Gap Analysis
+# agentX Vision 80% Progress
 
 **Date**: 2026-05-25  
-**Purpose**: Track the gap between the 5 product-vision images and the current CLI implementation.  
-**Status**: Phase 1 product-surface pass completed in commit `4463c71`; `/guide`, richer `/sessions`, resume/handoff continuity, and one-time guide hint added in follow-up passes.
+**Purpose**: Track progress toward the 5 product-vision images and define the next implementation queue.  
+**Current status**: ~78-82% of the read-heavy / guarded MVP vision.  
+**Memory Hall**: `project:agentX` entry `01KSEBHDM4RX5112ZV65JN0VD9`
 
-## Summary
+This document is intentionally concrete. It should prevent future agents from looping on vague "keep improving polish" work. Each next item should be implemented as a small, testable commit.
 
-The 5 images describe a polished local Ollama agent shell with three clear modes, rich tools, Memory Hall continuity, and safety as an everyday visible feature.
+## Vision Target
 
-agentX already has most of the core engineering pieces:
+The 5 images describe a local Ollama agent shell with:
 
-- `chat` / `ask` / `shell` modes
-- Slash commands for files, search, git, diff, tests, Docker, Memory Hall, sessions, resume, handoff, context, and tasks
-- GREEN / YELLOW / RED risk model with approval policy
-- Transcript-backed resume and auto handoff
-- Task list persistence and MT22 migration work
+- A clear first impression: "本地 Ollama agent shell"
+- Three understandable use modes: `chat`, `ask`, `shell`
+- Rich slash-command workflows for files, git, tests, review, Docker, Memory Hall, context, and commit
+- Memory Hall + transcript continuity across sessions
+- Safety as a visible product feature: GREEN / YELLOW / RED, approval gates, user control
 
-The largest remaining gap is product experience: discoverability, onboarding, and making safety feel reassuring instead of hidden.
+agentX already has most of the runtime capability. The remaining work is primarily product experience, naming consistency, and handoff quality.
 
-## Current Estimate
+## Completed Commits
 
-| Dimension | Current | Notes |
-|---|---:|---|
-| Engineering capability | 80-85% | Strong CLI/tool/runtime foundation. |
-| Feature completeness | 75-80% | Most pictured functions exist in some form. |
-| Safety communication | 70-75% | Improved in `/help`, `/tools`, `/doctor`, `/status`, welcome UI. |
-| Memory continuity feeling | 65-70% | Handoff/resume exist; UX can still feel technical. |
-| Onboarding / first 60 seconds | 70-75% | `/guide` plus one-time local hint covers first orientation. |
-| Visual polish | 55-65% | Rich panels help, but this is still terminal-first. |
+| Commit | Title | What changed |
+|---|---|---|
+| `4463c71` | 補強 agentX 安全與 shell 完整度 | Categorized `/help`, risk-grouped `/tools`, richer `/doctor` and `/status`, safer `/resume latest`, fresh task snapshots for handoff, final command/args preview for `/run`, stronger safety classification, full ruff/pytest cleanup. |
+| `e06f8e0` | 收斂 Grok 文件與本地狀態忽略規則 | Replaced loop-prone Grok progress notes with a concise Vision tracker; ignored local `.agentx` state, tmp files, and Gemini symlink. |
+| `c5c96b7` | 新增 guide 導覽與 session 摘要 | Added `/guide` 60-second orientation; richer `/sessions` view with start/model/namespace/turns/last summary; README and tests updated. |
+| `b1b1fcd` | 改善 resume 與 handoff 交接體驗 | `/resume` now reports loaded transcript name/source/summary size/next hint; `/handoff` now includes active-task next steps; tests added. |
+| `458e7ed` | 新增一次性 guide 啟動提示 | Added local-only `.agentx/state.json`; first launch in a repo shows `/guide` hint once, then dismisses locally; tests and docs updated. |
 
-Overall: roughly **75-80% on the read-heavy / guarded MVP vision**, with the next gains coming from onboarding and continuity rather than more tools.
+## Verification Baseline
 
-## What Was Completed
+Latest verified baseline after `458e7ed`:
 
-Recent product-surface passes moved the daily UX surfaces closer to the images:
+- `uv run ruff check .` passed
+- `uv run pytest -q` passed: `158 passed`
+- Shell smoke: temporary workspace showed first-run guide hint once, second launch suppressed it, `.agentx/state.json` contained `{"guide_hint_seen": true}`
 
-- `/guide` gives a 60-second orientation across modes, workflows, safety, and Memory Hall.
-- First repo launch shows a one-time local `/guide` hint, then stores dismissal in `.agentx/state.json`.
-- `/help` is categorized by workflow instead of a flat list.
-- `/tools` groups tools by GREEN / YELLOW / RED risk.
-- `/doctor` now shows both technical health and product posture.
-- `/status` shows approval mode and safety meaning.
-- Shell welcome text now states the local Ollama agent-shell positioning and safety model.
-- `/run` output includes final command and per-argument listing.
-- `/resume latest` no longer resumes the current empty transcript.
-- `/resume` reports which transcript was loaded and the summary size.
-- `/handoff` includes a "next steps" section based on active tasks.
-- Handoff uses the latest task list snapshot.
-- Safety command classification catches sensitive paths and cross-absolute-path `mv`.
-- README now reflects `task`, `approval`, and `execute` behavior.
+Known warning noise:
 
-Validation for that commit:
+- `tests/test_task.py` and `tests/test_tasks.py` still emit MT22 deprecation warnings for legacy task APIs. This is expected until MT22 migration/removal is finished.
 
-- `uv run ruff check .`
-- `uv run pytest -q` (`149 passed`)
-- `uv run agentx --help`
+## Image-by-Image Status
 
-## Remaining Gaps
+### Image 1: Hero / Local Ollama Agent Shell
 
-### P0: Avoid Agent Loop Drift
+**Current estimate**: 80%
 
-The previous autonomous pass kept appending "continue / no stopping" status blocks to this document. That pattern is explicitly not useful. Future work should be scoped into small commits with tests or clear acceptance criteria.
+Done:
 
-### P1: First-Run / Orientation
+- README now opens with a clear local Ollama agent-shell positioning.
+- Shell welcome panel states model, mode, workspace, namespace, and safety model.
+- One-time first-run `/guide` hint gives a concrete onboarding path.
+- `/guide` explains what agentX is and how to start.
 
-New users still need to infer the best entry point.
+Remaining gap:
 
-Recommended next work:
+- No visual landing page or demo artifact matching the polish of the images.
+- README is usable but still documentation-first, not product-page-polished.
 
-- Keep refining `/guide` with real user feedback.
-- Consider a `/guide --full` or docs-linked extended version if users need more depth.
+Recommended next:
 
-### P1: Memory Hall Felt Continuity
+- Add `docs/demo.md` or `docs/product-tour.md` with screenshots / terminal captures.
+- Keep README concise and link to deeper tour rather than expanding endlessly.
 
-The mechanics exist, but the experience is still technical.
+### Image 2: Three Modes, From Simple to Powerful
 
-Recommended next work:
+**Current estimate**: 85%
 
-- Continue improving `/sessions` summaries and resume affordances.
-- Refine `/resume` and `/handoff` wording with real usage.
+Done:
 
-### P2: Approval Gate UX
+- Top-level commands exist: `agentx chat`, `agentx ask`, `agentx shell`.
+- `/guide` explains `chat`, `ask`, `shell` with examples.
+- Shell supports mode switching through `/mode chat` and `/mode agent`.
+- Plan/execute flow exists for higher-risk or complex work.
 
-The approval model works, but terminology is still a little CLI-native.
+Remaining gap:
 
-Recommended next work:
+- Image uses `chat / ask / shell`, but shell-internal naming still uses `/mode agent`.
+- No `/mode ask` alias yet.
+- No explicit "ask mode = one-shot agent task" alias inside shell.
 
-- Consider `strict` and `deny` aliases while keeping existing `ask/auto/off` stable.
-- Add examples to `/approval`.
-- Show when a YELLOW tool was auto-approved vs manually approved in transcript.
+Recommended next:
 
-### P2: Visual Polish
+- Add `/mode ask` as an alias for current shell `agent` mode, while preserving `/mode agent`.
+- Update `/guide`, `/help`, README, and tests so mode language matches the image.
 
-Panels and risk grouping improved the terminal experience. Full parity with the images would require a deliberate TUI pass.
+### Image 3: Tools, Workflows, Risk Cards
 
-Recommended next work:
+**Current estimate**: 80-85%
 
-- Stable layout tests for help/tools output.
-- Fewer repeated safety footers.
-- Better compact display for narrow terminals.
+Done:
 
-## Non-Goals For The Next Pass
+- Tools cover files, read, search, fetch, git, diff, tests, review, Docker Compose, Memory Hall, patch/edit helpers, context, sessions, commit.
+- `/tools` groups by GREEN / YELLOW / RED.
+- `/help` groups slash commands by workflow category.
+- `/guide` provides common workflows: understand project, inspect changes, safe execution, resume/handoff.
+- `/run` prints final command and per-argument listing.
 
-- Do not rewrite the TUI architecture.
-- Do not change RED behavior without explicit human approval.
-- Do not remove MT22 legacy task support until the migration gates are met.
-- Do not keep appending speculative percentage updates after every micro-change.
+Remaining gap:
 
-## Recommended Next Unit
+- No dedicated `/workflows` or deeper workflow helper.
+- Tool output is Rich-terminal-polished but not visual-card-polished like the images.
+- No layout tests for help/tools narrow terminal output.
 
-Improve approval UX as a small, testable unit:
+Recommended next:
 
-- Add `strict` / `deny` aliases while preserving `ask` / `auto` / `off`.
-- Update `/approval` output and docs with short examples.
+- Either extend `/guide` with a "full" mode or add `/workflows`.
+- Add tests for `SLASH_COMMANDS` coverage and guide workflow content.
+- Avoid adding decorative complexity unless it improves actual discoverability.
+
+### Image 4: Memory Hall + Session Handoff
+
+**Current estimate**: 78-82%
+
+Done:
+
+- `/memory` and `/remember` work through Memory Hall.
+- `/sessions` shows transcript name/start/model/namespace/turns/last.
+- `/resume latest` excludes the current empty transcript.
+- `/resume` reports loaded transcript name, source, summary lines, approximate tokens, and next hint.
+- `/handoff` includes task-aware next steps.
+- Auto handoff uses fresh task snapshots.
+
+Remaining gap:
+
+- Handoff is still heuristic and mechanical.
+- It does not yet always produce clean sections for completed / todo / blockers / next agent.
+- `/sessions` last summary is useful but still lightweight.
+
+Recommended next:
+
+- Improve `build_handoff()` structure:
+  - `完成`
+  - `待辦`
+  - `阻塞`
+  - `下一輪建議`
+- Keep it deterministic first. Do not call a model for handoff unless reliability and timeout behavior are clear.
+- Add tests for handoff section formatting.
+
+### Image 5: Safety Priority + Approval Gate
+
+**Current estimate**: 80%
+
+Done:
+
+- GREEN / YELLOW / RED risk classification exists and is visible in `/tools`, `/help`, `/doctor`, `/status`, welcome UI.
+- Approval policy supports `ask`, `auto`, `off`.
+- RED tools are blocked.
+- Dangerous command patterns and sensitive paths are guarded.
+- Cross-absolute-path `mv` is conservatively RED.
+- `/run` is allowlisted and prints command preview.
+- Docker build/up/down are YELLOW and preview final command/args.
+
+Remaining gap:
+
+- Image names approval modes as `ask`, `auto-approve`, `strict`, `deny`; current CLI uses `ask`, `auto`, `off`.
+- No `strict` / `deny` aliases yet.
+- Transcript does not clearly distinguish auto-approved vs manually approved YELLOW tools.
+
+Recommended next:
+
+- Add aliases without changing behavior:
+  - `auto-approve` -> `auto`
+  - `deny` -> `off`
+  - `strict` -> `ask` for now, documented as "always ask for YELLOW"; do not alter GREEN behavior unless separately designed.
+- Update `/approval`, `/config set approval`, README, and tests.
 - Keep RED behavior unchanged.
+
+## Current Gap Summary
+
+| Area | Status | Next best unit |
+|---|---:|---|
+| Local shell positioning | 80% | Product tour doc / demo capture |
+| Mode clarity | 85% | `/mode ask` alias |
+| Tool discoverability | 80-85% | `/workflows` or `/guide --full` |
+| Memory continuity | 78-82% | Handoff section formatting |
+| Safety / approval UX | 80% | Approval aliases + docs/tests |
+| Visual polish | 55-65% | Optional TUI/web demo, not required for guarded MVP |
+
+## Recommended Implementation Queue
+
+### P0: Mode and Approval Naming Alignment
+
+Small, safe, high-value naming changes:
+
+1. Add `/mode ask` alias for shell agent mode.
+2. Add approval aliases:
+   - `/approval auto-approve`
+   - `/approval strict`
+   - `/approval deny`
+3. Allow `.agentx/config.toml` `approval = "auto-approve" | "strict" | "deny"` by normalizing to canonical values.
+4. Update README and tests.
+
+Acceptance:
+
+- Existing `ask/auto/off` behavior remains compatible.
+- RED behavior unchanged.
+- `uv run ruff check .` and `uv run pytest -q` pass.
+
+### P1: Handoff Section Formatting
+
+Make deterministic handoff easier for the next session/agent to parse.
+
+Acceptance:
+
+- Handoff includes sections for completed / active todo / blockers / next suggested command.
+- Existing Memory Hall write path unchanged.
+- Tests verify section headings and active-task rendering.
+
+### P1: Workflow Helper
+
+Choose one:
+
+- Extend `/guide` with more workflow rows, or
+- Add `/workflows` for practical recipes.
+
+Acceptance:
+
+- User can see how to do "understand project", "modify safely", "review", "handoff".
+- Tests cover command registration and key workflow strings.
+
+### P2: Product Tour / Demo Doc
+
+Add a documentation artifact that maps directly to the five images.
+
+Acceptance:
+
+- `docs/product-tour.md` or `docs/demo.md`.
+- Includes minimal terminal examples and links to `/guide`, `/tools`, `/sessions`, `/approval`.
+- Avoids pretending there is a web UI if there is not.
+
+## Explicit Non-Goals
+
+- Do not rewrite TUI architecture unless Maki explicitly asks.
+- Do not change RED behavior without explicit approval.
+- Do not remove MT22 legacy task support until migration gates are met.
+- Do not keep appending vague percentage updates after every micro-change.
+- Do not commit local `.agentx/state.json`, sessions, patches, or tmp files.
+
+## Suggested Next Commit
+
+`補齊 mode 與 approval 命名對齊`
+
+Scope:
+
+- `/mode ask` alias
+- approval aliases
+- README and tests
+
+This directly closes the highest-signal remaining gap between the implementation and images 2 + 5.
