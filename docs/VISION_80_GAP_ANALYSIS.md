@@ -246,7 +246,15 @@ Acceptance:
 
 ## Suggested Next Commit
 
-After the current unit, the next useful commit should focus on either:
+Maki's next requested direction is tracked in `docs/CAPABILITY_ROADMAP_2026-05-25.md`:
+
+1. Local file retrieval by keyword/topic
+2. Git operation loop
+3. Intent understanding and task decomposition
+
+Recommended implementation order is search first, then Git, then intent understanding. Search and Git are the reliability foundation; intent understanding should become a thin task-planning layer on top of those capabilities.
+
+After that roadmap, the next useful polish-only commit should focus on either:
 
 - narrow-terminal layout tests for `/help`, `/tools`, `/guide`, `/workflows`
 - richer transcript distinction for manually approved vs auto-approved YELLOW tools
