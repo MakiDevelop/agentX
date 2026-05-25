@@ -7,11 +7,15 @@ from agentx.project_config import load_project_config, set_project_config
 def test_set_and_load_project_config(tmp_path):
     set_project_config(tmp_path, "model", "gemma4:e2b")
     set_project_config(tmp_path, "auto_handoff", "false")
+    set_project_config(tmp_path, "mode", "ask")
+    set_project_config(tmp_path, "approval", "auto-approve")
 
     config = load_project_config(tmp_path)
 
     assert config.model == "gemma4:e2b"
     assert config.auto_handoff is False
+    assert config.mode == "agent"
+    assert config.approval == "auto"
 
 
 def test_set_and_load_persona_config(tmp_path):
@@ -23,7 +27,7 @@ def test_set_and_load_persona_config(tmp_path):
 
 
 def test_reject_invalid_project_config_values(tmp_path):
-    with pytest.raises(ValueError, match="mode must be chat or agent"):
+    with pytest.raises(ValueError, match="mode must be chat, ask, or agent"):
         set_project_config(tmp_path, "mode", "plan")
 
     with pytest.raises(ValueError, match="approval must be ask"):

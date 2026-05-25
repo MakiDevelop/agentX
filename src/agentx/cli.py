@@ -20,7 +20,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from agentx.approval import ApprovalMode, ApprovalPolicy
+from agentx.approval import ApprovalMode, ApprovalPolicy, normalize_approval_mode
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from agentx.config import Settings
 from agentx.doctor import run_doctor
@@ -83,6 +83,8 @@ class ShellState:
 
     def set_chat_mode(self, new_mode: str) -> None:
         """切換 chat / agent 模式。"""
+        if new_mode == "ask":
+            new_mode = "agent"
         if new_mode not in {"chat", "agent"}:
             raise ValueError("mode must be 'chat' or 'agent'")
         self.mode = new_mode
@@ -111,6 +113,7 @@ ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 SLASH_COMMANDS = [
     ("/help", "列出所有 slash command 與中文說明"),
     ("/guide", "60 秒快速導覽：模式選擇、常用工作流、安全與記憶"),
+    ("/workflows", "列出實務工作流：理解、修改、測試、review、handoff"),
     ("/init", "掃描 repo 並寫入 project profile 到 Memory Hall"),
     ("/task [TEXT|status|list|add ...|update <id> ...|done <id>|clear]", "多任務清單管理（已統一為真相來源）"),
     ("/doctor", "檢查 Ollama、模型、Memory Hall、git、uv 狀態"),
@@ -134,7 +137,7 @@ SLASH_COMMANDS = [
     ("/git", "顯示 git status"),
     ("/diff [PATH]", "顯示 git diff，可指定單一檔案"),
     ("/apply PATCH_FILE", "套用 workspace 內 patch 檔，會先要求 approval"),
-    ("/approval [ask|auto|off]", "查看或切換 YELLOW 工具 approval policy"),
+    ("/approval [ask|auto|off|strict|auto-approve|deny]", "查看或切換 YELLOW 工具 approval policy"),
     ("/memory QUERY", "查詢目前 namespace 的 Memory Hall 記憶"),
     ("/run COMMAND", "執行固定 allowlist 命令"),
     ("/docker [ps|build|up|logs|down]", "執行 workspace 內 Docker Compose allowlist 指令"),
@@ -144,6 +147,7 @@ SLASH_COMMANDS = [
     ("/plan", "切換 plan 模式；plan 模式只討論方案，不使用工具"),
     ("/execute", "從 plan 模式切換至執行模式，後續將可使用工具實際執行方案"),
     ("/mode chat", "切換到純聊天模式，不使用工具，速度較快"),
+    ("/mode ask", "切換到單次任務語意的 agent 工具模式，同 /mode agent"),
     ("/mode agent", "切換到 agent 工具模式，可使用 repo / git / Memory Hall 工具"),
     ("/models", "列出 Ollama 目前可用模型"),
     ("/model [MODEL]", "查看或切換 Ollama 模型，例如 /model gemma4:31b"),
@@ -164,8 +168,18 @@ GUIDE_MODE_ROWS = [
 GUIDE_WORKFLOW_ROWS = [
     ("了解專案", "/files  →  /read README.md  →  /search 關鍵字"),
     ("檢查變更", "/git  →  /diff  →  /test  →  /review"),
-    ("安全執行", "/tools 看風險  →  /approval ask  →  /run allowlist 指令"),
+    ("安全執行", "/tools 看風險  →  /approval strict  →  /run allowlist 指令"),
     ("延續工作", "/sessions  →  /resume latest  →  /handoff 本輪重點"),
+]
+
+WORKFLOW_ROWS = [
+    ("理解 repo", "/guide  →  /files  →  /read README.md  →  /search 關鍵字"),
+    ("小步修改", "/task add 目標  →  /mode ask  →  讓 agent 讀檔與改檔  →  /diff"),
+    ("安全執行", "/tools  →  /approval strict  →  /run uv run pytest -q"),
+    ("工程驗證", "/git  →  /diff  →  /test  →  /review"),
+    ("Docker 檢查", "/docker ps  →  /docker build  →  /docker up  →  /docker logs"),
+    ("記憶交接", "/sessions  →  /resume latest  →  /handoff 完成與待辦"),
+    ("提交收尾", "/review  →  /commit 中文訊息"),
 ]
 
 
@@ -192,7 +206,7 @@ def print_slash_help() -> None:
     # Category definitions (vision-aligned grouping)
     categories = [
         ("核心與模式", [
-            "/help", "/guide", "/status", "/mode", "/plan", "/execute", "/clear", "/exit",
+            "/help", "/guide", "/workflows", "/status", "/mode", "/plan", "/execute", "/clear", "/exit",
         ]),
         ("檔案與內容", [
             "/files", "/read", "/search", "/attach", "/fetch",
@@ -288,7 +302,26 @@ def print_guide() -> None:
     safety.add_row("RED", "危險操作與敏感路徑預設受保護。")
     safety.add_row("Memory Hall", "用 /remember 寫入重點，用 /handoff 交接，用 /resume 延續上一輪。")
     console.print(safety)
-    console.print("[dim]下一步：輸入 /help 看全部指令，或 /tools 看工具與風險分級。[/dim]")
+    console.print("[dim]下一步：輸入 /workflows 看實務路徑，/help 看全部指令，或 /tools 看工具與風險分級。[/dim]")
+
+
+def print_workflows() -> None:
+    """Print practical recipes for common repo workflows."""
+    console.print(
+        Panel(
+            "[bold]agentX workflows[/bold]\n"
+            "常用路徑以可驗證、可交接、可回復為主；需要改動時先看風險與 diff。",
+            border_style="cyan",
+            padding=(0, 1),
+        )
+    )
+    table = Table(title="實務工作流", show_header=True, header_style="bold")
+    table.add_column("目標", style="cyan", no_wrap=True)
+    table.add_column("建議路徑")
+    for goal, path in WORKFLOW_ROWS:
+        table.add_row(goal, path)
+    console.print(table)
+    console.print("[dim]提示：/mode ask 與 /mode agent 使用同一個工具模式；ask 是面向使用者的命名。[/dim]")
 
 
 def print_tools(tools: ToolRegistry) -> None:
@@ -527,6 +560,7 @@ def print_approval(policy: ApprovalPolicy) -> None:
     table.add_column("Key", style="cyan")
     table.add_column("Value")
     table.add_row("mode", policy.mode.value)
+    table.add_row("aliases", "strict=ask, auto-approve=auto, deny=off")
     table.add_row("GREEN", "auto allow")
     table.add_row("YELLOW", "ask / auto / off")
     table.add_row("RED", "always block")
@@ -535,8 +569,8 @@ def print_approval(policy: ApprovalPolicy) -> None:
     # Educational note for better safety awareness
     meaning = {
         "auto": "YELLOW 工具現在會自動執行（適合熟悉後提高效率）",
-        "ask": "YELLOW 工具會詢問你是否執行（最平衡的模式）",
-        "off": "YELLOW 工具會被拒絕執行（最保守）",
+        "ask": "YELLOW 工具會詢問你是否執行（strict 目前同義，最平衡）",
+        "off": "YELLOW 工具會被拒絕執行（deny 同義，最保守）",
     }.get(policy.mode.value, "")
 
     if meaning:
@@ -866,6 +900,9 @@ def build_handoff(
     recent = "\n".join(f"- [{item_mode}] {prompt}" for item_mode, prompt in history[-10:])
     note_section = f"\n人類補充：{note}\n" if note else ""
     next_steps = _handoff_next_steps(tasks, task_summary)
+    completed = _handoff_completed(tasks)
+    todo = _handoff_todo(tasks, task_summary)
+    blockers = _handoff_blockers(tasks)
 
     # MT22: 優先使用新多任務清單
     if tasks:
@@ -896,8 +933,52 @@ def build_handoff(
         f"{task_section}"
         f"transcript：{transcript.path}\n"
         f"{note_section}"
+        f"完成：\n{completed}\n"
+        f"待辦：\n{todo}\n"
+        f"阻塞：\n{blockers}\n"
         f"最近互動：\n{recent if recent else '- 無使用者任務'}\n"
-        f"建議下一步：\n{next_steps}"
+        f"下一輪建議：\n{next_steps}"
+    )
+
+
+def _handoff_completed(tasks: list[dict] | None = None) -> str:
+    if not tasks:
+        return "- 未記錄完成項目"
+    done = [task for task in tasks if task.get("status") == "done"]
+    if not done:
+        return "- 未記錄完成項目"
+    return "\n".join(
+        f"- #{task.get('id')}: {task.get('description')} [done]"
+        for task in done[:8]
+    )
+
+
+def _handoff_todo(tasks: list[dict] | None = None, task_summary: str | None = None) -> str:
+    if tasks:
+        active = [
+            task for task in tasks
+            if task.get("status") not in {"done", "blocked"}
+        ]
+        if active:
+            return "\n".join(
+                f"- #{task.get('id')}: {task.get('description')} [{task.get('status', 'pending')}]"
+                for task in active[:8]
+            )
+        return "- 無 active todo"
+    if task_summary and task_summary.strip() and "(none)" not in task_summary:
+        return "- 見上方多任務清單摘要"
+    return "- 無 active todo"
+
+
+def _handoff_blockers(tasks: list[dict] | None = None) -> str:
+    if not tasks:
+        return "- 無明確阻塞"
+    blocked = [task for task in tasks if task.get("status") == "blocked"]
+    if not blocked:
+        return "- 無明確阻塞"
+    return "\n".join(
+        f"- #{task.get('id')}: {task.get('description')} [blocked]"
+        for task in blocked[:5]
     )
 
 
@@ -993,6 +1074,8 @@ def shell(
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
     mode = mode or project_config.mode or "chat"
+    if mode == "ask":
+        mode = "agent"
 
     # === 階段一：建立 ShellState（必須在任何 command 處理之前） ===
     state = ShellState(
@@ -1004,7 +1087,7 @@ def shell(
     # Phase A (MT22): 優先使用新多任務系統作為真相來源
     migrate_single_task_if_needed(settings.workspace)
     approval_policy = ApprovalPolicy(
-        mode=ApprovalMode(project_config.approval) if project_config.approval else ApprovalMode.ASK
+        mode=normalize_approval_mode(project_config.approval) if project_config.approval else ApprovalMode.ASK
     )
     ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
 
@@ -1238,6 +1321,13 @@ def shell(
         print_guide()
 
     register_handler("/guide", handle_guide)
+
+    def handle_workflows(state: ShellState, prompt: str):
+        """顯示常用 workflow recipe"""
+        transcript.write("slash_command", {"command": prompt})
+        print_workflows()
+
+    register_handler("/workflows", handle_workflows)
 
     def handle_memory(state: ShellState, prompt: str):
         """查詢目前 namespace 的 Memory Hall 記憶（支援 /memory QUERY）"""
@@ -1522,7 +1612,7 @@ def shell(
     register_handler("/commit", handle_commit)
 
     def handle_approval(state: ShellState, prompt: str):
-        """查看或切換 YELLOW 工具的 approval policy（ask / auto / off）"""
+        """查看或切換 YELLOW 工具的 approval policy（含 aliases）"""
         if prompt == "/approval":
             transcript.write("slash_command", {"command": prompt})
             print_approval(approval_policy)
@@ -1530,9 +1620,9 @@ def shell(
 
         mode_value = prompt.removeprefix("/approval ").strip()
         try:
-            approval_policy.mode = ApprovalMode(mode_value)
+            approval_policy.mode = normalize_approval_mode(mode_value)
         except ValueError:
-            print_raw("usage: /approval ask|auto|off")
+            print_raw("usage: /approval ask|auto|off|strict|auto-approve|deny")
             return
         transcript.write("slash_command", {"command": prompt, "approval": approval_policy.mode.value})
         print_approval(approval_policy)
@@ -1583,7 +1673,7 @@ def shell(
         try:
             state.set_chat_mode(next_mode)
         except ValueError:
-            print_raw("mode must be chat or agent")
+            print_raw("mode must be chat, ask, or agent")
             return
         transcript.write("slash_command", {"command": prompt, "mode": state.mode})
         console.print(f"mode={state.mode}")
@@ -2120,9 +2210,9 @@ def shell(
             if prompt.startswith("/approval "):
                 mode_value = prompt.removeprefix("/approval ").strip()
                 try:
-                    approval_policy.mode = ApprovalMode(mode_value)
+                    approval_policy.mode = normalize_approval_mode(mode_value)
                 except ValueError:
-                    console.print("usage: /approval ask|auto|off")
+                    console.print("usage: /approval ask|auto|off|strict|auto-approve|deny")
                     continue
                 transcript.write("slash_command", {"command": prompt, "approval": approval_policy.mode.value})
                 print_approval(approval_policy)
@@ -2232,7 +2322,7 @@ def shell(
                 try:
                     state.set_chat_mode(next_mode)
                 except ValueError:
-                    console.print("mode must be chat or agent")
+                    console.print("mode must be chat, ask, or agent")
                     continue
                 transcript.write("slash_command", {"command": prompt, "mode": state.mode})
                 console.print(f"mode={state.mode}")

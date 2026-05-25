@@ -13,6 +13,20 @@ class ApprovalMode(str, Enum):
     OFF = "off"
 
 
+APPROVAL_ALIASES = {
+    "strict": ApprovalMode.ASK,
+    "auto-approve": ApprovalMode.AUTO,
+    "deny": ApprovalMode.OFF,
+}
+
+
+def normalize_approval_mode(value: str) -> ApprovalMode:
+    normalized = value.strip().lower()
+    if normalized in APPROVAL_ALIASES:
+        return APPROVAL_ALIASES[normalized]
+    return ApprovalMode(normalized)
+
+
 @dataclass
 class ApprovalPolicy:
     mode: ApprovalMode = ApprovalMode.ASK

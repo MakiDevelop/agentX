@@ -32,6 +32,9 @@ def test_build_handoff_includes_next_steps(tmp_path: Path) -> None:
         tasks=[{"id": 3, "description": "補 handoff next steps", "status": "pending"}],
     )
 
-    assert "建議下一步：" in content
+    assert "完成：" in content
+    assert "待辦：" in content
+    assert "阻塞：" in content
+    assert "下一輪建議：" in content
     assert "#3: 補 handoff next steps [pending]" in content
     assert "最近互動：" in content

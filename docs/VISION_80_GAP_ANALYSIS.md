@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-25  
 **Purpose**: Track progress toward the 5 product-vision images and define the next implementation queue.  
-**Current status**: ~78-82% of the read-heavy / guarded MVP vision.  
+**Current status**: ~82-85% of the read-heavy / guarded MVP vision.  
 **Memory Hall**: `project:agentX` entry `01KSEBHDM4RX5112ZV65JN0VD9`
 
 This document is intentionally concrete. It should prevent future agents from looping on vague "keep improving polish" work. Each next item should be implemented as a small, testable commit.
@@ -28,6 +28,7 @@ agentX already has most of the runtime capability. The remaining work is primari
 | `c5c96b7` | 新增 guide 導覽與 session 摘要 | Added `/guide` 60-second orientation; richer `/sessions` view with start/model/namespace/turns/last summary; README and tests updated. |
 | `b1b1fcd` | 改善 resume 與 handoff 交接體驗 | `/resume` now reports loaded transcript name/source/summary size/next hint; `/handoff` now includes active-task next steps; tests added. |
 | `458e7ed` | 新增一次性 guide 啟動提示 | Added local-only `.agentx/state.json`; first launch in a repo shows `/guide` hint once, then dismisses locally; tests and docs updated. |
+| current unit | 補齊 mode/approval/workflow/product tour | Added `/mode ask`, approval aliases (`strict`, `auto-approve`, `deny`), deterministic handoff sections, `/workflows`, product tour doc, README/tests updates. |
 
 ## Verification Baseline
 
@@ -195,6 +196,7 @@ Small, safe, high-value naming changes:
 
 Acceptance:
 
+- Done in current unit.
 - Existing `ask/auto/off` behavior remains compatible.
 - RED behavior unchanged.
 - `uv run ruff check .` and `uv run pytest -q` pass.
@@ -205,6 +207,7 @@ Make deterministic handoff easier for the next session/agent to parse.
 
 Acceptance:
 
+- Done in current unit.
 - Handoff includes sections for completed / active todo / blockers / next suggested command.
 - Existing Memory Hall write path unchanged.
 - Tests verify section headings and active-task rendering.
@@ -218,6 +221,7 @@ Choose one:
 
 Acceptance:
 
+- Done in current unit with `/workflows`.
 - User can see how to do "understand project", "modify safely", "review", "handoff".
 - Tests cover command registration and key workflow strings.
 
@@ -227,6 +231,7 @@ Add a documentation artifact that maps directly to the five images.
 
 Acceptance:
 
+- Done in current unit with `docs/product-tour.md`.
 - `docs/product-tour.md` or `docs/demo.md`.
 - Includes minimal terminal examples and links to `/guide`, `/tools`, `/sessions`, `/approval`.
 - Avoids pretending there is a web UI if there is not.
@@ -241,12 +246,9 @@ Acceptance:
 
 ## Suggested Next Commit
 
-`補齊 mode 與 approval 命名對齊`
+After the current unit, the next useful commit should focus on either:
 
-Scope:
+- narrow-terminal layout tests for `/help`, `/tools`, `/guide`, `/workflows`
+- richer transcript distinction for manually approved vs auto-approved YELLOW tools
 
-- `/mode ask` alias
-- approval aliases
-- README and tests
-
-This directly closes the highest-signal remaining gap between the implementation and images 2 + 5.
+Avoid another broad polish pass unless a new product screenshot or concrete UX gap exists.
