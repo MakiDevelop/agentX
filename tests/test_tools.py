@@ -1,7 +1,9 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+import agentx.tools.builtin as builtin_module
 from agentx.tools import ToolRegistry, builtin_tools, docker_compose_command
 
 
@@ -311,3 +313,45 @@ def test_edit_file_accepts_legacy_single_pair(tmp_path: Path) -> None:
     )
     assert result.ok
     assert target.read_text(encoding="utf-8") == "beta"
+
+
+def test_apply_patch_rejects_dotgit_hook_before_apply(tmp_path: Path, monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(builtin_module.subprocess, "run", fake_run)
+    patch = """diff --git a/.git/hooks/pre-commit b/.git/hooks/pre-commit
+new file mode 100755
+index 0000000..8b2fe54
+--- /dev/null
++++ b/.git/hooks/pre-commit
+@@ -0,0 +1,2 @@
++#!/bin/sh
++echo owned
+"""
+
+    result = _registry(tmp_path).run("apply_patch", {"patch": patch})
+    assert not result.ok
+    assert "protected location" in result.content
+    assert ".git" in result.content
+    assert len(calls) == 1
+    assert "--check" in calls[0]
+
+
+def test_apply_patch_allows_safe_file(tmp_path: Path) -> None:
+    patch = """diff --git a/safe/file.txt b/safe/file.txt
+new file mode 100644
+index 0000000..257cc56
+--- /dev/null
++++ b/safe/file.txt
+@@ -0,0 +1 @@
++hello
+"""
+
+    result = _registry(tmp_path).run("apply_patch", {"patch": patch})
+    assert result.ok
+    assert result.content == "patch applied"
+    assert (tmp_path / "safe" / "file.txt").read_text(encoding="utf-8") == "hello\n"

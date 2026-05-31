@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -326,6 +327,9 @@ class ApplyPatchTool(_WorkspaceTool):
         if check.returncode != 0:
             return f"git apply --check failed\n{check.stdout}{check.stderr}".strip()
 
+        for path in _patch_write_paths(patch):
+            ensure_safe_write_path(self.workspace, resolve_inside_workspace(self.workspace, path))
+
         applied = subprocess.run(
             ["git", "apply", str(patch_path)],
             cwd=self.workspace,
@@ -338,6 +342,42 @@ class ApplyPatchTool(_WorkspaceTool):
         if applied.returncode != 0:
             return f"git apply failed\n{output}".strip()
         return output or "patch applied"
+
+
+def _patch_write_paths(patch: str) -> set[str]:
+    paths: set[str] = set()
+    for line in patch.splitlines():
+        if line.startswith("diff --git a/"):
+            old, _, new = line.removeprefix("diff --git ").rpartition(" b/")
+            _add_patch_path(paths, old, strip=1)
+            if new:
+                _add_patch_path(paths, f"b/{new}", strip=1)
+            continue
+        if line.startswith(("--- ", "+++ ")):
+            _add_patch_path(paths, line[4:], strip=1)
+        elif line.startswith(("rename from ", "rename to ")):
+            _add_patch_path(paths, line.removeprefix("rename from ").removeprefix("rename to "), strip=0)
+        elif line.startswith(("copy from ", "copy to ")):
+            _add_patch_path(paths, line.removeprefix("copy from ").removeprefix("copy to "), strip=0)
+    return paths
+
+
+def _add_patch_path(paths: set[str], raw: str, *, strip: int) -> None:
+    path = _patch_path(raw, strip=strip)
+    if path and path != "/dev/null":
+        paths.add(path)
+
+
+def _patch_path(raw: str, *, strip: int) -> str | None:
+    token = raw.split("\t", 1)[0].strip()
+    if token.startswith('"'):
+        token = ast.literal_eval(token)
+    if token == "/dev/null":
+        return token
+    parts = token.split("/")
+    if len(parts) <= strip:
+        return None
+    return "/".join(parts[strip:])
 
 
 class _DockerComposeTool(_WorkspaceTool):
