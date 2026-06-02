@@ -143,19 +143,15 @@ if has_legacy_single_task(settings.workspace):
 
 ---
 
-**記錄時間**：推進中 + 驗證通過 (2026)  
+**記錄時間**：推進中 + task.py 移除 + 驗證通過 (2026)  
 **負責人**：Grok（逐一推進中）  
-**更新**：cli.py 三處 legacy if 分支已移除（print_config, build_handoff, 啟動）。_format_legacy 函式刪除。helper deprecated 標記（tasks.py）。  
+**更新**：cli.py 三處 legacy if 分支已移除。 _format 刪。 _get_legacy 從 tasks.py 移除（最後 src dep 清除）。 task.py 模組已 git rm 。 test_task.py 更新為「僅歷史相容驗證」+ importorskip。 test_tasks.py 清理 legacy _get 測試。 has_legacy / _get 已正式標記 internal deprecated。
 **驗證**（全部 PASS）：
-- 手動腳本：/config + build_handoff 帶 legacy task.json → PASS（無 MT22 note，顯示 "(none)"）。
-- doctor 仍正確報告 "legacy_only (舊系統仍主導)" + 全 20 個 test_doctor.py 通過。
-- 直接呼叫 get_task_migration_status 確認 legacy 偵測正常（legacy_only 時 legacy_system_active=True）。
-- ruff clean；tasks/doctor 測試通過（57 passed）；cli_dispatch 既有問題未受影響（非本次變更）。
-- 啟動流程 legacy 寫入/提示已移除，無 regression。
-- **完整 E2E 端到端驗證腳本** (/tmp/e2e_mt22_legacy_removal.py)：
-  - 完全無 legacy 環境：migrate/status, /config, build_handoff, doctor 全部 PASS。
-  - 帶 legacy 環境（模擬舊使用者）：pre-migrate detect, migrate 成功, post-migrate /config/handoff 無 legacy UI, doctor 報告正確。ALL PASS。
-  - 涵蓋「模擬完全無 legacy 環境」的端到端測試通過（符合 checklist 要求）。
+- 手動 + E2E 腳本：/config, handoff, 啟動, doctor 在無/有 legacy 時行為正確。
+- 57 tests in tasks+doctor passed。
+- ruff clean。
+- 符合 checklist 整體移除前置條件（已標記 deprecated、test_task 標記歷史、E2E 通過、migration guide 存在、get_migration_status 為主診斷）。
+下一步：最終清理剩餘 _legacy 測試引用、更新更多 docs。
 下一步：標記內部 deprecated（已），更新 test_task.py 為 legacy-only，移除 task.py 模組當條件全滿足。
 
 **參考**：
