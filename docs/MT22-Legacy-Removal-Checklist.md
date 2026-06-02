@@ -143,9 +143,14 @@ if has_legacy_single_task(settings.workspace):
 
 ---
 
-**記錄時間**：推進中  
+**記錄時間**：推進中 + 驗證通過 (2026)  
 **負責人**：Grok（逐一推進中）  
-**更新**：cli.py 三處 legacy 分支已移除（2026 推進）。helper 仍存於 tasks.py 供診斷。下一步：確認無生產呼叫後標記 deprecated，更新 migration guide，清理剩餘 test_task.py 等。
+**更新**：cli.py 三處 legacy if 分支已移除（print_config, build_handoff, 啟動）。_format_legacy 函式刪除。helper deprecated 標記（tasks.py）。  
+**驗證**：
+- 手動腳本：/config + build_handoff 帶 legacy task.json → PASS（無 MT22 note，顯示 "(none)"）。
+- doctor 仍正確報告 "legacy_only (舊系統仍主導)"。
+- ruff clean；tasks/doctor 測試通過；cli_dispatch 既有問題未受影響。
+下一步：標記內部 deprecated（已），更新 test_task.py 為 legacy-only，移除 task.py 模組當條件全滿足。
 
 **參考**：
 - `docs/MT22-v0.3.0-Handover.md`（主 handoff）
