@@ -284,6 +284,25 @@ class AgentSession:
                 )
                 self.messages.append({"role": "system", "content": verify_msg})
 
+                # === Opt5: 成功編輯模式主動寫入 Memory Hall 作為經驗庫（供未來 few-shot recall） ===
+                # 讓 Gemma4 等模型可以從過去成功案例學到模式，增加「聰明」程度。
+                try:
+                    path = action.args.get("path", "unknown")
+                    lesson = f"成功 {action.tool} on {path}。結果摘要: {(result.content or '')[:400]}"
+                    if hasattr(self.memory, "write_structured"):
+                        self.memory.write_structured(
+                            content=lesson,
+                            namespace=self.namespace,
+                            entry_type="success_pattern",
+                            summary=f"成功 {action.tool} @{path}",
+                            tags=["edit-success", "gemma-lesson", action.tool],
+                            metadata={"tool": action.tool, "path": str(path)},
+                        )
+                    else:
+                        self.memory.write(lesson, namespace=self.namespace)
+                except Exception:
+                    pass  # 靜默，不影響主流程
+
             # === 錯誤分類與基礎恢復處理（階段一 + 步驟 4） ===
             if not result.ok:
                 error_type = self.error_classifier.classify(action.tool, result)
