@@ -28,6 +28,7 @@ from agentx.git_workflow import build_commit_plan, commit_and_push
 from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
+from agentx.llamacpp import LlamaCppCancelledError, LlamaCppClient
 from agentx.ollama import OllamaCancelledError, OllamaClient
 from agentx.persona import list_personas, normalize_persona
 from agentx.project_config import load_project_config, set_project_config
@@ -61,6 +62,21 @@ if TYPE_CHECKING:
 
     from agentx.config import Settings
     from agentx.loop import AgentSession
+
+
+def create_llm_client(settings: "Settings") -> OllamaClient | LlamaCppClient:
+    """Create the appropriate LLM client based on settings.backend."""
+    if settings.backend == "llamacpp":
+        return LlamaCppClient(
+            base_url=settings.llamacpp_url,
+            model=settings.model,
+            timeout=settings.ollama_timeout,
+        )
+    return OllamaClient(
+        base_url=settings.ollama_url,
+        model=settings.model,
+        timeout=settings.ollama_timeout,
+    )
 
 
 @dataclass
@@ -766,6 +782,7 @@ def main(
     agent: bool = typer.Option(False, "--agent", help="Use agent/tool mode with -p."),
     plan: bool = typer.Option(False, "--plan", help="Start in pure planning mode for -p (only produce high-quality plan + reflection, no tools)."),
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan thoroughly first, then seamlessly continue into execution in the same run (recommended for complex tasks)."),
+    orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
 ) -> None:
     """Run local Ollama agent workflows."""
@@ -779,6 +796,7 @@ def main(
         agent_mode=agent,
         plan_mode=plan,
         plan_then_execute=plan_then_execute,
+        orchestrate=orchestrate,
     ))
     raise typer.Exit()
 
@@ -793,11 +811,7 @@ def build_runtime(
     注意（MT22）：此函式已完全與舊的單一任務系統（TaskState）解耦，
     不再回傳或依賴舊的 task 物件。所有任務相關狀態請改用新多任務清單。
     """
-    ollama = OllamaClient(
-        base_url=settings.ollama_url,
-        model=settings.model,
-        timeout=settings.ollama_timeout,
-    )
+    ollama = create_llm_client(settings)
     memory = MemoryHallClient(
         base_url=settings.memory_hall_url,
         token=settings.memory_hall_token,
@@ -821,6 +835,7 @@ def run_print_prompt(
     agent_mode: bool = False,
     plan_mode: bool = False,
     plan_then_execute: bool = False,
+    orchestrate: bool = False,
 ) -> str:
     settings = Settings()
     project_config = load_project_config(settings.workspace)
@@ -829,10 +844,16 @@ def run_print_prompt(
     # Phase A (MT22): 自動從舊單一任務遷移到多任務清單
     migrate_single_task_if_needed(settings.workspace)
 
-    ollama, _, tools = build_runtime(settings)
+    ollama, memory, tools = build_runtime(settings)
     attachment_context, _ = build_attachment_context(prompt, settings.workspace)
     if attachment_context:
         prompt = f"{prompt}\n\n{attachment_context}"
+
+    if orchestrate:
+        from agentx.orchestrator import Orchestrator
+        orch = Orchestrator(settings=settings, llm=ollama, memory=memory, tools=tools, trace=print_trace)
+        result = orch.run(prompt, namespace=namespace)
+        return result.summary
     if agent_mode:
         # Use headless-optimized prompt when running via -p --agent
         # B1: 自動注入當前任務清單摘要，讓模型更容易維持長期任務狀態
@@ -1224,7 +1245,7 @@ def shell(
                     print_raw("")
                 else:
                     print_block(answer)
-            except OllamaCancelledError:
+            except (OllamaCancelledError, LlamaCppCancelledError):
                 transcript.write("cancel", {"job": job.id, "prompt": queued_prompt})
                 print_block(f"cancelled job #{job.id}")
             except Exception as exc:
@@ -1710,13 +1731,9 @@ def shell(
 
         new_settings = state.update_settings(model=model)
 
-        # 切換模型需要重建 OllamaClient（外部相依）
+        # 切換模型需要重建 LLM client（外部相依）
         nonlocal ollama
-        ollama = OllamaClient(
-            base_url=new_settings.ollama_url,
-            model=new_settings.model,
-            timeout=new_settings.ollama_timeout,
-        )
+        ollama = create_llm_client(new_settings)
         if state.agent_session:
             state.agent_session.ollama = ollama
 
@@ -2349,12 +2366,8 @@ def shell(
                     console.print("usage: /model gemma4:e2b")
                     continue
                 new_settings = state.update_settings(model=model)
-                # model 切換需要重建 ollama client（這是外部相依，不適合全藏在 state）
-                ollama = OllamaClient(
-                    base_url=new_settings.ollama_url,
-                    model=new_settings.model,
-                    timeout=new_settings.ollama_timeout,
-                )
+                # model 切換需要重建 LLM client（這是外部相依，不適合全藏在 state）
+                ollama = create_llm_client(new_settings)
                 if state.agent_session:
                     state.agent_session.ollama = ollama
                 transcript.write("slash_command", {"command": prompt, "model": new_settings.model})

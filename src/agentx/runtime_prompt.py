@@ -53,24 +53,45 @@ def _base_engineering_principles() -> str:
 
 def _base_output_rules() -> str:
     return """Output Rules:
-- Always respond with exactly one JSON object per turn.
-- Available action types:
-  - {"type":"tool_call","tool":"...","args":{...}}
-  - {"type":"reflect","focus":"optional focus"}
-  - {"type":"final","content":"..."}"""
+- CRITICAL: Always respond with exactly one JSON object per turn. No markdown, no explanation, no text outside the JSON.
+- There are ONLY 3 valid action types. You MUST use one of these exact formats:
+
+1. Tool call (to use any tool):
+   {"type":"tool_call","tool":"<TOOL_NAME>","args":{<TOOL_ARGS>}}
+
+2. Reflection (to think about progress):
+   {"type":"reflect","focus":"<what to reflect on>"}
+
+3. Final answer (to reply to user):
+   {"type":"final","content":"<your answer>"}
+
+IMPORTANT: "type" can ONLY be "tool_call", "reflect", or "final". Never use tool names as type values.
+
+Examples:
+- Read a file:     {"type":"tool_call","tool":"read_file","args":{"path":"src/main.py"}}
+- Edit a file:     {"type":"tool_call","tool":"search_replace","args":{"path":"hello.py","old_string":"# placeholder","new_string":"print('hello')"}}
+- Add a task:      {"type":"tool_call","tool":"task_add","args":{"description":"implement feature X"}}
+- List files:      {"type":"tool_call","tool":"list_files","args":{"path":"."}}
+- Run tests:       {"type":"tool_call","tool":"run_tests","args":{}}
+- Final answer:    {"type":"final","content":"已完成修改。"}"""
 
 
 def _base_tools_section() -> str:
-    return """Available Tools:
-- list_files, read_file, search_text
-- git_status, git_diff
-- search_replace (strongly preferred for editing), insert_code
-- run_tests (use frequently after edits)
-- apply_patch (only when necessary)
-- reflect (use after important edits or when uncertain)
-- task_add, task_update, task_list (maintain an explicit task list for complex work)
-- memory_search / memory_write
-- Other tools as listed in the tool list"""
+    return """Available Tools (use via {"type":"tool_call","tool":"<name>","args":{...}}):
+- list_files: {"path":"."} — list workspace files
+- read_file: {"path":"file.py"} — read file content
+- search_text: {"pattern":"keyword","path":"."} — search in files
+- git_status: {} — show git status
+- git_diff: {} — show git diff
+- search_replace: {"path":"file.py","old_string":"original text","new_string":"replacement text"} — edit file (preferred)
+- insert_code: {"path":"file.py","insert_after":"marker line","content":"new code"} — insert after marker
+- run_tests: {} — run project tests
+- apply_patch: {"patch":"..."} — apply unified diff (last resort)
+- task_add: {"description":"task"} — add task to list
+- task_update: {"task_id":1,"status":"done"} — update task status
+- task_list: {} — show all tasks
+- memory_search: {"query":"keyword"} — search Memory Hall
+- memory_write: {"content":"note"} — write to Memory Hall"""
 
 
 def _base_capabilities_limits() -> str:
@@ -200,3 +221,59 @@ Use Traditional Chinese for final answers to the user.
 
 
 AGENT_SYSTEM_PROMPT = build_agent_system_prompt()
+
+
+def build_worker_system_prompt(
+    subtask_description: str,
+    dependency_context: str = "",
+) -> str:
+    """Focused worker agent prompt — minimal context for single subtask execution."""
+    dep_block = ""
+    if dependency_context:
+        dep_block = f"\nContext from previous steps:\n{dependency_context}\n"
+
+    return f"""You are a focused worker agent. You have exactly ONE task to complete:
+
+{subtask_description}
+{dep_block}
+{_base_output_rules()}
+
+{_base_tools_section()}
+
+Workflow:
+1. Read relevant files if needed.
+2. Make precise edits using search_replace or insert_code.
+3. When done, return {{"type":"final","content":"your summary in Traditional Chinese"}}.
+
+Do NOT plan, manage task lists, or reflect extensively. Just execute the task efficiently.
+
+{_base_communication_style()}
+"""
+
+
+PLANNING_SYSTEM_PROMPT = """You are a task planner for agentX. Given a complex engineering task, break it into small, independent subtasks.
+
+CRITICAL: Respond with ONLY a JSON object in this exact format:
+{"type":"final","content":"{\\"goal\\":\\"...\\",...}"}
+
+The content field must be a JSON string with this structure:
+{
+  "goal": "one-line description of the overall goal",
+  "subtasks": [
+    {
+      "id": "s1",
+      "description": "Clear, actionable description of what to do",
+      "depends_on": [],
+      "context_hints": ["relevant file paths or facts"]
+    }
+  ]
+}
+
+Rules:
+- 2-6 subtasks maximum.
+- Each subtask should be completable in 3-6 tool calls.
+- Use depends_on ONLY when a subtask truly needs another's output.
+- Prefer independent subtasks (fewer dependencies = faster execution).
+- context_hints: list key file paths the worker will need to read.
+- If the task is simple (1-2 edits), use just 1 subtask.
+"""

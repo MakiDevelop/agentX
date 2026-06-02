@@ -12,7 +12,7 @@ def run_doctor(settings: Settings, memory: MemoryHallClient, ollama: OllamaClien
     checks = [
         _check_command("uv", ["uv", "--version"]),
         _check_command("git", ["git", "status", "--short", "--branch"], cwd=settings.workspace),
-        _check_ollama(settings, ollama),
+        _check_llm_backend(settings, ollama),
         _check_model(settings, ollama),
         _check_memory_search(memory),
         _check_task_migration(settings),
@@ -29,19 +29,28 @@ def _check_command(name: str, command: list[str], cwd=None) -> tuple[str, bool, 
     return name, result.returncode == 0, output[:300]
 
 
-def _check_ollama(settings: Settings, ollama: OllamaClient) -> tuple[str, bool, str]:
+def _check_llm_backend(settings: Settings, ollama: OllamaClient) -> tuple[str, bool, str]:
+    backend = getattr(settings, "backend", "ollama")
+    if backend == "llamacpp":
+        url = settings.llamacpp_url
+    else:
+        url = settings.ollama_url
     try:
         models = ollama.list_models()
     except Exception as exc:
-        return "ollama", False, f"{settings.ollama_url} {type(exc).__name__}: {exc}"
-    return "ollama", True, f"{settings.ollama_url} models={len(models)}"
+        return f"llm ({backend})", False, f"{url} {type(exc).__name__}: {exc}"
+    return f"llm ({backend})", True, f"{url} models={len(models)}"
 
 
 def _check_model(settings: Settings, ollama: OllamaClient) -> tuple[str, bool, str]:
+    backend = getattr(settings, "backend", "ollama")
     try:
         models = ollama.list_models()
     except Exception as exc:
         return "model", False, f"{type(exc).__name__}: {exc}"
+    if backend == "llamacpp":
+        # llama.cpp usually reports model path as ID; accept any loaded model
+        return "model", len(models) > 0, f"{settings.model} (backend: llamacpp, loaded: {len(models)})"
     return "model", settings.model in models, settings.model
 
 
