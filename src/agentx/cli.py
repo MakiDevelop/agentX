@@ -23,6 +23,7 @@ from rich.text import Text
 from agentx.approval import ApprovalMode, ApprovalPolicy, normalize_approval_mode
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from agentx.config import Settings
+from agentx.context_compactor import LLMContextCompactor
 from agentx.doctor import run_doctor
 from agentx.git_workflow import build_commit_plan, commit_and_push
 from agentx.jobs import PromptJobQueue
@@ -895,12 +896,14 @@ def run_print_prompt(
                     "使用者任務："
                 ) + prompt
 
+        compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None
         agent_loop = AgentLoop(
             settings=settings,
             ollama=ollama,
             tools=tools,
             namespace=namespace,
             system_prompt=system_prompt,
+            compactor=compactor,
         )
         effective_plan_only = plan_mode or plan_then_execute
         return agent_loop.run(agent_prompt, namespace=namespace, plan_only=effective_plan_only)
@@ -1052,7 +1055,8 @@ def ask(
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
     ollama, _, tools = build_runtime(settings)
-    agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace)
+    compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None
+    agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace, compactor=compactor)
     print_raw(agent.run(prompt, namespace=namespace))
 
 
@@ -1114,12 +1118,14 @@ def shell(
     transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
     if current_tasks:
         transcript.write("tasks", {"count": len(current_tasks), "summary": task_summary})
+    compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None
     agent_session = AgentSession(
         settings=settings,
         ollama=ollama,
         tools=tools,
         namespace=namespace,
         trace=print_trace,
+        compactor=compactor,
     )
     state.agent_session = agent_session
     chat_messages = [
