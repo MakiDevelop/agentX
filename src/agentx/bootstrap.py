@@ -10,6 +10,10 @@ from agentx.tools import SKIPPED_DIRS
 
 BOOTSTRAP_FILES = ("AGENTX.md", "AGENTS.md", "README.md", "pyproject.toml", "package.json")
 
+# Additional project-specific handoff / next-session files (inspired by ai-tetsu NEXT_SESSION.md)
+# These are loaded from .agentx/handoff/ if present, to provide living "from where to continue" context.
+HANDOFF_FILES = ("NEXT_SESSION.md", "CONVERSATION_HANDOFF.md")
+
 
 class MemorySearcher(Protocol):
     def search(self, query: str, namespace: str = "shared", limit: int = 5) -> str: ...
@@ -25,6 +29,15 @@ def build_repo_context(workspace: Path, max_chars: int = 12000) -> str:
         if path.is_file():
             content = path.read_text(encoding="utf-8", errors="replace")
             parts.append(f"--- {filename} ---\n{content[:3000]}")
+
+    # Load handoff / next-session files from .agentx/handoff/ (ai-tetsu style living handoff)
+    handoff_dir = workspace / ".agentx" / "handoff"
+    if handoff_dir.is_dir():
+        for filename in HANDOFF_FILES:
+            path = handoff_dir / filename
+            if path.is_file():
+                content = path.read_text(encoding="utf-8", errors="replace")
+                parts.append(f"--- .agentx/handoff/{filename} ---\n{content[:3000]}")
 
     context = "\n\n".join(part for part in parts if part.strip())
     return context[:max_chars]

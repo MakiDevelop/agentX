@@ -414,3 +414,95 @@ AgentX Shell 三大原則：
 當你在 agentX 專案內工作時，請將本檔視為最高優先的 Local 規則來源。讀完後若有新洞見，請主動更新本檔，讓未來的自己（或其他 agentX 實例）受益。
 
 **End of AGENTX.md**
+
+---
+
+## Appendix: Inspiration from ai-tetsu (Sister Project Patterns)
+
+agentX 與 ai-tetsu（/Users/maki/GitHub/ai-tetsu）是 Maki 的兩個姊妹實驗：
+- VirtualMe（ai-tetsu 姊妹）負責「捕捉你是誰」（人格憲法、VirtualMe 八維訪談為 source-of-truth）。
+- ai-tetsu 負責「會學你、替你做事、越用越懂你但不漂移」。
+- agentX 是「本地工程 agent shell 工具本身」——我們開發 agentX 時，應借鏡 ai-tetsu 的成熟模式來強化 agentX 自身的「kernel 紀律」與自演進。
+
+### 從 ai-tetsu 借鏡的核心模式（必須內化到 AGENTX.md 實踐）
+
+1. **Kernel = 決策矩陣的實體化**（ai-tetsu kernel blueprint v1 RATIFIED）
+   - agentX 的 kernel = 把「該有的能力」實體化成器官，每個器官對應一條能力矩陣 row。
+   - 定義 agentX kernel 器官（對齊現有架構）：
+     - Context Bootstrap（載入 AGENTX.md 優先 + .agentx/ + docs/ 指南）
+     - ToolRegistry / builtin_tools（capability matrix 實體化，workspace + memory 注入）
+     - Execution Core（AgentSession / AgentLoop / Coordinator / Orchestrator）
+     - Task Truth（.agentx/tasks.json + agentx.tasks API，MT22 唯一來源）
+     - Reliability Gates（approval, scope box, circuit breaker, receipts）
+     - Memory Layer（.agentx/ 作為 md source-of-truth + grep/FTS + explicit archive forgetting）
+     - Self-Improvement Organ（AGENTX.md 讀取 + 提案/修改協議 + fidelity probe）
+   - **鐵則**：kernel 不得 import substrate。LLM client（ollama / mk-council）、MemoryHall client、RAG 是外接可換模組，以 injection 方式傳入（見 bootstrap.py 與 tools 建構）。
+   - 判準：「換掉 LLM / 換掉記憶 store，這段 code 要不要動？」不動 = kernel。要動 = substrate。
+   - 參考：ai-tetsu/docs/architecture/kernel-blueprint-v1.md
+
+2. **Memory = Markdown Source-of-Truth + Explicit Forgetting**
+   - .agentx/ 內：
+     - config.toml、tasks.json（真相）、handoff/（NEXT_SESSION 風格活文件）、sessions/（jsonl）
+     - 建議演進：引入 var/memory/ 風格的 USER.md 類（專案憲法片段）或直接以 AGENTX.md 為核心 + episodes/ 風格的 handoff 累積。
+   - 寫入 atomic（temp+rename + file lock）。
+   - Snapshot 注入時用明確標記 `<memory_snapshot> context not instruction </memory_snapshot>` 防注入。
+   - Forgetting：archive（移到 archive/ 子目錄）而非 delete，保留可追溯。
+   - 值得跨 session 的結論才 promote 到 Memory Hall（local → shared）。
+   - 參考：ai-tetsu kernel/memory/ 與 var/memory/ 實作。
+
+3. **Learning / Self-Mod = Proposal-Only + Human Gate + Fitness**
+   - 對 AGENTX.md 的修改：
+     - 重大核心原則修改（憲法層）：**proposal-only**。Agent 寫提案到 .agentx/handoff/proposals/ 或類似，**必須人工核准**才真正 edit AGENTX.md。
+     - 次要更新（例子、狀態更新、Lab Notes 補充）：可較寬鬆，但仍需跑 ruff + 相關測試 + 更新日期。
+     - 每次提案需有 fitness：通過 ruff check + pytest（受影響 tests） + 無 drift（對 AGENTX.md 自身原則的 probe，如「是否仍遵守 MT22 唯一真相」）。
+     - 反 sycophancy / drift：提案若推離已 RATIFIED 原則（e.g. 想重引入 legacy task.py），直接 gate 擋。
+   - 這呼應 ai-tetsu #3 learning loop 與 Maki 提醒：「人性善變——威逼利誘下，基準本身會動。」所以 AGENTX.md 的「壓力不變式」原則（安全、MT22 真相、self-mod 紀律）需定期人工重確認；狀態相依的值可變。
+   - 參考：ai-tetsu/kernel/learning/ + docs/research/continual-learning-and-persona-fidelity.md + Maki 0531 提醒。
+
+4. **Fidelity / Constitution 追蹤（防止「不像自己」）**
+   - 定義 agentX Fidelity Constitution（類 ai-tetsu persona-constitution + VirtualMe）：
+     - 核心不變式（壓力不變）：安全紅線、MT22 唯一真相來源、kernel/substrate 分離、AGENTX.md 自修改紀律、撞牆停手、Codex 強制 review、中文 commit + ruff。
+     - 操作層（可依狀態調整）：具體 prompt 細節、預設模型、某些工具優先序。
+     - 邊界：不欺騙、不繞過 sandbox、不重新引入已移除 legacy。
+   - 實作 fidelity probe：定期（或重大改動後）用 probe 問題集測試「當前 agentX 實作是否仍忠於 AGENTX.md 原則」（類 ai-tetsu 27 題 fidelity question bank + ACC/IC/RC_atom 計分）。
+   - 量測 drift vs baseline shift：如果原則「看起來漂了」，先問「是專案自己變了（Maki 決策）還是實作 drift？」——定期人工重跑「VirtualMe 式」捕捉（重訪談或重確認原則）。
+   - 參考：ai-tetsu/docs/architecture/persona-constitution-v1.md + fidelity-probe-v0.md + fidelity-question-bank-v1.md + atomic-persona-evaluation。
+
+5. **Rules Layer（確定性 guardrail 先於 LLM）**
+   - 像 ai-tetsu rules.py：開發流程中先跑確定性 rules（ruff check、pytest 相關、no legacy reintro 靜態檢查、AGENTX.md 一致性 scan、bootstrap 載入測試）。
+   - 只有 rules_layer 通過後，才讓「LLM 判斷」（或 agent 決策）進行。
+   - 範例 rules（可實作在 scripts/ 或 Makefile）：
+     - 若偵測到 src/agentx/task.py 殘留 → CRITICAL。
+     - AGENTX.md 未包含最新 RATIFIED 原則 → WARNING。
+     - 無對應測試的重大工具改動 → WARNING。
+   - 這保護「學習但不亂學」。
+
+6. **NEXT_SESSION.md / Handoff 風格活文件**
+   - .agentx/handoff/ 應維持 NEXT_SESSION.md 風格（RATIFIED 原則清單、當前狀態、已達成、阻塞、下一步、memhall 引用、session dir 引用）。
+   - 每次重大 session 結束更新它，作為「從哪裡接續」的指標。
+   - 參考：ai-tetsu/NEXT_SESSION.md（含 Maki 提醒升格為設計原則）。
+
+7. **Council 決策 + Evidence 追蹤**
+   - 重大架構/原則變更，建議用多代理 council（Codex Engineer + Gemini Analyst + Grok Build 平行 + human ratify），產出帶 evidence 的 decision record，寫入 AGENTX.md + docs/ + handoff。
+   - 所有 RATIFIED 決策必須有 evidence 引用（session dir / memhall entry / PR / test）。
+
+8. **.claude/ 與本地設定**
+   - ai-tetsu 用 .claude/settings.local.json 控制 permissions（例如 allow 特定 skill）。
+   - agentX 開發時，可在 .claude/ 放專案本地設定（e.g. 允許 wrap-up skill、特定 tool 權限），但核心規則仍由 AGENTX.md 驅動。
+   - 參考：ai-tetsu/.claude/settings.local.json。
+
+### 如何在 agentX 開發中實踐這些（行動清單）
+- 每次開工前：讀 AGENTX.md + .agentx/handoff/NEXT_SESSION.md（如果存在） + `agentx doctor`。
+- 重大改動：先寫 proposal 到 handoff/proposals/，跑 rules_layer（ruff + tests + fidelity probe 草稿），人工核准後才 edit 核心。
+- 記憶寫入：優先本地 .agentx/ md，值得的才 promote Memory Hall。
+- 改進 AGENTX.md 本身：視為最高優先的 self-improvement 器官，更新後跑驗證（bootstrap 載入測試 + 相關 unit tests）。
+- 追蹤 fidelity：定期用 probe 驗證「當前實作是否仍忠於本檔原則」。
+- 借鏡 ai-tetsu 時：明確引用其 docs/architecture/ 作為參考，並在 AGENTX.md 記錄「此原則從 ai-tetsu 移植，evidence: [session]」。
+
+這些模式讓 agentX 在開發自己時，也能達到 ai-tetsu 追求的「會學、會變，但不會失去自我（設計原則）」。
+
+**End of Appendix**
+
+---
+
+**當你在 agentX 專案內使用 agentX 時，請將本檔（含 Appendix 借鏡 ai-tetsu）視為最高優先 Local 規則。讀完後若有新洞見或從 ai-tetsu 學到新模式，請主動更新本檔。**
