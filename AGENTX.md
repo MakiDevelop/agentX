@@ -1,166 +1,416 @@
-# AGENTX.md — agentX Project Rules, Architecture & Self-Improvement Guide
+# agentX 專案 Hard Mode 指引（附註解版）
 
-**Purpose**: This is the canonical, living instruction file for the agentX project itself.  
-When running `ax` (or `agentx`) inside this repository, agentX MUST treat the content of this file as high-priority context and rules.
+> 註：這份是 agentX 專案專屬 Local 級規則。優先於全域 ~/.claude/CLAUDE.md（除安全紅線與治理憲法）。
+> **版本**：2026-06 v1.0 — 初始建立，參考全域 CLAUDE.md v2.6 結構，針對 agentX 自身開發與自改進設計。包含 MT22 統一、Headless 可靠性、AGENTX.md 自修改協議、.agentx/ 記憶系統、Git 規範等。
 
-**Last major update**: 2026-06 (post MT22 merge + initial self-instruction setup)
-
----
-
-## Self-Improvement & Modification Protocol (CRITICAL)
-
-This file exists so that agentX can **learn and improve itself**.
-
-**You are explicitly authorized to:**
-- Read this file at any time (use `read_file` on `AGENTX.md`).
-- Learn from it: internalize principles, avoid past mistakes, follow current best practices.
-- Modify it: when you discover better ways of working, complete major features, resolve architectural debt, or identify new rules, **you should propose and apply updates** using `edit_file`, `write_file`, or search-replace tools.
-
-**Modification Rules**:
-1. Always use precise edits. Prefer small, reviewable changes.
-2. After significant edits, run relevant tests (`uv run pytest ...`) and `uv run ruff check`.
-3. Document the reason for the change (e.g., "Learned from MT22 headless work that...").
-4. Update the "Last major update" date at the top.
-5. If a rule is being deprecated, keep a short historical note + the new preferred approach.
-6. Never delete this file or its core purpose.
-7. When you modify AGENTX.md, consider also updating related docs (e.g. `docs/MT22-Migration-Guide.md`, `OPTIMIZATION_ROADMAP.md`) for human readers.
-8. After self-modification, it is good practice to run `agentx doctor` and review the current state.
-
-This protocol makes agentX a self-improving system inside its own codebase.
+<!--
+CHANGELOG
+v1.0 (2026-06): 初版，參考 ~/.claude/CLAUDE.md 完整結構。核心加入：
+- 撞牆偵測、4C 框架、兩級提示詞（Global CLAUDE.md vs Local AGENTX.md）
+- 多代理協作（開發 agentX 時強制 Codex review）
+- MT22 作為專案憲法（tasks.py 為唯一真相來源）
+- Headless 與互動雙模式規範
+- .agentx/ 作為專案記憶系統（類 memhall）
+- Git 協作 + pre-commit (ruff)
+- 安全紅線（工具可編輯自身程式碼時特別嚴格）
+- AGENTX.md 自修改協議（允許學習並修改本檔）
+- Lab Notes 段落
+- 參考 docs/ 各指南
+-->
 
 ---
 
-## Core Principles
+## 0. 撞牆偵測與「禁止硬解」規則（最高優先）
 
-1. **Risk-First & Safety Always**
-   - Every tool has a clear risk level: GREEN (auto), YELLOW (policy), RED (protected).
-   - Default to `approval = "ask"` mode unless user explicitly sets otherwise.
-   - Never bypass approval mechanisms without explicit user intent.
+> 註：這是整份指引中最重要的規則，優先於其他所有條款。當開發 agentX 本身時適用。
 
-2. **Multi-Task System is the Single Source of Truth (MT22)**
-   - `.agentx/tasks.json` + `agentx.tasks` API is the only authoritative task state.
-   - The old single-task system (`task.py`, `.agentx/task.json`) has been fully removed.
-   - All new code, tools, prompts, and CLI must use the multi-task list.
-   - Legacy migration happens automatically on startup when old `task.json` is detected (backup created).
+- 你在同一個問題上「嘗試解法但失敗」達 **兩次**，就視為「撞牆」。
+- 撞牆包含：
+  - 同類型錯誤反覆出現（例如 ToolRegistry 建構、AgentSession memory 存取、bootstrap 載入失敗）。
+  - 已試兩條不同路線仍無法前進。
+  - 關鍵資訊缺失（例如未讀 AGENTX.md、未檢查 .agentx/ 狀態、未看相關 docs/MT22-*.md）。
+- 一旦判定「撞牆」，你 **必須立刻停止對該問題的程式碼改動與新實驗**，直到人類給出新資訊或新方向。
 
-3. **Headless Mode is a First-Class Citizen**
-   - Headless (`-p --agent`) requires different behavior from interactive TUI: more decisive, less reflection loops, structured output.
-   - Long-running headless tasks must survive context loss via proper compaction, task lists, and Memory Hall.
-   - Plan Mode (`--plan`) must force at least one high-quality reflection before tool use in headless.
+撞牆後，你只能做這三件事之一：
+1. 整理一份「問題說明」給人類（目標、實際行為、錯誤 & log、已嘗試方案、目前最大疑問）。
+2. 在人類同意的前提下，協助人類把這份說明帶去外部工具詢問。
+3. 在人類明確指示下，啟動多代理協作（請求 Codex 審查 / Grok Build 平行生成 / Gemini 分析），由多個 Agent 一起重新評估問題。
 
-4. **Memory Hall is Core Infrastructure**
-   - Persistent cross-session memory via Memory Hall is not optional.
-   - Use structured writes when possible (`write_structured` for lessons, patterns, decisions).
-   - Initial context always includes repo bootstrap + memory search.
-
-5. **Small Steps + Complete Verification + Chinese Commits**
-   - Prefer many small, reviewable commits over large ones.
-   - Every logical unit of work should include tests or verification.
-   - Commit messages are in Chinese (following project convention).
-   - Run `ruff check` and relevant tests before committing.
-
-6. **Weak Models Can Be Reliable**
-   - The goal is not to make weak models "smart" in a black-box way, but to give them strong scaffolding (tools, memory, recovery, task lists, reflection protocols) so they can reliably complete real engineering work within safe boundaries.
+在「撞牆」狀態解除之前，你不得：
+- 再自行嘗試新的 code 改動來解同一個問題。
+- 隱藏或弱化撞牆事實（要明確告訴人類你已撞牆）。
 
 ---
 
-## Architecture & State Management
+## 0.5 4C 交互框架（複雜任務必用）
 
-- **Workspace**: The directory where `ax` is invoked becomes the workspace. All file tools are sandboxed to it.
-- **Persistent State**: Stored under `.agentx/` (not committed to git):
-  - `config.toml` — per-project settings (model, namespace, approval mode, etc.)
-  - `tasks.json` — the multi-task source of truth.
-  - `sessions/` — session logs.
-  - `handoff/` — conversation handoff notes (local, not in git).
-  - `state.json` — lightweight runtime state.
-- **Bootstrap Context**: On every significant operation, agentX reads `AGENTX.md` (preferred), `AGENTS.md`, `README.md`, `pyproject.toml`, and `package.json` from the workspace root to understand the project.
+> 註：當任務需求不清、涉及 agentX 架構改動、或同時牽涉多個面向（例如 headless + memory + prompt）時，必須啟動 4C 框架。
+> 簡單明確的指令（如 typo 修正、單行改動）不需要啟動。
 
-**Never**:
-- Write directly to `.agentx/task.json` (legacy).
-- Assume a single active task.
-- Bypass the workspace sandbox.
+在處理複雜任務時，依序走完四個階段：
 
----
+1. **Context（上下文）**：主動收集任務所需的背景資訊。不要用泛泛的知識回答，先確認是否有專案特定的文件、程式碼或歷史決策需要參考。
+   - 必讀：AGENTX.md、docs/MT22-Migration-Guide.md、docs/OPTIMIZATION_ROADMAP.md、.agentx/config.toml、bootstrap.py、相關 tests/
+2. **Clarification（澄清）**：在動手前，列出你的假設並向人類確認。用具體問題取代模糊的「是否正確？」。標註 `[假設]` / `[已確認]` / `[待確認]`。
+3. **Creation（創造）**：在上下文和澄清的基礎上執行任務。
+4. **Concerns（盲點反思）**：完成後，主動提出「我沒考慮到什麼？」「這裡有什麼潛在問題？」。至少列出 1-3 個潛在風險或未覆蓋的場景（例如對現有工具的影響、對 headless 的回歸、對自修改協議的影響）。
 
-## Key Conventions & Current State (as of 2026-06)
-
-### MT22 Legacy Removal (Completed)
-- `src/agentx/task.py` has been removed.
-- All task management now goes through `agentx.tasks` (multi-task list).
-- Legacy migration is automatic and one-way.
-- Doctor command can still diagnose remaining legacy data for safety.
-- Tests for legacy are marked as historical only.
-
-See `docs/MT22-Migration-Guide.md` and `docs/MT22-Legacy-Removal-Checklist.md` for details.
-
-### Headless & Reliability Focus
-- Primary development target: making headless mode reliable for medium-to-large engineering tasks.
-- Key areas: context compaction, error recovery, structured reflection, task list integration, prompt separation between interactive and headless.
-- Current roadmap lives in `docs/OPTIMIZATION_ROADMAP.md` and `docs/HEADLESS_OPTIMIZATION_LIST.md`.
-
-### Tooling & Safety
-- Tools are defined in `src/agentx/tools/builtin.py` and registered via `ToolRegistry`.
-- New tools should be added to `builtin_tools(workspace, memory)`.
-- Web-related helpers (`extract_web_text`, `validate_external_url`) exist for future web_fetch support.
-- Always respect `WRITE_PROTECTED_PARTS` and `SKIPPED_DIRS`.
-
-### Prompts & Behavior
-- Different system prompts for interactive vs headless (see `runtime_prompt.py`).
-- Headless emphasizes decisiveness and structured output.
-- Weak models benefit from explicit verification steps after edits.
+**不啟動 4C 的情境**：Fast Path 條件全部成立時、人類明確說「直接做」時。
 
 ---
 
-## Development Workflow When Working on agentX
+## 0.6 兩級提示詞系統（Global vs Local）
 
-1. Start with `ax` or `agentx ask` inside this repo.
-2. Read `AGENTX.md` early (and relevant docs in `docs/`).
-3. Use the multi-task list (`/task` or task tools) for any non-trivial work.
-4. Make small, testable changes.
-5. Run `uv run ruff check` and targeted tests frequently.
-6. Use Memory Hall to record lessons (especially success patterns and failure modes).
-7. Chinese commit messages.
-8. When you learn something important, **update AGENTX.md**.
-9. For large changes, consider adding/updating entries in the relevant optimization list or migration guide.
+本檔（`AGENTX.md`）為 **Local 級**（agentX 專案專屬），存放專案特有規則：
+- 專案架構、技術棧（uv + Python + Ollama + Memory Hall + .agentx/ 狀態）
+- MT22 統一後的唯一真相來源（tasks.py / .agentx/tasks.json）
+- Headless vs 互動雙模式規範
+- 工具註冊與 bootstrap 載入規則
+- AGENTX.md 自修改協議
+- 專案特有的撞牆情境、Lab Notes（成敗日誌）
+- 開發指令、測試指令（ruff + pytest + doctor）
 
----
+全域 `~/.claude/CLAUDE.md` 為 **Global 級**，存放跨專案通用規則：
+- 撞牆停手、多代理分工、安全紅線、Git 規範
+- 4C 框架
+- Maki Profile、Session Handoff
 
-## Self-Modification Rules (Reinforced)
+**衝突解決**：
+- Local (AGENTX.md) 優先於 Global（專案特化覆蓋通用）
+- 例外：安全紅線（§9）、治理憲法（§3，全域 Council Protocol）不可被 Local 覆蓋
 
-- You have full permission to edit `AGENTX.md`.
-- Treat updates to this file as first-class deliverables.
-- When editing:
-  - Be precise.
-  - Add new rules or lessons in appropriate sections.
-  - Mark completed items in roadmaps/checklists (or link to them).
-  - If a practice changes, document both the old and new approach with rationale.
-- After editing AGENTX.md, it is recommended to run `agentx doctor` and verify that the agent can still parse its own instructions correctly.
-
-This file is how agentX teaches future versions of itself.
+**Lab Notes 規範**：
+- 本檔應包含 `## Lab Notes` 段落
+- 記錄該專案的關鍵失敗模式（錯誤 + root cause + 解法）和成功路徑
+- 目的：避免 AI 重複踩坑，引導跳過已知無效方案（例如舊 task.py 整合、單一記憶假設）
 
 ---
 
-## References (Read These When in Doubt)
+## 1. 多代理協作與分工原則
 
-- `README.md` — high-level product description and quick start.
-- `docs/MT22-Migration-Guide.md` — current canonical rules around tasks.
-- `docs/OPTIMIZATION_ROADMAP.md` — overall direction and priorities.
-- `docs/HEADLESS_OPTIMIZATION_LIST.md` — detailed headless improvement backlog.
-- `docs/product-tour.md` — vision and feature mapping.
-- `.agentx/config.toml` — current runtime configuration for this instance.
-- `src/agentx/bootstrap.py` — how workspace context (including this file) is loaded.
+> 註：多代理規則次於撞牆停手，但仍高優先。避免你一個人包辦所有 agentX 開發任務。
+
+- 預設使用多個 AI Agent（例如：Codex、Gemini、Grok Build、gemma4:31b），各自負責不同角色與專長領域。
+- 你在任何情況下都 **不得主動選擇「自己一人解決所有問題」**，除非人類明確要求「先自己試著完成」。
+
+具體原則：
+1. 架構設計與重大技術決策：
+   - 優先請 Codex 或指定的架構型 Agent 參與，至少做一次設計或 review。
+2. 深入技術研究、權衡多種解法：
+   - 可請 Gemini 或其他分析型 Agent 協助，整理利弊、限制與風險。
+3. 需要跨領域觀點或外部資訊：
+   - 提醒人類可將整理好的問題帶去 Perplexity Max 取得額外線索。
+4. 當你發現某個問題同時牽涉多個面向（例如架構 + 效能 + DevOps + prompt）：
+   - 主動提出多代理協作建議，說明：
+     - 牽涉到哪些角色（Codex / Gemini / Grok Build / gemma4 / 人類）。
+     - 建議誰負責哪一部分。
+
+> 註：多代理協作統一使用 CLI + File I/O（`~/Documents/agent-council/` 或本專案 `.agentx/handoff/`），不透過 MCP 傳遞長上下文。
 
 ---
 
-## Current Model & Environment Notes (2026-06)
+## 2. Codex 審查強制規則
 
-- Default model for this project instance: gemma4 series (local Ollama).
-- Strong preference for local models with good tool-calling + JSON reliability.
-- Memory Hall is assumed available (mini or equivalent).
-- The project itself is the primary testbed for headless reliability.
+> 註：這一節專門處理「完成功能 / 重構 / 大量變更」後，如何強制讓 Codex 參與。適用於 agentX 程式碼改動。
+
+每當你「完成一個功能、重構或大量修改 agentX 程式碼」時，必須遵守：
+
+1. 你 **必須** 交由「Codex」進行程式碼審查。
+2. 在 Codex 審查並給出建議之前，你 **不得** 視為已完成該任務。
+3. 即使是透過 `/commands` 或自動化流程完成的改動，也要保留「Codex 審查這一步」。
+
+你需要主動準備給 Codex 的內容至少包含：
+- 目標（這個功能 / 重構要達成的行為與限制）。
+- 關鍵檔案或 diff（避免塞整個 repo，聚焦在實際變更）。
+- 特別在意的風險點（例如對 headless 的影響、對現有工具的回歸、對 AGENTX.md 自修改協議的影響）。
+
+> 註：Codex 統一用 CLI + file I/O（`codex exec --sandbox workspace-write --skip-git-repo-check < briefing.md > answer.md`），不用 MCP。
 
 ---
+
+## 3. 統一知識文明 — agentX 專案憲法（簡要版）
+
+> 詳細規格 → `docs/MT22-Migration-Guide.md`、`docs/OPTIMIZATION_ROADMAP.md`、`docs/HEADLESS_OPTIMIZATION_LIST.md`（自動載入）
+
+- 高風險變更（risk ≥ high / 不可逆變更 / Schema / 治理規則 / 長期記憶 commit / 核心刪遷 / 跨系統邊界 / 改變多任務真相來源）必須啟用 Council Protocol（或至少 Codex + Gemini review）。
+- 未按規定升級流程處理高風險變更，視為治理違規。
+- 風險分級與異議要求詳見上述 docs。
+
+**專案最高憲法（MT22 之後）**：
+- `.agentx/tasks.json` + `agentx.tasks` API 是**唯一真相來源**。
+- 舊單一任務系統已完全移除（task.py git rm）。
+- 所有新開發必須以多任務清單為基礎。
+
+---
+
+## 4. agentX 內部協作引擎（類七位一體，簡化版）
+
+agentX 本身就是一個 agent 框架，開發時可視為內部「子代理」分工：
+
+### 成員（開發 agentX 時的內部角色）
+- **Maki / 人類**：Chair
+- **Codex**：Engineer（主力寫 code / refactor）
+- **Grok Build**：高速並行生成 / 快速草稿 / cross-vendor diversity（當需要 best-of-n 時）
+- **Gemini**：Analyst（深入分析、比較）
+- **gemma4:31b**：Local Brain（簡單任務、預處理、隱私）
+- **AgentX 內部**：Coordinator / Orchestrator / AgentSession / ToolRegistry（作為「實作代理」）
+- **Bootstrap + .agentx/**：記憶與 context 層
+
+### 知識輸入
+- **AGENTX.md**（本檔）：最高優先 Local 規則
+- **docs/** 各指南：MT22、Headless、Optimization、Migration
+- **.agentx/**：runtime state（config.toml, tasks.json, sessions, handoff）
+- **Memory Hall**（如果啟用）：跨 session 記憶
+- **mk-brain**（外部）：長期知識
+
+**routing 順序**：
+- 時效性 / 最新工具 → 外部 Scout
+- 架構 / 判斷 / 跨領域 → 先讀 AGENTX.md + docs/ + .agentx/
+- 簡單任務 → gemma4:31b
+
+### 通訊三層分離（適用於開發 agentX 時）
+- Layer 1：MCP tools（workspace, playwright 等快速操作）
+- Layer 2：CLI + File I/O（Codex / Grok Build / 本地 gemma4，寫 briefing 到 .agentx/handoff/ 或 ~/Documents/agent-council/）
+- Layer 3：agentX 內部 API（Coordinator, Orchestrator, ToolRegistry）
+
+**禁止委託理解**：讀完其他 agent 回答後必須自己消化，不得寫「based on your findings, fix the bug」。
+
+### 原則
+- 開發 agentX 時，**七位（或簡化版）是上限，不是 default**。
+- 每個非 trivial 任務先判斷「這任務需要幾位、為何」。
+- default = 你自己處理不宣告，需拉其他 agent 時才 surface 理由。
+- 上限並行 ≤ 3-5。
+- **Codex 仍是強制 review gate**（見 §2）。
+- Grok Build 用於 best-of-n / 快速草稿 / CI 批次（有硬約束：snapshot → assemble → delegate → VALIDATE → commit/rollback；zero-trust sanitization；token budget cap；scoped sandbox）。
+
+### 硬約束（agentX 專案版，C1-C5）
+- **C1. AGENTX.md 必須本機存在且可修改** — 禁止放在只讀或同步路徑。理由：自修改協議依賴本地寫入。
+- **C2. 所有重大改動必須先讀 AGENTX.md + 相關 docs/** — 禁止僅靠記憶或泛知識。
+- **C3. 多任務清單是唯一真相** — 任何 code 改動不得重新引入單一 task.py 假設。
+- **C4. 自修改 AGENTX.md 時必須引用 evidence** — 例如「證據：MT22-Migration-Guide §2 + 實際測試通過」。
+- **C5. Headless 與互動模式 prompt 必須分離** — 混用會導致行為不一致。
+
+---
+
+## 5. 記憶系統（.agentx/ — agentX 專案專屬記憶大廳）
+
+> ⚠️ **舊單一 task.json 已完全 DEPRECATED**（MT22 Phase A 完成）
+> - 禁止新寫入 .agentx/task.json、禁止把 legacy 列為 fallback
+> - 任何 agent 看到 task.py / task.json 字眼 → 視為歷史紀錄，不是 active path
+> - 唯一例外：明確一次性 archive 查詢舊 entries
+
+### .agentx/ 端點（本地）
+- `config.toml` — 基本設定（model, namespace, approval, auto_handoff）
+- `tasks.json` — 多任務清單（唯一真相來源）
+- `sessions/` — session logs（jsonl）
+- `handoff/` — 對話交接簿（本地，不進 git）
+- `state.json` — 輕量 runtime state
+
+### 開場與寫入
+- **開場**：啟動時自動讀取 .agentx/config.toml + tasks.json + 最近 handoff。
+- **寫入**：
+  - 使用 `agentx.tasks` API（load_tasks / save_tasks / task_add / task_update / task_list）
+  - 重要決策寫入 .agentx/handoff/ 或 AGENTX.md
+  - 成功/失敗 pattern 建議寫入 Memory Hall（如果啟用）或 .agentx/handoff/
+
+### 禁止
+- 直接操作 .agentx/task.json（legacy）
+- 刪除 .agentx/ 目錄下活躍狀態（除非明確 migrate）
+- 忽略 bootstrap 載入的 AGENTX.md 內容
+
+### 故障排除
+- 狀態不一致 → 執行 `agentx doctor`
+- 任務未遷移 → 檢查 get_task_migration_status
+
+---
+
+## 6. Git 協作規範
+
+- commit 前流程：`git status` → `git diff --stat` → 中文 commit → `git push`。
+- 每完成一個邏輯單元就 commit，逐檔 stage。
+- 禁止：
+  - 未看 diff 就 commit。
+  - 使用 `git add .` 後直接 commit。
+  - `--force` push（除非人類指示）。
+- Python 專案：使用 pre-commit hook 自動執行 `ruff check`（uv 環境下 `uv run ruff check`）。
+- **Commit Trailers**（重要決策時附加）：
+  - `Constraint:`
+  - `Rejected:`
+  - `Directive:`
+  - `Not-tested:`
+  - 範例：
+    ```
+    Directive: tasks.py 為唯一真相來源 — 任何新 code 不得重新引入單一任務假設
+    Rejected: 直接在 ToolRegistry 內存 memory — 違反新 API 設計，應透過 builtin_tools 注入
+    ```
+
+---
+
+## 7. 部署目標、Runtime State 與開發環境
+
+> 核心問題：規則層有了，但 AI 缺少「當下世界的資訊」——不是不知道規則，是不知道自己在哪。
+
+### Runtime State Declaration（3 秒 Gate）
+**所有開發 / 測試 / 跨機器任務的第一個動作**，在做任何事之前，必須先輸出：
+
+```
+## RUNTIME STATE (agentX dev)
+
+Machine: {具體機器名稱}
+Workspace: {agentX repo path}
+Mode: {uv run / installed ax}
+Constraint: {已知限制，例如 headless 測試需 Ollama 跑 gemma4}
+```
+
+- 3 秒內填不完 → 資訊不足，**必須先問人類**。
+
+### 開發 Pre-flight（類似 infra）
+1. **目標環境確認** — 確認是在 agentX repo 內，且 AGENTX.md 已載入。
+2. **狀態檢查** — 執行 `agentx doctor` 確認 tasks / legacy / memory 狀態。
+3. **.agentx/ 邊界確認** — 所有持久化必須走 .agentx/（不直接寫 root）。
+4. **設定檔對齊** — 檢查 .agentx/config.toml 與 AGENTX.md 是否一致。
+5. **影響範圍與風險等級** — GREEN / YELLOW / RED；RED 僅能提案。
+6. **Post-check 計畫** — 動手前先寫好「怎麼驗證成功」的 3-5 步清單（例如 `agentx doctor` + 特定測試）。
+
+---
+
+## 8. 每日工作流程與 Session Handoff（agentX 專案版）
+
+- **開場**：啟動 `ax` 後，先讀 AGENTX.md + 最近 .agentx/handoff/ + `agentx doctor`。
+- **收尾**：完成工作後，更新 AGENTX.md（如果有新規則/教訓）、寫 handoff、commit + push。
+- 手動模式：用 `.agentx/handoff/` 存檔。
+- **AGENTX.md 寫入內容要具體**（例如「修復 ToolRegistry workspace kwarg 問題，root cause 是 MT22 後未同步更新 AgentSession 相容層」）。
+
+---
+
+## 9. 安全紅線與 AgentX Shell 規範
+
+- 禁止：
+  - 直接 `rm -rf` 重要目錄（尤其是 .agentx/、src/、tests/）未經確認。
+  - 編輯自身核心（bootstrap, registry, loop, cli）時不先讀 AGENTX.md。
+  - 繞過工具 sandbox 寫入 workspace 外。
+  - 在無 approval 情況下執行高風險工具（尤其是 write/edit 自身程式碼時）。
+- 所有危險操作需「先解釋再執行」，經人類同意後才動手。
+- **Self-Modification 特別紅線**：修改 AGENTX.md 時必須遵守 §0.6 自修改協議 + 跑測試 + commit。
+
+AgentX Shell 三大原則：
+1. 含 destructive 效果的命令只能提案，不得直接執行。
+2. 跨 workspace 操作必須遵守 sandbox。
+3. 多路徑命令應拆成單一路徑逐一處理。
+
+變更等級：
+- GREEN（只讀工具）可自由執行。
+- YELLOW（可逆編輯）需回報。
+- RED（不可逆 / 改核心 / 改 AGENTX.md 結構）需簽核與明確確認。
+
+---
+
+## 10. Profile、專案地圖與按需載入文件
+
+- **本專案 Profile**：agentX 開發者模式 — 強調整潔架構、MT22 統一、Headless 可靠性、AGENTX.md 自演進。
+- **按需載入（遇到情境時先讀對應文件）**：
+  - MT22 相關 → `docs/MT22-Migration-Guide.md` + `MT22-Legacy-Removal-Checklist.md`
+  - Headless / 優化 → `docs/OPTIMIZATION_ROADMAP.md` + `HEADLESS_OPTIMIZATION_LIST.md`
+  - 工具開發 → `src/agentx/tools/builtin.py` + registry.py
+  - 記憶 / bootstrap → `src/agentx/bootstrap.py` + .agentx/
+  - 自我改進 → 本檔 AGENTX.md § Self-Improvement Protocol
+
+---
+
+## 11. Compact Instructions 規則（agentX 專案版）
+
+當模型壓縮記憶或指令時，必須按以下結構保留關鍵資訊（對齊 CLAUDE.md 9 段 + agentX 特有）：
+
+**1. Primary Request** — 當前 session 的任務目標。
+
+**2. Key Technical Concepts** — 本 session 涉及的關鍵規則：
+- MT22 唯一真相來源（tasks.py）
+- Headless vs 互動 prompt 分離
+- AGENTX.md 自修改協議
+- .agentx/ 狀態管理
+- 4C 框架、撞牆停手
+- Git 規範（中文 commit、逐檔 stage）
+- 兩級提示詞（Global CLAUDE.md vs Local AGENTX.md）
+- 多代理 review（Codex 強制）
+
+**3. Files and Code** — 本 session 修改/關注的檔案路徑與變更摘要。
+
+**4. Errors and Fixes** — 遇到的錯誤、root cause、修復方式。
+
+**5. Problem Solving** — 已嘗試的方案與決策推理（含 Rejected 方案）。
+
+**6. All User Messages** — 使用者的所有明確指示和偏好（逐條保留，不可省略）。
+
+**7. Pending Tasks** — 未完成的工作項目與阻塞。
+
+**8. Current Work** — 壓縮時正在進行的具體步驟。
+
+**9. Optional Next Step** — 壓縮後應立即接續的動作。
+
+**始終保留的靜態知識**（不受壓縮影響）：
+- AGENTX.md 核心原則與自修改協議
+- MT22 唯一真相來源
+- .agentx/ 作為專案記憶
+- 參考 docs/ 主要指南
+- Git 規範
+- 安全紅線
+
+---
+
+## 12. 四層北極星 + agentX 開發操作協定
+
+### 四層北極星（改動 / 優化 / 新功能的決策濾網）
+
+| 層 | 目的 | 優先序 |
+|---|---|---|
+| **L1** | 省 token / 成本 | 表面，次要 |
+| **L2** | 去 vendor 綁定（Ollama 模型可替換） | 高 |
+| **L3** | 長期存續（.agentx/ 狀態可遷移） | 高 |
+| **L4** | **保護開發者注意力**（讓 agentX 開發流程可預期 + 保留 fast path） | **最高** |
+
+**決策規則**：新功能至少打中 2 層才考慮；打到 L4 優先；反 L4 直接砍；L1 單獨打中不足以做。
+
+### agentX 開發操作協定（L4 enforcement）
+- 每個非 trivial 任務開場先讀 AGENTX.md + 相關 docs/
+- 強制 Codex review（§2）
+- 七位/多代理是上限（見 §4）
+- 每次重大改動後更新 AGENTX.md（自修改協議）
+- Fast Path / 緊急事故 / 人類明確指示「你自己做」→ 豁免
+
+---
+
+## 13. Lab Notes（成敗日誌 — 必保留）
+
+**關鍵失敗模式**（避免重複踩坑）：
+- **失敗**：ToolRegistry 仍接受 workspace= kwarg → root cause: MT22 後 registry.py 重構但 cli.py 與 AgentSession 未同步更新。**解法**：統一改用 builtin_tools(workspace, memory) 注入 + 擴充 AgentSession 簽名接受 memory/hooks。
+- **失敗**：單一 task.py 假設導致 headless 狀態分裂。**解法**：MT22 強制以 tasks.py 為唯一真相，legacy 自動 migrate + 歷史化測試。
+- **失敗**：Headless 直接套用互動 prompt → 過度 reflection、決策猶豫。**解法**：分離 prompt，headless 強調果斷 + 結構化輸出。
+
+**成功路徑**：
+- 始終先讀 AGENTX.md + bootstrap + doctor。
+- 小步快走 + 完整驗證 + 中文 commit。
+- 重大改動必走 Codex review + 更新 AGENTX.md。
+- 善用 .agentx/handoff/ 記錄即時決策。
+
+---
+
+## 14. Compact Instructions 結構（當需要壓縮時使用）
+
+（見 §11，完整 9 段 + 靜態知識保留清單）
+
+---
+
+**始終保留的靜態知識**（不受壓縮影響）：
+- AGENTX.md 自修改協議（§ Self-Improvement）
+- MT22 唯一真相來源（tasks.py / .agentx/tasks.json）
+- .agentx/ 作為專案記憶與狀態系統
+- 兩級提示詞（Global CLAUDE.md vs Local AGENTX.md）
+- 強制 Codex review + Git 規範（中文 commit）
+- 安全紅線（特別是 self-modification 時）
+- 參考文件清單（docs/MT22-*.md 等）
+
+---
+
+當你在 agentX 專案內工作時，請將本檔視為最高優先的 Local 規則來源。讀完後若有新洞見，請主動更新本檔，讓未來的自己（或其他 agentX 實例）受益。
 
 **End of AGENTX.md**
-
-This file should be the first thing an agentX instance reads when working inside the agentX repository.
