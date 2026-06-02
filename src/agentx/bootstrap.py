@@ -8,7 +8,7 @@ from typing import Protocol
 from agentx.tools import SKIPPED_DIRS
 
 
-BOOTSTRAP_FILES = ("AGENTS.md", "README.md", "pyproject.toml", "package.json")
+BOOTSTRAP_FILES = ("AGENTX.md", "AGENTS.md", "README.md", "pyproject.toml", "package.json")
 
 
 class MemorySearcher(Protocol):

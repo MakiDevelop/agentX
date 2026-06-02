@@ -19,6 +19,19 @@
 
 想更自主就輸入 `/approval auto-approve`；想最有安全感就保持預設的 ask / strict 模式。
 
+## 專案自身規則與自學習（AGENTX.md）
+
+本專案根目錄有 `AGENTX.md`，這是 agentX 開發此專案時的**主要指令與規則文件**（類似其他專案的 CLAUDE.md / AGENTS.md）。
+
+- 啟動 `ax` 在這個 repo 內時，agentX 會優先讀取 `AGENTX.md` 作為高優先級 context。
+- `AGENTX.md` 內包含：
+  - 核心原則（MT22 多任務為唯一真相來源、風險優先、無頭模式行為等）
+  - 架構決策與當前狀態
+  - **明確的自修改協議**：允許（並鼓勵）agentX 讀取、學習，並使用工具修改 `AGENTX.md` 本身。
+- 這讓 agentX 可以在開發自己的過程中持續「學習」並把新規則、新教訓寫回文件中。
+
+貢獻者與未來的 agentX 實例都應該優先參考 `AGENTX.md`。
+
 ## 快速開始
 
 ```bash
