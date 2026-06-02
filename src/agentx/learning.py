@@ -214,17 +214,15 @@ For each proposal, output STRICT JSON (one object per proposal, no extra text):
 Only propose things that are generalizable and would have helped in this session. Prioritize safety and fidelity to existing principles.
 """
         try:
-            # Assume ollama has a simple chat or complete method; adapt to actual client
-            response = ollama.chat([
-                {"role": "system", "content": "You are a careful, evidence-based self-improvement module for agentX. Output only valid JSON array of proposals."},
+            # Use actual OllamaClient.chat (returns str content). Request JSON for structured proposals.
+            messages = [
+                {"role": "system", "content": "You are a careful, evidence-based self-improvement module for agentX. Output ONLY a JSON array of 0-3 proposals. No extra text."},
                 {"role": "user", "content": prompt}
-            ], model=ollama.model if hasattr(ollama, 'model') else None)  # rough
-
-            # Parse (robust parsing needed in real; here simplified)
-            text = response.get("content", "[]") if isinstance(response, dict) else str(response)
+            ]
+            text = ollama.chat(messages, json_mode=True)
             proposals_data = json.loads(text) if text.strip().startswith("[") else []
             if not isinstance(proposals_data, list):
-                proposals_data = [proposals_data]
+                proposals_data = [proposals_data] if isinstance(proposals_data, dict) else []
 
             results = []
             for data in proposals_data[:3]:  # cap
