@@ -291,48 +291,56 @@ class AgentSession:
             if result.ok:
                 self.consecutive_reflections = 0
 
-            # Micro-task 12：編輯工具成功後，自動執行測試 + Reflection
+            # Micro-task 12：編輯工具成功後，自動執行測試（+ 條件式 Reflection）
             if action.tool in EDITING_TOOLS and result.ok:
-                # 自動跑測試
+                self._edit_count = getattr(self, "_edit_count", 0) + 1
+
+                # 自動跑 build/test
                 test_result = self.tools.run("run_tests", {})
                 self.messages.append({"role": "tool", "content": self._format_tool_result(test_result)})
 
-                # 編輯後提醒模型更新 Task List（實際流程中模型會在下一輪有機會先呼叫 task_update）
-                task_summary = self._get_current_task_summary()
-                self.messages.append(
-                    {
+                # 簡單編輯（累計 <=2 次）：只報告結果 + JSON 提醒，跳過重量級 reflection
+                if self._edit_count <= 2:
+                    build_status = "passed" if test_result.ok else "FAILED"
+                    self.messages.append({
                         "role": "system",
                         "content": (
-                            "如果你剛剛有修改任務，請記得在接下來的回應中先使用 task_update 工具更新 Task List 的狀態。\n"
-                            "之後再進行 Reflection，並給出明確的下一步建議。\n\n"
-                            f"目前任務狀態參考：\n{task_summary}"
+                            f"Build/test {build_status}. "
+                            "Continue with the next action, or reply with "
+                            '{"type":"final","content":"your summary"} if done.'
                         ),
-                    }
-                )
-
-                # 再自動 Reflection
-                reflection = self._reflect(f"剛剛使用了 {action.tool} 工具，測試結果如下")
-                self.messages.append(
-                    {"role": "system", "content": f"=== 自動 Reflection（編輯 + 測試後） ===\n{reflection}"}
-                )
-
-                # Micro-task 14：Reflection 後主動建議 Review + Commit（當適當時機）
-                task_summary = self._get_current_task_summary()
-                self.messages.append(
-                    {
+                    })
+                else:
+                    # 複雜編輯（>=3 次）：完整 reflection
+                    task_summary = self._get_current_task_summary()
+                    reflection = self._reflect(f"剛剛使用了 {action.tool} 工具，測試結果如下")
+                    self.messages.append(
+                        {"role": "system", "content": f"=== Reflection ===\n{reflection}"}
+                    )
+                    self.messages.append({
                         "role": "system",
                         "content": (
-                            "根據剛剛的 Reflection，請評估目前變更是否已經穩定（測試通過、風險可控）。\n"
-                            "如果變更已經足夠好，請主動建議使用者執行以下流程：\n"
-                            "1. 使用 /review 進行程式碼審查\n"
-                            "2. 使用 /commit 進行逐檔 stage + 中文 commit + push\n\n"
-                            "如果還不適合 commit，請清楚說明還需要做什麼。\n"
-                            "請給出明確的下一步建議。\n\n"
-                            f"目前任務狀態參考：\n{task_summary}"
+                            f"目前任務狀態：\n{task_summary}\n\n"
+                            'REMINDER: respond with exactly one JSON object. '
+                            '{"type":"final","content":"..."} or {"type":"tool_call","tool":"...","args":{...}}'
                         ),
-                    }
-                )
+                    })
 
+        # Fallback: force a final answer before giving up
+        self.messages.append({
+            "role": "user",
+            "content": (
+                "你已經用完所有步驟。請立即總結你完成的工作，用以下格式回覆：\n"
+                '{"type":"final","content":"你的總結"}'
+            ),
+        })
+        try:
+            raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
+            action = self._parse_action(raw)
+            if isinstance(action, FinalAnswer):
+                return action.content
+        except Exception:
+            pass
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
 
     def clear(self) -> None:

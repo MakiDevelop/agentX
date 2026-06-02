@@ -192,11 +192,36 @@ class ToolRegistry:
         except AttributeError:
             return ToolResult(tool=tool, ok=False, content=f"Unknown tool: {tool}")
 
+        # Auto-fill missing 'path' for file tools using last known path
+        args = self._auto_fill_path(tool, args)
+
         try:
             content = method(**args)
             return ToolResult(tool=tool, ok=True, content=str(content))
         except Exception as exc:
             return ToolResult(tool=tool, ok=False, content=f"{type(exc).__name__}: {exc}")
+
+    _FILE_TOOLS = {"read_file", "search_replace", "insert_code", "search_text"}
+
+    def _auto_fill_path(self, tool: str, args: dict[str, Any]) -> dict[str, Any]:
+        """Auto-fill missing 'path' arg from last used path for file-based tools.
+
+        Only remembers paths under src/ (or similar source dirs) to avoid
+        accidentally targeting config files like Cargo.toml.
+        """
+        if not hasattr(self, "_last_file_path"):
+            self._last_file_path = ""
+
+        if tool in self._FILE_TOOLS:
+            if "path" in args and args["path"]:
+                path = args["path"]
+                # Only remember source file paths, not config/build files
+                if not path.endswith((".toml", ".lock", ".json", ".yaml", ".yml")):
+                    self._last_file_path = path
+            elif self._last_file_path:
+                args = {**args, "path": self._last_file_path}
+
+        return args
 
     def _resolve_inside_workspace(self, path: str | None = None) -> Path:
         target = self.workspace if path in (None, "") else (self.workspace / path).resolve()
@@ -256,10 +281,7 @@ class ToolRegistry:
         return self.memory.write(content=content, namespace=namespace)
 
     def _tool_run_tests(self) -> str:
-        commands = [
-            ["uv", "run", "ruff", "check", "."],
-            ["uv", "run", "pytest", "-q"],
-        ]
+        commands = self._detect_test_commands()
         outputs = []
         for command in commands:
             completed = subprocess.run(
@@ -277,6 +299,36 @@ class ToolRegistry:
             if completed.returncode != 0:
                 break
         return "\n\n".join(outputs)
+
+    def _detect_test_commands(self) -> list[list[str]]:
+        """Auto-detect project type and return appropriate build/test commands."""
+        ws = self.workspace
+        if (ws / "Cargo.toml").exists():
+            cmds = [["cargo", "check"]]
+            # If there are test files or #[test] attributes, also run tests
+            src_dir = ws / "src"
+            if src_dir.exists():
+                try:
+                    result = subprocess.run(
+                        ["grep", "-r", "#\\[test\\]", str(src_dir)],
+                        capture_output=True, text=True, timeout=5, check=False,
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        cmds.append(["cargo", "test"])
+                except Exception:
+                    pass
+            return cmds
+        if (ws / "go.mod").exists():
+            return [["go", "build", "./..."], ["go", "test", "./..."]]
+        if (ws / "package.json").exists():
+            if (ws / "node_modules" / ".bin" / "tsc").exists():
+                return [["npx", "tsc", "--noEmit"]]
+            return [["npm", "test"]]
+        if (ws / "pyproject.toml").exists() or (ws / "setup.py").exists():
+            return [["uv", "run", "ruff", "check", "."], ["uv", "run", "pytest", "-q"]]
+        if (ws / "Makefile").exists():
+            return [["make", "check"]]
+        return [["echo", "no test runner detected"]]
 
     def _tool_run_command(self, command: str) -> str:
         if command not in ALLOWED_COMMANDS:
