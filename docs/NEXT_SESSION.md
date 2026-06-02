@@ -36,3 +36,12 @@
 下一步從讀 AGENTX.md（含 Appendix） + 本機 .agentx/handoff/NEXT_SESSION.md（如果存在） + `agentx doctor` 開始。
 
 （本檔為 committed 範本；實際執行時的活文件建議放在 .agentx/handoff/NEXT_SESSION.md，本地 gitignored。）
+
+## 新增：自我學習機制 (2026-06)
+- 自動觸發：在 ask() 成功 final answer 後 (非 plan mode)，如果 learning_enabled，自動呼叫 reflect_and_learn() 產生 proposals。
+- 也在 max_steps 結束的 incomplete session 時嘗試學習（從「失敗」中學）。
+- 手動：/learn slash command 隨時強制 reflection。
+- proposals 寫到 .agentx/learning/proposals/ (md + json)，proposal-only，永不自動 apply 到核心 (AGENTX.md 等)。
+- 整合 recovery、memory、prompts。
+- 符合 AGENTX.md 自修改協議 + ai-tetsu proposal gate + fidelity。
+- 讓 agentX 越用越「聰明」：學 recovery 策略、prompt 改善、任務模式、甚至建議更新 AGENTX.md。
