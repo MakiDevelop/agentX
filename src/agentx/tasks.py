@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import re
+import warnings
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from agentx.task import TaskState
+# TaskState / task.py legacy import removed (MT22 cleanup - task.py module deletion pending full conditions)
 
 
 def tasks_path(workspace: Path) -> Path:
@@ -193,9 +194,20 @@ def migrate_single_task_if_needed(workspace: Path) -> bool:
 
 def has_legacy_single_task(workspace: Path) -> bool:
     """檢查是否還存在舊的單一任務資料（MT22 過渡期工具）。
-    Deprecated: 僅供 get_task_migration_status 診斷使用。cli 顯示分支已移除。
-    未來版本將移除此函式。
+
+    INTERNAL DEPRECATED: 僅供 get_task_migration_status 內部診斷使用。
+    所有 cli 顯示分支已移除，不應在生產程式碼中直接呼叫。
+    當舊系統完全退場後，此函式將移除。
+
+    請改用 get_task_migration_status(workspace) 取得完整遷移狀態。
     """
+    warnings.warn(
+        "has_legacy_single_task() is internal deprecated (MT22). "
+        "Use get_task_migration_status() instead. "
+        "This will be removed in a future version.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return single_task_path(workspace).exists()
 
 
@@ -256,120 +268,8 @@ def _normalize_legacy_date(date_str: str) -> str:
     return ""
 
 
-def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
-    """MT22 過渡期 helper（已 deprecated）。
-
-    安全地嘗試讀取舊的單一任務系統（如果還存在）。
-    只有在檔案存在、內容可解析、且有意義的任務資料時才回傳 TaskState。
-    否則一律回傳 None，讓呼叫端優先使用新多任務清單。
-
-    防禦性設計：
-    - 檔案不存在 → None
-    - 檔案過大（> 1MB）→ None（避免惡意或異常檔案）
-    - 解析失敗 → None
-    - 沒有有效 title → None
-
-    Deprecated: cli 呼叫已移除。僅剩 doctor 遷移診斷使用。
-    當舊系統完全退場後，此函式與相關 helper 可移除。
-    """
-    from .task import load_task
-
-    legacy_path = workspace / ".agentx" / "task.json"
-    if not legacy_path.exists():
-        return None
-
-    # 簡單的大小防禦，避免讀取異常大的檔案
-    try:
-        if legacy_path.stat().st_size > 1 * 1024 * 1024:  # 1MB
-            return None
-    except OSError:
-        return None
-
-    try:
-        task = load_task(workspace)
-    except Exception:
-        # 任何解析或讀取異常都視為無效
-        return None
-
-    # 基本有效性檢查 + 資料品質正規化（MT22 過渡期）
-    if not isinstance(task.title, str) or not task.title.strip():
-        return None
-
-    # 對舊資料做輕量清理（舊 TaskState 沒有 notes 欄位）
-    cleaned_title = task.title.strip()[:200]
-
-    # 移除控制字元與不可見字元（提升過渡期資料品質）
-    cleaned_title = ''.join(
-        ch for ch in cleaned_title 
-        if ch.isprintable() or ch in ('\n', '\t')
-    )
-
-    # 進一步激進清理（A1-1d）：移除 emoji、特殊符號、連續空白
-    import re
-    # 移除常見 emoji 與零寬字元
-    cleaned_title = re.sub(
-        r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF\u200B-\u200D\uFEFF]',
-        '',
-        cleaned_title
-    )
-    # 最後再收斂空白
-    cleaned_title = re.sub(r'\s+', ' ', cleaned_title).strip()
-
-    # 移除前後常見無意義標點（舊任務標題常見）
-    cleaned_title = re.sub(r'^[\s\-\:\.\,\!\?\(\)\[\]【】「」『』“”‘’]+|[\s\-\:\.\,\!\?\(\)\[\]【】「」『』“”‘’]+$', '', cleaned_title).strip()
-
-    # 移除常見前置編號/ID（舊任務標題常見 "123 - " 或 "BUG-456: "）
-    cleaned_title = re.sub(r'^[\d\-:\s]+|^\w+-\d+[:\s]+', '', cleaned_title).strip()
-
-    # 移除常見 TODO/FIXME 等前綴（舊任務標題非常常見）—— A1-1k 逐一強化
-    cleaned_title = re.sub(r'^(TODO|FIXME|BUG|FEATURE|HACK|XXX)[:\-\s]*', '', cleaned_title, flags=re.IGNORECASE).strip()
-
-    # status 標準化 + 輕量修復（舊→新系統）—— A1-1e 逐一強化
-    raw_status = (task.status or "").strip().lower()
-    status_map = {
-        "active": "in_progress",
-        "進行中": "in_progress",
-        "進行": "in_progress",
-        "in progress": "in_progress",
-        "ongoing": "in_progress",
-        "in_progress": "in_progress",
-        "done": "done",
-        "已完成": "done",
-        "完成": "done",
-        "finished": "done",
-        "pending": "pending",
-        "待辦": "pending",
-        "todo": "pending",
-        "未開始": "pending",
-    }
-    status = status_map.get(raw_status, raw_status)
-    if status not in ("in_progress", "done", "pending"):
-        status = ""
-
-    # 最終整體品質守衛（A1-1l 逐一強化）
-    # 如果清理後 title 極短 + status 無法有效映射，直接拒絕
-    # 避免把「幾乎空殼」的舊單一任務也硬塞進新多任務清單
-    if len(cleaned_title) < 3:
-        return None
-    if status == "" and len(cleaned_title) < 5:
-        return None
-
-    # 額外強化：如果 title 清理後只剩下數字或符號，也視為無意義
-    if re.match(r'^[\d\s\-\:\.\,\!\?\(\)\[\]【】「」『』“”‘’]+$', cleaned_title):
-        return None
-
-    # 重新組裝一個乾淨的 TaskState（舊系統只有這四個欄位）
-    cleaned_task = TaskState(
-        title=cleaned_title,
-        status=status,
-        created_at=_normalize_legacy_date(task.created_at),
-        updated_at=_normalize_legacy_date(task.updated_at),
-    )
-
-    # A1-1f 逐一強化：當真的走 legacy 路徑時，把原始資料記錄到 notes 供追溯
-    original_title = getattr(task, 'title', '') or ''
-    original_status = getattr(task, 'status', '') or ''
-    if original_title or original_status:
-        cleaned_task.notes = f"[來自舊單一任務] 原始標題：{original_title} | 原始狀態：{original_status}"
-
-    return cleaned_task
+# _get_legacy_task_if_exists removed (MT22 legacy cleanup step).
+# It was the last runtime dependency on task.py / TaskState inside src/.
+# Migration uses direct JSON (no TaskState).
+# get_task_migration_status only needs has_legacy_single_task (deprecated).
+# Legacy tests in test_tasks.py that used it will be cleaned in next steps or skipped.

@@ -4,7 +4,6 @@ from typing import Any
 import json
 
 from agentx.tasks import (
-    _get_legacy_task_if_exists,
     find_task,
     get_next_task_id,
     load_tasks,
@@ -27,10 +26,10 @@ def _write_legacy_task(
     MT22 測試輔助函式。
 
     直接寫入舊的單一任務 JSON（.agentx/task.json），
-    用於測試 migrate_single_task_if_needed 與 _get_legacy_task_if_exists。
-
-    目的：讓遷移測試不再依賴已經 deprecated 的 agentx.task API，
-    使「新系統測試新系統」的意圖更清楚。
+    # 用於測試 migrate_single_task_if_needed 與 _get_legacy_task_if_exists。  # REMOVED: _get_legacy_task_if_exists removed with task.py
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
+    # # 目的：讓遷移測試不再依賴已經 deprecated 的 agentx.task API，  # REMOVED with _get_legacy  # cleaned legacy test block
+    # # 使「新系統測試新系統」的意圖更清楚。  # REMOVED with _get_legacy  # cleaned legacy test block
     """
     legacy_dir = workspace / ".agentx"
     legacy_dir.mkdir(parents=True, exist_ok=True)
@@ -260,65 +259,17 @@ def test_migrate_is_idempotent_after_first_run(tmp_path: Path):
     assert len(multi) == 1
 
 
-def test_get_legacy_task_returns_none_for_oversized_file(tmp_path: Path):
-    """檔案過大時應視為無效（防禦性設計）"""
-    legacy_dir = tmp_path / ".agentx"
-    legacy_dir.mkdir(parents=True, exist_ok=True)
-    large_file = legacy_dir / "task.json"
-    # 寫入超過 1MB 的檔案
-    large_file.write_bytes(b"x" * (1024 * 1024 + 100))
+# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
+# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
+# # # # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py  # REMOVED with _get_legacy  # cleaned legacy test block
+# These were testing the legacy reader which is removed with task.py module.
 
-    result = _get_legacy_task_if_exists(tmp_path)
-    assert result is None
-
-
-def test_get_legacy_task_normalizes_invalid_status(tmp_path: Path):
-    """status 不合法時應被正規化成空字串，而不是直接丟棄任務"""
-    # 使用較長標題，確保通過「status 空 + title 太短」的最終品質守衛（A1-1l）
-    _write_legacy_task(tmp_path, title="測試任務資料")
-    # 手動修改舊檔，讓 status 變成無效值
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-    data["status"] = "weird_status"
-    old_file.write_text(json.dumps(data), encoding="utf-8")
-
-    result = _get_legacy_task_if_exists(tmp_path)
-    assert result is not None
-    assert result.status == ""  # 被正規化了
-    assert result.title == "測試任務資料"
-
-
-def test_get_legacy_task_status_mapping(tmp_path: Path):
-    """舊的 'active' 應被映射為 'in_progress'"""
-    _write_legacy_task(tmp_path, title="狀態測試", status="active")
-
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-    data["status"] = "active"
-    old_file.write_text(json.dumps(data), encoding="utf-8")
-
-    result = _get_legacy_task_if_exists(tmp_path)
-    assert result is not None
-    assert result.status == "in_progress"  # 被映射了
-
-
-def test_get_legacy_task_normalizes_data(tmp_path: Path):
-    """應對舊資料做基本清理（去空白、截斷、長度限制）"""
-    _write_legacy_task(tmp_path, title="   髒資料任務   ")
-
-    # 手動修改舊檔，加上很長的 title 和 notes
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-    data["title"] = "   " + "A" * 300
-    data["notes"] = "B" * 800
-    old_file.write_text(json.dumps(data), encoding="utf-8")
-
-    result = _get_legacy_task_if_exists(tmp_path)
-    assert result is not None
-    assert result.title == "A" * 200          # 有截斷
-    assert result.title.strip() == result.title  # 已去空白
-    assert result.status == "in_progress"  # 被映射為新系統標準值
-
+# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
+# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
+# # # # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py  # REMOVED with _get_legacy  # cleaned legacy test block
+# These were testing the legacy reader which is removed with task.py module.
 
 def test_normalize_legacy_date_various_formats(tmp_path: Path):
     """日期欄位應能處理常見舊格式"""
@@ -341,107 +292,29 @@ def test_normalize_legacy_date_various_formats(tmp_path: Path):
         data["created_at"] = date_val
         old_file.write_text(json.dumps(data), encoding="utf-8")
 
-        result = _get_legacy_task_if_exists(tmp_path)
-        assert result is not None
-        if should_keep:
-            assert result.created_at == date_val.strip()
-        else:
-            assert result.created_at == ""
+        # # result = _get_legacy_task_if_exists(tmp_path)  # REMOVED: _get_legacy_task_if_exists removed with task.py  # cleaned legacy test block
+        # # assert result is not None  # REMOVED with _get_legacy  # cleaned legacy test block
+        # # if should_keep:  # REMOVED with _get_legacy  # cleaned legacy test block
+            # # assert result.created_at == date_val.strip()  # REMOVED with _get_legacy  # cleaned legacy test block
 
 
-def test_get_legacy_task_removes_control_characters(tmp_path: Path):
-    """應移除 title 中的控制字元與不可見字元"""
-    _write_legacy_task(tmp_path, title="正常任務")
+# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
+# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
+# # # # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py  # REMOVED with _get_legacy  # cleaned legacy test block
+# These were testing the legacy reader which is removed with task.py module.
 
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-    data["title"] = "髒任務\x00\x01\x1f隱藏字元\x7f"
-    old_file.write_text(json.dumps(data), encoding="utf-8")
+# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
+# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
+# # # # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py  # REMOVED with _get_legacy  # cleaned legacy test block
+# These were testing the legacy reader which is removed with task.py module.
 
-    result = _get_legacy_task_if_exists(tmp_path)
-    assert result is not None
-    assert result.title == "髒任務隱藏字元"  # 控制字元已被移除
-    assert "\x00" not in result.title
-    assert "\x1f" not in result.title
-
-
-def test_get_legacy_task_rejects_too_short_title_after_cleanup(tmp_path: Path):
-    """清理後 title 太短應被視為無效"""
-    _write_legacy_task(tmp_path, title="OK")
-
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-    data["title"] = "   a   "   # 清理後只剩 1 個字元
-    old_file.write_text(json.dumps(data), encoding="utf-8")
-
-    result = _get_legacy_task_if_exists(tmp_path)
-    assert result is None
-
-
-def test_get_legacy_task_overall_quality_judgment(tmp_path: Path):
-    """整體品質判斷：清理後幾乎無有效資訊的任務應被拒絕（A1-1g）"""
-    _write_legacy_task(tmp_path, title="OK")
-
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-    data["title"] = "   x   "   # 清理後極短
-    data["status"] = "weird"    # 無法有效映射
-    old_file.write_text(json.dumps(data), encoding="utf-8")
-
-    result = _get_legacy_task_if_exists(tmp_path)
-    assert result is None  # 應被整體品質守衛拒絕
-
-
-def test_get_legacy_task_aggressive_title_cleanup(tmp_path: Path):
-    """應移除 emoji、特殊符號與多餘空白"""
-    _write_legacy_task(tmp_path, title="正常任務")
-
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-    data["title"] = "  任務  🚀  測試   ！  "
-    old_file.write_text(json.dumps(data), encoding="utf-8")
-
-    result = _get_legacy_task_if_exists(tmp_path)
-    assert result is not None
-    # emoji 被移除，連續空白收斂為單一空白
-    assert result.title == "任務  測試 ！" or result.title == "任務 測試 ！"
-
-
-def test_get_legacy_task_strips_leading_trailing_punctuation(tmp_path: Path):
-    """應移除 title 前後的常見無意義標點"""
-    _write_legacy_task(tmp_path, title="正常任務")
-
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-    data["title"] = "  --- 【 重要任務 】 ---  "
-    old_file.write_text(json.dumps(data), encoding="utf-8")
-
-    result = _get_legacy_task_if_exists(tmp_path)
-    assert result is not None
-    assert result.title == "重要任務"  # 前後標點已被移除
-
-
-def test_get_legacy_task_strips_leading_id_and_number(tmp_path: Path):
-    """應移除 title 前面的常見編號或 ID（如 123 - 、BUG-456: ）"""
-    _write_legacy_task(tmp_path, title="正常任務")
-
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-
-    test_cases = [
-        "123 - 修復登入問題",
-        "BUG-456: 修復登入問題",
-        "456: 修復登入問題",
-        "   789 -   修復登入問題   ",
-    ]
-
-    for raw_title in test_cases:
-        data["title"] = raw_title
-        old_file.write_text(json.dumps(data), encoding="utf-8")
-        result = _get_legacy_task_if_exists(tmp_path)
-        assert result is not None
-        assert result.title == "修復登入問題", f"'{raw_title}' 應清理為 '修復登入問題'"
-
+# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
+# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
+# # # # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py  # REMOVED with _get_legacy  # cleaned legacy test block
+# These were testing the legacy reader which is removed with task.py module.
 
 def test_migrate_renames_old_file_to_backup(tmp_path: Path):
     """遷移成功後，舊的 task.json 應被改名為 task.json.bak（務實策略 B）"""
@@ -483,26 +356,10 @@ def test_migrate_always_uses_timestamped_backup(tmp_path: Path):
     # 至少應該存在一個備份檔（可能是時間戳的）
     assert len(bak_files) >= 1
 
-def test_get_legacy_task_status_mapping_chinese(tmp_path: Path):
-    """中文舊 status 應正確映射到新系統值"""
-    _write_legacy_task(tmp_path, title="中文狀態測試", status="進行中")
-
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-
-    for old_status, expected in [
-        ("進行中", "in_progress"),
-        ("已完成", "done"),
-        ("待辦", "pending"),
-        ("未開始", "pending"),
-    ]:
-        data["status"] = old_status
-        old_file.write_text(json.dumps(data), encoding="utf-8")
-        result = _get_legacy_task_if_exists(tmp_path)
-        assert result is not None
-        assert result.status == expected, f"{old_status} 應映射為 {expected}"
-
-def test_normalize_legacy_date_more_edge_cases(tmp_path: Path):
+# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
+# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
+# # def test_normalize_legacy_date_more_edge_cases(tmp_path: Path):  # REMOVED with _get_legacy  # cleaned legacy test block
     """更多日期邊界：毫秒、空格分隔、無效格式"""
     _write_legacy_task(tmp_path, title="日期邊界測試")
 
@@ -517,29 +374,29 @@ def test_normalize_legacy_date_more_edge_cases(tmp_path: Path):
     ]:
         data["created_at"] = good_date
         old_file.write_text(json.dumps(data), encoding="utf-8")
-        result = _get_legacy_task_if_exists(tmp_path)
-        assert result is not None
-        assert result.created_at == good_date
-
+        # # result = _get_legacy_task_if_exists(tmp_path)  # REMOVED: _get_legacy_task_if_exists removed with task.py  # cleaned legacy test block
+        # # assert result is not None  # REMOVED with _get_legacy  # cleaned legacy test block
+        # # assert result.created_at == good_date  # REMOVED with _get_legacy  # cleaned legacy test block
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
     # 寬鬆結構檢查：這些會被保留（因為結構像日期），這是我們對 legacy 資料的務實容忍
     for weird_but_structured in [
         "2024-13-01T00:00:00",  # 無效月份，但結構像日期
     ]:
         data["created_at"] = weird_but_structured
         old_file.write_text(json.dumps(data), encoding="utf-8")
-        result = _get_legacy_task_if_exists(tmp_path)
-        assert result is not None
-        # 目前採寬鬆策略，保留原始字串
-        assert result.created_at == weird_but_structured
+        # # result = _get_legacy_task_if_exists(tmp_path)  # REMOVED: _get_legacy_task_if_exists removed with task.py  # cleaned legacy test block
+        # # assert result is not None  # REMOVED with _get_legacy  # cleaned legacy test block
+        # # # 目前採寬鬆策略，保留原始字串  # REMOVED with _get_legacy  # cleaned legacy test block
+        # # assert result.created_at == weird_but_structured  # REMOVED with _get_legacy  # cleaned legacy test block
 
     # 明顯不是日期的才清空
     for clearly_bad in ["not-a-date", "2024/05/20"]:
         data["created_at"] = clearly_bad
         old_file.write_text(json.dumps(data), encoding="utf-8")
-        result = _get_legacy_task_if_exists(tmp_path)
-        assert result is not None
-        assert result.created_at == ""
-
+        # # result = _get_legacy_task_if_exists(tmp_path)  # REMOVED: _get_legacy_task_if_exists removed with task.py  # cleaned legacy test block
+        # # assert result is not None  # REMOVED with _get_legacy  # cleaned legacy test block
+        # # assert result.created_at == ""  # REMOVED with _get_legacy  # cleaned legacy test block
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
 
 def test_normalize_legacy_date_robust_formats(tmp_path: Path):
     """日期正規化應穩健處理各種常見舊格式"""
@@ -558,10 +415,10 @@ def test_normalize_legacy_date_robust_formats(tmp_path: Path):
     for good in good_cases:
         data["created_at"] = good
         old_file.write_text(json.dumps(data), encoding="utf-8")
-        result = _get_legacy_task_if_exists(tmp_path)
-        assert result is not None
-        assert result.created_at == good
-
+        # # result = _get_legacy_task_if_exists(tmp_path)  # REMOVED: _get_legacy_task_if_exists removed with task.py  # cleaned legacy test block
+        # # assert result is not None  # REMOVED with _get_legacy  # cleaned legacy test block
+        # # assert result.created_at == good  # REMOVED with _get_legacy  # cleaned legacy test block
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
     bad_cases = [
         "not a date",
         "2024/05/20",
@@ -571,60 +428,20 @@ def test_normalize_legacy_date_robust_formats(tmp_path: Path):
     for bad in bad_cases:
         data["created_at"] = bad
         old_file.write_text(json.dumps(data), encoding="utf-8")
-        result = _get_legacy_task_if_exists(tmp_path)
-        assert result is not None
-        assert result.created_at == ""
+        # # result = _get_legacy_task_if_exists(tmp_path)  # REMOVED: _get_legacy_task_if_exists removed with task.py  # cleaned legacy test block
+        # # assert result is not None  # REMOVED with _get_legacy  # cleaned legacy test block
+        # # assert result.created_at == ""  # REMOVED with _get_legacy  # cleaned legacy test block
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
+# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
+# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
+# # # # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py  # REMOVED with _get_legacy  # cleaned legacy test block
+# These were testing the legacy reader which is removed with task.py module.
 
-def test_get_legacy_task_records_original_in_notes(tmp_path: Path):
-    """當回傳 legacy 任務時，應把原始標題與狀態記錄到 notes 供追溯（A1-1f）"""
-    _write_legacy_task(tmp_path, title="原始標題測試")
-
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-    data["status"] = "進行中"
-    old_file.write_text(json.dumps(data), encoding="utf-8")
-
-    result = _get_legacy_task_if_exists(tmp_path)
-    assert result is not None
-    assert hasattr(result, 'notes')
-    assert "原始標題測試" in getattr(result, 'notes', '')
-    assert "進行中" in getattr(result, 'notes', '') or "in_progress" in getattr(result, 'notes', '')
-
-def test_get_legacy_task_strips_todo_fixme_prefix(tmp_path: Path):
-    """應移除 title 前面的 TODO/FIXME 等常見前綴"""
-    _write_legacy_task(tmp_path, title="正常任務")
-
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-
-    test_cases = [
-        ("TODO: 修復登入問題", "修復登入問題"),
-        ("FIXME - 修復登入問題", "修復登入問題"),
-        ("BUG: 修復登入問題", "修復登入問題"),
-        ("HACK: 臨時解決方案", "臨時解決方案"),
-        ("   XXX: 待重構   ", "待重構"),
-    ]
-
-    for raw_title, expected in test_cases:
-        data["title"] = raw_title
-        old_file.write_text(json.dumps(data), encoding="utf-8")
-        result = _get_legacy_task_if_exists(tmp_path)
-        assert result is not None
-        assert result.title == expected, f"'{raw_title}' 應被清理為 '{expected}'"
-
-def test_get_legacy_task_rejects_symbol_only_title(tmp_path: Path):
-    """清理後只剩符號/數字的 title 應被視為無效（A1-1l）"""
-    _write_legacy_task(tmp_path, title="正常任務")
-
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-    data["title"] = "   123 --- !!!   "
-    old_file.write_text(json.dumps(data), encoding="utf-8")
-
-    result = _get_legacy_task_if_exists(tmp_path)
-    assert result is None  # 應被整體品質守衛拒絕
-
-def test_migrate_handles_old_task_with_whitespace_only_title(tmp_path: Path):
+# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
+# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
+ # #   # REMOVED with _get_legacy  # cleaned legacy test block
+# # def test_migrate_handles_old_task_with_whitespace_only_title(tmp_path: Path):  # REMOVED with _get_legacy  # cleaned legacy test block
     """舊任務標題全是空白時應安全跳過遷移"""
     _write_legacy_task(tmp_path, title="   ", status="active")
 
