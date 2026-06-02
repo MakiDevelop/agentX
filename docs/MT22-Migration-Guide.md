@@ -6,15 +6,16 @@
 
 ---
 
-## 1. 目前狀態（2026-05）
+## 1. 目前狀態（推進中）
 
 - 新多任務系統（`.agentx/tasks.json` + `agentx.tasks` API）已成為主要真相來源。
-- 舊單一任務系統（`.agentx/task.json` + `agentx.task`）已進入受控過渡期，所有公開 API 均已標記 `DeprecationWarning`。
+- 舊單一任務系統（`.agentx/task.json` + `agentx.task`）已進入受控過渡期，cli 顯示分支（/config, handoff, 啟動提示）已移除，helper 標記 deprecated。
 - 啟動時會自動嘗試遷移進行中的舊任務（策略 B：成功後備份為 `task.json.bak.*`）。
 - 診斷工具：
-  - `has_legacy_single_task(workspace)`
+  - `has_legacy_single_task(workspace)`（deprecated，僅診斷）
   - `get_task_migration_status(workspace)`
-  - `/doctor` 會顯示當前狀態。
+  - `/doctor` 會顯示當前狀態（legacy_only / mixed / multi_only）。
+- cli 不再在 /config 等顯示 legacy 提示（但 doctor 仍報告遷移狀態）。
 
 ---
 
@@ -23,15 +24,15 @@
 ### 一般使用者
 - 建議盡快改用 `/task` 相關指令管理多任務清單。
 - 舊 `task.json` 若為進行中狀態，啟動時會自動遷移。
-- 啟動時若偵測到舊資料，會看到過渡提示。
+- cli 顯示已無過渡提示（/config 等），但 `agentx doctor` 仍會報告遷移狀態。
 
 ### 進階使用者 / 腳本作者
 - 請改用 `load_tasks` / `save_tasks` / `task_add` 等新 API。
 - 避免直接操作 `.agentx/task.json`。
 
 ### 移除時間點（預計）
-- v0.3.0：舊系統處於「受控過渡 + 明確 deprecated」階段。
-- v0.4+：預計完全移除 `task.py` 模組及相關相容層。
+- v0.3.0：cli 顯示分支已移除，helper deprecated，診斷仍可用。
+- v0.4+：預計完全移除 `task.py` 模組及相關相容層（待 checklist 條件滿足）。
 
 ### 使用者遷移建議流程（推薦做法）
 
