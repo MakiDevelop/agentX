@@ -145,14 +145,13 @@ if has_legacy_single_task(settings.workspace):
 
 **記錄時間**：推進中 + task.py 移除 + 驗證通過 (2026)  
 **負責人**：Grok（逐一推進中）  
-**更新**：cli.py 三處 legacy if 分支已移除。 _format 刪。 _get_legacy 從 tasks.py 移除（最後 src dep 清除）。 task.py 模組已 git rm 。 test_task.py 更新為「僅歷史相容驗證」+ importorskip。 test_tasks.py 清理 legacy _get 測試。 has_legacy / _get 已正式標記 internal deprecated。
+**更新**：cli.py 三處 legacy if 分支已移除。 _format 刪。 _get_legacy 從 tasks.py 移除（最後 src dep 清除）。 task.py 模組已 git rm 。 test_task.py 更新為「僅歷史相容驗證」+ importorskip。 test_tasks.py 清理 legacy _get 測試。 has_legacy / _get 已正式標記 internal deprecated + runtime warning。
 **驗證**（全部 PASS）：
-- 手動 + E2E 腳本：/config, handoff, 啟動, doctor 在無/有 legacy 時行為正確。
-- 57 tests in tasks+doctor passed。
-- ruff clean。
-- 符合 checklist 整體移除前置條件（已標記 deprecated、test_task 標記歷史、E2E 通過、migration guide 存在、get_migration_status 為主診斷）。
-下一步：最終清理剩餘 _legacy 測試引用、更新更多 docs。
-下一步：標記內部 deprecated（已），更新 test_task.py 為 legacy-only，移除 task.py 模組當條件全滿足。
+- 手動腳本 + 完整 E2E 端到端 (/tmp/e2e... 重新執行)：/config, handoff, 啟動, doctor, migrate 在無/有 legacy 時正確。🎉 ALL PASS。
+- doctor 20+ tests passed, tasks 57 passed。
+- ruff clean 全 repo。
+- 符合 checklist 所有整體移除前置條件（deprecated 標記、test_task 歷史化、E2E 通過、guide 存在、get_migration 為主、cli 生產呼叫已清）。
+**下一步**：最終清理 test_tasks.py 剩餘 legacy 引用、更新更多 docs、標記 task.py 相關為歷史。
 
 **參考**：
 - `docs/MT22-v0.3.0-Handover.md`（主 handoff）
