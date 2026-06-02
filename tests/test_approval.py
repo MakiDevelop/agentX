@@ -1,4 +1,4 @@
-from agentx.approval import ApprovalMode, ApprovalPolicy
+from agentx.approval import ApprovalMode, ApprovalPolicy, normalize_approval_mode
 from agentx.safety import Risk
 
 
@@ -25,3 +25,9 @@ def test_yellow_off_blocks() -> None:
 def test_yellow_ask_uses_callback() -> None:
     policy = ApprovalPolicy(mode=ApprovalMode.ASK)
     assert policy.decide("memory_write", {}, Risk.YELLOW, lambda *_: True)
+
+
+def test_approval_aliases_normalize_to_existing_modes() -> None:
+    assert normalize_approval_mode("strict") == ApprovalMode.ASK
+    assert normalize_approval_mode("auto-approve") == ApprovalMode.AUTO
+    assert normalize_approval_mode("deny") == ApprovalMode.OFF

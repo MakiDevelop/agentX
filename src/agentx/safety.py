@@ -17,6 +17,7 @@ READ_ONLY_TOOLS = {
     "git_diff",
     "memory_search",
     "run_command",
+    "web_fetch",
     "run_tests",
     "docker_compose_ps",
     "docker_compose_logs",
@@ -24,6 +25,8 @@ READ_ONLY_TOOLS = {
 
 YELLOW_TOOLS = {
     "apply_patch",
+    "search_replace",
+    "insert_code",
     "docker_compose_build",
     "docker_compose_down",
     "docker_compose_up",
@@ -45,6 +48,9 @@ SENSITIVE_PATHS = (
     "~/.ssh",
     "~/.gnupg",
     ".secrets",
+    "/.ssh",
+    "/.gnupg",
+    "/.secrets",
 )
 
 
@@ -58,11 +64,28 @@ def classify_tool(tool: str) -> Risk:
 
 def classify_command(command: str) -> Risk:
     normalized = " ".join(command.strip().split())
-    if any(pattern in normalized for pattern in RED_COMMAND_PATTERNS):
+    lowered = normalized.lower()
+    if any(pattern.lower() in lowered for pattern in RED_COMMAND_PATTERNS):
         return Risk.RED
     if any(path in normalized for path in SENSITIVE_PATHS):
         return Risk.RED
+    if lowered.startswith("mv ") and _looks_like_absolute_multi_path_move(normalized):
+        return Risk.RED
     return Risk.YELLOW
+
+
+def _looks_like_absolute_multi_path_move(command: str) -> bool:
+    """Conservative cross-device move guard.
+
+    We cannot know the device boundary from a raw command string, so absolute
+    multi-path mv commands are treated as RED and should be decomposed into a
+    copy/verify/delete workflow by the human.
+    """
+    parts = command.split()
+    if len(parts) < 3:
+        return False
+    paths = [part for part in parts[1:] if part.startswith("/") or part.startswith("~")]
+    return len(paths) >= 2
 
 
 def require_allowed(tool: str) -> None:

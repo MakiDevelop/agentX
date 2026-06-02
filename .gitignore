@@ -4,7 +4,13 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .DS_Store
+GEMINI.md
 .agentx/sessions/
 .agentx/patches/
 .agentx/task.json
 playground/
+.agentx/tasks.json
+.agentx/state.json
+.agentx/*.md
+.agentx/handoff/
+tmp/

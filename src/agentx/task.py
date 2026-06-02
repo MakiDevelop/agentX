@@ -1,9 +1,17 @@
 from __future__ import annotations
 
 import json
+import warnings
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
+
+# === DEPRECATION NOTICE (MT22 / Phase A) ===
+# 單一任務系統（task.py + TaskState）正在退場。
+# 新的真相來源是 tasks.py 的多任務清單（.agentx/tasks.json）。
+# 啟動時會自動把進行中的舊任務遷移過去。
+# 請改用 load_tasks / save_tasks / task_add 等工具與 API。
+# 預計在後續版本移除本模組。
 
 
 @dataclass
@@ -23,6 +31,12 @@ def task_path(workspace: Path) -> Path:
 
 
 def load_task(workspace: Path) -> TaskState:
+    warnings.warn(
+        "load_task() is deprecated (MT22). Use load_tasks() from agentx.tasks instead. "
+        "This will be removed in a future version.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     path = task_path(workspace)
     if not path.exists():
         return TaskState()
@@ -34,12 +48,22 @@ def load_task(workspace: Path) -> TaskState:
 
 
 def save_task(workspace: Path, task: TaskState) -> None:
+    warnings.warn(
+        "save_task() is deprecated (MT22). Use save_tasks() from agentx.tasks instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     path = task_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(asdict(task), ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def start_task(workspace: Path, title: str) -> TaskState:
+    warnings.warn(
+        "start_task() is deprecated (MT22). Use the new multi-task APIs in agentx.tasks instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     now = datetime.now().isoformat(timespec="seconds")
     task = TaskState(title=title, status="active", created_at=now, updated_at=now)
     save_task(workspace, task)
@@ -47,6 +71,11 @@ def start_task(workspace: Path, title: str) -> TaskState:
 
 
 def finish_task(workspace: Path) -> TaskState:
+    warnings.warn(
+        "finish_task() is deprecated (MT22).",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     task = load_task(workspace)
     task.status = "done"
     task.updated_at = datetime.now().isoformat(timespec="seconds")
@@ -55,6 +84,11 @@ def finish_task(workspace: Path) -> TaskState:
 
 
 def clear_task(workspace: Path) -> TaskState:
+    warnings.warn(
+        "clear_task() is deprecated (MT22). Use clear_tasks() from agentx.tasks instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     task = TaskState()
     path = task_path(workspace)
     if path.exists():

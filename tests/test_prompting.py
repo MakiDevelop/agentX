@@ -7,6 +7,7 @@ def test_slash_completion_text_keeps_literal_prefix():
     assert slash_completion_text("/config set KEY VALUE") == "/config set "
     assert slash_completion_text("/resume [latest|FILE]") == "/resume "
     assert slash_completion_text("/mode agent") == "/mode agent"
+    assert slash_completion_text("/mode ask") == "/mode ask"
 
 
 def test_slash_completer_filters_by_prefix():

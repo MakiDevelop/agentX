@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import tomllib
 import json
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
+from agentx.approval import normalize_approval_mode
 from agentx.persona import normalize_persona
 
 
@@ -33,12 +33,20 @@ def load_project_config(workspace: Path) -> ProjectConfig:
         return ProjectConfig()
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     agentx = data.get("agentx", {})
+    approval = agentx.get("approval")
+    if approval is not None:
+        approval = normalize_approval_mode(str(approval)).value
+    mode = agentx.get("mode")
+    if mode is not None:
+        mode = str(mode).strip().lower()
+    if mode == "ask":
+        mode = "agent"
     return ProjectConfig(
         model=agentx.get("model"),
         namespace=agentx.get("namespace"),
-        mode=agentx.get("mode"),
+        mode=mode,
         auto_handoff=agentx.get("auto_handoff"),
-        approval=agentx.get("approval"),
+        approval=approval,
         persona=agentx.get("persona"),
     )
 
@@ -83,13 +91,17 @@ def _parse_value(key: str, value: str) -> str | bool:
     if key == "persona":
         return normalize_persona(value)
     if key == "mode":
-        if value not in {"chat", "agent"}:
-            raise ValueError("mode must be chat or agent")
-        return value
+        normalized = value.lower()
+        if normalized == "ask":
+            return "agent"
+        if normalized not in {"chat", "agent"}:
+            raise ValueError("mode must be chat, ask, or agent")
+        return normalized
     if key == "approval":
-        if value not in {"ask", "auto", "off"}:
-            raise ValueError("approval must be ask, auto, or off")
-        return value
+        try:
+            return normalize_approval_mode(value).value
+        except ValueError as exc:
+            raise ValueError("approval must be ask, auto, off, strict, auto-approve, or deny") from exc
     if key == "auto_handoff":
         normalized = value.lower()
         if normalized in {"1", "true", "yes", "on"}:

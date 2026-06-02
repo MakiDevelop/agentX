@@ -7,6 +7,7 @@ from collections.abc import Callable
 from prompt_toolkit.application import Application
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import HSplit, Layout, Window
+from prompt_toolkit.widgets.base import Frame
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.widgets import TextArea
 
@@ -64,6 +65,13 @@ class AgentXTui:
             height=1,
             content=FormattedTextControl(lambda: [("reverse", f" {self._status_text()} ")]),
         )
+
+        # 輸入框加上線框 + 上方多一點 margin（使用者要求）
+        input_frame = Frame(self.input)
+
+        # 注意：不要對包含 Frame 的容器強制小 height，否則 terminal 太小時會報 "Window too small..."
+
+
         key_bindings = KeyBindings()
 
         @key_bindings.add("c-c")
@@ -75,7 +83,17 @@ class AgentXTui:
             self._input_queue.put("/exit")
 
         self.app: Application[None] = Application(
-            layout=Layout(HSplit([self.output, status, self.input]), focused_element=self.input),
+            layout=Layout(
+                HSplit(
+                    [
+                        self.output,
+                        status,
+                        Window(height=1),   # 額外 margin-up，讓輸入框跟狀態列有呼吸空間
+                        input_frame,
+                    ]
+                ),
+                focused_element=self.input,
+            ),
             key_bindings=key_bindings,
             full_screen=full_screen,
             refresh_interval=0.2,

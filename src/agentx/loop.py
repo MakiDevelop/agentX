@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json as _json
-import re as _re
 import threading
 from collections.abc import Callable
 from enum import Enum
@@ -10,18 +8,18 @@ from pydantic import ValidationError
 
 from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
-from agentx.hooks import HookManager
+from agentx.context_compactor import ContextCompactor, HeuristicContextCompactor
+from agentx.recovery import RecoveryPlaybook
 from agentx.json_repair import extract_json_object
-from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
-from agentx.protocol import FinalAnswer, ToolCall, ToolResult
+from agentx.errors import ErrorContext, ErrorType, RecoverySuggestion
+from agentx.error_classifier import ErrorClassifier
+from agentx.protocol import FinalAnswer, Reflect, ToolCall, ToolResult
 from agentx.runtime_prompt import build_agent_system_prompt
+from agentx.tasks import format_task_list_summary, get_next_task_id, load_tasks, save_tasks
 from agentx.tools import ToolRegistry
 
-
-class InvalidAction(Enum):
-    NON_JSON = "non_json"
-    BAD_SCHEMA = "bad_schema"
+EDITING_TOOLS = {"search_replace", "insert_code", "apply_patch"}
 
 
 class AgentLoop:
@@ -30,19 +28,19 @@ class AgentLoop:
         settings: Settings,
         ollama: OllamaClient,
         tools: ToolRegistry,
-        memory: MemoryHallClient,
         namespace: str = "project:agentX",
         trace: Callable[[str], None] | None = None,
-        hooks: HookManager | None = None,
+        system_prompt: str | None = None,
+        compactor: ContextCompactor | None = None,
     ) -> None:
         self.session = AgentSession(
             settings=settings,
             ollama=ollama,
             tools=tools,
-            memory=memory,
             namespace=namespace,
             trace=trace,
-            hooks=hooks,
+            system_prompt=system_prompt,
+            compactor=compactor,
         )
 
     def run(
@@ -50,8 +48,11 @@ class AgentLoop:
         prompt: str,
         namespace: str = "project:agentX",
         cancel_event: threading.Event | None = None,
+        plan_only: bool | None = None,
     ) -> str:
-        return self.session.ask(prompt, namespace=namespace, cancel_event=cancel_event)
+        return self.session.ask(
+            prompt, namespace=namespace, cancel_event=cancel_event, plan_only=plan_only
+        )
 
 
 class AgentSession:
@@ -60,20 +61,39 @@ class AgentSession:
         settings: Settings,
         ollama: OllamaClient,
         tools: ToolRegistry,
-        memory: MemoryHallClient,
         namespace: str = "project:agentX",
         trace: Callable[[str], None] | None = None,
-        hooks: HookManager | None = None,
+        system_prompt: str | None = None,
+        compactor: ContextCompactor | None = None,
     ) -> None:
         self.settings = settings
         self.ollama = ollama
         self.tools = tools
-        self.memory = memory
         self.namespace = namespace
         self.trace = trace
-        if hooks is not None:
-            self.tools.hooks = hooks
         self.compaction_count = 0
+        self.plan_only: bool = False
+        self._custom_system_prompt = system_prompt
+        self._has_completed_planning: bool = False
+        # Reflection loop guard for headless stability (Micro-task 20)
+        self.consecutive_reflections: int = 0
+        self.max_consecutive_reflections: int = 3
+
+        # Task List 持久化載入（Micro-task 21 A2）
+        self.tasks: list[dict] = load_tasks(self.settings.workspace)
+
+        # 錯誤恢復相關狀態（階段一）
+        self.error_classifier = ErrorClassifier()
+        self.error_history: list[ErrorContext] = []
+        self.current_error: ErrorContext | None = None
+
+        # Context Compaction v2（Phase B1）
+        self.compactor: ContextCompactor = compactor or HeuristicContextCompactor()
+
+        # Phase B2：錯誤恢復策略成熟化
+        self.recovery_playbook = RecoveryPlaybook()
+
+        # === Safety hardening states (continued from feature/agent-tools review N series) ===
         # Outcome of the most recent ask() — coordinator / callers consume these
         # for structured success judgment (review N5: don't rely on string
         # prefixes of the summary).
@@ -90,20 +110,19 @@ class AgentSession:
         # failed cargo test would make the failure "fall off" and let the
         # finalization guard pass a lying success.)
         self._tool_outcomes: dict[str, bool] = {}
+
         self.messages = self._initial_messages()
 
     def _initial_messages(self) -> list[dict[str, str]]:
+        system_prompt = self._custom_system_prompt or build_agent_system_prompt(self.settings.persona, tools=self.tools)
         return [
-            {
-                "role": "system",
-                "content": build_agent_system_prompt(self.settings.persona, tools=self.tools),
-            },
+            {"role": "system", "content": system_prompt},
             {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(self.settings.workspace)},
             {
                 "role": "system",
                 "content": "Memory Hall context:\n"
                 + build_memory_context(
-                    self.memory,
+                    self.tools.memory,
                     project_namespace=self.namespace,
                     query=f"{self.settings.workspace.name} project context",
                 ),
@@ -115,9 +134,24 @@ class AgentSession:
         prompt: str,
         namespace: str = "project:agentX",
         cancel_event: threading.Event | None = None,
+        plan_only: bool | None = None,
     ) -> str:
-        self.last_termination = "running"
-        self.last_failing_tools = set()
+        effective_plan_only = plan_only if plan_only is not None else self.plan_only
+
+        direct = self._direct_tool_call(prompt)
+        if direct is not None:
+            result = self._run_tool(direct)
+            self.messages.append(
+                {
+                    "role": "user",
+                    "content": f"Task: {prompt}",
+                }
+            )
+            self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
+            if result.ok:
+                return result.content
+            return f"工具執行失敗：{result.content}"
+
         self.messages.append(
             {
                 "role": "user",
@@ -129,9 +163,14 @@ class AgentSession:
             }
         )
 
-        finalize_retries = 0
         for _ in range(self.settings.max_steps):
-            self._maybe_auto_compact()
+            # Context Compaction v2 自動觸發（穩定性強化）
+            limit = getattr(self.settings, "context_limit_tokens", 8192)
+            if isinstance(limit, (int, float)) and limit > 0:
+                if self.context_tokens_estimate > limit * 0.82:
+                    compact_result = self.compact(keep_last=5)
+                    self._emit_trace(f"auto_compact triggered: {compact_result}")
+
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
             action = self._parse_action(raw)
             if isinstance(action, InvalidAction):
@@ -149,93 +188,324 @@ class AgentSession:
                 )
                 continue
             if isinstance(action, FinalAnswer):
-                failing = self._unresolved_failing_tools()
-                if failing and finalize_retries < self.MAX_FINALIZE_RETRIES:
-                    finalize_retries += 1
-                    self.messages.append({"role": "assistant", "content": action.content})
-                    failing_summary = ", ".join(sorted(failing))
-                    self.messages.append(
-                        {
-                            "role": "user",
-                            "content": (
-                                f"上一次 {failing_summary} 工具回應顯示失敗（exit≠0 或 ok=false）。"
-                                "在問題解決前不可以下成功結論。請繼續呼叫工具修正，"
-                                "或若確定卡住，請用 type=final 明確說明失敗原因，不要含糊。"
-                            ),
-                        }
-                    )
-                    continue
-                if failing:
-                    # Retries exhausted with unresolved failures — refuse to
-                    # propagate the model's final claim (review N7). Replace
-                    # with a forced failure summary that callers / coordinators
-                    # can rely on for honest reporting.
-                    failing_summary = ", ".join(sorted(failing))
-                    forced_final = (
-                        f"任務失敗：經過 {self.MAX_FINALIZE_RETRIES + 1} 次嘗試後，"
-                        f"以下工具仍處於失敗狀態：{failing_summary}。"
-                        f"模型最後一次回應（僅供參考、非結論）："
-                        f"{action.content.replace(chr(10), ' ')[:400]}"
-                    )
-                    self.messages.append({"role": "assistant", "content": forced_final})
-                    self.last_failing_tools = failing
-                    self.last_termination = "final"
-                    return forced_final
                 self.messages.append({"role": "assistant", "content": action.content})
-                self.last_failing_tools = set()
-                self.last_termination = "final"
                 return action.content
 
-            result = self._run_tool(action)
+            if isinstance(action, Reflect):
+                self.consecutive_reflections += 1
+                reflection = self._reflect(action.focus)
+                self.messages.append({"role": "assistant", "content": action.model_dump_json()})
+                self.messages.append(
+                    {"role": "system", "content": f"=== Reflection ===\n{reflection}"}
+                )
+                if effective_plan_only:
+                    self._has_completed_planning = True
+
+                # Micro-task 20: Reflection loop guard
+                if self.consecutive_reflections >= self.max_consecutive_reflections:
+                    if effective_plan_only:
+                        guard_msg = (
+                            f"【Reflection Loop Guard 觸發 - PLAN MODE】\n"
+                            f"你已連續 {self.consecutive_reflections} 次輸出 reflect 而未產出 final 方案。\n"
+                            "plan mode 的目的是產生高品質規劃，請立即：\n"
+                            "- 使用 task_list 整理狀態\n"
+                            "- 輸出一個結構化、完整的 final 方案（清楚列出步驟、風險、驗證方式）\n"
+                            "- 不要再純粹 Reflection，也不要建議執行工具（plan mode 禁止）\n\n"
+                            "強制進度，停止無效迴圈。guard 已重置。"
+                        )
+                    else:
+                        guard_msg = (
+                            f"【Reflection Loop Guard 觸發】\n"
+                            f"你已連續 {self.consecutive_reflections} 次輸出 reflect 而未執行實質工具或 final。\n"
+                            "在 headless 模式中這會導致效率低下、token 浪費與無效迴圈。\n\n"
+                            "請立即採取行動：\n"
+                            "- 使用 task_list 快速整理目前所有任務狀態\n"
+                            "- 輸出一個有價值的 final 方案（即使不完美也先給出可執行建議）\n"
+                            "- 或執行下一個具體的工具行動（search_replace / run_tests 等）\n\n"
+                            "強制進度，停止純粹 Reflection。guard 已重置。"
+                        )
+                    self.messages.append({"role": "system", "content": guard_msg})
+                    self.consecutive_reflections = 0  # give one more chance after warning
+                continue
+
+            if effective_plan_only and not self._has_completed_planning:
+                # Plan mode: require at least one reflection, and treat a good final plan as planning complete.
+                self.messages.append({"role": "assistant", "content": action.model_dump_json()})
+
+                if isinstance(action, FinalAnswer):
+                    # Planning phase considered complete once a final plan is delivered.
+                    # Subsequent turns (if any) can use tools.
+                    self._has_completed_planning = True
+                    # For plan-then-execute, we allow the model to continue into execution in the same session.
+                    continue
+
+                self.messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "你目前處於 PLAN MODE（Headless）。\n"
+                            "請先進行認真的 Reflection，檢討你的規劃是否完整、風險是否清楚、驗證方式是否可行。\n"
+                            "請用結構化方式思考步驟。\n\n"
+                            "完成 Reflection 後，請明確判斷：\n"
+                            "- 如果規劃還不夠好 → 繼續優化規劃並再次 Reflection\n"
+                            "- 如果規劃已經完整且風險可控 → 在 final answer 中清楚輸出完整方案，並建議可以開始執行\n\n"
+                            "請輸出 reflect 或 final。"
+                        ),
+                    }
+                )
+                continue
+
+            # Special handling for internal task management tools
+            if action.tool.startswith("task_"):
+                result = self._handle_task_tool(action)
+            else:
+                result = self._run_tool(action)
+
             self.messages.append({"role": "assistant", "content": action.model_dump_json()})
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
 
-        self.last_failing_tools = self._unresolved_failing_tools()
-        self.last_termination = "max_steps_exceeded"
+            # === 錯誤分類與基礎恢復處理（階段一 + 步驟 4） ===
+            if not result.ok:
+                error_type = self.error_classifier.classify(action.tool, result)
+                self.current_error = ErrorContext(
+                    error_type=error_type,
+                    tool_name=action.tool,
+                    error_message=result.content or "",
+                )
+                self.error_history.append(self.current_error)
+
+                # === STUCK 偵測（階段二步驟 1） ===
+                if self._detect_stuck(self.current_error):
+                    self.current_error.error_type = ErrorType.STUCK
+                    stuck_msg = self._build_stuck_intervention_message(self.current_error)
+                    self.messages.append({"role": "system", "content": stuck_msg})
+                    # STUCK 時強烈建議進行 Reflection
+                    self.messages.append({
+                        "role": "system",
+                        "content": "請立即輸出 reflect，專注解決當前卡住的問題。"
+                    })
+                    continue  # 跳過後續執行，讓模型在下一輪有機會回應 STUCK 訊息
+
+                if error_type in (ErrorType.TRANSIENT, ErrorType.CALL_ERROR):
+                    # 有限次重試引導
+                    retry_guidance = self._build_retry_guidance(action.tool, result.content, error_type)
+                    self.messages.append({"role": "system", "content": retry_guidance})
+                else:
+                    # 較嚴重錯誤 → 強烈引導進行結構化錯誤 Reflection
+                    reflection_guidance = self._build_error_reflection_guidance(self.current_error)
+                    self.messages.append({"role": "system", "content": reflection_guidance})
+
+                    # 額外鼓勵模型主動輸出 reflect
+                    self.messages.append({
+                        "role": "system",
+                        "content": "請現在輸出 reflect，專注分析這個錯誤並提出恢復策略。"
+                    })
+
+            else:
+                self.current_error = None
+
+            # Micro-task 20: reset reflection loop counter only on successful tool action
+            # (failed tool + reflect 迴圈應被 guard 捕捉，避免逃脫)
+            if result.ok:
+                self.consecutive_reflections = 0
+
+            # Micro-task 12：編輯工具成功後，自動執行測試（+ 條件式 Reflection）
+            if action.tool in EDITING_TOOLS and result.ok:
+                self._edit_count = getattr(self, "_edit_count", 0) + 1
+
+                # 自動跑 build/test
+                test_result = self.tools.run("run_tests", {})
+                self.messages.append({"role": "tool", "content": self._format_tool_result(test_result)})
+
+                # 簡單編輯（累計 <=2 次）：只報告結果 + JSON 提醒，跳過重量級 reflection
+                if self._edit_count <= 2:
+                    build_status = "passed" if test_result.ok else "FAILED"
+                    self.messages.append({
+                        "role": "system",
+                        "content": (
+                            f"Build/test {build_status}. "
+                            "Continue with the next action, or reply with "
+                            '{"type":"final","content":"your summary"} if done.'
+                        ),
+                    })
+                else:
+                    # 複雜編輯（>=3 次）：完整 reflection
+                    task_summary = self._get_current_task_summary()
+                    reflection = self._reflect(f"剛剛使用了 {action.tool} 工具，測試結果如下")
+                    self.messages.append(
+                        {"role": "system", "content": f"=== Reflection ===\n{reflection}"}
+                    )
+                    self.messages.append({
+                        "role": "system",
+                        "content": (
+                            f"目前任務狀態：\n{task_summary}\n\n"
+                            'REMINDER: respond with exactly one JSON object. '
+                            '{"type":"final","content":"..."} or {"type":"tool_call","tool":"...","args":{...}}'
+                        ),
+                    })
+
+        # Fallback: force a final answer before giving up
+        self.messages.append({
+            "role": "user",
+            "content": (
+                "你已經用完所有步驟。請立即總結你完成的工作，用以下格式回覆：\n"
+                '{"type":"final","content":"你的總結"}'
+            ),
+        })
+        try:
+            raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
+            action = self._parse_action(raw)
+            if isinstance(action, FinalAnswer):
+                return action.content
+        except Exception:
+            pass
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
 
-    MAX_FINALIZE_RETRIES = 3
-    AUTO_COMPACT_RATIO = 0.7
-    # Don't re-compact unless context has grown by at least this fraction of
-    # the limit since the previous compact (hysteresis, review N8).
-    AUTO_COMPACT_HYSTERESIS_RATIO = 0.1
-    _EXIT_FAIL_RE = _re.compile(r"\bexit=([1-9]\d*)\b")
-
-    def _maybe_auto_compact(self) -> None:
-        limit = self.settings.context_limit_tokens
-        if limit <= 0:
-            return
-        current = self.context_tokens_estimate
-        if current < limit * self.AUTO_COMPACT_RATIO:
-            return
-        if self._last_compact_tokens is not None:
-            growth = current - self._last_compact_tokens
-            if growth < limit * self.AUTO_COMPACT_HYSTERESIS_RATIO:
-                # Already compacted recently; bootstrap + summary alone are
-                # above threshold. Compacting again would burn cycles and
-                # rebuild the same summary without freeing meaningful space.
-                self._emit_trace(
-                    f"auto-compact skipped: only +{growth} tokens since last compact"
-                )
-                return
-        try:
-            self._emit_trace(f"auto-compact at {current} tokens (limit={limit})")
-            self.compact()
-            self._last_compact_tokens = self.context_tokens_estimate
-        except Exception as exc:  # don't crash the agent loop on compact failure
-            self._emit_trace(f"auto-compact failed: {type(exc).__name__}: {exc}")
-
-    def _unresolved_failing_tools(self) -> set[str]:
-        return {name for name, ok in self._tool_outcomes.items() if not ok}
-
     def clear(self) -> None:
+        """完整重置（包含 tasks）。僅供需要完全重置的場合使用。"""
+        self.clear_context()
+        self.tasks = []
+        save_tasks(self.settings.workspace, self.tasks)
+
+    def clear_context(self) -> None:
+        """只重置對話上下文與錯誤狀態，不影響 tasks。/clear slash command 應使用此方法。"""
         self.messages = self._initial_messages()
-        # Reset session bookkeeping so a fresh task starts clean (review codex
-        # C2: stale _last_compact_tokens disables auto-compact across /clear).
-        self._last_compact_tokens = None
-        self._tool_outcomes = {}
-        self.last_termination = "unknown"
-        self.last_failing_tools = set()
+        self.error_history = []
+        self.current_error = None
+
+    # === Task Management (for complex long-horizon tasks) ===
+
+    def add_task(self, description: str, notes: str = "") -> dict:
+        task = {
+            "id": get_next_task_id(self.tasks),
+            "description": description,
+            "status": "pending",
+            "notes": notes,
+        }
+        self.tasks.append(task)
+        save_tasks(self.settings.workspace, self.tasks)  # Micro-task 21: 自動持久化
+        return task
+
+    def update_task(self, task_id: int | str, status: str | None = None, notes: str | None = None) -> dict | None:
+        # 對本地模型更寬容：允許 task_id 是字串或數字
+        try:
+            task_id = int(task_id)
+        except (TypeError, ValueError):
+            return None
+
+        # 限制 status 只能是合法值，避免污染持久化資料
+        valid_status = {"pending", "in_progress", "done"}
+        if status is not None and status not in valid_status:
+            return None
+
+        for task in self.tasks:
+            if task["id"] == task_id:
+                if status:
+                    task["status"] = status
+                if notes is not None:
+                    task["notes"] = notes
+                save_tasks(self.settings.workspace, self.tasks)  # Micro-task 21: 自動持久化
+                return task
+        return None
+
+    def get_tasks(self, status: str | None = None) -> list[dict]:
+        if status:
+            return [t for t in self.tasks if t["status"] == status]
+        return self.tasks
+
+    def clear_tasks(self) -> None:
+        self.tasks = []
+        save_tasks(self.settings.workspace, self.tasks)  # Micro-task 21: 自動持久化
+
+    def _get_current_task_summary(self) -> str:
+        """取得目前任務清單摘要，用於 prompt 注入（B3）"""
+        if not self.tasks:
+            return "目前沒有任何任務。"
+        return format_task_list_summary(self.tasks)
+
+    def _build_retry_guidance(self, tool_name: str, error_message: str, error_type: ErrorType) -> str:
+        """為暫時性或呼叫錯誤產生重試引導訊息"""
+        if error_type == ErrorType.TRANSIENT:
+            return (
+                f"【暫時性錯誤】工具 `{tool_name}` 執行失敗：{error_message}\n"
+                "這看起來是暫時性問題（例如超時、連線問題）。\n"
+                "建議：稍等一下或直接重試同樣參數。如果連續失敗，請考慮改用其他方式或進行 Reflection。"
+            )
+        elif error_type == ErrorType.CALL_ERROR:
+            return (
+                f"【呼叫錯誤】工具 `{tool_name}` 執行失敗：{error_message}\n"
+                "這通常是因為參數有誤（路徑不存在、參數型別錯誤等）。\n"
+                "建議：檢查參數後重新呼叫工具。如果不確定，請先使用 list_files 或 read_file 確認環境。"
+            )
+        return f"工具 `{tool_name}` 發生錯誤：{error_message}"
+
+    def _build_error_reflection_guidance(self, error_ctx: ErrorContext) -> str:
+        """當發生較嚴重錯誤時，產生引導模型進行結構化錯誤 Reflection 的訊息"""
+        return (
+            f"【錯誤 Reflection 引導】\n"
+            f"工具 `{error_ctx.tool_name}` 發生錯誤（類型：{error_ctx.error_type.value}）。\n"
+            f"錯誤訊息：{error_ctx.error_message}\n\n"
+            "請現在進行一次**結構化的錯誤 Reflection**，回答以下問題：\n"
+            "1. 這個錯誤的根本原因是什麼？\n"
+            "2. 這屬於哪一類錯誤（暫時性 / 呼叫錯誤 / 執行錯誤 / 需求誤解）？\n"
+            "3. 建議的恢復策略是什麼？（重試 / 修正參數 / 回退修改 / 調整任務 / 詢問使用者）\n"
+            "4. 是否需要更新 Task List？\n\n"
+            "請輸出 reflect，並在 focus 中寫明「錯誤分析與恢復策略」。"
+        )
+
+    def _detect_stuck(self, new_error: ErrorContext, threshold: int = 3) -> bool:
+        """
+        簡單的 STUCK 偵測：
+        如果最近 N 次錯誤都是「同一個工具」且「同一類錯誤」，則視為 STUCK。
+        """
+        if len(self.error_history) < threshold:
+            return False
+
+        recent_errors = self.error_history[-threshold:]
+        same_tool = all(e.tool_name == new_error.tool_name for e in recent_errors)
+        same_type = all(e.error_type == new_error.error_type for e in recent_errors)
+
+        return same_tool and same_type
+
+    def _build_stuck_intervention_message(self, error_ctx: ErrorContext) -> str:
+        """
+        Phase B2 成熟化版本：
+        當偵測到 STUCK 時，給予更結構化、更有行動力的介入訊息。
+        """
+        suggestions = self._generate_recovery_suggestions(error_ctx)
+
+        suggestion_block = ""
+        if suggestions:
+            suggestion_block = "\n\n【系統建議的恢復選項（由高到低優先）】\n"
+            for i, s in enumerate(suggestions, 1):
+                suggestion_block += (
+                    f"{i}. **{s.action.value}**（信心 {s.confidence:.0%}）\n"
+                    f"   {s.description}\n"
+                    f"   理由：{s.rationale}\n\n"
+                )
+
+        return (
+            f"【⚠️ STUCK 偵測 - 請立即介入】\n"
+            f"你已經在工具 `{error_ctx.tool_name}` 上連續遇到相同類型錯誤（{error_ctx.error_type.value}）多次。\n"
+            f"這強烈表示目前的策略有根本問題。\n\n"
+            "請**立刻停止**重複相同操作，並進行一次認真的 Reflection。\n"
+            "在 Reflection 中請明確回答：\n"
+            "1. 目前卡住的核心假設是什麼？\n"
+            "2. 你接下來要採取哪一個恢復動作？\n"
+            f"{suggestion_block}"
+            "強烈建議現在輸出 reflect，並在 focus 中寫明你選擇的恢復方向。"
+        )
+
+    def _generate_recovery_suggestions(self, error_ctx: ErrorContext) -> list[RecoverySuggestion]:
+        """
+        Phase B2 成熟化版本：委派給 RecoveryPlaybook。
+        產生更有系統性、更有優先序的恢復建議。
+        """
+        return self.recovery_playbook.generate_suggestions(
+            error_ctx,
+            self.error_history,
+            tasks=self.tasks,
+        )  # 最多給 3 個建議，避免提示過長
 
     @property
     def message_count(self) -> int:
@@ -258,98 +528,47 @@ class AgentSession:
             "compactions": self.compaction_count,
         }
 
-    def compact(self, keep_last: int = 8) -> str:
-        bootstrap = self._initial_messages()
-        tail = self.messages[-keep_last:] if len(self.messages) > keep_last else self.messages
-        user_items = [m.get("content", "") for m in self.messages if m.get("role") == "user"]
-        tool_items = [m.get("content", "") for m in self.messages if m.get("role") == "tool"]
-        assistant_items = [m.get("content", "") for m in self.messages if m.get("role") == "assistant"]
+    @property
+    def last_recovery_suggestions(self) -> list[str]:
+        """Phase B2：上次錯誤恢復建議（供 /status 或 transcript 觀測）"""
+        if self.recovery_playbook.last_record:
+            return self.recovery_playbook.last_record.suggested_actions
+        return []
 
-        summary_lines = [
-            "Session compacted. Continue from this structured summary.",
-            f"- Previous message count: {len(self.messages)}",
-            f"- Kept last messages: {len(tail)}",
-            "",
-            "Current goal / user requests:",
-        ]
-        for item in user_items[-5:]:
-            summary_lines.append(f"- {item.replace(chr(10), ' ')[:500]}")
+    def compact(self, keep_last: int = 6) -> str:
+        """
+        Context Compaction v2（Phase B1）。
 
-        summary_lines.extend(["", "Recent assistant conclusions:"])
-        for item in assistant_items[-5:]:
-            summary_lines.append(f"- {item.replace(chr(10), ' ')[:500]}")
-
-        summary_lines.extend(["", "Recent tool results:"])
-        for item in tool_items[-5:]:
-            summary_lines.append(f"- {item.replace(chr(10), ' ')[:500]}")
-
-        read_files, modified_files = self._extract_file_operations()
-        if read_files:
-            summary_lines.append("")
-            summary_lines.append("<read-files>")
-            for path in sorted(read_files):
-                summary_lines.append(f"  {path}")
-            summary_lines.append("</read-files>")
-        if modified_files:
-            summary_lines.append("")
-            summary_lines.append("<modified-files>")
-            for path in sorted(modified_files):
-                summary_lines.append(f"  {path}")
-            summary_lines.append("</modified-files>")
-
-        summary_lines.extend(["", "Recent raw messages:"])
-        for message in tail:
-            role = message.get("role", "unknown")
-            content = message.get("content", "").replace("\n", " ")[:300]
-            summary_lines.append(f"- {role}: {content}")
-        self.compaction_count += 1
-        self.messages = [
-            *bootstrap,
-            {"role": "system", "content": "\n".join(summary_lines)},
-        ]
-        return (
-            f"已壓縮上下文：保留最近 {len(tail)} 則訊息摘要，"
-            f"目前約 {self.context_tokens_estimate} tokens。"
+        使用 HeuristicContextCompactor 產生結構化摘要，
+        強制保留目前任務清單、重要 Reflection 與決策歷史。
+        """
+        new_messages, result = self.compactor.compact(
+            self.messages,
+            self.tasks,
+            keep_last=keep_last,
+            error_history=self.error_history,
         )
 
-    _FILE_READ_TOOLS = frozenset({"read_file"})
-    _FILE_WRITE_TOOLS = frozenset({"write_file", "edit_file", "apply_patch"})
+        self.messages = new_messages
+        self.compaction_count += 1
 
-    def _extract_file_operations(self) -> tuple[set[str], set[str]]:
-        read_files: set[str] = set()
-        modified_files: set[str] = set()
-        for msg in self.messages:
-            if msg.get("role") != "assistant":
-                continue
-            try:
-                data = _json.loads(msg.get("content", "") or "{}")
-            except _json.JSONDecodeError:
-                continue
-            if not isinstance(data, dict) or data.get("type") != "tool_call":
-                continue
-            tool = str(data.get("tool", ""))
-            args = data.get("args") or {}
-            if not isinstance(args, dict):
-                continue
-            path = args.get("path")
-            if not isinstance(path, str) or not path:
-                continue
-            if tool in self._FILE_READ_TOOLS:
-                read_files.add(path)
-            elif tool in self._FILE_WRITE_TOOLS:
-                modified_files.add(path)
-        read_files -= modified_files
-        return read_files, modified_files
+        # 重新計算 token 估計
+        return (
+            f"{result} 目前約 {self.context_tokens_estimate} tokens。"
+        )
 
-    def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | InvalidAction:
+    def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | Reflect | "InvalidAction":
         data = extract_json_object(raw)
         if data is None:
             return InvalidAction.NON_JSON
+
         try:
             if data.get("type") == "tool_call":
                 return ToolCall.model_validate(data)
+            if data.get("type") == "reflect":
+                return Reflect.model_validate(data)
             return FinalAnswer.model_validate(data)
-        except ValidationError:
+        except (AttributeError, ValidationError):
             return InvalidAction.BAD_SCHEMA
 
     def _format_tool_result(self, result: ToolResult) -> str:
@@ -358,16 +577,92 @@ class AgentSession:
     def _run_tool(self, action: ToolCall) -> ToolResult:
         self._emit_trace(f"tool_call {action.tool} args={action.args}")
         result = self.tools.run(action.tool, action.args)
-        # Persist per-tool outcome so unresolved failures don't fall off a
-        # window when other tools are called later (review codex C3). Treat
-        # exit=N (N≠0) inside content as failure even when ok=True (registry
-        # wraps subprocess exit codes that way).
-        is_failure = (not result.ok) or bool(self._EXIT_FAIL_RE.search(result.content))
-        self._tool_outcomes[result.tool] = not is_failure
         summary = result.content.replace("\n", "\\n")[:240]
         self._emit_trace(f"tool_result {action.tool} ok={result.ok} content={summary}")
         return result
 
+    def _handle_task_tool(self, action: ToolCall) -> ToolResult:
+        """Internal task management for the agent."""
+        tool = action.tool
+        args = action.args
+
+        try:
+            if tool == "task_add":
+                desc = args.get("description", "")
+                notes = args.get("notes", "")
+                task = self.add_task(desc, notes)
+                return ToolResult(tool=tool, ok=True, content=f"Task added: {task}")
+
+            elif tool == "task_update":
+                task_id = args.get("task_id")
+                status = args.get("status")
+                notes = args.get("notes")
+                task = self.update_task(task_id, status, notes)
+                if task:
+                    return ToolResult(tool=tool, ok=True, content=f"Task updated: {task}")
+                else:
+                    return ToolResult(tool=tool, ok=False, content=f"Task {task_id} not found")
+
+            elif tool == "task_list":
+                status = args.get("status")
+                tasks = self.get_tasks(status)
+                # B2: 回傳結構化、易讀的任務摘要，而不是原始 dict list
+                # 讓本地模型更容易理解目前任務狀態
+                if tasks:
+                    content = format_task_list_summary(tasks)
+                else:
+                    content = "目前沒有任何任務。"
+                if status:
+                    content = f"篩選條件: status={status}\n{content}"
+                return ToolResult(tool=tool, ok=True, content=content)
+
+            else:
+                return ToolResult(tool=tool, ok=False, content=f"Unknown task tool: {tool}")
+
+        except Exception as e:
+            return ToolResult(tool=tool, ok=False, content=str(e))
+
+    def _reflect(self, focus: str | None = None) -> str:
+        """讓模型對最近的行為進行自我檢討，並明確建議下一步。"""
+        focus_text = f"\n特別關注：{focus}" if focus else ""
+
+        reflection_prompt = (
+            "你剛剛執行了一些工具呼叫。請誠實地進行自我檢討：\n"
+            f"{focus_text}\n\n"
+            "請回答以下問題：\n"
+            "1. 最近的工具結果是否符合預期？有什麼問題或風險？\n"
+            "2. 目前任務的進度如何？\n"
+            "3. **下一步最建議做什麼？**（請給出明確的行動建議，例如：繼續修復、執行更多測試、輸出最終方案、需要更多資訊等）\n\n"
+            "請用清晰的 bullet points 回覆，並在最後一段清楚寫出「下一步建議」。"
+        )
+
+        # 暫時把 reflection_prompt 當成 user message 丟給模型
+        reflection_messages = self.messages + [
+            {"role": "user", "content": reflection_prompt}
+        ]
+
+        try:
+            reflection = self.ollama.chat(
+                reflection_messages, json_mode=False, cancel_event=None
+            )
+            return reflection.strip()
+        except Exception as e:
+            return f"Reflection 失敗: {str(e)}"
+
     def _emit_trace(self, message: str) -> None:
         if self.trace is not None:
             self.trace(message)
+
+    def _direct_tool_call(self, prompt: str) -> ToolCall | None:
+        normalized = prompt.lower()
+        if any(keyword in normalized for keyword in ("列出", "檔案", "files", "list files")):
+            if any(keyword in normalized for keyword in ("repo", "目錄", "directory", "workspace")):
+                return ToolCall(type="tool_call", tool="list_files", args={"path": "."})
+        if "git status" in normalized:
+            return ToolCall(type="tool_call", tool="git_status", args={})
+        return None
+
+
+class InvalidAction(Enum):
+    NON_JSON = "non_json"
+    BAD_SCHEMA = "bad_schema"

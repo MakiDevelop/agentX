@@ -18,6 +18,11 @@ class FinalAnswer(BaseModel):
     content: str
 
 
+class Reflect(BaseModel):
+    type: Literal["reflect"]
+    focus: str | None = None  # 可選，告訴模型要特別反思哪個面向
+
+
 class ToolResult(BaseModel):
     tool: str
     ok: bool
