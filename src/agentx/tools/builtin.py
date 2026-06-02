@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -311,37 +312,69 @@ class ApplyPatchTool(_WorkspaceTool):
 
     def run(self, args: dict[str, Any]) -> str:
         patch = args["patch"]
-        patch_dir = self.workspace / ".agentx" / "patches"
-        patch_dir.mkdir(parents=True, exist_ok=True)
-        patch_path = patch_dir / "pending.patch"
-        patch_path.write_text(patch, encoding="utf-8")
+        # Use system temp file for patch content. Never write untrusted patch data
+        # into the workspace (including .agentx/patches). This hardens the staging
+        # surface compared to writing pending.patch under protected .agentx dir.
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".patch", delete=False, encoding="utf-8"
+        ) as tf:
+            tf.write(patch)
+            patch_path = Path(tf.name)
 
-        check = subprocess.run(
-            ["git", "apply", "--check", str(patch_path)],
-            cwd=self.workspace,
-            text=True,
-            capture_output=True,
-            timeout=20,
-            check=False,
-        )
-        if check.returncode != 0:
-            return f"git apply --check failed\n{check.stdout}{check.stderr}".strip()
+        try:
+            check = subprocess.run(
+                ["git", "apply", "--check", str(patch_path)],
+                cwd=self.workspace,
+                text=True,
+                capture_output=True,
+                timeout=20,
+                check=False,
+            )
+            if check.returncode != 0:
+                return f"git apply --check failed\n{check.stdout}{check.stderr}".strip()
 
-        for path in _patch_write_paths(patch):
-            ensure_safe_write_path(self.workspace, resolve_inside_workspace(self.workspace, path))
+            # Collect touched paths from two sources (defense in depth):
+            # 1. String parse of the raw patch text (catches declared intent early)
+            # 2. git apply --name-only (uses git's own robust parser for quoting,
+            #    spaces, " b/" in names, renames, copies, binary patches, etc.)
+            paths: set[str] = _patch_write_paths(patch)
 
-        applied = subprocess.run(
-            ["git", "apply", str(patch_path)],
-            cwd=self.workspace,
-            text=True,
-            capture_output=True,
-            timeout=20,
-            check=False,
-        )
-        output = (applied.stdout + applied.stderr).strip()
-        if applied.returncode != 0:
-            return f"git apply failed\n{output}".strip()
-        return output or "patch applied"
+            name_only = subprocess.run(
+                ["git", "apply", "--name-only", str(patch_path)],
+                cwd=self.workspace,
+                text=True,
+                capture_output=True,
+                timeout=20,
+                check=False,
+            )
+            if name_only.returncode == 0:
+                for line in name_only.stdout.strip().splitlines():
+                    p = line.strip()
+                    if p and p != "/dev/null":
+                        paths.add(p)
+
+            for path in paths:
+                ensure_safe_write_path(
+                    self.workspace, resolve_inside_workspace(self.workspace, path)
+                )
+
+            applied = subprocess.run(
+                ["git", "apply", str(patch_path)],
+                cwd=self.workspace,
+                text=True,
+                capture_output=True,
+                timeout=20,
+                check=False,
+            )
+            output = (applied.stdout + applied.stderr).strip()
+            if applied.returncode != 0:
+                return f"git apply failed\n{output}".strip()
+            return output or "patch applied"
+        finally:
+            try:
+                patch_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def _patch_write_paths(patch: str) -> set[str]:

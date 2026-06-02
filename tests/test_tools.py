@@ -337,8 +337,11 @@ index 0000000..8b2fe54
     assert not result.ok
     assert "protected location" in result.content
     assert ".git" in result.content
-    assert len(calls) == 1
+    # Now two subprocess calls: --check + --name-only (for git's authoritative path list)
+    # The string parser on patch content + ensure still triggers the protected rejection.
+    assert len(calls) == 2
     assert "--check" in calls[0]
+    assert "--name-only" in calls[1]
 
 
 def test_apply_patch_allows_safe_file(tmp_path: Path) -> None:
@@ -355,3 +358,57 @@ index 0000000..257cc56
     assert result.ok
     assert result.content == "patch applied"
     assert (tmp_path / "safe" / "file.txt").read_text(encoding="utf-8") == "hello\n"
+    # Verify we did not leave patch staging artifact inside .agentx (we use temp + cleanup now)
+    assert not (tmp_path / ".agentx" / "patches" / "pending.patch").exists()
+
+
+def test_apply_patch_rejects_protected_canonical_variants(tmp_path: Path, monkeypatch) -> None:
+    """Ensure the ensure_safe_write_path canonical (casefold, rstrip, NFC, : split)
+    still catches variants even when patch declares them with different casing/trailing.
+    """
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(builtin_module.subprocess, "run", fake_run)
+
+    # Case variant + trailing space in the declared name in patch
+    patch = """diff --git a/.GIT/hooks/pre-commit  b/.GIT/hooks/pre-commit 
+new file mode 100755
+index 0000000..8b2fe54
+--- /dev/null
++++ b/.GIT/hooks/pre-commit 
+@@ -0,0 +1,2 @@
++#!/bin/sh
++echo pwned
+"""
+
+    result = _registry(tmp_path).run("apply_patch", {"patch": patch})
+    assert not result.ok
+    assert "protected location" in result.content
+    assert ".git" in result.content.lower()
+    assert len(calls) == 2  # --check + --name-only
+
+
+def test_apply_patch_rejects_rename_to_protected(tmp_path: Path, monkeypatch) -> None:
+    """Rename/copy to protected path should also be caught by the guard."""
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(builtin_module.subprocess, "run", fake_run)
+
+    patch = """diff --git a/safe.txt b/.git/hooks/pre-commit
+similarity index 100%
+rename from safe.txt
+rename to .git/hooks/pre-commit
+"""
+
+    result = _registry(tmp_path).run("apply_patch", {"patch": patch})
+    assert not result.ok
+    assert "protected location" in result.content
+    assert len(calls) == 2
