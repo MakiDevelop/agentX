@@ -1431,6 +1431,25 @@ def shell(
 
     register_handler("/jobs", handle_jobs)
 
+    def handle_learn(state: ShellState, prompt: str):
+        """觸發自我學習 reflection，產生改善提案（proposal-only，不自動修改核心）。參考 AGENTX.md 自修改協議。"""
+        transcript.write("slash_command", {"command": prompt})
+        if not hasattr(state, "agent_session") or state.agent_session is None:
+            print_raw("No active agent session for learning.")
+            return
+        try:
+            learnings = state.agent_session.reflect_and_learn()
+            if learnings:
+                print_raw(f"Generated {len(learnings)} learning proposals. Check .agentx/learning/proposals/ and review/approve before applying (per AGENTX.md Self-Improvement Protocol + ai-tetsu proposal gate).")
+                for l in learnings:
+                    print_raw(f"  - {l['id']}: {l['title']} ({l['type']}) status={l.get('status')}")
+            else:
+                print_raw("No new learning proposals generated (or learning disabled).")
+        except Exception as e:
+            print_raw(f"Learning reflection failed (safe): {e}")
+
+    register_handler("/learn", handle_learn)
+
     def handle_cancel(state: ShellState, prompt: str):
         """取消 queued 或 current job"""
         value = prompt.removeprefix("/cancel").strip() or None

@@ -18,6 +18,7 @@ from agentx.hooks import (
 from agentx.protocol import Tool, ToolResult
 from agentx.safety import Risk
 from agentx.tools import ApprovalCallback, ToolRegistry, builtin_tools
+from agentx.learning import LearningManager, load_learning_manager  # self-learning proposals + reflexion (ai-tetsu inspired)
 
 __all__ = [
     "__version__",
@@ -40,6 +41,8 @@ __all__ = [
     "ToolResult",
     "ToolResultContext",
     "builtin_tools",
+    "LearningManager",
+    "load_learning_manager",
 ]
 
 __version__ = "0.1.0"

@@ -4,6 +4,8 @@ import threading
 from collections.abc import Callable
 from enum import Enum
 
+from dataclasses import asdict
+
 from pydantic import ValidationError
 
 from agentx.bootstrap import build_memory_context, build_repo_context
@@ -20,6 +22,7 @@ from agentx.tasks import format_task_list_summary, get_next_task_id, load_tasks,
 from agentx.hooks import HookManager
 from agentx.memory_hall import MemoryHallClient
 from agentx.tools import ToolRegistry
+from agentx.learning import load_learning_manager, LearningManager
 
 EDITING_TOOLS = {"search_replace", "insert_code", "apply_patch"}
 
@@ -85,9 +88,11 @@ class AgentSession:
         self._has_completed_planning: bool = False
         self.memory = memory
         self.hooks = hooks
+        self.learning_manager: LearningManager = load_learning_manager(settings, memory)
         # Reflection loop guard for headless stability (Micro-task 20)
         self.consecutive_reflections: int = 0
         self.max_consecutive_reflections: int = 3
+        self.learning_enabled = getattr(settings, "learning_enabled", True)
 
         # Task List 持久化載入（Micro-task 21 A2）
         self.tasks: list[dict] = load_tasks(self.settings.workspace)
@@ -128,6 +133,46 @@ class AgentSession:
         self._tool_outcomes: dict[str, bool] = {}
 
         self.messages = self._initial_messages()
+
+    def reflect_and_learn(self, transcript_summary: str | None = None) -> list[dict]:
+        """Trigger self-learning reflection. Generates proposals (never auto-applies core changes).
+        This is how agentX gets 'smarter' over time while respecting human gate + fidelity.
+        Call after ask() or on /learn.
+        """
+        if not getattr(self, "learning_enabled", True):
+            return []
+
+        # Gather context
+        recent_messages = self.messages[-20:] if self.messages else []
+        transcript = transcript_summary or "\n".join(
+            f"{m.get('role', '?')}: {str(m.get('content', ''))[:500]}" for m in recent_messages
+        )
+        errors = [asdict(e) if hasattr(e, '__dataclass_fields__') else str(e) for e in self.error_history[-5:]]
+        tasks_summary = [{"id": t.get("id"), "status": t.get("status"), "title": t.get("title")} for t in (self.tasks or [])[-5:]]
+
+        # Load key principles from AGENTX.md for fitness (simple read; agent can do deeper)
+        principles = ""
+        agentyx_path = self.settings.workspace / "AGENTX.md"
+        if agentyx_path.exists():
+            principles = agentyx_path.read_text(encoding="utf-8")[:4000]  # cap for prompt
+
+        proposals = self.learning_manager.reflect_on_session(
+            self.ollama,
+            transcript,
+            errors,
+            tasks_summary,
+            principles or "Follow safety, MT22 tasks as truth, kernel/substrate decoupling, proposal-only for core changes."
+        )
+
+        # Record as learning episode if memory
+        if self.memory and proposals:
+            try:
+                summary = f"Self-learning proposals from session: {len(proposals)} new. Titles: {[p.title for p in proposals]}"
+                self.memory.write(summary, namespace=self.namespace)
+            except Exception:
+                pass
+
+        return [{"id": p.id, "title": p.title, "type": p.lesson_type, "status": p.status} for p in proposals]
 
     def _initial_messages(self) -> list[dict[str, str]]:
         system_prompt = self._custom_system_prompt or build_agent_system_prompt(self.settings.persona, tools=self.tools, model=self.settings.model)
@@ -209,6 +254,15 @@ class AgentSession:
                 continue
             if isinstance(action, FinalAnswer):
                 self.messages.append({"role": "assistant", "content": action.content})
+                # Self-learning: after successful final answer, trigger reflection to get smarter (proposals only)
+                if not effective_plan_only and getattr(self, "learning_enabled", True):
+                    try:
+                        learnings = self.reflect_and_learn()
+                        if learnings:
+                            self.trace(f"[learning] Generated {len(learnings)} proposals. Review with /learn or .agentx/learning/proposals/")
+                    except Exception as _e:
+                        # Learning must never break the main flow
+                        self.trace(f"[learning] Reflection skipped due to error: {_e}")
                 return action.content
 
             if isinstance(action, Reflect):

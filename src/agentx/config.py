@@ -22,6 +22,7 @@ class Settings:
     auto_handoff: bool
     persona: str
     workspace: Path
+    learning_enabled: bool = True
 
     def __init__(self) -> None:
         workspace = Path(os.getenv("AGENTX_WORKSPACE", os.getcwd())).resolve()
@@ -40,6 +41,7 @@ class Settings:
             auto_handoff=auto_handoff,
             persona=normalize_persona(os.getenv("AGENTX_PERSONA") or config.persona or "default"),
             workspace=workspace,
+            learning_enabled=os.getenv("AGENTX_LEARNING", "1") != "0",
         )
 
     @classmethod
@@ -56,6 +58,7 @@ class Settings:
         auto_handoff: bool,
         persona: str,
         workspace: Path,
+        learning_enabled: bool = True,
     ) -> "Settings":
         settings = cls.__new__(cls)
         settings._set_values(
@@ -69,6 +72,7 @@ class Settings:
             auto_handoff=auto_handoff,
             persona=persona,
             workspace=workspace,
+            learning_enabled=learning_enabled,
         )
         return settings
 
@@ -84,6 +88,7 @@ class Settings:
             "auto_handoff": self.auto_handoff,
             "persona": self.persona,
             "workspace": self.workspace,
+            "learning_enabled": self.learning_enabled,
         }
         values.update(changes)
         return type(self).from_values(**values)
@@ -101,6 +106,7 @@ class Settings:
         auto_handoff: bool,
         persona: str,
         workspace: Path,
+        learning_enabled: bool = True,
     ) -> None:
         object.__setattr__(self, "model", model)
         object.__setattr__(self, "ollama_url", ollama_url)
@@ -112,3 +118,4 @@ class Settings:
         object.__setattr__(self, "auto_handoff", auto_handoff)
         object.__setattr__(self, "persona", persona)
         object.__setattr__(self, "workspace", workspace)
+        object.__setattr__(self, "learning_enabled", learning_enabled)
