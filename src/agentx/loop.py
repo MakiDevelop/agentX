@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
-from agentx.context_compactor import ContextCompactor, HeuristicContextCompactor
+from agentx.context_compactor import ContextCompactor, HeuristicContextCompactor, LLMContextCompactor
 from agentx.recovery import RecoveryPlaybook
 from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
@@ -88,7 +88,13 @@ class AgentSession:
         self.current_error: ErrorContext | None = None
 
         # Context Compaction v2（Phase B1）
-        self.compactor: ContextCompactor = compactor or HeuristicContextCompactor()
+        if compactor is not None:
+            self.compactor: ContextCompactor = compactor
+        elif "gemma" in settings.model.lower():
+            # Opt-in LLM-assisted for Gemma4/small models (smarter summary using the model itself)
+            self.compactor: ContextCompactor = LLMContextCompactor(self.ollama)
+        else:
+            self.compactor: ContextCompactor = HeuristicContextCompactor()
 
         # Phase B2：錯誤恢復策略成熟化
         self.recovery_playbook = RecoveryPlaybook()
