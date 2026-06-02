@@ -60,7 +60,7 @@ class RecoveryPlaybook:
         if same_file_count >= 3:
             suggestions.append(RecoverySuggestion(
                 action=RecoveryAction.BACKTRACK,
-                description=f"你已經對同一個檔案/位置連續失敗 {same_file_count} 次。強烈建議先用 git diff 或 read_file 確認最近修改，再考慮 BACKTRACK。",
+                description=f"你已經對同一個檔案/位置連續失敗 {same_file_count} 次。強烈建議先用 git diff 或 read_file 確認最近修改，再考慮 BACKTRACK。（Gemma4 等小模型特別容易在同位置重複失敗，驗證現況是脫困第一步）",
                 rationale="同檔案連續 edit 失敗是本地模型最常陷入的死循環。",
                 confidence=0.88,
             ))
@@ -69,13 +69,13 @@ class RecoveryPlaybook:
         if same_tool_count >= 3 and same_type_count >= 3:
             suggestions.append(RecoverySuggestion(
                 action=RecoveryAction.BACKTRACK,
-                description=f"連續在 `{error_ctx.tool_name}` 上遇到相同錯誤，建議立即 BACKTRACK 最近修改。",
+                description=f"連續在 `{error_ctx.tool_name}` 上遇到相同錯誤，建議立即 BACKTRACK 最近修改。（Gemma4 等弱模型 format drift 常見，驗證比繼續 edit 更重要）",
                 rationale="同工具同類型錯誤 ≥3 次，幾乎一定是最近變更引入的問題。",
                 confidence=0.86,
             ))
             suggestions.append(RecoverySuggestion(
                 action=RecoveryAction.SIMPLIFY_SCOPE,
-                description="把目前正在處理的任務拆小，先只解決這個錯誤相關的最小部分。",
+                description="把目前正在處理的任務拆小，先只解決這個錯誤相關的最小部分。（對小模型尤其有效，避免 token 浪費在無效重試）",
                 rationale="複雜任務 + 連續失敗時，拆小是最有效的脫困方式。",
                 confidence=0.77,
             ))
@@ -93,7 +93,7 @@ class RecoveryPlaybook:
         if error_ctx.error_type == ErrorType.EXECUTION_ERROR:
             suggestions.append(RecoverySuggestion(
                 action=RecoveryAction.VERIFY_ASSUMPTION,
-                description="先用 read_file 或 run_tests 驗證你對目前程式狀態的假設，再繼續修改。",
+                description="先用 read_file 或 run_tests 驗證你對目前程式狀態的假設，再繼續修改。（Gemma4 等小模型容易「以為成功但實際有細節遺漏」，驗證是必要習慣）",
                 rationale="執行錯誤多半來自對現況的錯誤認知。",
                 confidence=0.75,
             ))

@@ -217,6 +217,7 @@ class AgentSession:
                             "- 使用 task_list 整理狀態\n"
                             "- 輸出一個結構化、完整的 final 方案（清楚列出步驟、風險、驗證方式）\n"
                             "- 不要再純粹 Reflection，也不要建議執行工具（plan mode 禁止）\n\n"
+                            "（Gemma4 等弱模型特別容易陷入無效 reflection，guard 強制你產出可執行規劃。）\n"
                             "強制進度，停止無效迴圈。guard 已重置。"
                         )
                     else:
@@ -228,6 +229,7 @@ class AgentSession:
                             "- 使用 task_list 快速整理目前所有任務狀態\n"
                             "- 輸出一個有價值的 final 方案（即使不完美也先給出可執行建議）\n"
                             "- 或執行下一個具體的工具行動（search_replace / run_tests 等）\n\n"
+                            "（Gemma4 等小模型容易過度 reflection 導致 token 燒盡，guard 保護你專注執行。）\n"
                             "強制進度，停止純粹 Reflection。guard 已重置。"
                         )
                     self.messages.append({"role": "system", "content": guard_msg})
