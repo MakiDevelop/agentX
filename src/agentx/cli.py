@@ -44,7 +44,7 @@ from agentx.tasks import (
     migrate_single_task_if_needed,
     save_tasks,
 )
-from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, docker_compose_command
+from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, builtin_tools, docker_compose_command
 from agentx.transcript import (
     Transcript,
     find_transcript,
@@ -829,8 +829,7 @@ def build_runtime(
         return approval_policy.decide(tool, args, risk, approve_interactive)
 
     tools = ToolRegistry(
-        workspace=settings.workspace,
-        memory=memory,
+        builtin_tools(settings.workspace, memory),
         approver=approve if approval_policy is not None else None,
     )
     return ollama, memory, tools
@@ -1054,9 +1053,9 @@ def ask(
         settings = settings.with_updates(max_steps=max_steps)
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
-    ollama, _, tools = build_runtime(settings)
+    ollama, memory, tools = build_runtime(settings)
     compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None
-    agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace, compactor=compactor)
+    agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace, compactor=compactor, memory=memory)
     print_raw(agent.run(prompt, namespace=namespace))
 
 
@@ -1126,6 +1125,7 @@ def shell(
         namespace=namespace,
         trace=print_trace,
         compactor=compactor,
+        memory=memory,
     )
     state.agent_session = agent_session
     chat_messages = [

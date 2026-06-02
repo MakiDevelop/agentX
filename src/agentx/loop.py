@@ -17,6 +17,8 @@ from agentx.error_classifier import ErrorClassifier
 from agentx.protocol import FinalAnswer, Reflect, ToolCall, ToolResult
 from agentx.runtime_prompt import build_agent_system_prompt
 from agentx.tasks import format_task_list_summary, get_next_task_id, load_tasks, save_tasks
+from agentx.hooks import HookManager
+from agentx.memory_hall import MemoryHallClient
 from agentx.tools import ToolRegistry
 
 EDITING_TOOLS = {"search_replace", "insert_code", "apply_patch"}
@@ -32,6 +34,8 @@ class AgentLoop:
         trace: Callable[[str], None] | None = None,
         system_prompt: str | None = None,
         compactor: ContextCompactor | None = None,
+        memory: MemoryHallClient | None = None,
+        hooks: HookManager | None = None,
     ) -> None:
         self.session = AgentSession(
             settings=settings,
@@ -41,6 +45,8 @@ class AgentLoop:
             trace=trace,
             system_prompt=system_prompt,
             compactor=compactor,
+            memory=memory,
+            hooks=hooks,
         )
 
     def run(
@@ -65,6 +71,8 @@ class AgentSession:
         trace: Callable[[str], None] | None = None,
         system_prompt: str | None = None,
         compactor: ContextCompactor | None = None,
+        memory: MemoryHallClient | None = None,
+        hooks: HookManager | None = None,
     ) -> None:
         self.settings = settings
         self.ollama = ollama
@@ -75,6 +83,8 @@ class AgentSession:
         self.plan_only: bool = False
         self._custom_system_prompt = system_prompt
         self._has_completed_planning: bool = False
+        self.memory = memory
+        self.hooks = hooks
         # Reflection loop guard for headless stability (Micro-task 20)
         self.consecutive_reflections: int = 0
         self.max_consecutive_reflections: int = 3
@@ -127,10 +137,14 @@ class AgentSession:
             {
                 "role": "system",
                 "content": "Memory Hall context:\n"
-                + build_memory_context(
-                    self.tools.memory,
-                    project_namespace=self.namespace,
-                    query=f"{self.settings.workspace.name} project context",
+                + (
+                    build_memory_context(
+                        self.memory or getattr(self.tools, "memory", None),
+                        project_namespace=self.namespace,
+                        query=f"{self.settings.workspace.name} project context",
+                    )
+                    if (self.memory or getattr(self.tools, "memory", None)) is not None
+                    else "(Memory Hall client not provided)"
                 ),
             },
         ]

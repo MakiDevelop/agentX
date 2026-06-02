@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agentx.tools import ToolRegistry, docker_compose_command, extract_web_text, validate_external_url
+from agentx.tools import ToolRegistry, builtin_tools, docker_compose_command, extract_web_text, validate_external_url
 
 
 class FakeMemory:
@@ -14,7 +14,7 @@ class FakeMemory:
 
 
 def test_read_file_blocks_workspace_escape(tmp_path: Path) -> None:
-    registry = ToolRegistry(workspace=tmp_path, memory=FakeMemory())  # type: ignore[arg-type]
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()))  # type: ignore[arg-type]
     result = registry.run("read_file", {"path": "../outside.txt"})
     assert not result.ok
     assert "escapes workspace" in result.content
@@ -22,14 +22,14 @@ def test_read_file_blocks_workspace_escape(tmp_path: Path) -> None:
 
 def test_list_files(tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("hello", encoding="utf-8")
-    registry = ToolRegistry(workspace=tmp_path, memory=FakeMemory())  # type: ignore[arg-type]
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()))  # type: ignore[arg-type]
     result = registry.run("list_files", {})
     assert result.ok
     assert result.content == "a.txt"
 
 
 def test_run_command_prints_final_command_and_args(tmp_path: Path) -> None:
-    registry = ToolRegistry(workspace=tmp_path, memory=FakeMemory())  # type: ignore[arg-type]
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()))  # type: ignore[arg-type]
     result = registry.run("run_command", {"command": "git status --short --branch"})
 
     assert result.ok
