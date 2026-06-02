@@ -114,7 +114,7 @@ class AgentSession:
         self.messages = self._initial_messages()
 
     def _initial_messages(self) -> list[dict[str, str]]:
-        system_prompt = self._custom_system_prompt or build_agent_system_prompt(self.settings.persona, tools=self.tools)
+        system_prompt = self._custom_system_prompt or build_agent_system_prompt(self.settings.persona, tools=self.tools, model=self.settings.model)
         return [
             {"role": "system", "content": system_prompt},
             {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(self.settings.workspace)},

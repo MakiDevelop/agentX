@@ -278,7 +278,7 @@ class Orchestrator:
     def _run_worker(self, subtask_description: str, dependency_context: str) -> str:
         """Spawn a fresh AgentSession for a single subtask."""
         worker_settings = self.settings.with_updates(max_steps=self.worker_max_steps)
-        system_prompt = build_worker_system_prompt(subtask_description, dependency_context)
+        system_prompt = build_worker_system_prompt(subtask_description, dependency_context, model=self.settings.model)
 
         worker = AgentLoop(
             settings=worker_settings,

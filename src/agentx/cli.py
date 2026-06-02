@@ -880,7 +880,7 @@ def run_print_prompt(
         # B1: 自動注入當前任務清單摘要，讓模型更容易維持長期任務狀態
         current_tasks = load_tasks(settings.workspace)
         task_summary = format_task_list_summary(current_tasks)
-        system_prompt = build_headless_agent_system_prompt(settings.persona, task_summary)
+        system_prompt = build_headless_agent_system_prompt(settings.persona, task_summary, model=settings.model)
 
         agent_prompt = prompt
         if plan_mode or plan_then_execute:
@@ -921,7 +921,7 @@ def run_print_prompt(
         return agent_loop.run(agent_prompt, namespace=namespace, plan_only=effective_plan_only)
     return ollama.chat(
         [
-            {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)},
+            {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona, model=settings.model)},
             {"role": "user", "content": prompt},
         ],
         json_mode=False,
@@ -1094,7 +1094,7 @@ def chat(
     ollama, _, _ = build_runtime(settings)
     answer = ollama.chat(
         [
-            {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)},
+            {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona, model=settings.model)},
             {"role": "user", "content": prompt},
         ],
         json_mode=False,
@@ -1159,7 +1159,7 @@ def shell(
     )
     state.agent_session = agent_session
     chat_messages = [
-        {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona)}
+        {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona, model=settings.model)}
     ]
     history: list[tuple[str, str]] = []
     job_queue = PromptJobQueue()
@@ -1477,7 +1477,7 @@ def shell(
         chat_messages[:] = [
             {
                 "role": "system",
-                "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona),
+                "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona, model=state.settings.model),
             }
         ]
         transcript.write("slash_command", {"command": prompt})
@@ -1791,7 +1791,7 @@ def shell(
         chat_messages = [
             {
                 "role": "system",
-                "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona),
+                "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona, model=state.settings.model),
             }
         ]
 
@@ -2420,7 +2420,7 @@ def shell(
                 chat_messages = [
                     {
                         "role": "system",
-                        "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona),
+                        "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona, model=state.settings.model),
                     }
                 ]
                 transcript.write("slash_command", {"command": prompt, "persona": state.settings.persona})
