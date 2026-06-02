@@ -8,15 +8,12 @@ from agentx.persona import normalize_persona
 from agentx.project_config import load_project_config
 
 DEFAULT_MODEL = "gemma4:e2b"
-DEFAULT_BACKEND = "ollama"  # "ollama" or "llamacpp"
 
 
 @dataclass(frozen=True)
 class Settings:
     model: str
-    backend: str
     ollama_url: str
-    llamacpp_url: str
     ollama_timeout: float
     memory_hall_url: str
     memory_hall_token: str | None
@@ -34,9 +31,7 @@ class Settings:
             auto_handoff = os.getenv("AGENTX_AUTO_HANDOFF") != "0"
         self._set_values(
             model=os.getenv("AGENTX_MODEL") or config.model or DEFAULT_MODEL,
-            backend=os.getenv("AGENTX_BACKEND", DEFAULT_BACKEND),
             ollama_url=os.getenv("AGENTX_OLLAMA_URL", "http://127.0.0.1:11434"),
-            llamacpp_url=os.getenv("AGENTX_LLAMACPP_URL", "http://127.0.0.1:8080"),
             ollama_timeout=float(os.getenv("AGENTX_OLLAMA_TIMEOUT", "60")),
             memory_hall_url=os.getenv("AGENTX_MEMORY_HALL_URL", "http://100.122.171.74:9100"),
             memory_hall_token=os.getenv("AGENTX_MEMORY_HALL_TOKEN") or os.getenv("MH_API_TOKEN"),
@@ -52,9 +47,7 @@ class Settings:
         cls,
         *,
         model: str,
-        backend: str,
         ollama_url: str,
-        llamacpp_url: str,
         ollama_timeout: float,
         memory_hall_url: str,
         memory_hall_token: str | None,
@@ -67,9 +60,7 @@ class Settings:
         settings = cls.__new__(cls)
         settings._set_values(
             model=model,
-            backend=backend,
             ollama_url=ollama_url,
-            llamacpp_url=llamacpp_url,
             ollama_timeout=ollama_timeout,
             memory_hall_url=memory_hall_url,
             memory_hall_token=memory_hall_token,
@@ -84,9 +75,7 @@ class Settings:
     def with_updates(self, **changes: object) -> "Settings":
         values = {
             "model": self.model,
-            "backend": self.backend,
             "ollama_url": self.ollama_url,
-            "llamacpp_url": self.llamacpp_url,
             "ollama_timeout": self.ollama_timeout,
             "memory_hall_url": self.memory_hall_url,
             "memory_hall_token": self.memory_hall_token,
@@ -103,9 +92,7 @@ class Settings:
         self,
         *,
         model: str,
-        backend: str,
         ollama_url: str,
-        llamacpp_url: str,
         ollama_timeout: float,
         memory_hall_url: str,
         memory_hall_token: str | None,
@@ -116,9 +103,7 @@ class Settings:
         workspace: Path,
     ) -> None:
         object.__setattr__(self, "model", model)
-        object.__setattr__(self, "backend", backend)
         object.__setattr__(self, "ollama_url", ollama_url)
-        object.__setattr__(self, "llamacpp_url", llamacpp_url)
         object.__setattr__(self, "ollama_timeout", ollama_timeout)
         object.__setattr__(self, "memory_hall_url", memory_hall_url)
         object.__setattr__(self, "memory_hall_token", memory_hall_token)

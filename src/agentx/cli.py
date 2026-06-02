@@ -28,7 +28,6 @@ from agentx.git_workflow import build_commit_plan, commit_and_push
 from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
-from agentx.llamacpp import LlamaCppCancelledError, LlamaCppClient
 from agentx.ollama import OllamaCancelledError, OllamaClient
 from agentx.persona import list_personas, normalize_persona
 from agentx.project_config import load_project_config, set_project_config
@@ -64,19 +63,6 @@ if TYPE_CHECKING:
     from agentx.loop import AgentSession
 
 
-def create_llm_client(settings: "Settings") -> OllamaClient | LlamaCppClient:
-    """Create the appropriate LLM client based on settings.backend."""
-    if settings.backend == "llamacpp":
-        return LlamaCppClient(
-            base_url=settings.llamacpp_url,
-            model=settings.model,
-            timeout=settings.ollama_timeout,
-        )
-    return OllamaClient(
-        base_url=settings.ollama_url,
-        model=settings.model,
-        timeout=settings.ollama_timeout,
-    )
 
 
 @dataclass
@@ -811,7 +797,11 @@ def build_runtime(
     注意（MT22）：此函式已完全與舊的單一任務系統（TaskState）解耦，
     不再回傳或依賴舊的 task 物件。所有任務相關狀態請改用新多任務清單。
     """
-    ollama = create_llm_client(settings)
+    ollama = OllamaClient(
+        base_url=settings.ollama_url,
+        model=settings.model,
+        timeout=settings.ollama_timeout,
+    )
     memory = MemoryHallClient(
         base_url=settings.memory_hall_url,
         token=settings.memory_hall_token,
@@ -1245,7 +1235,7 @@ def shell(
                     print_raw("")
                 else:
                     print_block(answer)
-            except (OllamaCancelledError, LlamaCppCancelledError):
+            except OllamaCancelledError:
                 transcript.write("cancel", {"job": job.id, "prompt": queued_prompt})
                 print_block(f"cancelled job #{job.id}")
             except Exception as exc:
@@ -1733,7 +1723,11 @@ def shell(
 
         # 切換模型需要重建 LLM client（外部相依）
         nonlocal ollama
-        ollama = create_llm_client(new_settings)
+        ollama = OllamaClient(
+            base_url=new_settings.ollama_url,
+            model=new_settings.model,
+            timeout=new_settings.ollama_timeout,
+        )
         if state.agent_session:
             state.agent_session.ollama = ollama
 
@@ -2367,7 +2361,11 @@ def shell(
                     continue
                 new_settings = state.update_settings(model=model)
                 # model 切換需要重建 LLM client（這是外部相依，不適合全藏在 state）
-                ollama = create_llm_client(new_settings)
+                ollama = OllamaClient(
+                    base_url=new_settings.ollama_url,
+                    model=new_settings.model,
+                    timeout=new_settings.ollama_timeout,
+                )
                 if state.agent_session:
                     state.agent_session.ollama = ollama
                 transcript.write("slash_command", {"command": prompt, "model": new_settings.model})
