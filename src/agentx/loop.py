@@ -253,17 +253,7 @@ class AgentSession:
                 )
                 continue
             if isinstance(action, FinalAnswer):
-                self.messages.append({"role": "assistant", "content": action.content})
-                # Self-learning: after successful final answer, trigger reflection to get smarter (proposals only)
-                if not effective_plan_only and getattr(self, "learning_enabled", True):
-                    try:
-                        learnings = self.reflect_and_learn()
-                        if learnings:
-                            self.trace(f"[learning] Generated {len(learnings)} proposals. Review with /learn or .agentx/learning/proposals/")
-                    except Exception as _e:
-                        # Learning must never break the main flow
-                        self.trace(f"[learning] Reflection skipped due to error: {_e}")
-                return action.content
+                return self._handle_final_answer(action.content, effective_plan_only)
 
             if isinstance(action, Reflect):
                 self.consecutive_reflections += 1
@@ -465,9 +455,15 @@ class AgentSession:
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
             action = self._parse_action(raw)
             if isinstance(action, FinalAnswer):
-                return action.content
+                return self._handle_final_answer(action.content, effective_plan_only)
         except Exception:
             pass
+        # Attempt learning even on incomplete session (max steps hit)
+        if getattr(self, "learning_enabled", True):
+            try:
+                self.reflect_and_learn("session ended without final answer (max_steps reached)")
+            except Exception:
+                pass
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
 
     def clear(self) -> None:
@@ -665,6 +661,19 @@ class AgentSession:
         return (
             f"{result} 目前約 {self.context_tokens_estimate} tokens。"
         )
+
+    def _handle_final_answer(self, content: str, plan_only: bool) -> str:
+        self.messages.append({"role": "assistant", "content": content})
+        # Self-learning: after successful final answer, trigger reflection to get smarter (proposals only)
+        if not plan_only and getattr(self, "learning_enabled", True):
+            try:
+                learnings = self.reflect_and_learn()
+                if learnings:
+                    self.trace(f"[learning] Generated {len(learnings)} proposals. Review with /learn or .agentx/learning/proposals/")
+            except Exception as _e:
+                # Learning must never break the main flow
+                self.trace(f"[learning] Reflection skipped due to error: {_e}")
+        return content
 
     def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | Reflect | "InvalidAction":
         data = extract_json_object(raw)
