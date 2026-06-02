@@ -12,7 +12,7 @@ def build_chat_system_prompt(workspace: Path, persona: str = "default", model: s
     return f"""You are agentX, a local Ollama-powered engineering shell.
 Use Traditional Chinese for user-facing answers.
 Persona:
-{persona_prompt(persona)}
+{persona_prompt(persona, model)}
 
 Output style:
 - Use plain terminal text only.
@@ -204,7 +204,7 @@ Your job is to help Maki complete real software engineering work reliably and de
 - In headless mode, be significantly more decisive and execution-oriented. Avoid excessive or low-value reflection.
 
 Persona:
-{persona_prompt(persona)}
+{persona_prompt(persona, model)}
 
 {_base_output_rules()}
 
@@ -250,7 +250,7 @@ Your job is to help Maki complete real software engineering work reliably, even 
 {_base_engineering_principles()}
 
 Persona:
-{persona_prompt(persona)}
+{persona_prompt(persona, model)}
 
 {_base_output_rules()}
 

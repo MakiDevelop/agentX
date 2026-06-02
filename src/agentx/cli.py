@@ -153,7 +153,7 @@ SLASH_COMMANDS = [
     ("/mode agent", "切換到 agent 工具模式，可使用 repo / git / Memory Hall 工具"),
     ("/models", "列出 Ollama 目前可用模型"),
     ("/model [MODEL]", "查看或切換 Ollama 模型，例如 /model gemma4:31b"),
-    ("/persona [default|tutor]", "查看或切換人格設定；tutor 是女子大學生家庭教師模式"),
+    ("/persona [default|tutor|gemma4]", "查看或切換人格設定；tutor 是家庭教師，gemma4 是弱模型專用（小步驟+嚴格驗證）"),
     ("/remember TEXT", "把指定內容寫入目前 Memory Hall namespace"),
     ("/status", "顯示目前模型、模式、namespace、訊息數與粗估 context tokens"),
     ("/clear", "清空目前 shell session 上下文，並重新載入 repo 與 Memory Hall context"),
