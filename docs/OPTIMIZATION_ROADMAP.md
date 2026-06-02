@@ -146,19 +146,28 @@
 
 ---
 
-## 目前狀態（2026-05 後更新）
+## 目前狀態（推進中）
 
 - **Phase A 已完成**（MT22 全系列）：
   - 雙任務統一 + Codex 修復 + handoff 豐富化
+  - cli.py 三處 legacy 分支已移除（print_config, build_handoff, 啟動流程）（b0a7a77）
 - **Phase B1 已完成**（MT23）：
   - Context Compaction v2 基礎 + 穩定性打磨（自動觸發、DI、bootstrap 保護）
+  - 新增 LLMContextCompactor + 對 gemma 自動使用 + CLI 入口明確傳遞（69a7bdd, e77a145）
 - **Phase B2 已大幅完成**（MT24）：
   - `RecoveryPlaybook` 成熟化：支援同檔案連續失敗、工具震盪偵測、任務感知建議
   - 擴充 RecoveryAction + RecoveryRecord（可觀測上次建議）
   - STUCK 訊息極度結構化，對弱模型更友好
   - 測試 96 passed（5 個恢復專用測試）
   - 為未來「記錄恢復效果 → 學習 playbook」鋪好基礎
-- 測試 91 passed，ruff 乾淨。
+- **Gemma4 弱模型智能專項**（逐一優化 6 項 + 推進）：
+  - model-aware prompt + gemma delta
+  - worker prompt 驗證強化
+  - LLM compactor
+  - 編輯後自動驗證注入
+  - 成功模式寫 MH 經驗庫
+  - gemma4 專用 persona + 自動調整
+- 測試 91+ passed（部分 web 相關仍 fail，待清理），ruff 乾淨。
 - Codex review 意見已全部處理並記錄在 `CODEX-REVIEW-MT22-Dual-Task-Unification.md`。
 - 其餘 Phase 依序解鎖。
 - 任何新發現的優化項目，優先塞進對應 Phase，而非破壞順序。
