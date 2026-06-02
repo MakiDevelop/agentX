@@ -1,0 +1,514 @@
+from __future__ import annotations
+
+import ast
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import Any
+
+from agentx.memory_hall import MemoryHallClient
+from agentx.protocol import Tool
+from agentx.safety import Risk
+from agentx.tools._helpers import (
+    ALLOWED_COMMANDS,
+    BUILD_COMMANDS,
+    SKIPPED_DIRS,
+    docker_compose_command,
+    ensure_safe_write_path,
+    resolve_inside_workspace,
+    run_subprocess,
+)
+
+
+class _WorkspaceTool:
+    def __init__(self, workspace: Path) -> None:
+        self.workspace = workspace.resolve()
+
+
+class ListFilesTool(_WorkspaceTool):
+    name = "list_files"
+    description = "列出 workspace 內檔案，會跳過 .git/.venv/cache 目錄"
+    risk = Risk.GREEN
+    signature = 'path=".", limit=200'
+
+    def run(self, args: dict[str, Any]) -> str:
+        path = args.get("path", ".")
+        limit = int(args.get("limit", 200))
+        root = resolve_inside_workspace(self.workspace, path)
+        if not root.exists():
+            raise FileNotFoundError(path)
+        files: list[str] = []
+        for item in sorted(root.rglob("*")):
+            if any(part in SKIPPED_DIRS for part in item.relative_to(self.workspace).parts):
+                continue
+            if item.is_file():
+                files.append(str(item.relative_to(self.workspace)))
+            if len(files) >= limit:
+                break
+        return "\n".join(files)
+
+
+class ReadFileTool(_WorkspaceTool):
+    name = "read_file"
+    description = "讀取 workspace 內指定檔案內容"
+    risk = Risk.GREEN
+    signature = "path, max_chars=20000"
+
+    def run(self, args: dict[str, Any]) -> str:
+        path = args["path"]
+        max_chars = int(args.get("max_chars", 20000))
+        target = resolve_inside_workspace(self.workspace, path)
+        if not target.is_file():
+            raise FileNotFoundError(path)
+        return target.read_text(encoding="utf-8", errors="replace")[:max_chars]
+
+
+class WriteFileTool(_WorkspaceTool):
+    name = "write_file"
+    description = "寫入 workspace 內檔案（新檔或整檔重寫），自動建立父目錄；需 approval。改既有檔案的局部請改用 edit_file"
+    risk = Risk.YELLOW
+    signature = "path, content"
+
+    def run(self, args: dict[str, Any]) -> str:
+        path = args["path"]
+        content = args.get("content", "")
+        if not isinstance(content, str):
+            content = str(content)
+        target = resolve_inside_workspace(self.workspace, path)
+        if target == self.workspace:
+            raise ValueError("path must not be the workspace root itself")
+        ensure_safe_write_path(self.workspace, target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        relative = target.relative_to(self.workspace)
+        return f"wrote {len(content)} bytes to {relative}"
+
+
+class EditFileTool(_WorkspaceTool):
+    name = "edit_file"
+    description = (
+        "對 workspace 內既有檔案做 oldText→newText 替換；"
+        "每個 oldText 必須在檔內出現恰好一次；改 bug／局部修正用這個比 write_file 安全"
+    )
+    risk = Risk.YELLOW
+    signature = "path, edits=[{oldText, newText}]"
+
+    def run(self, args: dict[str, Any]) -> str:
+        path = args["path"]
+        target = resolve_inside_workspace(self.workspace, path)
+        if not target.is_file():
+            raise FileNotFoundError(path)
+        ensure_safe_write_path(self.workspace, target)
+
+        edits = _coerce_edits(args)
+        if not edits:
+            raise ValueError("edits must contain at least one {oldText, newText} entry")
+
+        content = target.read_text(encoding="utf-8", errors="replace")
+        for index, edit in enumerate(edits):
+            old_text = str(edit.get("oldText", ""))
+            new_text = str(edit.get("newText", ""))
+            if not old_text:
+                raise ValueError(f"edits[{index}].oldText must not be empty")
+            count = content.count(old_text)
+            if count == 0:
+                raise ValueError(
+                    f"edits[{index}] 找不到指定的 oldText 在 {path}。"
+                    " oldText 必須完整符合，包含所有空白與換行。"
+                )
+            if count > 1:
+                raise ValueError(
+                    f"edits[{index}] 在 {path} 找到 {count} 處 oldText 出現；"
+                    " 每個 oldText 必須唯一，請加上更多前後文以區分。"
+                )
+            content = content.replace(old_text, new_text, 1)
+
+        target.write_text(content, encoding="utf-8")
+        return f"applied {len(edits)} edit(s) to {target.relative_to(self.workspace)}"
+
+
+def _coerce_edits(args: dict[str, Any]) -> list[dict[str, Any]]:
+    edits = args.get("edits")
+    if isinstance(edits, list):
+        cleaned: list[dict[str, Any]] = []
+        for index, entry in enumerate(edits):
+            if not isinstance(entry, dict):
+                # Review N9: surface malformed entries instead of silently
+                # dropping them — partial intent should not be reported as ok.
+                raise ValueError(
+                    f"edits[{index}] must be a dict with oldText/newText, "
+                    f"got {type(entry).__name__}"
+                )
+            cleaned.append(entry)
+        return cleaned
+    old_text = args.get("oldText")
+    new_text = args.get("newText")
+    if isinstance(old_text, str) and isinstance(new_text, str):
+        return [{"oldText": old_text, "newText": new_text}]
+    return []
+
+
+class SearchTextTool(_WorkspaceTool):
+    name = "search_text"
+    description = "使用 rg 搜尋 workspace 內文字"
+    risk = Risk.GREEN
+    signature = 'pattern, path=".", limit=100'
+
+    def run(self, args: dict[str, Any]) -> str:
+        pattern = args["pattern"]
+        path = args.get("path", ".")
+        limit = int(args.get("limit", 100))
+        root = resolve_inside_workspace(self.workspace, path)
+        _, output = run_subprocess(
+            ["rg", "--line-number", "--color", "never", pattern, str(root)],
+            cwd=self.workspace,
+        )
+        return "\n".join(output.splitlines()[:limit])
+
+
+class GitStatusTool(_WorkspaceTool):
+    name = "git_status"
+    description = "查看 git status --short --branch"
+    risk = Risk.GREEN
+
+    def run(self, args: dict[str, Any]) -> str:
+        _, output = run_subprocess(["git", "status", "--short", "--branch"], cwd=self.workspace)
+        return output
+
+
+class GitDiffTool(_WorkspaceTool):
+    name = "git_diff"
+    description = "查看 git diff，可指定單一 path"
+    risk = Risk.GREEN
+    signature = "path=null, max_chars=30000"
+
+    def run(self, args: dict[str, Any]) -> str:
+        path = args.get("path")
+        max_chars = int(args.get("max_chars", 30000))
+        cmd = ["git", "diff"]
+        if path:
+            resolve_inside_workspace(self.workspace, path)
+            cmd.extend(["--", path])
+        _, output = run_subprocess(cmd, cwd=self.workspace)
+        return output[:max_chars]
+
+
+class MemorySearchTool:
+    name = "memory_search"
+    description = "查詢 Memory Hall"
+    risk = Risk.GREEN
+    signature = 'query, namespace="shared", limit=5'
+
+    def __init__(self, memory: MemoryHallClient) -> None:
+        self.memory = memory
+
+    def run(self, args: dict[str, Any]) -> str:
+        return self.memory.search(
+            query=args["query"],
+            namespace=args.get("namespace", "shared"),
+            limit=int(args.get("limit", 5)),
+        )
+
+
+class MemoryWriteTool:
+    name = "memory_write"
+    description = "寫入 Memory Hall"
+    risk = Risk.YELLOW
+    signature = 'content, namespace="agent:agentx"'
+
+    def __init__(self, memory: MemoryHallClient) -> None:
+        self.memory = memory
+
+    def run(self, args: dict[str, Any]) -> str:
+        return self.memory.write(
+            content=args["content"],
+            namespace=args.get("namespace", "agent:agentx"),
+        )
+
+
+class RunCommandTool(_WorkspaceTool):
+    name = "run_command"
+    description = "執行 GREEN allowlist 命令（read-only 檢查、純語法掃描）"
+    risk = Risk.GREEN
+    signature = "command"
+
+    def run(self, args: dict[str, Any]) -> str:
+        command = args["command"]
+        if command not in ALLOWED_COMMANDS:
+            allowed = "\n".join(f"- {item}" for item in sorted(ALLOWED_COMMANDS))
+            raise PermissionError(f"Command is not allowlisted: {command}\nAllowed:\n{allowed}")
+        completed = subprocess.run(
+            ALLOWED_COMMANDS[command],
+            cwd=self.workspace,
+            text=True,
+            capture_output=True,
+            timeout=120,
+            check=False,
+        )
+        output = completed.stdout or completed.stderr
+        return f"$ {command}\nexit={completed.returncode}\n{output.strip()}"
+
+
+class RunBuildCommandTool(_WorkspaceTool):
+    name = "run_build_command"
+    description = (
+        "執行 YELLOW build/test allowlist 命令（cargo check/build/test/clippy）；"
+        "會 invoke build.rs、proc-macro、測試碼 = 執行任意 repo 內程式，故需 approval"
+    )
+    risk = Risk.YELLOW
+    signature = "command"
+
+    def run(self, args: dict[str, Any]) -> str:
+        command = args["command"]
+        if command not in BUILD_COMMANDS:
+            allowed = "\n".join(f"- {item}" for item in sorted(BUILD_COMMANDS))
+            raise PermissionError(f"Command is not allowlisted: {command}\nAllowed:\n{allowed}")
+        completed = subprocess.run(
+            BUILD_COMMANDS[command],
+            cwd=self.workspace,
+            text=True,
+            capture_output=True,
+            timeout=300,
+            check=False,
+        )
+        output = completed.stdout or completed.stderr
+        return f"$ {command}\nexit={completed.returncode}\n{output.strip()}"
+
+
+class RunTestsTool(_WorkspaceTool):
+    name = "run_tests"
+    description = "執行固定 allowlist 驗證：ruff check 與 pytest"
+    risk = Risk.GREEN
+
+    def run(self, args: dict[str, Any]) -> str:
+        commands = [
+            ["uv", "run", "ruff", "check", "."],
+            ["uv", "run", "pytest", "-q"],
+        ]
+        outputs: list[str] = []
+        for command in commands:
+            completed = subprocess.run(
+                command,
+                cwd=self.workspace,
+                text=True,
+                capture_output=True,
+                timeout=120,
+                check=False,
+            )
+            output = completed.stdout or completed.stderr
+            outputs.append(
+                f"$ {' '.join(command)}\nexit={completed.returncode}\n{output.strip()}"
+            )
+            if completed.returncode != 0:
+                break
+        return "\n\n".join(outputs)
+
+
+class ApplyPatchTool(_WorkspaceTool):
+    name = "apply_patch"
+    description = "套用 unified diff patch，需 approval"
+    risk = Risk.YELLOW
+    signature = "patch"
+
+    def run(self, args: dict[str, Any]) -> str:
+        patch = args["patch"]
+        # Use system temp file for patch content. Never write untrusted patch data
+        # into the workspace (including .agentx/patches). This hardens the staging
+        # surface compared to writing pending.patch under protected .agentx dir.
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".patch", delete=False, encoding="utf-8"
+        ) as tf:
+            tf.write(patch)
+            patch_path = Path(tf.name)
+
+        try:
+            check = subprocess.run(
+                ["git", "apply", "--check", str(patch_path)],
+                cwd=self.workspace,
+                text=True,
+                capture_output=True,
+                timeout=20,
+                check=False,
+            )
+            if check.returncode != 0:
+                return f"git apply --check failed\n{check.stdout}{check.stderr}".strip()
+
+            # Collect touched paths from two sources (defense in depth):
+            # 1. String parse of the raw patch text (catches declared intent early)
+            # 2. git apply --name-only (uses git's own robust parser for quoting,
+            #    spaces, " b/" in names, renames, copies, binary patches, etc.)
+            paths: set[str] = _patch_write_paths(patch)
+
+            name_only = subprocess.run(
+                ["git", "apply", "--name-only", str(patch_path)],
+                cwd=self.workspace,
+                text=True,
+                capture_output=True,
+                timeout=20,
+                check=False,
+            )
+            if name_only.returncode == 0:
+                for line in name_only.stdout.strip().splitlines():
+                    p = line.strip()
+                    if p and p != "/dev/null":
+                        paths.add(p)
+
+            for path in paths:
+                ensure_safe_write_path(
+                    self.workspace, resolve_inside_workspace(self.workspace, path)
+                )
+
+            applied = subprocess.run(
+                ["git", "apply", str(patch_path)],
+                cwd=self.workspace,
+                text=True,
+                capture_output=True,
+                timeout=20,
+                check=False,
+            )
+            output = (applied.stdout + applied.stderr).strip()
+            if applied.returncode != 0:
+                return f"git apply failed\n{output}".strip()
+            return output or "patch applied"
+        finally:
+            try:
+                patch_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+
+def _patch_write_paths(patch: str) -> set[str]:
+    paths: set[str] = set()
+    for line in patch.splitlines():
+        if line.startswith("diff --git a/"):
+            old, _, new = line.removeprefix("diff --git ").rpartition(" b/")
+            _add_patch_path(paths, old, strip=1)
+            if new:
+                _add_patch_path(paths, f"b/{new}", strip=1)
+            continue
+        if line.startswith(("--- ", "+++ ")):
+            _add_patch_path(paths, line[4:], strip=1)
+        elif line.startswith(("rename from ", "rename to ")):
+            _add_patch_path(paths, line.removeprefix("rename from ").removeprefix("rename to "), strip=0)
+        elif line.startswith(("copy from ", "copy to ")):
+            _add_patch_path(paths, line.removeprefix("copy from ").removeprefix("copy to "), strip=0)
+    return paths
+
+
+def _add_patch_path(paths: set[str], raw: str, *, strip: int) -> None:
+    path = _patch_path(raw, strip=strip)
+    if path and path != "/dev/null":
+        paths.add(path)
+
+
+def _patch_path(raw: str, *, strip: int) -> str | None:
+    token = raw.split("\t", 1)[0].strip()
+    if token.startswith('"'):
+        token = ast.literal_eval(token)
+    if token == "/dev/null":
+        return token
+    parts = token.split("/")
+    if len(parts) <= strip:
+        return None
+    return "/".join(parts[strip:])
+
+
+class _DockerComposeTool(_WorkspaceTool):
+    action: str = ""
+
+    def _run_action(self, args: dict[str, Any]) -> str:
+        command = docker_compose_command(
+            self.workspace,
+            self.action,
+            compose_file=args.get("compose_file"),
+            service=args.get("service"),
+            tail=int(args.get("tail", 100)),
+        )
+        completed = subprocess.run(
+            command,
+            cwd=self.workspace,
+            text=True,
+            capture_output=True,
+            timeout=300,
+            check=False,
+        )
+        output = completed.stdout or completed.stderr
+        return f"$ {' '.join(command)}\nexit={completed.returncode}\n{output.strip()}"
+
+
+class DockerComposePsTool(_DockerComposeTool):
+    name = "docker_compose_ps"
+    description = "查看 docker compose ps"
+    risk = Risk.GREEN
+    signature = "compose_file=null"
+    action = "ps"
+
+    def run(self, args: dict[str, Any]) -> str:
+        return self._run_action(args)
+
+
+class DockerComposeBuildTool(_DockerComposeTool):
+    name = "docker_compose_build"
+    description = "執行 docker compose build，需 approval"
+    risk = Risk.YELLOW
+    signature = "compose_file=null"
+    action = "build"
+
+    def run(self, args: dict[str, Any]) -> str:
+        return self._run_action(args)
+
+
+class DockerComposeUpTool(_DockerComposeTool):
+    name = "docker_compose_up"
+    description = "執行 docker compose up -d，需 approval"
+    risk = Risk.YELLOW
+    signature = "compose_file=null"
+    action = "up"
+
+    def run(self, args: dict[str, Any]) -> str:
+        return self._run_action(args)
+
+
+class DockerComposeDownTool(_DockerComposeTool):
+    name = "docker_compose_down"
+    description = "執行 docker compose down，需 approval"
+    risk = Risk.YELLOW
+    signature = "compose_file=null"
+    action = "down"
+
+    def run(self, args: dict[str, Any]) -> str:
+        return self._run_action(args)
+
+
+class DockerComposeLogsTool(_DockerComposeTool):
+    name = "docker_compose_logs"
+    description = "查看 docker compose logs"
+    risk = Risk.GREEN
+    signature = "compose_file=null, service=null, tail=100"
+    action = "logs"
+
+    def run(self, args: dict[str, Any]) -> str:
+        return self._run_action(args)
+
+
+def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
+    return [
+        ListFilesTool(workspace),
+        ReadFileTool(workspace),
+        WriteFileTool(workspace),
+        EditFileTool(workspace),
+        SearchTextTool(workspace),
+        GitStatusTool(workspace),
+        GitDiffTool(workspace),
+        MemorySearchTool(memory),
+        MemoryWriteTool(memory),
+        RunCommandTool(workspace),
+        RunBuildCommandTool(workspace),
+        RunTestsTool(workspace),
+        ApplyPatchTool(workspace),
+        DockerComposePsTool(workspace),
+        DockerComposeBuildTool(workspace),
+        DockerComposeUpTool(workspace),
+        DockerComposeDownTool(workspace),
+        DockerComposeLogsTool(workspace),
+    ]

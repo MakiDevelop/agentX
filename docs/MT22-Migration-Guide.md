@@ -6,15 +6,17 @@
 
 ---
 
-## 1. 目前狀態（2026-05）
+## 1. 目前狀態（MT22 Phase A 已完成，v0.3.0+ 過渡）
 
-- 新多任務系統（`.agentx/tasks.json` + `agentx.tasks` API）已成為主要真相來源。
-- 舊單一任務系統（`.agentx/task.json` + `agentx.task`）已進入受控過渡期，所有公開 API 均已標記 `DeprecationWarning`。
-- 啟動時會自動嘗試遷移進行中的舊任務（策略 B：成功後備份為 `task.json.bak.*`）。
-- 診斷工具：
-  - `has_legacy_single_task(workspace)`
+- 新多任務系統（`.agentx/tasks.json` + `agentx.tasks` API）**已成為唯一真相來源**。
+- 舊單一任務系統（`.agentx/task.json` + `agentx.task`）**模組已完全移除**（git rm）。cli 顯示分支（/config, handoff, 啟動提示）已移除，helper 標記 internal deprecated（僅 doctor/get_migration_status 內部使用 + 受保護歷史測試）。
+- 啟動時若偵測到孤立的進行中舊 task.json，仍會自動嘗試遷移（策略 B：成功後備份為 `task.json.bak.<timestamp>`），之後舊檔不再被新系統讀取。
+- 診斷工具（保留用於觀測殘留舊資料）：
+  - `has_legacy_single_task(workspace)`（internal deprecated + DeprecationWarning，僅供 get_task_migration_status）
   - `get_task_migration_status(workspace)`
-  - `/doctor` 會顯示當前狀態。
+  - `agentx doctor` 仍會顯示 task_migration (MT22) 項目，正確區分 legacy_only / mixed / multi_only / no_task_data。
+- **tests/test_task.py** 與部分 test_tasks.py 中的 legacy 測試已歷史化（pytest.importorskip + 明確 docstring），不會在純新環境破壞 collection。
+- **tests/test_cli_dispatch.py** 已加 guard，不再因 TaskState 造成 no-legacy 環境 collection 失敗。
 
 ---
 
@@ -23,15 +25,15 @@
 ### 一般使用者
 - 建議盡快改用 `/task` 相關指令管理多任務清單。
 - 舊 `task.json` 若為進行中狀態，啟動時會自動遷移。
-- 啟動時若偵測到舊資料，會看到過渡提示。
+- cli 顯示已無過渡提示（/config 等），但 `agentx doctor` 仍會報告遷移狀態。
 
 ### 進階使用者 / 腳本作者
 - 請改用 `load_tasks` / `save_tasks` / `task_add` 等新 API。
 - 避免直接操作 `.agentx/task.json`。
 
-### 移除時間點（預計）
-- v0.3.0：舊系統處於「受控過渡 + 明確 deprecated」階段。
-- v0.4+：預計完全移除 `task.py` 模組及相關相容層。
+### 移除時間點（已執行）
+- v0.3.0 Phase A：cli 顯示分支已移除、helper 標記 deprecated、診斷保留、**task.py 模組已 git rm**、測試歷史化 + 最終清理完成。
+- v0.4+：若仍有真實舊 .agentx/task.json 使用者，doctor 仍可協助診斷；完全移除 has_legacy / get_migration_status 的時機視實際採用情況而定（目前保留作為安全網）。
 
 ### 使用者遷移建議流程（推薦做法）
 
@@ -42,7 +44,7 @@
 **步驟 2：讓自動遷移自然發生**
 - 正常啟動與使用 agentX。
 - 如果 workspace 中有進行中的舊單一任務，啟動時會自動執行遷移，並把舊檔備份為 `task.json.bak.<timestamp>`。
-- 啟動畫面會出現明確的過渡提示。
+- **注意**：cli 啟動 /config / handoff 已無過渡提示（MT22 UI 污染已清除），僅 doctor 仍可觀測狀態。
 
 **步驟 3：驗證遷移結果**
 ```bash

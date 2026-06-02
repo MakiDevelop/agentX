@@ -79,5 +79,5 @@
 
 **2026-05 正式實作 Roadmap 啟動**：
 - 建立 `docs/OPTIMIZATION_ROADMAP.md`，由 Claude 全權決定 5 Phase 實作順序（風險優先、基礎優先）。
-- Phase A（雙任務系統統一）即將啟動（MT22）。這是 Codex review 當初點名的最高風險項目，解決後才能安全推進後續所有 scaffolding。
+- Phase A（雙任務系統統一，MT22）**已完成**：task.py 移除、cli 污染清除、test 最終清理、診斷保留。詳見 MT22-Legacy-Removal-Checklist.md 。
 - 後續 Phase 將依序解鎖 Context Compaction、錯誤恢復成熟化、Prompt 統一等。

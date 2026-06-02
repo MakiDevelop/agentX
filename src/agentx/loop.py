@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
-from agentx.context_compactor import ContextCompactor, HeuristicContextCompactor
+from agentx.context_compactor import ContextCompactor, HeuristicContextCompactor, LLMContextCompactor
 from agentx.recovery import RecoveryPlaybook
 from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
@@ -88,15 +88,39 @@ class AgentSession:
         self.current_error: ErrorContext | None = None
 
         # Context Compaction v2（Phase B1）
-        self.compactor: ContextCompactor = compactor or HeuristicContextCompactor()
+        if compactor is not None:
+            self.compactor: ContextCompactor = compactor
+        elif "gemma" in settings.model.lower():
+            # Opt-in LLM-assisted for Gemma4/small models (smarter summary using the model itself)
+            self.compactor: ContextCompactor = LLMContextCompactor(self.ollama)
+        else:
+            self.compactor: ContextCompactor = HeuristicContextCompactor()
 
         # Phase B2：錯誤恢復策略成熟化
         self.recovery_playbook = RecoveryPlaybook()
 
+        # === Safety hardening states (continued from feature/agent-tools review N series) ===
+        # Outcome of the most recent ask() — coordinator / callers consume these
+        # for structured success judgment (review N5: don't rely on string
+        # prefixes of the summary).
+        self.last_termination: str = "unknown"
+        self.last_failing_tools: set[str] = set()
+        # Hysteresis state for auto-compact (review N8: don't re-compact every
+        # turn when bootstrap alone is over threshold).
+        self._last_compact_tokens: int | None = None
+        # Persistent per-tool outcome tracker. Updated on every _run_tool;
+        # later success of the same tool clears its failed state. Survives
+        # compact() (which empties messages but not session-level state)
+        # but is reset by clear(). (review codex C3: 12-message window was
+        # too narrow — a long sequence of read_file / search_text after a
+        # failed cargo test would make the failure "fall off" and let the
+        # finalization guard pass a lying success.)
+        self._tool_outcomes: dict[str, bool] = {}
+
         self.messages = self._initial_messages()
 
     def _initial_messages(self) -> list[dict[str, str]]:
-        system_prompt = self._custom_system_prompt or build_agent_system_prompt(self.settings.persona)
+        system_prompt = self._custom_system_prompt or build_agent_system_prompt(self.settings.persona, tools=self.tools, model=self.settings.model)
         return [
             {"role": "system", "content": system_prompt},
             {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(self.settings.workspace)},
@@ -193,6 +217,7 @@ class AgentSession:
                             "- 使用 task_list 整理狀態\n"
                             "- 輸出一個結構化、完整的 final 方案（清楚列出步驟、風險、驗證方式）\n"
                             "- 不要再純粹 Reflection，也不要建議執行工具（plan mode 禁止）\n\n"
+                            "（Gemma4 等弱模型特別容易陷入無效 reflection，guard 強制你產出可執行規劃。）\n"
                             "強制進度，停止無效迴圈。guard 已重置。"
                         )
                     else:
@@ -204,6 +229,7 @@ class AgentSession:
                             "- 使用 task_list 快速整理目前所有任務狀態\n"
                             "- 輸出一個有價值的 final 方案（即使不完美也先給出可執行建議）\n"
                             "- 或執行下一個具體的工具行動（search_replace / run_tests 等）\n\n"
+                            "（Gemma4 等小模型容易過度 reflection 導致 token 燒盡，guard 保護你專注執行。）\n"
                             "強制進度，停止純粹 Reflection。guard 已重置。"
                         )
                     self.messages.append({"role": "system", "content": guard_msg})
@@ -245,6 +271,39 @@ class AgentSession:
 
             self.messages.append({"role": "assistant", "content": action.model_dump_json()})
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
+
+            # === 自動驗證注入（opt4：提升 Gemma4 等弱模型的「聰明」與可靠性） ===
+            # 編輯類工具成功後，自動注入系統提示，強制模型在下一步先驗證（read or test）
+            # 這對小模型非常有效，避免「以為成功但實際有 bug」的情況。
+            if result.ok and action.tool in ("edit_file", "write_file", "search_replace", "insert_code", "apply_patch"):
+                verify_msg = (
+                    "【系統自動建議 - 弱模型驗證強化 (Gemma4 優化)】\n"
+                    f"剛才的 {action.tool} 成功。為確保正確（Gemma4 等小模型容易 overlook 細節或格式問題），"
+                    "請在下一步優先輸出 tool_call 來驗證：\n"
+                    f"- read_file 剛修改的 path（建議用小 max_chars 只看關鍵區）確認內容完全符合預期\n"
+                    "- 或 run_tests / run_build_command 確認無誤\n"
+                    "驗證通過後再繼續其他動作或輸出 final。不要跳過這步！"
+                )
+                self.messages.append({"role": "system", "content": verify_msg})
+
+                # === Opt5: 成功編輯模式主動寫入 Memory Hall 作為經驗庫（供未來 few-shot recall） ===
+                # 讓 Gemma4 等模型可以從過去成功案例學到模式，增加「聰明」程度。
+                try:
+                    path = action.args.get("path", "unknown")
+                    lesson = f"成功 {action.tool} on {path}。結果摘要: {(result.content or '')[:400]}"
+                    if hasattr(self.memory, "write_structured"):
+                        self.memory.write_structured(
+                            content=lesson,
+                            namespace=self.namespace,
+                            entry_type="success_pattern",
+                            summary=f"成功 {action.tool} @{path}",
+                            tags=["edit-success", "gemma-lesson", action.tool],
+                            metadata={"tool": action.tool, "path": str(path)},
+                        )
+                    else:
+                        self.memory.write(lesson, namespace=self.namespace)
+                except Exception:
+                    pass  # 靜默，不影響主流程
 
             # === 錯誤分類與基礎恢復處理（階段一 + 步驟 4） ===
             if not result.ok:

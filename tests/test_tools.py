@@ -86,7 +86,7 @@ def test_validate_external_url_rejects_localhost() -> None:
 
 def test_web_fetch_blocks_private_network(monkeypatch) -> None:
     monkeypatch.setattr(
-        "agentx.tools.socket.getaddrinfo",
+        "agentx.tools._helpers.socket.getaddrinfo",
         lambda *args, **kwargs: [(None, None, None, None, ("192.168.1.1", 80))],
     )
 

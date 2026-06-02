@@ -1,16 +1,23 @@
 # === DEPRECATION NOTICE (MT22 / v0.3.0) ===
 #
-# 此檔案幾乎完全在測試舊的單一任務系統（task.py + TaskState）。
-# 該系統正在被新的多任務清單（tasks.py + tasks.json）取代。
+# 此檔案**僅用於歷史相容驗證**（legacy single-task system）。
+# 該系統（task.py + TaskState + .agentx/task.json）正在被新的多任務清單
+# （tasks.py + tasks.json + agentx.tasks API）取代。
 #
 # 狀態：
-# - 此檔案已被標記為主要技術債。
-# - 預計在 v0.3.0 後逐步廢棄、轉換或移除。
-# - 目前僅保留作為遷移相容測試與歷史參考。
+# - 此檔案**僅保留作為遷移相容測試與歷史參考**。
+# - 所有新測試請使用 tests/test_tasks.py 中的多任務相關測試。
+# - 預計在 v0.3.0 後逐步廢棄或移除此檔案及對應的 task.py 模組。
 #
-# 請優先使用 tests/test_tasks.py 中的多任務相關測試。
-#
-# 如果你正在新增測試，請改用新系統的 API。
+# 如果你正在新增測試，請改用新系統的 API（load_tasks / save_tasks 等）。
+# 此檔案中的測試**不會**被視為新功能覆蓋的一部分。
+
+import pytest
+pytest.importorskip(
+    "agentx.task",
+    reason="task.py is legacy (MT22); this test file is kept ONLY for historical compatibility verification. "
+           "All new tests should use tests/test_tasks.py . Module will be removed when checklist conditions met.",
+)
 
 from agentx.task import clear_task, finish_task, load_task, start_task
 

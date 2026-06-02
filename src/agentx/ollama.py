@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import threading
-from collections.abc import Sequence
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from types import TracebackType
 from typing import Any
 
 import httpx
@@ -18,6 +18,7 @@ class OllamaClient:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
+        self._client = httpx.Client(timeout=timeout)
 
     def chat(
         self,
@@ -34,23 +35,20 @@ class OllamaClient:
         }
         if json_mode:
             payload["format"] = "json"
-        with httpx.Client(timeout=self.timeout) as client:
-            if payload["stream"]:
-                return self._chat_stream(client, payload, on_delta, cancel_event)
-            response = client.post(f"{self.base_url}/api/chat", json=payload)
-            response.raise_for_status()
-            data = response.json()
-        return _message_content(data).strip()
+        if payload["stream"]:
+            return self._chat_stream(payload, on_delta, cancel_event)
+        response = self._client.post(f"{self.base_url}/api/chat", json=payload)
+        response.raise_for_status()
+        return _message_content(response.json()).strip()
 
     def _chat_stream(
         self,
-        client: httpx.Client,
         payload: dict[str, Any],
         on_delta: Callable[[str], None] | None,
         cancel_event: threading.Event | None,
     ) -> str:
         chunks: list[str] = []
-        with client.stream("POST", f"{self.base_url}/api/chat", json=payload) as response:
+        with self._client.stream("POST", f"{self.base_url}/api/chat", json=payload) as response:
             response.raise_for_status()
             for line in response.iter_lines():
                 if cancel_event is not None and cancel_event.is_set():
@@ -68,11 +66,24 @@ class OllamaClient:
         return "".join(chunks).strip()
 
     def list_models(self) -> list[str]:
-        with httpx.Client(timeout=self.timeout) as client:
-            response = client.get(f"{self.base_url}/api/tags")
-            response.raise_for_status()
-            data = response.json()
+        response = self._client.get(f"{self.base_url}/api/tags")
+        response.raise_for_status()
+        data = response.json()
         return [str(model.get("name", "")) for model in data.get("models", []) if model.get("name")]
+
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self) -> "OllamaClient":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.close()
 
 
 def _message_content(data: dict[str, Any]) -> str:

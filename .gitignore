@@ -8,6 +8,7 @@ GEMINI.md
 .agentx/sessions/
 .agentx/patches/
 .agentx/task.json
+playground/
 .agentx/tasks.json
 .agentx/state.json
 .agentx/*.md
