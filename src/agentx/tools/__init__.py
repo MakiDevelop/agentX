@@ -7,9 +7,11 @@ from agentx.tools._helpers import (
     WRITE_PROTECTED_PARTS,
     docker_compose_command,
     ensure_safe_write_path,
+    extract_web_text,
     resolve_compose_file,
     resolve_inside_workspace,
     run_subprocess,
+    validate_external_url,
 )
 from agentx.tools.builtin import (
     ApplyPatchTool,
@@ -71,6 +73,7 @@ __all__ = [
     "builtin_tools",
     "docker_compose_command",
     "ensure_safe_write_path",
+    "extract_web_text",
     "resolve_compose_file",
     "resolve_inside_workspace",
     "run_subprocess",
@@ -78,4 +81,5 @@ __all__ = [
     "tool_is_enabled",
     "tool_prompt_line",
     "tool_signature",
+    "validate_external_url",
 ]

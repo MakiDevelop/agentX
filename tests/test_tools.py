@@ -2,18 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agentx.tools import ToolRegistry, docker_compose_command  # extract_web_text, validate_external_url temporarily unavailable after merge (web tools from other branch)
-
-# Temporary stubs for web-related helpers (added in main branch's tools; to be properly ported)
-def extract_web_text(html: str, content_type: str = "") -> str:
-    """Stub: return as-is for now."""
-    return html
-
-def validate_external_url(url: str) -> None:
-    """Stub: basic block for private/local to allow tests to import."""
-    if any(x in url for x in ("localhost", "127.0.0.1", "192.168.", "10.", "172.16.")):
-        raise ValueError("blocked non-public or local host")
-
+from agentx.tools import ToolRegistry, docker_compose_command, extract_web_text, validate_external_url
 
 
 class FakeMemory:
@@ -97,7 +86,7 @@ def test_validate_external_url_rejects_localhost() -> None:
 
 def test_web_fetch_blocks_private_network(monkeypatch) -> None:
     monkeypatch.setattr(
-        "agentx.tools.socket.getaddrinfo",
+        "agentx.tools._helpers.socket.getaddrinfo",
         lambda *args, **kwargs: [(None, None, None, None, ("192.168.1.1", 80))],
     )
 

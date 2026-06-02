@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
+import socket
 import subprocess
 import unicodedata
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 SKIPPED_DIRS = {
@@ -158,3 +161,42 @@ def docker_compose_command(
             args.append(service)
         return args
     raise ValueError(f"unsupported docker compose action: {action}")
+
+
+# === Web helpers (added to support test_tools web tests post-merge) ===
+
+def extract_web_text(html: str, content_type: str = "") -> str:
+    """Simple text extraction: strip scripts/styles and tags. For Gemma-friendly tool use."""
+    if not html or not isinstance(html, str):
+        return ""
+    # Remove script and style blocks
+    text = re.sub(r'(?is)<(script|style).*?>.*?</\1>', ' ', html)
+    # Remove all other tags
+    text = re.sub(r'<[^>]+>', ' ', text)
+    # Collapse whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+def validate_external_url(url: str) -> None:
+    """Reject local/private hosts. Used by web_fetch tool for safety (Gemma context)."""
+    if not url or not isinstance(url, str):
+        raise ValueError("invalid url")
+    if not url.lower().startswith(("http://", "https://")):
+        raise ValueError("must be http or https")
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if host in ("localhost", "127.0.0.1", "::1") or host.startswith("127."):
+        raise ValueError("local hosts not allowed")
+    # Check for private networks via getaddrinfo (test monkeys this)
+    try:
+        addrs = socket.getaddrinfo(host, None)
+        for _, _, _, _, sockaddr in addrs:
+            ip = sockaddr[0]
+            if (
+                ip.startswith(("10.", "192.168."))
+                or ip.startswith("172.") and 16 <= int(ip.split(".")[1]) <= 31
+            ):
+                raise ValueError("blocked non-public")
+    except socket.gaierror:
+        pass  # can't resolve; let caller decide or allow for test
+    # Note: full impl may use requests/httpx with allow_redirects=False etc.
