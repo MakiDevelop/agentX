@@ -270,6 +270,20 @@ class AgentSession:
             self.messages.append({"role": "assistant", "content": action.model_dump_json()})
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
 
+            # === 自動驗證注入（opt4：提升 Gemma4 等弱模型的「聰明」與可靠性） ===
+            # 編輯類工具成功後，自動注入系統提示，強制模型在下一步先驗證（read or test）
+            # 這對小模型非常有效，避免「以為成功但實際有 bug」的情況。
+            if result.ok and action.tool in ("edit_file", "write_file", "search_replace", "insert_code", "apply_patch"):
+                verify_msg = (
+                    "【系統自動建議 - 弱模型驗證強化 (Gemma4 優化)】\n"
+                    f"剛才的 {action.tool} 成功。為確保正確（Gemma4 等小模型容易 overlook 細節或格式問題），"
+                    "請在下一步優先輸出 tool_call 來驗證：\n"
+                    f"- read_file 剛修改的 path（建議用小 max_chars 只看關鍵區）確認內容完全符合預期\n"
+                    "- 或 run_tests / run_build_command 確認無誤\n"
+                    "驗證通過後再繼續其他動作或輸出 final。不要跳過這步！"
+                )
+                self.messages.append({"role": "system", "content": verify_msg})
+
             # === 錯誤分類與基礎恢復處理（階段一 + 步驟 4） ===
             if not result.ok:
                 error_type = self.error_classifier.classify(action.tool, result)
