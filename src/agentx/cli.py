@@ -37,10 +37,8 @@ from agentx.prompting import SlashCommandCompleter
 from agentx.runtime_prompt import build_chat_system_prompt, build_headless_agent_system_prompt
 from agentx.safety import Risk
 from agentx.tasks import (
-    _get_legacy_task_if_exists,
     format_task_list_summary,
     get_next_task_id,
-    has_legacy_single_task,
     load_tasks,
     migrate_single_task_if_needed,
     save_tasks,
@@ -641,11 +639,6 @@ def is_natural_execute_trigger(text: str) -> bool:
     return any(trigger.lower() in text_lower for trigger in EXECUTE_TRIGGERS)
 
 
-def _format_legacy_task_note() -> str:
-    """回傳 legacy 任務的標準提示文字（MT22 過渡期）。"""
-    return "注意 (MT22)：舊單一任務系統已棄用，建議改用新多任務清單（/task）"
-
-
 def print_config(
     settings: Settings,
     namespace: str,
@@ -674,21 +667,13 @@ def print_config(
     table.add_row("config_file_persona", str(project_config.persona))
     table.add_row("config_file_auto_handoff", str(project_config.auto_handoff))
 
-    # MT22: 優先顯示新多任務清單
+    # MT22 後：只顯示新多任務清單
     current_tasks = load_tasks(settings.workspace)
     if current_tasks:
         summary = format_task_list_summary(current_tasks, max_active=5)
         table.add_row("tasks (multi)", summary[:400] if summary else "(none)")
     else:
-        if has_legacy_single_task(settings.workspace):
-            legacy = _get_legacy_task_if_exists(settings.workspace)
-            if legacy:
-                table.add_row("task (legacy)", legacy.title)
-                table.add_row("task_status (legacy)", legacy.status)
-            table.add_row("注意 (MT22)", _format_legacy_task_note())
-            # TODO (v0.3.0+): 當舊系統完全退場後，此分支可移除
-        else:
-            table.add_row("tasks", "(none)")
+        table.add_row("tasks", "(none)")
 
     console.print(table)
 
@@ -946,24 +931,13 @@ def build_handoff(
     todo = _handoff_todo(tasks, task_summary)
     blockers = _handoff_blockers(tasks)
 
-    # MT22: 優先使用新多任務清單
+    # MT22 後：只使用新多任務清單（legacy 分支已移除）
     if tasks:
         task_section = f"多任務清單：\n{format_task_list_summary(tasks, max_active=8)}\n"
     elif task_summary:
         task_section = f"多任務清單摘要：\n{task_summary}\n"
     else:
-        if has_legacy_single_task(settings.workspace):
-            legacy = _get_legacy_task_if_exists(settings.workspace)
-            if legacy:
-                task_section = (
-                    f"task（legacy）：{legacy.title} [{legacy.status}]\n"
-                    f"{_format_legacy_task_note()}\n"
-                )
-                # TODO (v0.3.0+): 當舊系統完全退場後，此分支可移除
-            else:
-                task_section = "tasks：(none)\n"
-        else:
-            task_section = "tasks：(none)\n"
+        task_section = "tasks：(none)\n"
 
     return (
         f"agentX session handoff\n"
@@ -1133,21 +1107,11 @@ def shell(
     )
     ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
 
-    # 主要使用新多任務清單（MT22）
+    # MT22 後：只使用新多任務清單（legacy 分支已移除）
     current_tasks = load_tasks(settings.workspace)
     task_summary = format_task_list_summary(current_tasks)
 
     transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
-    # 過渡期記錄：如果舊的單一任務還存在，寫入 legacy 記錄方便除錯與遷移驗證
-    if has_legacy_single_task(settings.workspace):
-        legacy = _get_legacy_task_if_exists(settings.workspace)
-        if legacy:
-            transcript.write("task_legacy", {"title": legacy.title, "status": legacy.status})
-        # v0.3.0 過渡期提示
-        print_raw(
-            "[MT22] 偵測到舊的單一任務系統資料。\n"
-            "      建議改用新的多任務清單（/task）。舊系統預計在後續版本移除。"
-        )
     if current_tasks:
         transcript.write("tasks", {"count": len(current_tasks), "summary": task_summary})
     agent_session = AgentSession(

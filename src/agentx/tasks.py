@@ -192,7 +192,10 @@ def migrate_single_task_if_needed(workspace: Path) -> bool:
 
 
 def has_legacy_single_task(workspace: Path) -> bool:
-    """檢查是否還存在舊的單一任務資料（MT22 過渡期工具）。"""
+    """檢查是否還存在舊的單一任務資料（MT22 過渡期工具）。
+    Deprecated: 僅供 get_task_migration_status 診斷使用。cli 顯示分支已移除。
+    未來版本將移除此函式。
+    """
     return single_task_path(workspace).exists()
 
 
@@ -254,7 +257,7 @@ def _normalize_legacy_date(date_str: str) -> str:
 
 
 def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
-    """MT22 過渡期 helper。
+    """MT22 過渡期 helper（已 deprecated）。
 
     安全地嘗試讀取舊的單一任務系統（如果還存在）。
     只有在檔案存在、內容可解析、且有意義的任務資料時才回傳 TaskState。
@@ -266,7 +269,8 @@ def _get_legacy_task_if_exists(workspace: Path) -> "TaskState | None":
     - 解析失敗 → None
     - 沒有有效 title → None
 
-    這是為了在過渡期間保留相容性，當舊系統完全退場後，此函式與其呼叫者可移除。
+    Deprecated: cli 呼叫已移除。僅剩 doctor 遷移診斷使用。
+    當舊系統完全退場後，此函式與相關 helper 可移除。
     """
     from .task import load_task
 
