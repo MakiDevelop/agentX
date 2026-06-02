@@ -17,6 +17,7 @@ from agentx.config import Settings
 from agentx.hooks import HookManager
 from agentx.json_repair import extract_json_object
 from agentx.loop import AgentSession
+from agentx.context_compactor import LLMContextCompactor
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
 from agentx.tools import ToolRegistry
@@ -137,6 +138,7 @@ class Coordinator:
         step: PlanStep,
         completed: list[StepResult],
     ) -> StepResult:
+        compactor = LLMContextCompactor(self.ollama) if "gemma" in self.settings.model.lower() else None
         session = AgentSession(
             settings=self.settings,
             ollama=self.ollama,
@@ -145,6 +147,7 @@ class Coordinator:
             namespace=self.namespace,
             trace=self.trace,
             hooks=self.hooks,
+            compactor=compactor,
         )
         completed_block = (
             "\n".join(

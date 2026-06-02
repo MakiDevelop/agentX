@@ -12,6 +12,7 @@ from agentx.config import Settings
 from agentx.json_repair import extract_json_object
 from agentx.loop import AgentLoop
 from agentx.memory_hall import MemoryHallClient
+from agentx.context_compactor import LLMContextCompactor
 from agentx.runtime_prompt import PLANNING_SYSTEM_PROMPT, build_worker_system_prompt
 from agentx.tools import ToolRegistry
 
@@ -247,12 +248,14 @@ class Orchestrator:
     def _plan(self, prompt: str) -> dict[str, Any] | None:
         """Use LLM to decompose prompt into a structured plan."""
         plan_settings = self.settings.with_updates(max_steps=6)
+        compactor = LLMContextCompactor(self.llm) if "gemma" in self.settings.model.lower() else None
         planner = AgentLoop(
             settings=plan_settings,
             ollama=self.llm,
             tools=self.tools,
             system_prompt=PLANNING_SYSTEM_PROMPT,
             trace=self.trace,
+            compactor=compactor,
         )
         try:
             raw = planner.run(f"請將以下任務拆解成子任務：\n{prompt}")
@@ -296,11 +299,13 @@ class Orchestrator:
     def _fallback_single_agent(self, prompt: str, namespace: str, run_id: str) -> OrchestratorResult:
         """Fallback: run as single agent when planning fails."""
         self._trace("running fallback single agent")
+        compactor = LLMContextCompactor(self.llm) if "gemma" in self.settings.model.lower() else None
         worker = AgentLoop(
             settings=self.settings,
             ollama=self.llm,
             tools=self.tools,
             trace=self.trace,
+            compactor=compactor,
         )
         try:
             answer = worker.run(prompt, namespace=namespace)
