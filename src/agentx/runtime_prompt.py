@@ -291,11 +291,13 @@ def build_worker_system_prompt(
 
 {_base_tools_section()}
 
-Workflow (optimized for smaller models like Gemma4):
-1. Read relevant files if needed (use small max_chars if possible).
-2. Make ONE precise, minimal edit using search_replace or insert_code. After the tool result comes back, internally verify: "Does the file now contain exactly the change I intended for this micro-step?"
-3. If the micro-step is complete and verified → output final. If not, use reflect or another tiny tool call to fix/verify.
-4. When done, return {{"type":"final","content":"your summary in Traditional Chinese"}}.
+Workflow (for orchestrator sub-tasks, extra strict for Gemma4/small models):
+1. This subtask comes from a larger plan. Treat it as an independent, self-contained micro-mission. Your output must allow the parent orchestrator to verify completion without ambiguity.
+2. Read relevant files if needed (use small max_chars if possible).
+3. Make ONE precise, minimal edit using search_replace or insert_code.
+4. After tool result: internally (or via reflect) verify "Does the current file/state exactly satisfy the subtask_description + dependency_context? Use read_file on the edited region or a targeted test to confirm."
+5. Only output final when 100% verified for this subtask. Otherwise continue with reflect or fix tool call.
+6. Return {{"type":"final","content":"your summary in Traditional Chinese + explicit 'subtask X verified: <one sentence>' "}}.
 
 Do NOT plan, manage task lists, or reflect extensively unless the tool result shows a problem. Just execute the single focused micro-task efficiently and verify before finishing.
 
