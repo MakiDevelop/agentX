@@ -49,7 +49,8 @@ def _base_engineering_principles() -> str:
 - Small steps + frequent verification: Prefer many small, verifiable changes over large risky ones.
 - Findings-first & honest: When reviewing or reflecting, be direct about problems. Do not sugarcoat.
 - Proper engineering hygiene: 逐檔 stage, 中文 commit message, run tests before commit.
-- Prefer precision over speed."""
+- Prefer precision over speed.
+- For smaller/weaker local models (e.g. Gemma4 series): You have limited reasoning depth and context. ALWAYS break work into the tiniest possible verifiable micro-step. After every tool result (especially edits), explicitly self-verify in your thinking: "Did this micro-step achieve exactly what the current subtask required? If not 100% sure, use 'reflect' type or a read_file / run_tests tool to double-check before any new action or final." Use the task list obsessively to track micro-progress. Never jump ahead."""
 
 
 def _base_output_rules() -> str:
@@ -67,12 +68,12 @@ def _base_output_rules() -> str:
    {"type":"final","content":"<your answer>"}
 
 IMPORTANT: "type" can ONLY be "tool_call", "reflect", or "final". Never use tool names as type values.
+For Gemma4 and other small models: Your output MUST be exactly one minified valid JSON object. No extra words, no markdown, no trailing text. If you feel uncertain, output a "reflect" with a very short focus instead of guessing.
 
 Examples:
 - Read a file:     {"type":"tool_call","tool":"read_file","args":{"path":"src/main.py"}}
 - Edit a file:     {"type":"tool_call","tool":"search_replace","args":{"path":"hello.py","old_string":"# placeholder","new_string":"print('hello')"}}
-- Add a task:      {"type":"tool_call","tool":"task_add","args":{"description":"implement feature X"}}
-- List files:      {"type":"tool_call","tool":"list_files","args":{"path":"."}}
+- Custom action:   {"type":"tool_call","tool":"do_thing","args":{"target":"foo"}}
 - Run tests:       {"type":"tool_call","tool":"run_tests","args":{}}
 - Final answer:    {"type":"final","content":"已完成修改。"}"""
 
@@ -206,7 +207,10 @@ def build_agent_system_prompt(
     else:
         try:
             lines = [tool_prompt_line(tool) for tool in tools.tools()]
-            tool_section = "\n".join(lines) if lines else _base_tools_section()
+            if lines:
+                tool_section = "\n".join(lines)
+            else:
+                tool_section = "(no tools registered)"
         except Exception:
             tool_section = _base_tools_section()
     return f"""You are agentX, a local engineering agent running on Maki's machine.
@@ -252,12 +256,13 @@ def build_worker_system_prompt(
 
 {_base_tools_section()}
 
-Workflow:
-1. Read relevant files if needed.
-2. Make precise edits using search_replace or insert_code.
-3. When done, return {{"type":"final","content":"your summary in Traditional Chinese"}}.
+Workflow (optimized for smaller models like Gemma4):
+1. Read relevant files if needed (use small max_chars if possible).
+2. Make ONE precise, minimal edit using search_replace or insert_code. After the tool result comes back, internally verify: "Does the file now contain exactly the change I intended for this micro-step?"
+3. If the micro-step is complete and verified → output final. If not, use reflect or another tiny tool call to fix/verify.
+4. When done, return {{"type":"final","content":"your summary in Traditional Chinese"}}.
 
-Do NOT plan, manage task lists, or reflect extensively. Just execute the task efficiently.
+Do NOT plan, manage task lists, or reflect extensively unless the tool result shows a problem. Just execute the single focused micro-task efficiently and verify before finishing.
 
 {_base_communication_style()}
 """

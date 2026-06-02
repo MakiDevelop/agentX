@@ -85,10 +85,12 @@ class HeuristicContextCompactor(ContextCompactor):
             role = m.get("role")
             content = str(m.get("content", ""))
 
-            # 高價值訊息標記
+            # 高價值訊息標記（針對 Gemma4 等弱模型優化：多保留成功驗證、錯誤恢復、任務進度）
             is_high_value = any(marker in content for marker in [
                 "=== Reflection", "Reflection Loop Guard", "STUCK", "已更新任務",
-                "search_replace 成功", "insert_code 成功", "編輯後", "下一步建議"
+                "search_replace 成功", "insert_code 成功", "edit_file", "write_file", "patch applied",
+                "編輯後", "下一步建議", "build_pass", "verified", "工具執行成功", "test passed",
+                "目標達成", "micro-step complete", "verification"
             ])
 
             if is_high_value:

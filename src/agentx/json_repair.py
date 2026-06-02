@@ -20,13 +20,38 @@ def extract_json_object(raw: str) -> dict[str, Any] | None:
         candidates.append(balanced)
 
     for candidate in candidates:
+        # Gemma4 / small model common fixes before json.loads
+        fixed = _fix_common_malformed_json(candidate)
         try:
-            data = json.loads(candidate)
+            data = json.loads(fixed)
         except json.JSONDecodeError:
             continue
         if isinstance(data, dict):
             return data
     return None
+
+
+def _fix_common_malformed_json(s: str) -> str:
+    """Heuristic fixes for JSON produced by smaller models like Gemma4.
+    - Remove trailing commas before } or ]
+    - Convert single quotes to double (for strings and keys, best-effort)
+    - Remove JS-style comments
+    - Trim leading/trailing junk
+    This increases tool-call parse success rate without changing the strict prompt contract.
+    """
+    if not s or not s.strip():
+        return s
+    s = s.strip()
+    # Remove // and /* */ comments (small models sometimes add them)
+    s = re.sub(r"//.*?$", "", s, flags=re.MULTILINE)
+    s = re.sub(r"/\*.*?\*/", "", s, flags=re.DOTALL)
+    # Remove trailing commas ( ,} or ,] )
+    s = re.sub(r",\s*([}\]])", r"\1", s)
+    # Best-effort single to double quotes for keys and string values
+    # Only do simple cases to avoid breaking valid JSON with escaped quotes.
+    # This is defense-in-depth; the prompt still requires proper double-quoted JSON.
+    s = re.sub(r"'([^'\\]*(?:\\.[^'\\]*)*)'", r'"\1"', s)
+    return s
 
 
 def _first_balanced_object(raw: str) -> str | None:
