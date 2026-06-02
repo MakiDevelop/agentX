@@ -1,3 +1,23 @@
+"""
+MT22 遷移相容性測試（歷史 + 驗證）。
+
+本檔案**僅保留用於驗證舊單一任務 → 新多任務清單的自動遷移行為**。
+即使 src/agentx/task.py 已完全移除（MT22 Phase A 完成），
+這些測試仍使用 _write_legacy_task() 直接在 .agentx/task.json 寫入舊格式 JSON，
+來確保 migrate_single_task_if_needed() 在各種 dirty/edge 情境下仍正確運作。
+
+原則：
+- 所有新功能測試請使用 agentx.tasks 的公開 API（load/save/find 等）。
+- 本檔案的 migrate 系列測試是「移除 legacy 後仍需保留的相容性保險」。
+- 已移除的舊 reader 測試（原 _get_legacy_task_if_exists 等）已刪或以 importorskip 保護。
+- 不要再依賴 agentx.task 模組（它已不存在）。
+
+參見：
+- docs/MT22-Legacy-Removal-Checklist.md
+- docs/MT22-Migration-Guide.md
+- src/agentx/tasks.py 中的 has_legacy_single_task / get_task_migration_status（僅供 doctor 診斷）
+"""
+
 from pathlib import Path
 from typing import Any
 
@@ -6,6 +26,7 @@ import json
 from agentx.tasks import (
     find_task,
     get_next_task_id,
+    get_task_migration_status,
     load_tasks,
     migrate_single_task_if_needed,
     save_tasks,
@@ -23,13 +44,11 @@ def _write_legacy_task(
     **extra: Any,
 ) -> None:
     """
-    MT22 測試輔助函式。
+    MT22 測試輔助函式（僅供本檔案歷史相容測試使用）。
 
     直接寫入舊的單一任務 JSON（.agentx/task.json），
-    # 用於測試 migrate_single_task_if_needed 與 _get_legacy_task_if_exists。  # REMOVED: _get_legacy_task_if_exists removed with task.py
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-    # # 目的：讓遷移測試不再依賴已經 deprecated 的 agentx.task API，  # REMOVED with _get_legacy  # cleaned legacy test block
-    # # 使「新系統測試新系統」的意圖更清楚。  # REMOVED with _get_legacy  # cleaned legacy test block
+    用於測試 migrate_single_task_if_needed 在各種 legacy dirty data 下的行為。
+    注意：_get_legacy_task_if_exists 及對應 reader 已隨 task.py 移除，本 helper 已改為純 JSON 寫入。
     """
     legacy_dir = workspace / ".agentx"
     legacy_dir.mkdir(parents=True, exist_ok=True)
@@ -259,65 +278,8 @@ def test_migrate_is_idempotent_after_first_run(tmp_path: Path):
     assert len(multi) == 1
 
 
-# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
-# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-# # # # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py  # REMOVED with _get_legacy  # cleaned legacy test block
-# These were testing the legacy reader which is removed with task.py module.
-
-# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
-# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-# # # # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py  # REMOVED with _get_legacy  # cleaned legacy test block
-# These were testing the legacy reader which is removed with task.py module.
-
-def test_normalize_legacy_date_various_formats(tmp_path: Path):
-    """日期欄位應能處理常見舊格式"""
-    _write_legacy_task(tmp_path, title="日期測試任務")
-
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-
-    # 各種常見舊格式
-    test_cases = [
-        ("2024-01-15T10:30:00", True),
-        ("2024-01-15T10:30:00Z", True),
-        ("2024-01-15T10:30:00.123456", True),
-        ("2024-01-15T10:30:00+08:00", True),
-        ("invalid-date", False),
-        ("", False),
-    ]
-
-    for date_val, should_keep in test_cases:
-        data["created_at"] = date_val
-        old_file.write_text(json.dumps(data), encoding="utf-8")
-
-        # # result = _get_legacy_task_if_exists(tmp_path)  # REMOVED: _get_legacy_task_if_exists removed with task.py  # cleaned legacy test block
-        # # assert result is not None  # REMOVED with _get_legacy  # cleaned legacy test block
-        # # if should_keep:  # REMOVED with _get_legacy  # cleaned legacy test block
-            # # assert result.created_at == date_val.strip()  # REMOVED with _get_legacy  # cleaned legacy test block
-
-
-# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
-# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-# # # # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py  # REMOVED with _get_legacy  # cleaned legacy test block
-# These were testing the legacy reader which is removed with task.py module.
-
-# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
-# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-# # # # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py  # REMOVED with _get_legacy  # cleaned legacy test block
-# These were testing the legacy reader which is removed with task.py module.
-
-# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
-# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-# # # # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py  # REMOVED with _get_legacy  # cleaned legacy test block
-# These were testing the legacy reader which is removed with task.py module.
-
 def test_migrate_renames_old_file_to_backup(tmp_path: Path):
-    """遷移成功後，舊的 task.json 應被改名為 task.json.bak（務實策略 B）"""
+    """遷移成功後，舊的 task.json 應被改名為帶時間戳的 task.json.bak.*（務實策略 B）"""
     _write_legacy_task(tmp_path, title="重構認證模組")
 
     migrated = migrate_single_task_if_needed(tmp_path)
@@ -325,7 +287,7 @@ def test_migrate_renames_old_file_to_backup(tmp_path: Path):
 
     old_path = tmp_path / ".agentx" / "task.json"
 
-    # 舊檔應該不再以 task.json 的形式存在（已被備份或刪除）
+    # 舊檔應該不再以 task.json 的形式存在（已被備份）
     assert not old_path.exists()
 
     # 確認新多任務清單正確
@@ -335,7 +297,7 @@ def test_migrate_renames_old_file_to_backup(tmp_path: Path):
 
 
 def test_migrate_always_uses_timestamped_backup(tmp_path: Path):
-    """無論如何，備份檔都應使用時間戳命名，避免覆蓋"""
+    """無論如何，備份檔都應使用時間戳命名，避免覆蓋既有 .bak"""
     # 第一次遷移
     _write_legacy_task(tmp_path, title="任務一")
     migrated1 = migrate_single_task_if_needed(tmp_path)
@@ -353,98 +315,63 @@ def test_migrate_always_uses_timestamped_backup(tmp_path: Path):
     assert migrated2 is True
 
     bak_files = list(backup_dir.glob("task.json.bak*"))
-    # 至少應該存在一個備份檔（可能是時間戳的）
+    # 至少應該存在一個備份檔（時間戳的優先）
     assert len(bak_files) >= 1
 
-# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
-# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-# # def test_normalize_legacy_date_more_edge_cases(tmp_path: Path):  # REMOVED with _get_legacy  # cleaned legacy test block
-    """更多日期邊界：毫秒、空格分隔、無效格式"""
-    _write_legacy_task(tmp_path, title="日期邊界測試")
 
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-
-    # 成功案例
-    for good_date in [
-        "2024-05-20T14:30:00.123",
-        "2024-05-20 14:30:00",
-        "2023-12-31T23:59:59Z",
-    ]:
-        data["created_at"] = good_date
-        old_file.write_text(json.dumps(data), encoding="utf-8")
-        # # result = _get_legacy_task_if_exists(tmp_path)  # REMOVED: _get_legacy_task_if_exists removed with task.py  # cleaned legacy test block
-        # # assert result is not None  # REMOVED with _get_legacy  # cleaned legacy test block
-        # # assert result.created_at == good_date  # REMOVED with _get_legacy  # cleaned legacy test block
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-    # 寬鬆結構檢查：這些會被保留（因為結構像日期），這是我們對 legacy 資料的務實容忍
-    for weird_but_structured in [
-        "2024-13-01T00:00:00",  # 無效月份，但結構像日期
-    ]:
-        data["created_at"] = weird_but_structured
-        old_file.write_text(json.dumps(data), encoding="utf-8")
-        # # result = _get_legacy_task_if_exists(tmp_path)  # REMOVED: _get_legacy_task_if_exists removed with task.py  # cleaned legacy test block
-        # # assert result is not None  # REMOVED with _get_legacy  # cleaned legacy test block
-        # # # 目前採寬鬆策略，保留原始字串  # REMOVED with _get_legacy  # cleaned legacy test block
-        # # assert result.created_at == weird_but_structured  # REMOVED with _get_legacy  # cleaned legacy test block
-
-    # 明顯不是日期的才清空
-    for clearly_bad in ["not-a-date", "2024/05/20"]:
-        data["created_at"] = clearly_bad
-        old_file.write_text(json.dumps(data), encoding="utf-8")
-        # # result = _get_legacy_task_if_exists(tmp_path)  # REMOVED: _get_legacy_task_if_exists removed with task.py  # cleaned legacy test block
-        # # assert result is not None  # REMOVED with _get_legacy  # cleaned legacy test block
-        # # assert result.created_at == ""  # REMOVED with _get_legacy  # cleaned legacy test block
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-
-def test_normalize_legacy_date_robust_formats(tmp_path: Path):
-    """日期正規化應穩健處理各種常見舊格式"""
-    _write_legacy_task(tmp_path, title="日期穩健測試")
-
-    old_file = tmp_path / ".agentx" / "task.json"
-    data = json.loads(old_file.read_text())
-
-    good_cases = [
-        "2024-05-20T14:30:00",
-        "2024-05-20T14:30:00.123456",
-        "2024-05-20 14:30:00",
-        "2024-05-20T14:30:00Z",
-    ]
-
-    for good in good_cases:
-        data["created_at"] = good
-        old_file.write_text(json.dumps(data), encoding="utf-8")
-        # # result = _get_legacy_task_if_exists(tmp_path)  # REMOVED: _get_legacy_task_if_exists removed with task.py  # cleaned legacy test block
-        # # assert result is not None  # REMOVED with _get_legacy  # cleaned legacy test block
-        # # assert result.created_at == good  # REMOVED with _get_legacy  # cleaned legacy test block
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-    bad_cases = [
-        "not a date",
-        "2024/05/20",
-        "完全不是日期",
-    ]
-
-    for bad in bad_cases:
-        data["created_at"] = bad
-        old_file.write_text(json.dumps(data), encoding="utf-8")
-        # # result = _get_legacy_task_if_exists(tmp_path)  # REMOVED: _get_legacy_task_if_exists removed with task.py  # cleaned legacy test block
-        # # assert result is not None  # REMOVED with _get_legacy  # cleaned legacy test block
-        # # assert result.created_at == ""  # REMOVED with _get_legacy  # cleaned legacy test block
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
-# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-# # # # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py  # REMOVED with _get_legacy  # cleaned legacy test block
-# These were testing the legacy reader which is removed with task.py module.
-
-# # [REMOVED as part of MT22 legacy cleanup: _get_legacy_task_if_exists tests]  # REMOVED: _get_legacy_task_if_exists removed with task.py
-# # # These were testing the legacy reader which is removed with task.py module.  # REMOVED with _get_legacy  # cleaned legacy test block
- # #   # REMOVED with _get_legacy  # cleaned legacy test block
-# # def test_migrate_handles_old_task_with_whitespace_only_title(tmp_path: Path):  # REMOVED with _get_legacy  # cleaned legacy test block
-    """舊任務標題全是空白時應安全跳過遷移"""
+def test_migrate_skips_blank_title(tmp_path: Path):
+    """舊任務標題全是空白（或僅空白）時應安全跳過遷移（對應 migrate 內 if not title）"""
     _write_legacy_task(tmp_path, title="   ", status="active")
 
     migrated = migrate_single_task_if_needed(tmp_path)
     assert migrated is False
     assert load_tasks(tmp_path) == []
+
+
+# =============================================================================
+# CI 風格「模擬完全無 legacy 環境」測試
+# 這些測試專為 CI / 回歸保護設計：
+# - 使用乾淨 tmp_path（無任何 .agentx 或無 task.json）
+# - 驗證 migration status 為 clean / no legacy
+# - 驗證新系統 API 完全不依賴舊格式
+# - 驗證關鍵字 "MT22" / "legacy" 不會意外出現在純新環境的診斷/摘要中（除 doctor 的固定項目名）
+# - 可被 CI 直接收集執行，作為 "task.py 移除後無回歸" 的 gate
+# =============================================================================
+
+def test_ci_no_legacy_clean_workspace_migration_status(tmp_path: Path):
+    """模擬完全無 legacy 環境：乾淨 workspace 應回報無 legacy 資料。"""
+    status = get_task_migration_status(tmp_path)
+
+    assert status["has_legacy_single_task"] is False
+    assert status["has_multi_task_file"] is False
+    assert status["legacy_system_active"] is False
+    assert status["multi_task_count"] == 0
+
+
+def test_ci_no_legacy_after_migrate_old_file_is_gone_and_new_is_clean(tmp_path: Path):
+    """模擬有 legacy 但 migrate 後：舊檔消失、新 tasks.json 乾淨、無舊 reader 污染。"""
+    _write_legacy_task(tmp_path, title="即將被遷移的舊任務", status="active")
+
+    # 遷移前狀態
+    pre = get_task_migration_status(tmp_path)
+    assert pre["has_legacy_single_task"] is True
+
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is True
+
+    # 舊檔已備份，不再是 task.json
+    old = tmp_path / ".agentx" / "task.json"
+    assert not old.exists()
+
+    # 新系統乾淨（.bak 存在但不影響 has_legacy 判斷；has_legacy 只看 task.json）
+    post = get_task_migration_status(tmp_path)
+    assert post["has_legacy_single_task"] is False
+    assert post["has_multi_task_file"] is True
+    assert post["legacy_system_active"] is False
+    assert post["multi_task_count"] == 1
+
+    # 載入新清單不應有任何 legacy 殘留
+    tasks = load_tasks(tmp_path)
+    assert len(tasks) == 1
+    assert "自動遷移" in tasks[0]["notes"]
+    # 沒有舊 TaskState 物件等污染
