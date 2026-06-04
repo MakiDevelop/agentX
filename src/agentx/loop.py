@@ -108,6 +108,8 @@ class AgentSession:
                 self.hooks = HookManager()
             self.hooks.add(HookEvent.FINAL_ANSWER, self._on_final_answer_learning)
             self.hooks.add(HookEvent.SESSION_END, self._on_session_end_learning)
+        if self.hooks is not None and self.tools.hooks is None:
+            self.tools.hooks = self.hooks
 
         # Task List 持久化載入（Micro-task 21 A2）
         self.tasks: list[dict] = load_tasks(self.settings.workspace)
@@ -300,12 +302,7 @@ class AgentSession:
             ))
 
         for step in range(self.settings.max_steps):
-            # Context Compaction v2 自動觸發（穩定性強化）
-            limit = getattr(self.settings, "context_limit_tokens", 8192)
-            if isinstance(limit, (int, float)) and limit > 0:
-                if self.context_tokens_estimate > limit * 0.82:
-                    compact_result = self.compact(keep_last=5)
-                    self._emit_trace(f"auto_compact triggered: {compact_result}")
+            self._maybe_auto_compact()
 
             if self.hooks:
                 self.hooks.fire(HookEvent.TURN_START, TurnStartContext(
@@ -330,6 +327,26 @@ class AgentSession:
                 )
                 continue
             if isinstance(action, FinalAnswer):
+                failing = self._unresolved_failing_tools()
+                if failing:
+                    self._final_guard_retries = getattr(self, "_final_guard_retries", 0) + 1
+                    if self._final_guard_retries >= 4:
+                        self.last_failing_tools = failing
+                        return self._handle_final_answer(
+                            f"任務失敗：工具 {', '.join(sorted(failing))} 仍有未解決的錯誤。"
+                            f" 模型原始回覆: {action.content}",
+                            effective_plan_only,
+                        )
+                    self.messages.append({"role": "assistant", "content": action.model_dump_json()})
+                    self.messages.append({
+                        "role": "system",
+                        "content": (
+                            f"FinalAnswer 被擋：工具 {', '.join(sorted(failing))} 仍有未解決的錯誤。"
+                            "請先修復錯誤再提交最終答案。"
+                        ),
+                    })
+                    continue
+                self._final_guard_retries = 0
                 return self._handle_final_answer(action.content, effective_plan_only)
 
             if isinstance(action, Reflect):
@@ -580,6 +597,10 @@ class AgentSession:
         self.error_history = []
         self.current_error = None
         self._file_ops = {}
+        self._tool_outcomes = {}
+        self._last_compact_tokens = None
+        self.last_termination = "unknown"
+        self.last_failing_tools = set()
 
     # === Task Management (for complex long-horizon tasks) ===
 
@@ -743,6 +764,22 @@ class AgentSession:
             return self.recovery_playbook.last_record.suggested_actions
         return []
 
+    def _maybe_auto_compact(self) -> None:
+        limit = getattr(self.settings, "context_limit_tokens", 8192)
+        if not isinstance(limit, (int, float)) or limit <= 0:
+            return
+        current = self.context_tokens_estimate
+        if current <= limit * 0.82:
+            return
+        if self._last_compact_tokens is not None and current <= self._last_compact_tokens:
+            return
+        try:
+            compact_result = self.compact(keep_last=5)
+            self._last_compact_tokens = self.context_tokens_estimate
+            self._emit_trace(f"auto_compact triggered: {compact_result}")
+        except Exception as e:
+            self._emit_trace(f"auto_compact failed (safe): {e}")
+
     def compact(self, keep_last: int = 6) -> str:
         """
         Context Compaction v2（Phase B1）。
@@ -751,6 +788,7 @@ class AgentSession:
         強制保留目前任務清單、重要 Reflection 與決策歷史。
         """
         before_count = len(self.messages)
+        self._scan_messages_for_file_ops(self.messages)
         new_messages, result = self.compactor.compact(
             self.messages,
             self.tasks,
@@ -758,18 +796,17 @@ class AgentSession:
             error_history=self.error_history,
         )
 
-        self._scan_messages_for_file_ops(new_messages)
-        if self._file_ops:
-            file_summary = self._build_file_ops_summary()
-            if file_summary:
-                for i in range(len(new_messages) - 1, -1, -1):
-                    if new_messages[i].get("role") == "system" and "壓縮" in new_messages[i].get("content", ""):
-                        new_messages[i]["content"] += "\n\n" + file_summary
-                        break
-                else:
-                    new_messages.append({"role": "system", "content": file_summary})
+        file_summary = self._build_file_ops_summary() if self._file_ops else ""
 
-        self.messages = new_messages
+        if len(new_messages) >= len(self.messages) and not file_summary:
+            result = "壓縮跳過（訊息數量不足）"
+        else:
+            if file_summary:
+                new_messages.append({"role": "system", "content": file_summary})
+            if len(new_messages) < len(self.messages):
+                self.messages = new_messages
+            elif file_summary:
+                self.messages.append({"role": "system", "content": file_summary})
         self.compaction_count += 1
 
         if self.hooks:
@@ -778,14 +815,15 @@ class AgentSession:
                 tokens_estimate=self.context_tokens_estimate, summary=result,
             ))
 
-        # 重新計算 token 估計
         return (
-            f"{result} 目前約 {self.context_tokens_estimate} tokens。"
+            f"壓縮完成：{result} 目前約 {self.context_tokens_estimate} tokens。"
         )
 
     def _handle_final_answer(self, content: str, plan_only: bool) -> str:
         self.messages.append({"role": "assistant", "content": content})
         self._persist_message("assistant", content)
+        self.last_termination = "final"
+        self.last_failing_tools = self._unresolved_failing_tools()
         if self.hooks:
             self.hooks.fire(HookEvent.FINAL_ANSWER, FinalAnswerContext(
                 content=content, plan_only=plan_only,
@@ -819,7 +857,16 @@ class AgentSession:
         summary = result.content.replace("\n", "\\n")[:240]
         self._emit_trace(f"tool_result {action.tool} ok={result.ok} content={summary}")
         self._track_file_op(action)
+        if result.ok and "exit=1" in (result.content or ""):
+            self._tool_outcomes[action.tool] = False
+        elif result.ok:
+            self._tool_outcomes[action.tool] = True
+        else:
+            self._tool_outcomes[action.tool] = False
         return result
+
+    def _unresolved_failing_tools(self) -> set[str]:
+        return {name for name, ok in self._tool_outcomes.items() if not ok}
 
     def _track_file_op(self, action: ToolCall) -> None:
         path = action.args.get("path")

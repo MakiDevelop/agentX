@@ -177,6 +177,11 @@ def test_error_hook_fires_on_tool_failure(tmp_path: Path) -> None:
         tmp_path,
         [
             '{"type":"tool_call","tool":"read_file","args":{"path":"nonexistent_file_xyz.txt"}}',
+            '{"type":"tool_call","tool":"read_file","args":{"path":"nonexistent_file_xyz.txt"}}',
+            '{"type":"final","content":"done"}',
+            '{"type":"final","content":"done"}',
+            '{"type":"final","content":"done"}',
+            '{"type":"final","content":"done"}',
             '{"type":"final","content":"done"}',
         ],
         hooks=hooks,
