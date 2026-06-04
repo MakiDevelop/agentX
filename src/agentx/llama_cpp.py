@@ -33,6 +33,7 @@ class LlamaCppClient:
             "model": self.model,
             "messages": list(messages),
             "stream": on_delta is not None or cancel_event is not None,
+            "chat_template_kwargs": {"enable_thinking": False},
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
@@ -111,7 +112,11 @@ def _extract_content(data: dict[str, Any]) -> str:
     choices = data.get("choices", [])
     if not choices:
         return ""
-    return str(choices[0].get("message", {}).get("content", ""))
+    msg = choices[0].get("message", {})
+    content = msg.get("content") or ""
+    if not content:
+        content = msg.get("reasoning_content") or ""
+    return str(content)
 
 
 def _extract_delta(data: dict[str, Any]) -> str:
