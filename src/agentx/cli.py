@@ -860,7 +860,11 @@ def run_print_prompt(
     # Phase A (MT22): 自動從舊單一任務遷移到多任務清單
     migrate_single_task_if_needed(settings.workspace)
 
-    ollama, memory, tools = build_runtime(settings)
+    approval_policy = None
+    if project_config.approval:
+        mode = normalize_approval_mode(project_config.approval)
+        approval_policy = ApprovalPolicy(mode)
+    ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
     attachment_context, _ = build_attachment_context(prompt, settings.workspace)
     if attachment_context:
         prompt = f"{prompt}\n\n{attachment_context}"
