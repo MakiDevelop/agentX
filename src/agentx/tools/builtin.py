@@ -86,6 +86,7 @@ class WriteFileTool(_WorkspaceTool):
 
 class EditFileTool(_WorkspaceTool):
     name = "edit_file"
+    aliases = ["search_replace"]
     description = (
         "對 workspace 內既有檔案做 oldText→newText 替換；"
         "每個 oldText 必須在檔內出現恰好一次；改 bug／局部修正用這個比 write_file 安全"
