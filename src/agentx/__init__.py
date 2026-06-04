@@ -8,17 +8,25 @@ from agentx.coordinator import (
     StepResult,
 )
 from agentx.hooks import (
+    CompactContext,
+    ErrorHookContext,
+    FinalAnswerContext,
     HookEvent,
     HookManager,
     HookResult,
     HookVeto,
+    SessionEndContext,
+    SessionStartContext,
     ToolCallContext,
     ToolResultContext,
+    TurnEndContext,
+    TurnStartContext,
 )
 from agentx.protocol import Tool, ToolResult
 from agentx.safety import Risk
 from agentx.tools import ApprovalCallback, ToolRegistry, builtin_tools
-from agentx.learning import LearningManager, load_learning_manager  # self-learning proposals + reflexion (ai-tetsu inspired)
+from agentx.learning import LearningManager, load_learning_manager
+from agentx.session_store import SessionEntry, SessionStore, fork_session
 
 __all__ = [
     "__version__",
@@ -26,10 +34,17 @@ __all__ = [
     "Coordinator",
     "CoordinatorError",
     "CoordinatorResult",
+    "CompactContext",
+    "ErrorHookContext",
+    "FinalAnswerContext",
     "HookEvent",
     "HookManager",
     "HookResult",
     "HookVeto",
+    "SessionEndContext",
+    "SessionStartContext",
+    "TurnEndContext",
+    "TurnStartContext",
     "Plan",
     "PlanStep",
     "Risk",
@@ -43,6 +58,9 @@ __all__ = [
     "builtin_tools",
     "LearningManager",
     "load_learning_manager",
+    "SessionEntry",
+    "SessionStore",
+    "fork_session",
 ]
 
 __version__ = "0.1.0"

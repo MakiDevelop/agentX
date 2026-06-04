@@ -13,6 +13,13 @@ from agentx.safety import Risk
 class HookEvent(str, Enum):
     PRE_TOOL_USE = "PreToolUse"
     POST_TOOL_USE = "PostToolUse"
+    SESSION_START = "SessionStart"
+    SESSION_END = "SessionEnd"
+    FINAL_ANSWER = "FinalAnswer"
+    TURN_START = "TurnStart"
+    TURN_END = "TurnEnd"
+    COMPACT = "Compact"
+    ERROR = "Error"
 
 
 class HookVeto(Exception):
@@ -49,6 +56,59 @@ class ToolResultContext:
     tool: str
     args: dict[str, Any]
     result: ToolResult
+
+
+@dataclass
+class SessionStartContext:
+    namespace: str
+    prompt: str
+
+
+@dataclass
+class SessionEndContext:
+    namespace: str
+    termination: str
+    message_count: int
+    error_count: int
+
+
+@dataclass
+class FinalAnswerContext:
+    content: str
+    plan_only: bool
+    message_count: int
+
+
+@dataclass
+class TurnStartContext:
+    step: int
+    message_count: int
+    tokens_estimate: int
+
+
+@dataclass
+class TurnEndContext:
+    step: int
+    action_type: str
+    tool_name: str | None = None
+    result_ok: bool | None = None
+
+
+@dataclass
+class CompactContext:
+    before_count: int
+    after_count: int
+    tokens_estimate: int
+    summary: str
+
+
+@dataclass
+class ErrorHookContext:
+    tool_name: str
+    error_type: str
+    error_message: str
+    is_stuck: bool
+    error_history_length: int
 
 
 HookCallback = Callable[[Any], "HookResult | None"]

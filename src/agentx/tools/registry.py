@@ -146,7 +146,12 @@ class ToolRegistry:
             content = tool.run(args)
             result = ToolResult(tool=primary, ok=True, content=str(content))
         except Exception as exc:
-            result = ToolResult(tool=primary, ok=False, content=f"{type(exc).__name__}: {exc}")
+            result = ToolResult(
+                tool=primary,
+                ok=False,
+                content=f"{type(exc).__name__}: {exc}",
+                error_type=type(exc).__name__,
+            )
         if self.hooks is not None:
             post = self.hooks.fire(
                 HookEvent.POST_TOOL_USE,

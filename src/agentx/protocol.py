@@ -27,6 +27,8 @@ class ToolResult(BaseModel):
     tool: str
     ok: bool
     content: str
+    error_type: str | None = None
+    error_details: dict[str, Any] | None = None
 
 
 @runtime_checkable

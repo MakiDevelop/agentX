@@ -19,10 +19,21 @@ from agentx.error_classifier import ErrorClassifier
 from agentx.protocol import FinalAnswer, Reflect, ToolCall, ToolResult
 from agentx.runtime_prompt import build_agent_system_prompt
 from agentx.tasks import format_task_list_summary, get_next_task_id, load_tasks, save_tasks
-from agentx.hooks import HookManager
+from agentx.hooks import (
+    HookEvent,
+    HookManager,
+    SessionStartContext,
+    SessionEndContext,
+    FinalAnswerContext,
+    TurnStartContext,
+    TurnEndContext,
+    CompactContext,
+    ErrorHookContext,
+)
 from agentx.memory_hall import MemoryHallClient
 from agentx.tools import ToolRegistry
 from agentx.learning import load_learning_manager, LearningManager
+from agentx.session_store import SessionStore
 
 EDITING_TOOLS = {"search_replace", "insert_code", "apply_patch"}
 
@@ -89,10 +100,14 @@ class AgentSession:
         self.memory = memory
         self.hooks = hooks
         self.learning_manager: LearningManager = load_learning_manager(settings, memory)
-        # Reflection loop guard for headless stability (Micro-task 20)
         self.consecutive_reflections: int = 0
         self.max_consecutive_reflections: int = 3
         self.learning_enabled = getattr(settings, "learning_enabled", True)
+        if self.learning_enabled:
+            if self.hooks is None:
+                self.hooks = HookManager()
+            self.hooks.add(HookEvent.FINAL_ANSWER, self._on_final_answer_learning)
+            self.hooks.add(HookEvent.SESSION_END, self._on_session_end_learning)
 
         # Task List 持久化載入（Micro-task 21 A2）
         self.tasks: list[dict] = load_tasks(self.settings.workspace)
@@ -131,6 +146,8 @@ class AgentSession:
         # failed cargo test would make the failure "fall off" and let the
         # finalization guard pass a lying success.)
         self._tool_outcomes: dict[str, bool] = {}
+        self._file_ops: dict[str, set[str]] = {}
+        self._session_store: SessionStore | None = None
 
         self.messages = self._initial_messages()
 
@@ -180,6 +197,27 @@ class AgentSession:
 
         return [{"id": p.id, "title": p.title, "type": p.lesson_type, "status": p.status} for p in proposals]
 
+    def _on_final_answer_learning(self, ctx: FinalAnswerContext) -> None:
+        if ctx.plan_only:
+            return
+        try:
+            learnings = self.reflect_and_learn()
+            if learnings:
+                self._emit_trace(
+                    f"[learning] Generated {len(learnings)} proposals. "
+                    "Review with /learn or .agentx/learning/proposals/"
+                )
+        except Exception as e:
+            self._emit_trace(f"[learning] Reflection skipped due to error: {e}")
+
+    def _on_session_end_learning(self, ctx: SessionEndContext) -> None:
+        if ctx.termination != "max_steps_exceeded":
+            return
+        try:
+            self.reflect_and_learn("session ended without final answer (max_steps reached)")
+        except Exception:
+            pass
+
     def _initial_messages(self) -> list[dict[str, str]]:
         system_prompt = self._custom_system_prompt or build_agent_system_prompt(self.settings.persona, tools=self.tools, model=self.settings.model)
         return [
@@ -199,6 +237,31 @@ class AgentSession:
                 ),
             },
         ]
+
+    def enable_persistence(self, workspace: Path | None = None) -> None:
+        ws = workspace or self.settings.workspace
+        self._session_store = SessionStore.create(ws, self.settings.model, self.namespace)
+        for msg in self.messages:
+            self._session_store.append(msg["role"], msg["content"])
+
+    def _persist_message(self, role: str, content: str, **metadata: Any) -> None:
+        if self._session_store is not None:
+            self._session_store.append(role, content, metadata=metadata or None)
+
+    @classmethod
+    def from_session_store(
+        cls,
+        store_path: Path,
+        settings: "Settings",
+        ollama: Any,
+        tools: "ToolRegistry",
+        **kwargs: Any,
+    ) -> "AgentSession":
+        store = SessionStore.load(store_path)
+        session = cls(settings=settings, ollama=ollama, tools=tools, **kwargs)
+        session.messages = store.replay()
+        session._session_store = store
+        return session
 
     def ask(
         self,
@@ -223,24 +286,32 @@ class AgentSession:
                 return result.content
             return f"工具執行失敗：{result.content}"
 
-        self.messages.append(
-            {
-                "role": "user",
-                "content": (
-                    f"Workspace: {self.settings.workspace}\n"
-                    f"Default memory namespace: {namespace}\n"
-                    f"Task: {prompt}"
-                ),
-            }
+        user_content = (
+            f"Workspace: {self.settings.workspace}\n"
+            f"Default memory namespace: {namespace}\n"
+            f"Task: {prompt}"
         )
+        self.messages.append({"role": "user", "content": user_content})
+        self._persist_message("user", user_content)
 
-        for _ in range(self.settings.max_steps):
+        if self.hooks:
+            self.hooks.fire(HookEvent.SESSION_START, SessionStartContext(
+                namespace=namespace, prompt=prompt,
+            ))
+
+        for step in range(self.settings.max_steps):
             # Context Compaction v2 自動觸發（穩定性強化）
             limit = getattr(self.settings, "context_limit_tokens", 8192)
             if isinstance(limit, (int, float)) and limit > 0:
                 if self.context_tokens_estimate > limit * 0.82:
                     compact_result = self.compact(keep_last=5)
                     self._emit_trace(f"auto_compact triggered: {compact_result}")
+
+            if self.hooks:
+                self.hooks.fire(HookEvent.TURN_START, TurnStartContext(
+                    step=step, message_count=len(self.messages),
+                    tokens_estimate=self.context_tokens_estimate,
+                ))
 
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
             action = self._parse_action(raw)
@@ -333,8 +404,18 @@ class AgentSession:
             else:
                 result = self._run_tool(action)
 
-            self.messages.append({"role": "assistant", "content": action.model_dump_json()})
-            self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
+            assistant_content = action.model_dump_json()
+            tool_content = self._format_tool_result(result)
+            self.messages.append({"role": "assistant", "content": assistant_content})
+            self.messages.append({"role": "tool", "content": tool_content})
+            self._persist_message("assistant", assistant_content)
+            self._persist_message("tool", tool_content)
+
+            if self.hooks:
+                self.hooks.fire(HookEvent.TURN_END, TurnEndContext(
+                    step=step, action_type="tool_call",
+                    tool_name=action.tool, result_ok=result.ok,
+                ))
 
             # === 自動驗證注入（opt4：提升 Gemma4 等弱模型的「聰明」與可靠性） ===
             # 編輯類工具成功後，自動注入系統提示，強制模型在下一步先驗證（read or test）
@@ -371,7 +452,13 @@ class AgentSession:
 
             # === 錯誤分類與基礎恢復處理（階段一 + 步驟 4） ===
             if not result.ok:
-                error_type = self.error_classifier.classify(action.tool, result)
+                if result.error_type:
+                    try:
+                        error_type = ErrorType(result.error_type)
+                    except ValueError:
+                        error_type = self.error_classifier.classify(action.tool, result)
+                else:
+                    error_type = self.error_classifier.classify(action.tool, result)
                 self.current_error = ErrorContext(
                     error_type=error_type,
                     tool_name=action.tool,
@@ -379,17 +466,26 @@ class AgentSession:
                 )
                 self.error_history.append(self.current_error)
 
-                # === STUCK 偵測（階段二步驟 1） ===
-                if self._detect_stuck(self.current_error):
+                is_stuck = self._detect_stuck(self.current_error)
+                if is_stuck:
                     self.current_error.error_type = ErrorType.STUCK
                     stuck_msg = self._build_stuck_intervention_message(self.current_error)
                     self.messages.append({"role": "system", "content": stuck_msg})
-                    # STUCK 時強烈建議進行 Reflection
                     self.messages.append({
                         "role": "system",
                         "content": "請立即輸出 reflect，專注解決當前卡住的問題。"
                     })
-                    continue  # 跳過後續執行，讓模型在下一輪有機會回應 STUCK 訊息
+
+                if self.hooks:
+                    self.hooks.fire(HookEvent.ERROR, ErrorHookContext(
+                        tool_name=action.tool, error_type=error_type.value,
+                        error_message=result.content or "",
+                        is_stuck=is_stuck,
+                        error_history_length=len(self.error_history),
+                    ))
+
+                if is_stuck:
+                    continue
 
                 if error_type in (ErrorType.TRANSIENT, ErrorType.CALL_ERROR):
                     # 有限次重試引導
@@ -464,11 +560,12 @@ class AgentSession:
                 return self._handle_final_answer(action.content, effective_plan_only)
         except Exception:
             pass
-        if self.learning_enabled:
-            try:
-                self.reflect_and_learn("session ended without final answer (max_steps reached)")
-            except Exception:
-                pass
+        self.last_termination = "max_steps_exceeded"
+        if self.hooks:
+            self.hooks.fire(HookEvent.SESSION_END, SessionEndContext(
+                namespace=namespace, termination="max_steps_exceeded",
+                message_count=len(self.messages), error_count=len(self.error_history),
+            ))
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
 
     def clear(self) -> None:
@@ -482,6 +579,7 @@ class AgentSession:
         self.messages = self._initial_messages()
         self.error_history = []
         self.current_error = None
+        self._file_ops = {}
 
     # === Task Management (for complex long-horizon tasks) ===
 
@@ -652,6 +750,7 @@ class AgentSession:
         使用 HeuristicContextCompactor 產生結構化摘要，
         強制保留目前任務清單、重要 Reflection 與決策歷史。
         """
+        before_count = len(self.messages)
         new_messages, result = self.compactor.compact(
             self.messages,
             self.tasks,
@@ -659,8 +758,25 @@ class AgentSession:
             error_history=self.error_history,
         )
 
+        self._scan_messages_for_file_ops(new_messages)
+        if self._file_ops:
+            file_summary = self._build_file_ops_summary()
+            if file_summary:
+                for i in range(len(new_messages) - 1, -1, -1):
+                    if new_messages[i].get("role") == "system" and "壓縮" in new_messages[i].get("content", ""):
+                        new_messages[i]["content"] += "\n\n" + file_summary
+                        break
+                else:
+                    new_messages.append({"role": "system", "content": file_summary})
+
         self.messages = new_messages
         self.compaction_count += 1
+
+        if self.hooks:
+            self.hooks.fire(HookEvent.COMPACT, CompactContext(
+                before_count=before_count, after_count=len(new_messages),
+                tokens_estimate=self.context_tokens_estimate, summary=result,
+            ))
 
         # 重新計算 token 估計
         return (
@@ -669,13 +785,12 @@ class AgentSession:
 
     def _handle_final_answer(self, content: str, plan_only: bool) -> str:
         self.messages.append({"role": "assistant", "content": content})
-        if not plan_only and self.learning_enabled:
-            try:
-                learnings = self.reflect_and_learn()
-                if learnings:
-                    self._emit_trace(f"[learning] Generated {len(learnings)} proposals. Review with /learn or .agentx/learning/proposals/")
-            except Exception as _e:
-                self._emit_trace(f"[learning] Reflection skipped due to error: {_e}")
+        self._persist_message("assistant", content)
+        if self.hooks:
+            self.hooks.fire(HookEvent.FINAL_ANSWER, FinalAnswerContext(
+                content=content, plan_only=plan_only,
+                message_count=len(self.messages),
+            ))
         return content
 
     def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | Reflect | "InvalidAction":
@@ -695,12 +810,67 @@ class AgentSession:
     def _format_tool_result(self, result: ToolResult) -> str:
         return result.model_dump_json()
 
+    _FILE_WRITE_TOOLS = {"write_file", "edit_file", "search_replace", "insert_code", "apply_patch"}
+    _FILE_READ_TOOLS = {"read_file"}
+
     def _run_tool(self, action: ToolCall) -> ToolResult:
         self._emit_trace(f"tool_call {action.tool} args={action.args}")
         result = self.tools.run(action.tool, action.args)
         summary = result.content.replace("\n", "\\n")[:240]
         self._emit_trace(f"tool_result {action.tool} ok={result.ok} content={summary}")
+        self._track_file_op(action)
         return result
+
+    def _track_file_op(self, action: ToolCall) -> None:
+        path = action.args.get("path")
+        if not path:
+            return
+        path = str(path)
+        if path not in self._file_ops:
+            self._file_ops[path] = set()
+        if action.tool in self._FILE_WRITE_TOOLS:
+            self._file_ops[path].add("write")
+        elif action.tool in self._FILE_READ_TOOLS:
+            self._file_ops[path].add("read")
+
+    def _scan_messages_for_file_ops(self, messages: list[dict[str, Any]]) -> None:
+        import json as _json
+        for msg in messages:
+            if msg.get("role") != "assistant":
+                continue
+            content = msg.get("content", "")
+            try:
+                data = _json.loads(content)
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(data, dict) or data.get("type") != "tool_call":
+                continue
+            tool = data.get("tool", "")
+            path = (data.get("args") or {}).get("path")
+            if not path:
+                continue
+            path = str(path)
+            if path not in self._file_ops:
+                self._file_ops[path] = set()
+            if tool in self._FILE_WRITE_TOOLS:
+                self._file_ops[path].add("write")
+            elif tool in self._FILE_READ_TOOLS:
+                self._file_ops[path].add("read")
+
+    def _build_file_ops_summary(self) -> str:
+        modified = []
+        read_only = []
+        for path, ops in sorted(self._file_ops.items()):
+            if "write" in ops:
+                modified.append(path)
+            elif "read" in ops:
+                read_only.append(path)
+        parts = []
+        if modified:
+            parts.append(f"<modified-files>\n{chr(10).join(modified)}\n</modified-files>")
+        if read_only:
+            parts.append(f"<read-files>\n{chr(10).join(read_only)}\n</read-files>")
+        return "\n".join(parts)
 
     def _handle_task_tool(self, action: ToolCall) -> ToolResult:
         """Internal task management for the agent."""
