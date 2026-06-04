@@ -139,7 +139,7 @@ class AgentSession:
         This is how agentX gets 'smarter' over time while respecting human gate + fidelity.
         Call after ask() or on /learn.
         """
-        if not getattr(self, "learning_enabled", True):
+        if not self.learning_enabled:
             return []
 
         # Gather context
@@ -147,14 +147,20 @@ class AgentSession:
         transcript = transcript_summary or "\n".join(
             f"{m.get('role', '?')}: {str(m.get('content', ''))[:500]}" for m in recent_messages
         )
-        errors = [asdict(e) if hasattr(e, '__dataclass_fields__') else str(e) for e in self.error_history[-5:]]
+        errors = []
+        for e in self.error_history[-5:]:
+            if hasattr(e, '__dataclass_fields__'):
+                d = asdict(e)
+                errors.append({k: str(v) for k, v in d.items()})
+            else:
+                errors.append(str(e))
         tasks_summary = [{"id": t.get("id"), "status": t.get("status"), "title": t.get("title")} for t in (self.tasks or [])[-5:]]
 
         # Load key principles from AGENTX.md for fitness (simple read; agent can do deeper)
         principles = ""
         agentyx_path = self.settings.workspace / "AGENTX.md"
         if agentyx_path.exists():
-            principles = agentyx_path.read_text(encoding="utf-8")[:4000]  # cap for prompt
+            principles = agentyx_path.read_text(encoding="utf-8", errors="replace")[:4000]
 
         proposals = self.learning_manager.reflect_on_session(
             self.ollama,
@@ -458,8 +464,7 @@ class AgentSession:
                 return self._handle_final_answer(action.content, effective_plan_only)
         except Exception:
             pass
-        # Attempt learning even on incomplete session (max steps hit)
-        if getattr(self, "learning_enabled", True):
+        if self.learning_enabled:
             try:
                 self.reflect_and_learn("session ended without final answer (max_steps reached)")
             except Exception:
@@ -664,15 +669,13 @@ class AgentSession:
 
     def _handle_final_answer(self, content: str, plan_only: bool) -> str:
         self.messages.append({"role": "assistant", "content": content})
-        # Self-learning: after successful final answer, trigger reflection to get smarter (proposals only)
-        if not plan_only and getattr(self, "learning_enabled", True):
+        if not plan_only and self.learning_enabled:
             try:
                 learnings = self.reflect_and_learn()
                 if learnings:
-                    self.trace(f"[learning] Generated {len(learnings)} proposals. Review with /learn or .agentx/learning/proposals/")
+                    self._emit_trace(f"[learning] Generated {len(learnings)} proposals. Review with /learn or .agentx/learning/proposals/")
             except Exception as _e:
-                # Learning must never break the main flow
-                self.trace(f"[learning] Reflection skipped due to error: {_e}")
+                self._emit_trace(f"[learning] Reflection skipped due to error: {_e}")
         return content
 
     def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | Reflect | "InvalidAction":
