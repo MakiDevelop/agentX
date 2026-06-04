@@ -58,6 +58,13 @@ ALLOWED_COMMANDS: dict[str, list[str]] = {
     "git status --short --branch": ["git", "status", "--short", "--branch"],
     "git diff": ["git", "diff"],
     "cargo fmt --check": ["cargo", "fmt", "--", "--check"],
+    "npm test": ["npm", "test"],
+    "npx vitest run": ["npx", "vitest", "run"],
+    "npx tsc --noEmit": ["npx", "tsc", "--noEmit"],
+    "node --version": ["node", "--version"],
+    "npm --version": ["npm", "--version"],
+    "ls -la": ["ls", "-la"],
+    "ls": ["ls"],
 }
 
 # YELLOW-risk build / test commands: invoke build.rs, proc-macros, or test code
@@ -68,6 +75,10 @@ BUILD_COMMANDS: dict[str, list[str]] = {
     "cargo build": ["cargo", "build"],
     "cargo test": ["cargo", "test"],
     "cargo clippy -- -D warnings": ["cargo", "clippy", "--", "-D", "warnings"],
+    "npm install": ["npm", "install"],
+    "npm run build": ["npm", "run", "build"],
+    "npm run test": ["npm", "run", "test"],
+    "npx vitest": ["npx", "vitest"],
 }
 
 DOCKER_COMPOSE_ACTIONS = {"ps", "build", "up", "down", "logs"}
