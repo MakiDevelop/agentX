@@ -38,12 +38,20 @@ class LlamaCppClient:
             payload["response_format"] = {"type": "json_object"}
         if payload["stream"]:
             return self._chat_stream(payload, on_delta, cancel_event)
-        response = self._client.post(
-            f"{self.base_url}/v1/chat/completions", json=payload,
-        )
-        response.raise_for_status()
-        data = response.json()
-        return _extract_content(data).strip()
+        for attempt in range(3):
+            try:
+                response = self._client.post(
+                    f"{self.base_url}/v1/chat/completions", json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+                return _extract_content(data).strip()
+            except (httpx.RemoteProtocolError, httpx.ConnectError, httpx.ReadTimeout) as e:
+                if attempt == 2:
+                    raise
+                import time
+                time.sleep(2 ** attempt)
+        return ""
 
     def _chat_stream(
         self,
