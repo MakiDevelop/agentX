@@ -30,6 +30,7 @@ from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaCancelledError, OllamaClient
+from agentx.llama_cpp import LlamaCppClient
 from agentx.persona import list_personas, normalize_persona
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
@@ -814,11 +815,20 @@ def build_runtime(
     注意（MT22）：此函式已完全與舊的單一任務系統（TaskState）解耦，
     不再回傳或依賴舊的 task 物件。所有任務相關狀態請改用新多任務清單。
     """
-    ollama = OllamaClient(
-        base_url=settings.ollama_url,
-        model=settings.model,
-        timeout=settings.ollama_timeout,
-    )
+    import os
+    backend = os.getenv("AGENTX_BACKEND", "ollama").lower()
+    if backend == "llama_cpp":
+        ollama = LlamaCppClient(
+            base_url=settings.ollama_url,
+            model=settings.model,
+            timeout=settings.ollama_timeout,
+        )
+    else:
+        ollama = OllamaClient(
+            base_url=settings.ollama_url,
+            model=settings.model,
+            timeout=settings.ollama_timeout,
+        )
     memory = MemoryHallClient(
         base_url=settings.memory_hall_url,
         token=settings.memory_hall_token,
