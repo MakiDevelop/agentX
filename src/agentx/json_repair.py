@@ -20,14 +20,13 @@ def extract_json_object(raw: str) -> dict[str, Any] | None:
         candidates.append(balanced)
 
     for candidate in candidates:
-        # Gemma4 / small model common fixes before json.loads
-        fixed = _fix_common_malformed_json(candidate)
-        try:
-            data = json.loads(fixed)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(data, dict):
-            return data
+        for fixer in (_fix_invalid_escapes, _fix_common_malformed_json):
+            try:
+                data = json.loads(fixer(candidate))
+            except json.JSONDecodeError:
+                continue
+            if isinstance(data, dict):
+                return data
     return None
 
 
@@ -48,10 +47,32 @@ def _fix_common_malformed_json(s: str) -> str:
     # Remove trailing commas ( ,} or ,] )
     s = re.sub(r",\s*([}\]])", r"\1", s)
     # Best-effort single to double quotes for keys and string values
-    # Only do simple cases to avoid breaking valid JSON with escaped quotes.
-    # This is defense-in-depth; the prompt still requires proper double-quoted JSON.
     s = re.sub(r"'([^'\\]*(?:\\.[^'\\]*)*)'", r'"\1"', s)
+    # Fix invalid escape sequences inside JSON strings (common with code-in-JSON)
+    s = _fix_invalid_escapes(s)
     return s
+
+
+def _fix_invalid_escapes(s: str) -> str:
+    valid_escapes = frozenset('"\\/bfnrtu')
+    result = []
+    i = 0
+    in_string = False
+    while i < len(s):
+        ch = s[i]
+        if ch == '"' and (i == 0 or s[i - 1] != '\\'):
+            in_string = not in_string
+            result.append(ch)
+        elif ch == '\\' and in_string and i + 1 < len(s):
+            next_ch = s[i + 1]
+            if next_ch in valid_escapes:
+                result.append(ch)
+            else:
+                result.append('\\\\')
+        else:
+            result.append(ch)
+        i += 1
+    return ''.join(result)
 
 
 def _first_balanced_object(raw: str) -> str | None:
