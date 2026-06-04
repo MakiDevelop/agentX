@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -118,7 +119,8 @@ class SessionStore:
         directory = workspace / ".agentx" / "sessions"
         directory.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        path = directory / f"{stamp}.session.jsonl"
+        uid = uuid.uuid4().hex[:6]
+        path = directory / f"{stamp}-{uid}.session.jsonl"
         store = cls(path)
         store.append(
             "system",
@@ -143,9 +145,11 @@ def fork_session(
     directory = workspace / ".agentx" / "sessions"
     directory.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    fork_path = directory / f"{stamp}-fork.session.jsonl"
+    uid = uuid.uuid4().hex[:6]
+    fork_path = directory / f"{stamp}-{uid}-fork.session.jsonl"
 
     new_store = SessionStore(fork_path)
+    found = False
     for entry in source.entries:
         new_store.append(
             entry.role,
@@ -153,6 +157,10 @@ def fork_session(
             metadata={**(entry.metadata or {}), "forked_from": str(source_path)},
         )
         if entry.id == from_entry_id:
+            found = True
             break
+
+    if not found:
+        raise ValueError(f"Entry ID {from_entry_id!r} not found in {source_path}")
 
     return new_store

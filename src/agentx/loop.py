@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import threading
 from collections.abc import Callable
 from enum import Enum
@@ -106,9 +107,11 @@ class AgentSession:
         if self.learning_enabled:
             if self.hooks is None:
                 self.hooks = HookManager()
-            self.hooks.add(HookEvent.FINAL_ANSWER, self._on_final_answer_learning)
-            self.hooks.add(HookEvent.SESSION_END, self._on_session_end_learning)
-        if self.hooks is not None and self.tools.hooks is None:
+            if not any(cb is self._on_final_answer_learning for cb in self.hooks.listeners(HookEvent.FINAL_ANSWER)):
+                self.hooks.add(HookEvent.FINAL_ANSWER, self._on_final_answer_learning)
+            if not any(cb is self._on_session_end_learning for cb in self.hooks.listeners(HookEvent.SESSION_END)):
+                self.hooks.add(HookEvent.SESSION_END, self._on_session_end_learning)
+        if self.hooks is not None:
             self.tools.hooks = self.hooks
 
         # Task List 持久化載入（Micro-task 21 A2）
@@ -149,6 +152,7 @@ class AgentSession:
         # finalization guard pass a lying success.)
         self._tool_outcomes: dict[str, bool] = {}
         self._file_ops: dict[str, set[str]] = {}
+        self._final_guard_retries: int = 0
         self._session_store: SessionStore | None = None
 
         self.messages = self._initial_messages()
@@ -220,7 +224,11 @@ class AgentSession:
         except Exception:
             pass
 
+    _RESTORE_SENTINEL = "__restore__"
+
     def _initial_messages(self) -> list[dict[str, str]]:
+        if self._custom_system_prompt == self._RESTORE_SENTINEL:
+            return [{"role": "system", "content": "(session restored from store)"}]
         system_prompt = self._custom_system_prompt or build_agent_system_prompt(self.settings.persona, tools=self.tools, model=self.settings.model)
         return [
             {"role": "system", "content": system_prompt},
@@ -260,6 +268,7 @@ class AgentSession:
         **kwargs: Any,
     ) -> "AgentSession":
         store = SessionStore.load(store_path)
+        kwargs.setdefault("system_prompt", cls._RESTORE_SENTINEL)
         session = cls(settings=settings, ollama=ollama, tools=tools, **kwargs)
         session.messages = store.replay()
         session._session_store = store
@@ -329,7 +338,7 @@ class AgentSession:
             if isinstance(action, FinalAnswer):
                 failing = self._unresolved_failing_tools()
                 if failing:
-                    self._final_guard_retries = getattr(self, "_final_guard_retries", 0) + 1
+                    self._final_guard_retries += 1
                     if self._final_guard_retries >= 4:
                         self.last_failing_tools = failing
                         return self._handle_final_answer(
@@ -337,14 +346,15 @@ class AgentSession:
                             f" 模型原始回覆: {action.content}",
                             effective_plan_only,
                         )
-                    self.messages.append({"role": "assistant", "content": action.model_dump_json()})
-                    self.messages.append({
-                        "role": "system",
-                        "content": (
-                            f"FinalAnswer 被擋：工具 {', '.join(sorted(failing))} 仍有未解決的錯誤。"
-                            "請先修復錯誤再提交最終答案。"
-                        ),
-                    })
+                    blocked_content = action.model_dump_json()
+                    guard_msg = (
+                        f"FinalAnswer 被擋：工具 {', '.join(sorted(failing))} 仍有未解決的錯誤。"
+                        "請先修復錯誤再提交最終答案。"
+                    )
+                    self.messages.append({"role": "assistant", "content": blocked_content})
+                    self.messages.append({"role": "system", "content": guard_msg})
+                    self._persist_message("assistant", blocked_content)
+                    self._persist_message("system", guard_msg)
                     continue
                 self._final_guard_retries = 0
                 return self._handle_final_answer(action.content, effective_plan_only)
@@ -352,10 +362,12 @@ class AgentSession:
             if isinstance(action, Reflect):
                 self.consecutive_reflections += 1
                 reflection = self._reflect(action.focus)
-                self.messages.append({"role": "assistant", "content": action.model_dump_json()})
-                self.messages.append(
-                    {"role": "system", "content": f"=== Reflection ===\n{reflection}"}
-                )
+                reflect_content = action.model_dump_json()
+                reflect_system = f"=== Reflection ===\n{reflection}"
+                self.messages.append({"role": "assistant", "content": reflect_content})
+                self.messages.append({"role": "system", "content": reflect_system})
+                self._persist_message("assistant", reflect_content)
+                self._persist_message("system", reflect_system)
                 if effective_plan_only:
                     self._has_completed_planning = True
 
@@ -599,6 +611,7 @@ class AgentSession:
         self._file_ops = {}
         self._tool_outcomes = {}
         self._last_compact_tokens = None
+        self._final_guard_retries = 0
         self.last_termination = "unknown"
         self.last_failing_tools = set()
 
@@ -797,21 +810,18 @@ class AgentSession:
         )
 
         file_summary = self._build_file_ops_summary() if self._file_ops else ""
+        if file_summary:
+            new_messages.append({"role": "system", "content": file_summary})
 
-        if len(new_messages) >= len(self.messages) and not file_summary:
+        if len(new_messages) >= before_count and not file_summary:
             result = "壓縮跳過（訊息數量不足）"
         else:
-            if file_summary:
-                new_messages.append({"role": "system", "content": file_summary})
-            if len(new_messages) < len(self.messages):
-                self.messages = new_messages
-            elif file_summary:
-                self.messages.append({"role": "system", "content": file_summary})
+            self.messages = new_messages
         self.compaction_count += 1
 
         if self.hooks:
             self.hooks.fire(HookEvent.COMPACT, CompactContext(
-                before_count=before_count, after_count=len(new_messages),
+                before_count=before_count, after_count=len(self.messages),
                 tokens_estimate=self.context_tokens_estimate, summary=result,
             ))
 
@@ -857,12 +867,12 @@ class AgentSession:
         summary = result.content.replace("\n", "\\n")[:240]
         self._emit_trace(f"tool_result {action.tool} ok={result.ok} content={summary}")
         self._track_file_op(action)
-        if result.ok and "exit=1" in (result.content or ""):
+        if not result.ok:
             self._tool_outcomes[action.tool] = False
-        elif result.ok:
-            self._tool_outcomes[action.tool] = True
+        elif result.ok and re.search(r'\bexit=([1-9]\d*)\b', result.content or ""):
+            self._tool_outcomes[action.tool] = False
         else:
-            self._tool_outcomes[action.tool] = False
+            self._tool_outcomes[action.tool] = True
         return result
 
     def _unresolved_failing_tools(self) -> set[str]:
