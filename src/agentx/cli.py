@@ -1053,7 +1053,11 @@ def ask(
         settings = settings.with_updates(max_steps=max_steps)
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
-    ollama, memory, tools = build_runtime(settings)
+    approval_policy = None
+    if project_config.approval:
+        mode = normalize_approval_mode(project_config.approval)
+        approval_policy = ApprovalPolicy(mode)
+    ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
     compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None
     agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace, compactor=compactor, memory=memory)
     print_raw(agent.run(prompt, namespace=namespace))
