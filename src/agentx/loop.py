@@ -1003,10 +1003,15 @@ class AgentSession:
 
     def _direct_tool_call(self, prompt: str) -> ToolCall | None:
         normalized = prompt.lower()
-        if any(keyword in normalized for keyword in ("列出", "檔案", "files", "list files")):
+        if len(normalized) > 200:
+            return None
+        write_keywords = ("write_file", "建立", "實作", "寫", "create", "implement")
+        if any(kw in normalized for kw in write_keywords):
+            return None
+        if any(keyword in normalized for keyword in ("列出", "list files")):
             if any(keyword in normalized for keyword in ("repo", "目錄", "directory", "workspace")):
                 return ToolCall(type="tool_call", tool="list_files", args={"path": "."})
-        if "git status" in normalized:
+        if normalized.strip() == "git status":
             return ToolCall(type="tool_call", tool="git_status", args={})
         return None
 
