@@ -19,7 +19,7 @@ class LlamaCppClient:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
-        self._client = httpx.Client(timeout=timeout)
+        self._client = httpx.Client(timeout=httpx.Timeout(timeout, read=max(timeout, 600.0)))
 
     def chat(
         self,
