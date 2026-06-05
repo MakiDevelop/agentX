@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import json
-import threading
-from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any
 
 from agentx.session_store import SessionEntry, SessionStore, fork_session
 
@@ -91,7 +88,7 @@ def test_session_store_persists_to_disk(tmp_path: Path) -> None:
 
 def test_fork_session_copies_up_to_entry(tmp_path: Path) -> None:
     store = SessionStore.create(tmp_path)
-    e1 = store.append("user", "q1")
+    store.append("user", "q1")
     e2 = store.append("assistant", "a1")
     store.append("user", "q2")
     store.append("assistant", "a2")
