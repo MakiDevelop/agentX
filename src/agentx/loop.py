@@ -257,10 +257,36 @@ class AgentSession:
         self._session_store = SessionStore.create(ws, self.settings.model, self.namespace)
         for msg in self.messages:
             self._session_store.append(msg["role"], msg["content"])
+        # Snapshot current important state at enable time
+        self._persist_state_event("tool_outcomes", dict(self._tool_outcomes))
+        self._persist_state_event("file_ops", {k: list(v) for k, v in self._file_ops.items()})
+        self._persist_state_event("last_failing_tools", list(self.last_failing_tools))
+        self._persist_state_event("compaction_count", self.compaction_count)
 
     def _persist_message(self, role: str, content: str, **metadata: Any) -> None:
         if self._session_store is not None:
             self._session_store.append(role, content, metadata=metadata or None)
+
+    def _persist_state_event(self, name: str, data: dict[str, Any]) -> None:
+        """Persist a snapshot of important session state so resume can reconstruct
+        more than messages (e.g. tool outcomes for final guard, file ops for the pillar).
+        """
+        if self._session_store is not None:
+            self._session_store.append_state(name, data)
+
+    def _restore_state_event(self, name: str, data: dict[str, Any]) -> None:
+        if name == "tool_outcomes":
+            self._tool_outcomes = {k: bool(v) for k, v in (data or {}).items()}
+        elif name == "file_ops":
+            self._file_ops = {k: set(v) if isinstance(v, (list, tuple)) else set() for k, v in (data or {}).items()}
+        elif name == "last_failing_tools":
+            self.last_failing_tools = set(data or [])
+        elif name == "compaction_count":
+            try:
+                self.compaction_count = int(data)
+            except (TypeError, ValueError):
+                pass
+        # last_termination etc. can be added later if needed; start minimal for Codex item
 
     @classmethod
     def from_session_store(
@@ -276,10 +302,9 @@ class AgentSession:
         session = cls(settings=settings, ollama=ollama, tools=tools, **kwargs)
         session.messages = store.replay()
         session._session_store = store
-        # NOTE (Codex feedback): replay only restores messages. _tool_outcomes, error_history,
-        # last_failing_tools, _file_ops, compaction_count etc. are not yet reconstructed.
-        # For full "resume" semantics we should also persist metadata events for these.
-        # Current JSONL is a good audit trail; richer state can be added later without breaking format.
+        # Restore state snapshots (Codex medium item addressed).
+        for name, data in store.replay_states():
+            session._restore_state_event(name, data)
         return session
 
     def ask(
@@ -629,6 +654,10 @@ class AgentSession:
         self._final_guard_retries = 0
         self.last_termination = "unknown"
         self.last_failing_tools = set()
+        # Persist the cleared state
+        self._persist_state_event("tool_outcomes", {})
+        self._persist_state_event("file_ops", {})
+        self._persist_state_event("last_failing_tools", [])
 
     # === Task Management (for complex long-horizon tasks) ===
 
@@ -834,6 +863,9 @@ class AgentSession:
             self.messages = new_messages
         self.compaction_count += 1
 
+        self._persist_state_event("compaction_count", self.compaction_count)
+        self._persist_state_event("file_ops", {k: list(v) for k, v in self._file_ops.items()})
+
         if self.hooks:
             self.hooks.fire(HookEvent.COMPACT, CompactContext(
                 before_count=before_count, after_count=len(self.messages),
@@ -902,6 +934,8 @@ class AgentSession:
             self._tool_outcomes[action.tool] = False
         else:
             self._tool_outcomes[action.tool] = True
+        self._persist_state_event("tool_outcomes", dict(self._tool_outcomes))
+        self._persist_state_event("last_failing_tools", list(self.last_failing_tools))
         return result
 
     def _unresolved_failing_tools(self) -> set[str]:
@@ -923,6 +957,8 @@ class AgentSession:
             self._file_ops[path].add("write")
         elif tool in self._FILE_READ_TOOLS:
             self._file_ops[path].add("read")
+        # Persist snapshot so resume knows what was touched (Codex item)
+        self._persist_state_event("file_ops", {k: list(v) for k, v in self._file_ops.items()})
 
     def _scan_messages_for_file_ops(self, messages: list[dict[str, Any]]) -> None:
         import json as _json

@@ -158,4 +158,36 @@ git diff --stat
 git diff
 ```
 
+## 6. Resolutions after Codex Review (2026-06 follow-up)
+
+All High findings from the review were addressed with targeted fixes:
+
+- **GREEN risk for Node commands**: Moved `npm test`, `npx vitest run` (and similar executing ones) from `ALLOWED_COMMANDS` (RunCommandTool, GREEN, no approval) to `BUILD_COMMANDS` (RunBuildCommandTool, YELLOW + approval gate). Safe read-only like `node --version`, `npx tsc --noEmit` remain GREEN. See src/agentx/tools/_helpers.py.
+
+- **Hook updated_args not reflected in tracking**: `ToolRegistry.run` now accepts `_return_effective=True` (backward-compatible) and returns `(ToolResult, effective_args)`. `AgentSession._run_tool` uses the effective args for `_track_file_op_from_args`. This keeps file-op summaries and audit consistent even if a PRE hook rewrites `path` or args. See registry.py + loop.py.
+
+- **SESSION_END incomplete**: Added explicit fires in `_handle_final_answer` (termination="final") and the direct-tool early return path (termination="direct_tool"). The max_steps path was already there. Listeners (including learning) now see normal successful terminations.
+
+- **POST hook drops error fields**: When injecting `additional_context`, the rebuilt ToolResult now copies `error_type` and `error_details` from the original. Preserves the unified error pillar.
+
+Medium items addressed:
+
+- Learning callback `is` identity fragility + accumulation: Replaced with a simple `_learning_hooks_registered` flag per session. Safer across shared managers and fresh sessions.
+
+- Partial fork files: `fork_session` now validates the `from_entry_id` exists in source *before* creating the output file or writing the marker. Raises early with no side effects on disk.
+
+- Incomplete resume state (the main remaining Medium): Implemented minimal but functional state event persistence.
+  - New `SessionStore.append_state(name, data)` / `replay_states()` using the existing metadata mechanism (role=system + metadata.event="state").
+  - `AgentSession` now has `_persist_state_event` / `_restore_state_event`.
+  - Snapshots for `tool_outcomes`, `file_ops`, `last_failing_tools`, `compaction_count` are persisted on mutation, enable_persistence, compact, clear_context, and _run_tool.
+  - `from_session_store` replays the state events after messages.
+  - Verified with functional test: state roundtrips correctly for the final-guard and file-tracking use cases.
+  - Scope kept minimal (full error_history serialization deferred as larger change; added NOTE in code). This directly addresses the "persistence records text but not enough state" concern.
+
+The briefing + actual codex-cli run + these fixes + re-verification (ruff clean, 253 tests passed) complete the landing for Tsumu's arch work per project rules (Codex gate for major changes).
+
+All Highs resolved; the architecture pillars are now more consistent and the most critical resume scenarios improved.
+
+---
+
 **End of briefing.**

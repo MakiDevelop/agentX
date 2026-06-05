@@ -114,6 +114,28 @@ class SessionStore:
                 break
         return messages
 
+    def append_state(self, name: str, data: dict[str, Any]) -> SessionEntry:
+        """Append a state snapshot event. Used for persisting session-level state
+        (tool_outcomes, file_ops, etc.) so that from_session_store can reconstruct
+        more than just messages (addresses Codex review note on incomplete resume).
+        """
+        return self.append(
+            "system",
+            f"[state:{name}]",
+            metadata={"event": "state", "name": name, "data": data or {}},
+        )
+
+    def replay_states(self) -> list[tuple[str, dict[str, Any]]]:
+        """Return list of (name, data) for all state events in order."""
+        states: list[tuple[str, dict[str, Any]]] = []
+        for entry in self._entries:
+            if entry.metadata.get("event") == "state":
+                name = entry.metadata.get("name")
+                data = entry.metadata.get("data", {})
+                if name:
+                    states.append((name, data))
+        return states
+
     @classmethod
     def create(cls, workspace: Path, model: str = "", namespace: str = "") -> SessionStore:
         directory = workspace / ".agentx" / "sessions"
