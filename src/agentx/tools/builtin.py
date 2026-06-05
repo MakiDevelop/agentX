@@ -86,6 +86,7 @@ class WriteFileTool(_WorkspaceTool):
 
 class EditFileTool(_WorkspaceTool):
     name = "edit_file"
+    aliases = ["search_replace"]
     description = (
         "對 workspace 內既有檔案做 oldText→newText 替換；"
         "每個 oldText 必須在檔內出現恰好一次；改 bug／局部修正用這個比 write_file 安全"
@@ -141,8 +142,8 @@ def _coerce_edits(args: dict[str, Any]) -> list[dict[str, Any]]:
                 )
             cleaned.append(entry)
         return cleaned
-    old_text = args.get("oldText")
-    new_text = args.get("newText")
+    old_text = args.get("oldText") or args.get("old_string") or args.get("old_text")
+    new_text = args.get("newText") or args.get("new_string") or args.get("new_text")
     if isinstance(old_text, str) and isinstance(new_text, str):
         return [{"oldText": old_text, "newText": new_text}]
     return []

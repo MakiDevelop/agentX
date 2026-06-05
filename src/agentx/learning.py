@@ -38,19 +38,24 @@ class LearningManager:
     - Fitness checks encourage "smarter" proposals (pass tests, respect principles in AGENTX.md).
     """
 
-    def __init__(self, settings: Settings, memory: Any = None):
+    def __init__(self, settings: Settings, memory: Any = None, *, enabled: bool = True):
         self.settings = settings
         self.workspace = settings.workspace
         self.memory = memory  # MemoryHallClient if available
+        self.enabled = enabled
         self.proposals_dir = self.workspace / ".agentx" / "learning" / "proposals"
-        self.proposals_dir.mkdir(parents=True, exist_ok=True)
+        if self.enabled:
+            self.proposals_dir.mkdir(parents=True, exist_ok=True)
         self._index_path = self.proposals_dir / "index.json"
         self._load_index()
 
     def _load_index(self):
         if self._index_path.exists():
-            with open(self._index_path, "r", encoding="utf-8") as f:
-                self.index = json.load(f)
+            try:
+                with open(self._index_path, "r", encoding="utf-8") as f:
+                    self.index = json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                self.index = {"proposals": []}
         else:
             self.index = {"proposals": []}
 
@@ -58,24 +63,8 @@ class LearningManager:
         with open(self._index_path, "w", encoding="utf-8") as f:
             json.dump(self.index, f, indent=2, ensure_ascii=False)
 
-    def propose(self, proposal: LearningProposal) -> Path:
-        """Write a new proposal. Returns the path to the proposal file."""
-        # Basic fitness default
-        if not proposal.fitness:
-            proposal.fitness = {
-                "ruff_ok": None,
-                "tests_relevant_pass": None,
-                "respects_agentyx_md_principles": None,  # agent should have checked AGENTX.md
-                "evidence_based": len(proposal.evidence) > 0,
-            }
-
-        # Write JSON for machine readability
-        json_path = self.proposals_dir / f"{proposal.timestamp[:10]}-{proposal.id}.json"
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(asdict(proposal), f, indent=2, ensure_ascii=False, default=str)
-
-        # Write human-readable MD
-        md_path = self.proposals_dir / f"{proposal.timestamp[:10]}-{proposal.id}.md"
+    @staticmethod
+    def _write_md(proposal: LearningProposal, md_path: Path) -> None:
         md_content = f"""# Learning Proposal {proposal.id}
 
 **Timestamp**: {proposal.timestamp}
@@ -111,6 +100,25 @@ class LearningManager:
         with open(md_path, "w", encoding="utf-8") as f:
             f.write(md_content)
 
+    def propose(self, proposal: LearningProposal) -> Path:
+        """Write a new proposal. Returns the path to the proposal file."""
+        # Basic fitness default
+        if not proposal.fitness:
+            proposal.fitness = {
+                "ruff_ok": None,
+                "tests_relevant_pass": None,
+                "respects_agentyx_md_principles": None,  # agent should have checked AGENTX.md
+                "evidence_based": len(proposal.evidence) > 0,
+            }
+
+        # Write JSON for machine readability
+        json_path = self.proposals_dir / f"{proposal.timestamp[:10]}-{proposal.id}.json"
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(asdict(proposal), f, indent=2, ensure_ascii=False, default=str)
+
+        md_path = self.proposals_dir / f"{proposal.timestamp[:10]}-{proposal.id}.md"
+        self._write_md(proposal, md_path)
+
         # Update index
         self.index["proposals"].append({
             "id": proposal.id,
@@ -126,9 +134,10 @@ class LearningManager:
         # Optionally write to Memory Hall as learning episode
         if self.memory:
             try:
+                ns = getattr(self.settings, "namespace", None) or "project:agentX"
                 self.memory.write(
                     f"Learning proposal {proposal.id}: {proposal.title}\n{proposal.description}\nEvidence: {proposal.evidence}",
-                    namespace=self.settings.namespace or "project:agentX",
+                    namespace=ns,
                 )
             except Exception:
                 pass  # non-fatal
@@ -156,11 +165,8 @@ class LearningManager:
         for p in self.index.get("proposals", []):
             if p["id"] == proposal_id:
                 p["status"] = new_status
-                if applied_to:
-                    p["applied_to"] = applied_to
                 self._save_index()
 
-                # Sync back to JSON
                 prop = self.get_proposal(proposal_id)
                 if prop:
                     prop.status = new_status
@@ -169,6 +175,8 @@ class LearningManager:
                     json_path = self.workspace / p["json"]
                     with open(json_path, "w", encoding="utf-8") as f:
                         json.dump(asdict(prop), f, indent=2, ensure_ascii=False, default=str)
+                    md_path = self.workspace / p["md"]
+                    self._write_md(prop, md_path)
                 return True
         return False
 
@@ -220,9 +228,14 @@ Only propose things that are generalizable and would have helped in this session
                 {"role": "user", "content": prompt}
             ]
             text = ollama.chat(messages, json_mode=True)
-            proposals_data = json.loads(text) if text.strip().startswith("[") else []
-            if not isinstance(proposals_data, list):
-                proposals_data = [proposals_data] if isinstance(proposals_data, dict) else []
+            parsed = json.loads(text.strip())
+            if isinstance(parsed, list):
+                proposals_data = parsed
+            elif isinstance(parsed, dict):
+                # Handle {"proposals": [...]} or single proposal object
+                proposals_data = parsed.get("proposals", [parsed])
+            else:
+                proposals_data = []
 
             results = []
             for data in proposals_data[:3]:  # cap
@@ -238,19 +251,10 @@ Only propose things that are generalizable and would have helped in this session
                 self.propose(prop)
                 results.append(prop)
             return results
-        except Exception as e:
-            # Fallback: create a minimal proposal about the failure to learn
-            fallback = LearningProposal(
-                source="session_reflection",
-                lesson_type="recovery_strategy",
-                title="Learning reflection failed - improve error handling in learning",
-                description=f"Reflexion LLM call failed: {e}. Future learning should be more robust.",
-                evidence=[f"Error during reflect: {str(e)[:200]}"],
-                proposed_change="Add better fallback and parsing in learning.py reflect_on_session. Consider using structured output tools.",
-            )
-            self.propose(fallback)
-            return [fallback]
+        except Exception:
+            return []
 
 
 def load_learning_manager(settings: Settings, memory: Any = None) -> LearningManager:
-    return LearningManager(settings, memory)
+    enabled = getattr(settings, "learning_enabled", True)
+    return LearningManager(settings, memory, enabled=enabled)

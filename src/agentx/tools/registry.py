@@ -93,23 +93,37 @@ class ToolRegistry:
     def describe_tools(self) -> dict[str, str]:
         return {name: tool.description for name, tool in self._tools.items() if tool_is_enabled(tool)}
 
-    def run(self, name: str, args: dict[str, Any]) -> ToolResult:
+    def run(
+        self, name: str, args: dict[str, Any], *, _return_effective: bool = False
+    ) -> ToolResult | tuple[ToolResult, dict[str, Any]]:
+        """Run a tool.
+
+        If _return_effective=True, returns (ToolResult, effective_args_dict) so callers
+        that care about post-PRE-hook args (e.g. AgentSession file-op tracking) can stay
+        consistent with what was actually executed. Normal callers continue to receive
+        just the ToolResult (backward compatible).
+        """
         primary = self._aliases.get(name, name)
         tool = self._tools.get(primary)
         if tool is None:
-            return ToolResult(tool=name, ok=False, content=f"Unknown tool: {name}")
+            r = ToolResult(tool=name, ok=False, content=f"Unknown tool: {name}")
+            return (r, args) if _return_effective else r
         if not tool_is_enabled(tool):
-            return ToolResult(
+            r = ToolResult(
                 tool=name,
                 ok=False,
                 content=f"Tool disabled in this environment: {primary}",
             )
+            return (r, args) if _return_effective else r
         if tool.risk == Risk.RED:
-            return ToolResult(
+            r = ToolResult(
                 tool=name,
                 ok=False,
                 content=f"Tool is blocked by safety policy: {name}",
             )
+            return (r, args) if _return_effective else r
+
+        executed_args = args
         if self.hooks is not None:
             pre = self.hooks.fire(
                 HookEvent.PRE_TOOL_USE,
@@ -117,23 +131,27 @@ class ToolRegistry:
             )
             if pre.blocked:
                 reason = pre.reason or "no reason given"
-                return ToolResult(
+                r = ToolResult(
                     tool=name,
                     ok=False,
                     content=f"Blocked by hook: {reason}",
                 )
+                return (r, executed_args) if _return_effective else r
             if pre.updated_args is not None:
-                args = pre.updated_args
+                executed_args = pre.updated_args
+                args = pre.updated_args  # used for the actual tool call below
+
         if tool.risk == Risk.YELLOW:
             if self.approver is not None:
                 if not self.approver(primary, args, tool.risk):
-                    return ToolResult(
+                    r = ToolResult(
                         tool=name,
                         ok=False,
                         content=f"Rejected by approval gate: {primary}",
                     )
+                    return (r, executed_args) if _return_effective else r
             elif not self.auto_approve_yellow:
-                return ToolResult(
+                r = ToolResult(
                     tool=name,
                     ok=False,
                     content=(
@@ -142,11 +160,23 @@ class ToolRegistry:
                         "auto_approve_yellow=True when constructing ToolRegistry."
                     ),
                 )
+                return (r, executed_args) if _return_effective else r
+
         try:
             content = tool.run(args)
             result = ToolResult(tool=primary, ok=True, content=str(content))
         except Exception as exc:
-            result = ToolResult(tool=primary, ok=False, content=f"{type(exc).__name__}: {exc}")
+            result = ToolResult(
+                tool=primary,
+                ok=False,
+                content=f"{type(exc).__name__}: {exc}",
+                error_type=type(exc).__name__,
+                error_details={
+                    "message": str(exc),
+                    "type": type(exc).__name__,
+                },
+            )
+
         if self.hooks is not None:
             post = self.hooks.fire(
                 HookEvent.POST_TOOL_USE,
@@ -154,15 +184,23 @@ class ToolRegistry:
             )
             if post.blocked:
                 reason = post.reason or "no reason given"
-                return ToolResult(
+                r = ToolResult(
                     tool=primary,
                     ok=False,
                     content=f"Blocked by post hook: {reason}",
                 )
+                return (r, executed_args) if _return_effective else r
             if post.additional_context:
+                # Codex feedback: preserve error_type / error_details (and any other fields)
+                # when injecting post-hook context. Do not drop structured error info.
                 result = ToolResult(
                     tool=result.tool,
                     ok=result.ok,
                     content=f"{result.content}\n\nAdditional context:\n{post.additional_context}",
+                    error_type=result.error_type,
+                    error_details=result.error_details,
                 )
+
+        if _return_effective:
+            return result, executed_args
         return result

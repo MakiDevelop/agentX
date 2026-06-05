@@ -88,10 +88,12 @@ def _base_tools_section() -> str:
 - search_text: {"pattern":"keyword","path":"."} — search in files
 - git_status: {} — show git status
 - git_diff: {} — show git diff
-- search_replace: {"path":"file.py","old_string":"original text","new_string":"replacement text"} — edit file (preferred)
+- search_replace: {"path":"file.py","old_string":"original text","new_string":"replacement text"} — edit existing file (small changes only)
 - insert_code: {"path":"file.py","insert_after":"marker line","content":"new code"} — insert after marker
 - run_tests: {} — run project tests
 - apply_patch: {"patch":"..."} — apply unified diff (last resort)
+
+IMPORTANT: When creating a NEW file, always use write_file. Never use apply_patch or search_replace for new files.
 - task_add: {"description":"task"} — add task to list
 - task_update: {"task_id":1,"status":"done"} — update task status
 - task_list: {} — show all tasks
