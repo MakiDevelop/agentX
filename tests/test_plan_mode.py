@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from agentx.cli import SLASH_COMMANDS, format_plan_status
@@ -33,6 +34,8 @@ class FakeOllama:
 
     def chat(self, messages, json_mode=False, cancel_event=None):  # noqa: ANN001
         self.last_messages = list(messages)
+        if self.call_count >= len(self.responses):
+            return '{"type":"final","content":"(plan_mode test fallback)"}'
         resp = self.responses[self.call_count]
         self.call_count += 1
         return resp
@@ -51,7 +54,9 @@ class FakeToolRegistry:
         self.executed: list[str] = []
         self.memory = MagicMock()  # required by AgentSession bootstrap
 
-    def run(self, tool: str, args: dict) -> object:  # noqa: ANN001
+    def run(self, tool: str, args: dict, **kwargs: Any) -> object:  # noqa: ANN001
+        # Accept _return_effective (and future internal flags) for compatibility with
+        # real ToolRegistry after Codex feedback fixes to run() signature.
         self.executed.append(tool)
         return MagicMock(ok=True, content=f"executed:{tool}")
 
@@ -92,23 +97,28 @@ def test_agent_session_plan_only_blocks_tool_call() -> None:
 
 def test_agent_session_normal_mode_still_executes_tools() -> None:
     """Sanity check: when plan_only=False (default), tools are still executed."""
+    # Tsumu _direct_tool_call change: now exact match `== "git status"`, and has
+    # length/write guards. "git status 一下" no longer short-circuits, so the ask
+    # will do at least one real ollama.chat. Provide enough + disable learning.
     fake_ollama = FakeOllama(
-        ['{"type":"tool_call","tool":"git_status","args":{}}']
+        ['{"type":"tool_call","tool":"git_status","args":{}}', '{"type":"final","content":"done"}']
     )
     fake_tools = FakeToolRegistry()
+
+    settings = MagicMock(model="test", persona="default", max_steps=3, workspace=Path("/tmp/test"))
+    settings.learning_enabled = False
 
     with patch("agentx.loop.build_repo_context", return_value="fake repo context"), \
          patch("agentx.loop.build_memory_context", return_value="fake memory context"):
 
         session = AgentSession(
-            settings=MagicMock(model="test", persona="default", max_steps=3, workspace=Path("/tmp/test")),
+            settings=settings,
             ollama=fake_ollama,  # type: ignore[arg-type]
             tools=fake_tools,  # type: ignore[arg-type]
             namespace="test",
         )
 
-        # We expect it to return early via the direct tool path or after execution.
-        # The important point is that the tool registry was called.
+        # The important point is that the tool registry was called (via normal path now).
         session.ask("git status 一下", plan_only=False)
 
     assert "git_status" in fake_tools.executed

@@ -4,6 +4,8 @@ import re
 import threading
 from collections.abc import Callable
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
 from dataclasses import asdict
 
@@ -107,10 +109,12 @@ class AgentSession:
         if self.learning_enabled:
             if self.hooks is None:
                 self.hooks = HookManager()
-            if not any(cb is self._on_final_answer_learning for cb in self.hooks.listeners(HookEvent.FINAL_ANSWER)):
+            # Codex feedback: avoid fragile `cb is bound_method` checks (bound method identity
+            # is not stable across sessions / shared HookManager). Use a simple guard flag instead.
+            if not getattr(self, "_learning_hooks_registered", False):
                 self.hooks.add(HookEvent.FINAL_ANSWER, self._on_final_answer_learning)
-            if not any(cb is self._on_session_end_learning for cb in self.hooks.listeners(HookEvent.SESSION_END)):
                 self.hooks.add(HookEvent.SESSION_END, self._on_session_end_learning)
+                self._learning_hooks_registered = True
         if self.hooks is not None:
             self.tools.hooks = self.hooks
 
@@ -272,6 +276,10 @@ class AgentSession:
         session = cls(settings=settings, ollama=ollama, tools=tools, **kwargs)
         session.messages = store.replay()
         session._session_store = store
+        # NOTE (Codex feedback): replay only restores messages. _tool_outcomes, error_history,
+        # last_failing_tools, _file_ops, compaction_count etc. are not yet reconstructed.
+        # For full "resume" semantics we should also persist metadata events for these.
+        # Current JSONL is a good audit trail; richer state can be added later without breaking format.
         return session
 
     def ask(
@@ -293,6 +301,13 @@ class AgentSession:
                 }
             )
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
+            if self.hooks:
+                self.hooks.fire(HookEvent.SESSION_END, SessionEndContext(
+                    namespace=self.namespace,
+                    termination="direct_tool",
+                    message_count=len(self.messages),
+                    error_count=len(self.error_history),
+                ))
             if result.ok:
                 return result.content
             return f"工具執行失敗：{result.content}"
@@ -839,6 +854,14 @@ class AgentSession:
                 content=content, plan_only=plan_only,
                 message_count=len(self.messages),
             ))
+            # Codex feedback: fire SESSION_END on normal successful final too
+            # (currently only fired on max_steps_exceeded in the outer loop).
+            self.hooks.fire(HookEvent.SESSION_END, SessionEndContext(
+                namespace=self.namespace,
+                termination="final",
+                message_count=len(self.messages),
+                error_count=len(self.error_history),
+            ))
         return content
 
     def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | Reflect | "InvalidAction":
@@ -863,10 +886,16 @@ class AgentSession:
 
     def _run_tool(self, action: ToolCall) -> ToolResult:
         self._emit_trace(f"tool_call {action.tool} args={action.args}")
-        result = self.tools.run(action.tool, action.args)
+        # Use _return_effective so file-op tracking (and future audit) sees the args
+        # after any PRE hook rewrite (Codex review feedback on consistency).
+        ret = self.tools.run(action.tool, action.args, _return_effective=True)
+        if isinstance(ret, tuple):
+            result, effective_args = ret
+        else:
+            result, effective_args = ret, action.args
         summary = result.content.replace("\n", "\\n")[:240]
         self._emit_trace(f"tool_result {action.tool} ok={result.ok} content={summary}")
-        self._track_file_op(action)
+        self._track_file_op_from_args(action.tool, effective_args)
         if not result.ok:
             self._tool_outcomes[action.tool] = False
         elif result.ok and re.search(r'\bexit=([1-9]\d*)\b', result.content or ""):
@@ -879,15 +908,20 @@ class AgentSession:
         return {name for name, ok in self._tool_outcomes.items() if not ok}
 
     def _track_file_op(self, action: ToolCall) -> None:
-        path = action.args.get("path")
+        # Legacy path (kept for _scan_messages_for_file_ops which reconstructs from history)
+        self._track_file_op_from_args(action.tool, action.args)
+
+    def _track_file_op_from_args(self, tool: str, args: dict[str, Any]) -> None:
+        """Track read/write using the *effective* args (after PRE hook rewrite if any)."""
+        path = args.get("path") if isinstance(args, dict) else None
         if not path:
             return
         path = str(path)
         if path not in self._file_ops:
             self._file_ops[path] = set()
-        if action.tool in self._FILE_WRITE_TOOLS:
+        if tool in self._FILE_WRITE_TOOLS:
             self._file_ops[path].add("write")
-        elif action.tool in self._FILE_READ_TOOLS:
+        elif tool in self._FILE_READ_TOOLS:
             self._file_ops[path].add("read")
 
     def _scan_messages_for_file_ops(self, messages: list[dict[str, Any]]) -> None:

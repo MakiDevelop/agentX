@@ -142,6 +142,12 @@ def fork_session(
     workspace: Path,
 ) -> SessionStore:
     source = SessionStore.load(source_path)
+
+    # Validate the from_entry_id exists *before* creating any output file (Codex feedback:
+    # avoid leaving a partial fork file on bad input).
+    if not any(e.id == from_entry_id for e in source.entries):
+        raise ValueError(f"Entry ID {from_entry_id!r} not found in {source_path}")
+
     directory = workspace / ".agentx" / "sessions"
     directory.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -149,7 +155,14 @@ def fork_session(
     fork_path = directory / f"{stamp}-{uid}-fork.session.jsonl"
 
     new_store = SessionStore(fork_path)
-    found = False
+
+    # Insert a clear fork marker (mirrors the session_start that create() inserts)
+    new_store.append(
+        "system",
+        f"forked from {source_path} starting after entry {from_entry_id}",
+        metadata={"event": "fork", "source": str(source_path), "from_entry": from_entry_id},
+    )
+
     for entry in source.entries:
         new_store.append(
             entry.role,
@@ -157,10 +170,6 @@ def fork_session(
             metadata={**(entry.metadata or {}), "forked_from": str(source_path)},
         )
         if entry.id == from_entry_id:
-            found = True
             break
-
-    if not found:
-        raise ValueError(f"Entry ID {from_entry_id!r} not found in {source_path}")
 
     return new_store

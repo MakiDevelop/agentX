@@ -355,7 +355,9 @@ def test_failing_tool_remembered_across_many_later_calls(tmp_path: Path) -> None
         def __init__(self) -> None:
             self.calls = 0
 
-        def run(self, name: str, args: dict) -> ToolResult:
+        def run(self, name: str, args: dict, **kwargs: Any) -> ToolResult:
+            # Accept _return_effective (and any future internal kwargs) for compatibility
+            # with the real ToolRegistry after Codex feedback fixes.
             self.calls += 1
             if name == "fail_cmd":
                 return ToolResult(tool="fail_cmd", ok=True, content="$ x\nexit=1\nerror")

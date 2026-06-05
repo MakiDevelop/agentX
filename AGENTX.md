@@ -392,6 +392,12 @@ AgentX Shell 三大原則：
 - 重大改動必走 Codex review + 更新 AGENTX.md。
 - 善用 .agentx/handoff/ 記錄即時決策。
 
+**2026-06 Tsumu 四大架構改善 (hooks / unified error / file tracking / JSONL persistence) + 後續 landing 修正**：
+- **失敗模式暴露**：把 learning 移到 hooks 後，coordinator/plan_mode 等使用多 session 的地方 response 預算爆炸；ShellState 瘦身後舊測試 ctor 崩；GREEN 裡不小心放了執行型 npm test / vitest（Codex 抓到）。
+- **解法**：學習 hook 在 coordinator/plan 測試明確 disable；_state 動態 attach + module-level testable cmd/dispatch shim 維持相容；npm test 類移到 BUILD_COMMANDS (YELLOW)；registry 支援 _return_effective 讓 file tracking 看到 hook rewrite 後的 args；SESSION_END 也在正常 final 發；fork 先驗證再寫檔；error_details 真的填；Fake 全部接受 **kwargs 防未來。
+- **Codex review**：已產生 docs/CODEX-REVIEW-TSUMU-ARCH-2026-06.md 並實際呼叫 codex-cli 跑過，High 項目（GREEN 安全、hook args 一致性、SESSION_END 完整性、post hook 掉 error 欄位）已修；Medium 多數已處理或加 comment。
+- **教訓**：新 hook/persistence 機制改變 side effect 數量與狀態重建，測試必須用 disable 或 defensive fakes，而非硬算 call count。重大架構必 Codex +  landing fixes 才算完成。
+
 ---
 
 ## 14. Compact Instructions 結構（當需要壓縮時使用）

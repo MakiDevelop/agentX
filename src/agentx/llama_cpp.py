@@ -47,7 +47,7 @@ class LlamaCppClient:
                 response.raise_for_status()
                 data = response.json()
                 return _extract_content(data).strip()
-            except (httpx.RemoteProtocolError, httpx.ConnectError, httpx.ReadTimeout) as e:
+            except (httpx.RemoteProtocolError, httpx.ConnectError, httpx.ReadTimeout):
                 if attempt == 2:
                     raise
                 import time

@@ -58,8 +58,6 @@ ALLOWED_COMMANDS: dict[str, list[str]] = {
     "git status --short --branch": ["git", "status", "--short", "--branch"],
     "git diff": ["git", "diff"],
     "cargo fmt --check": ["cargo", "fmt", "--", "--check"],
-    "npm test": ["npm", "test"],
-    "npx vitest run": ["npx", "vitest", "run"],
     "npx tsc --noEmit": ["npx", "tsc", "--noEmit"],
     "node --version": ["node", "--version"],
     "npm --version": ["npm", "--version"],
@@ -79,6 +77,10 @@ BUILD_COMMANDS: dict[str, list[str]] = {
     "npm run build": ["npm", "run", "build"],
     "npm run test": ["npm", "run", "test"],
     "npx vitest": ["npx", "vitest"],
+    # Tsumu expansion for Node/TS projects (Codex review note: these execute arbitrary
+    # workspace code / test code, therefore correctly YELLOW via run_build_command + approval).
+    "npm test": ["npm", "test"],
+    "npx vitest run": ["npx", "vitest", "run"],
 }
 
 DOCKER_COMPOSE_ACTIONS = {"ps", "build", "up", "down", "logs"}

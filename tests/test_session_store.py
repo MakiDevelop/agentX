@@ -97,9 +97,14 @@ def test_fork_session_copies_up_to_entry(tmp_path: Path) -> None:
     store.append("assistant", "a2")
 
     forked = fork_session(store.path, from_entry_id=e2.id, workspace=tmp_path)
-    assert len(forked.entries) == 3  # header + q1 + a1
+    # +1 for the explicit "forked ..." system marker we insert for traceability
+    # (improvement over the original create-only header behavior)
+    assert len(forked.entries) == 4  # fork-marker + header + q1 + a1
     assert forked.path != store.path
     assert forked.entries[-1].content == "a1"
+    # The first entry should be our fork marker (not the original create header)
+    assert "forked from" in forked.entries[0].content
+    assert forked.entries[0].metadata.get("event") == "fork"
 
 
 def test_fork_session_creates_new_file(tmp_path: Path) -> None:
