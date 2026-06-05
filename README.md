@@ -7,6 +7,8 @@
 - 清楚的風險分級：GREEN 自動、YELLOW 依策略、RED 永遠受保護
 - Memory Hall 跨 session 記憶與自動交接
 - 上下文壓縮、錯誤恢復、任務清單
+- **2026-06 四大架構改善**：lifecycle hooks（SESSION_START/END、FINAL_ANSWER、COMPACT、ERROR 等）、統一錯誤編碼（ToolResult error_type/details）、file ops tracking（compact 後仍保留修改檔案清單）、JSONL session 持久化（enable_persistence / from_session_store / fork_session）
+- 支援 llama.cpp OpenAI-compatible 後端（LlamaCppClient，適合本地 gemma4:31b 長程式碼生成）
 
 目前定位為 **read-heavy / guarded MVP**：功能強大，但你永遠握有控制權。
 
@@ -18,6 +20,19 @@
 - 記憶（Memory Hall）與交接是第一級公民，跨 session 工作不會斷線。
 
 想更自主就輸入 `/approval auto-approve`；想最有安全感就保持預設的 ask / strict 模式。
+
+## 2026-06 架構亮點
+
+本次 merge 納入 Tsumu 主導的**四大架構改善**（詳見 docs/CODEX-REVIEW-TSUMU-ARCH-2026-06.md 與 AGENTX.md）：
+
+- **Lifecycle Hooks**：新增 SESSION_START/END、FINAL_ANSWER、TURN_START/END、COMPACT、ERROR 等事件 + HookManager。學習機制已移至 hook listener，便於未來擴展 observability / safety / self-mod。
+- **統一錯誤編碼**：ToolResult 新增 `error_type` / `error_details`，ToolRegistry 自動捕捉，loop 優先使用，避免重複分類。
+- **File Ops Tracking**：AgentSession 追蹤 read/write 操作，compact 時自動注入 `<modified-files>` / `<read-files>`，讓模型在壓縮後仍知道碰過哪些檔案。
+- **JSONL Session 持久化**：SessionStore 支援 append / replay / fork_session。AgentSession 可 `enable_persistence()`，並透過 `from_session_store()` 恢復（包含關鍵 state 如 tool_outcomes、file_ops）。
+- **LlamaCppClient**：新增 llama.cpp OpenAI-compatible 後端，針對 gemma4 優化（關閉 thinking、600s+ read timeout、3 次重試、reasoning_content fallback）。
+- 其他相容性：edit_file 接受 search_replace alias + old_string/new_string 參數；run_command whitelist 擴充 Node/TS 指令；JSON repair 順序調整；approval config 在 -p / orchestrate / ask 一致讀取。
+
+這些改善讓長任務、本地小模型、session 恢復與自學習更可靠。詳細技術決策與 Codex review 記錄在 `docs/CODEX-REVIEW-TSUMU-ARCH-2026-06.md`。
 
 ## 專案自身規則與自學習（AGENTX.md）
 
@@ -498,5 +513,9 @@ uv run pytest -q
 
 ## 下一步
 
-- persona/profile 設定：把 agentX 的工程人格、語氣與安全邊界做成可切換設定
-- 更完整的 model-assisted context compaction / summary
+- 更完整的 session resume state reconstruction（目前已實作 tool_outcomes、file_ops、last_failing_tools、compaction_count 等關鍵 state 的 JSONL 快照與還原）
+- 擴充 lifecycle hooks 消費者（observability、進階 safety policy、更多自學習策略）
+- 繼續優化本地模型穩定性（llama.cpp / gemma4 長任務、thinking mode 控制）
+- persona / profile 動態切換與工程人格精煉
+
+詳細架構演進與已解決問題請參考 `docs/CODEX-REVIEW-TSUMU-ARCH-2026-06.md` 與 `AGENTX.md` Lab Notes。
