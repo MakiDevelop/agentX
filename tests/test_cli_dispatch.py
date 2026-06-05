@@ -5,7 +5,6 @@ from typing import Any
 from agentx.approval import ApprovalMode, ApprovalPolicy
 from agentx.cli import (
     NON_BLOCKING_COMMANDS,
-    SLASH_HANDLERS,
     ShellState,
     cmd_clear,
     cmd_exit,
