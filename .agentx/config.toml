@@ -1,5 +1,5 @@
 [agentx]
-model = "gemma4:e2b"
+model = "gemma4:31b"
 namespace = "project:agentX"
 mode = "chat"
 approval = "ask"

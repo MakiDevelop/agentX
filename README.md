@@ -339,7 +339,7 @@ Docker Compose allowlist：
 寫入專案預設值：
 
 ```text
-/config set model gemma4:e2b
+/config set model gemma4:31b
 /config set namespace project:agentX
 /config set mode chat
 /config set approval strict
@@ -362,7 +362,7 @@ Docker Compose allowlist：
 
 ```toml
 [agentx]
-model = "gemma4:e2b"
+model = "gemma4:31b"
 namespace = "project:agentX"
 mode = "chat"
 approval = "ask"

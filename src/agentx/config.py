@@ -7,7 +7,7 @@ from pathlib import Path
 from agentx.persona import normalize_persona
 from agentx.project_config import load_project_config
 
-DEFAULT_MODEL = "gemma4:e2b"
+DEFAULT_MODEL = "gemma4:31b"
 
 
 @dataclass(frozen=True)

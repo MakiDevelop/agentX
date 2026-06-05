@@ -1824,7 +1824,7 @@ def shell(
         # /model <name>
         model = prompt.removeprefix("/model ").strip()
         if not model:
-            print_raw("usage: /model gemma4:e2b")
+            print_raw("usage: /model gemma4:31b")
             return
 
         new_settings = state.update_settings(model=model)
@@ -2465,7 +2465,7 @@ def shell(
             if prompt.startswith("/model "):
                 model = prompt.removeprefix("/model ").strip()
                 if not model:
-                    console.print("usage: /model gemma4:e2b")
+                    console.print("usage: /model gemma4:31b")
                     continue
                 new_settings = state.update_settings(model=model)
                 # model 切換需要重建 LLM client（這是外部相依，不適合全藏在 state）
