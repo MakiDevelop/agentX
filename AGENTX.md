@@ -408,16 +408,19 @@ AgentX Shell 三大原則：
 - Codex review（codex-cli MCP）給 conditional green：實作概念正確、安全，與 Tsumu pillars 整合良好。主要 Medium 是 __init__.py 未 export InsertCodeTool（已在本 slice 修復） + 建議加 focused unit test（已新增）。Gemini 給明確 green。
 - 本 slice 現已處理 Codex 回饋，可視為完成（conditional green 已滿足）。
 - Hook-driven verify slice（本動繼續）：實作 _on_post_edit_verify (POST_TOOL_USE listener) 處理 pending_verifies stateful + persist（via append_state） + targeted verify guidance 注入（additional_context 進入 tool result，取代 loop hardcoded verify_msg）。擴充 _restore/_persist/clear/enable 支援 pending_verifies。更新 auto EDITING_TOOLS block 清 pending + 註記 targeted 方向。Hook 註冊於 __init__。測試通過（lifecycle/agent_session/tools）。
-- Fixes per Codex (conditional red) + llm-hub (request_changes) + Gemini (green) reviews:
+- Fixes per Codex (conditional red) + llm-hub (request_changes) + Gemini (green) reviews (merged d7e31fa):
   - EDITING_TOOLS 加入 canonical "edit_file", "write_file"（search_replace alias 由 registry primary 解析，listener 也 normalize 處理；write_file 現在正確觸發）。
   - pending_verifies clear 移到 test verification 之後（edit 時仍 stateful，供 resume；解決 model 指示與實際行為矛盾）。
   - Hook 訊息更新，明確說明本 slice auto test + clear 行為。
   - 新增 duplicate registration guard（_post_edit_verify_registered，類似 learning hooks）。
   - apply_patch 因無 path 自然 skip pending（留在 EDITING_TOOLS 供 auto test）。
-  - 無新 test（現有 47 pass 涵蓋；未來補 focused）。
-- 後續（若需）：更積極 targeted（ruff per path 而非全 run_tests）、auto read-back snippet 作為 additional_context、更新 prompts 提及 hook verify、加 unit test for pending state。
-- Evidence：git diff + ruff clean + pytest 47 pass。準備 re-briefing 給 Codex re-review。
-- 符合 AGENTX.md：小步 + 4C + 更新 tasks + 記 Lab Notes + 為 Codex 準備內容 + 回應 review 發現。
+  - 無新 test（現有 67 pass 涵蓋；未來補 focused）。
+- 後續 micro-slices（逐步進行）：
+  1. 補 focused unit tests（alias search_replace→edit_file、pending resume/persist/clear-after-verify、apply_patch case、duplicate guard）。
+  2. 更積極 targeted（per-path ruff 當 pending 時，而非全 run_tests；auto read-back snippet 作為 additional_context）。
+  3. 更新 prompts 提及 hook-driven verify。
+- Evidence：git diff + ruff clean + pytest 67 pass。Briefing 已更新 fixes section 並存 .agentx/handoff/。準備 re-briefing 給 Codex/Gemini/llm-hub re-review。
+- 符合 AGENTX.md：小步 + 4C + 更新 tasks + 記 Lab Notes + 為 Codex 準備內容 + 回應 review 發現 + 逐步進行。
 
 ---
 
