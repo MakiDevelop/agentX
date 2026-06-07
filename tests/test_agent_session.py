@@ -588,7 +588,7 @@ def test_integration_full_ask_with_edit_triggers_hook_verify_and_clear(tmp_path:
     edit_call = _json.dumps({
         "type": "tool_call",
         "tool": "search_replace",
-        "args": {"path": "src/integration.py", "oldText": "old", "newText": "new code here"}
+        "args": {"path": "src/integration.py", "oldText": "old", "newText": "x = 42  # valid clean python for ruff success"}
     })
     responses = [
         edit_call,
@@ -616,18 +616,59 @@ def test_integration_full_ask_with_edit_triggers_hook_verify_and_clear(tmp_path:
     (tmp_path / "src/integration.py").write_text("old\n", encoding="utf-8")
 
     # Run full ask - this exercises the real ask path, _run_tool, POST hook, EDITING_TOOLS block, clear
+    # Use valid clean Python for success case (ruff exit=0, pending cleared)
     result = session.ask("please do a small edit to src/integration.py replacing old with new code")
 
-    # The edit tool's result (not the later run_tests) should contain the hook-injected verify context
+    # The edit tool's result should contain the hook-injected verify context (with read-back).
+    # Per this micro-slice: only targeted ruff (per-path) is auto; full run_tests is explicit (model did not call it here, so no full test result).
     tool_msgs = [m for m in session.messages if m.get("role") == "tool"]
     assert len(tool_msgs) >= 1
     assert any("Hook-driven verify - stateful" in m.get("content", "") for m in tool_msgs)
     edit_tool_content = next((m["content"] for m in tool_msgs if "search_replace" in m.get("content", "") or "edit_file" in m.get("content", "")), "")
     assert "src/integration.py" in edit_tool_content
     assert "Auto read-back snippet" in edit_tool_content  # from the hook enhancement
+    # Assert targeted ruff happened (per-path), but no full run_tests result (since model went to final without calling run_tests)
+    assert any("targeted ruff" in m.get("content", "").lower() or "ruff check" in m.get("content", "") for m in tool_msgs)
+    assert not any("run_tests" in m.get("content", "").lower() and "exit=" in m.get("content", "") for m in tool_msgs)  # no auto full
 
-    # pending should have been cleared by the verification block (per-path ruff + full test)
+    # pending should have been cleared by the verification block (per-path ruff success)
     assert not session.pending_verifies
 
     # result is the final content
     assert "edit done" in result
+
+
+def test_ruff_failure_does_not_clear_pending(tmp_path: Path) -> None:
+    """Test coverage for ruff failure: on targeted ruff fail (returncode !=0), path remains in pending_verifies, failure reported, no clear.
+    Uses monkeypatch to simulate ruff failure reliably.
+    """
+    from unittest.mock import patch
+    import json as _json
+    edit_call = _json.dumps({
+        "type": "tool_call",
+        "tool": "search_replace",
+        "args": {"path": "src/fail.py", "oldText": "old", "newText": "new code here"}
+    })
+    responses = [edit_call, '{"type":"final","content":"tried but ruff failed"}', '{"type":"final","content":"done"}']
+    # setup similar to integration
+    memory = FakeMemory()
+    registry = ToolRegistry(builtin_tools(tmp_path, memory), auto_approve_yellow=True)
+    ollama = FakeOllama(responses)
+    settings = _make_settings(tmp_path, max_steps=5)
+    session = AgentSession(settings=settings, ollama=ollama, tools=registry, memory=memory)
+
+    (tmp_path / "src").mkdir(exist_ok=True)
+    (tmp_path / "src/fail.py").write_text("old\n", encoding="utf-8")
+
+    with patch("subprocess.run") as mock_ruff:
+        # simulate ruff failure (returncode=1, some output)
+        mock_result = type("R", (), {"stdout": "error: F401 unused import", "stderr": "", "returncode": 1})()
+        mock_ruff.return_value = mock_result
+        result = session.ask("edit src/fail.py , introduce lint error so ruff fails")
+
+    tool_msgs = [m for m in session.messages if m.get("role") == "tool"]
+    assert any("ruff check" in m.get("content", "") for m in tool_msgs)
+    assert any("F401" in m.get("content", "") for m in tool_msgs)  # failure reported
+    # pending NOT cleared on ruff failure
+    assert "src/fail.py" in session.pending_verifies
+    assert "tried but ruff failed" in result

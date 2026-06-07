@@ -422,6 +422,10 @@ AgentX Shell 三大原則：
 - 本 micro-slice 完成（逐步）：POST hook 增強 auto read-back snippet（included in additional_context）；EDITING_TOOLS block 改為 per-path ruff for each pending (targeted before full test)；runtime_prompt (worker + deltas) 更新提及 stateful pending + hook verify + auto snippet + targeted；新增 integration test via full ask()（觸發 search_replace edit，assert hook context with read-back + pending clear after per-path ruff + test）。
 - Evidence：ruff clean；pytest 新 integration + previous hook tests 通過（68+ total）；tasks.json id=3 進行中；Lab Notes + briefing 更新；準備 re-briefing 給最終 review。
 - 符合 AGENTX.md：小步 + 4C + 更新 tasks + 記 Lab Notes + 為 Codex 準備內容 + 回應 review 發現 + 逐步進行。
+- Next micro-slice (id=4, this step): 移除 full run_tests 自動依賴（per-path targeted 為預設 auto after edit；full run_tests 改為模型顯式呼叫 run_tests tool，當 batch 準備好 full verify 時 e.g. before final/commit）。更新 loop.py 移除 EDITING_TOOLS block 中的 unconditional full run_tests（只保留 per-path ruff + report "targeted done, call run_tests explicitly"）；更新 hook 訊息與 runtime_prompt 強調 explicit full calls 和 model control。更新 integration test 斷言 simple edit flow 中無 auto full run_tests 結果。ruff + pytest 每小步。更新 tasks/AGENTX.md。
+  - 額外修正 Codex 剩餘 concerns：check ruff returncode（失敗時 report exit=code + WARNING，不 clear 該 path）；不在失敗時 clear pending（只 clear 成功的）；clean stale text（prompts 移除 "auto receive test results"，loop comments 清理 "自動執行測試" / "full kept"）；補 test coverage（新增 test_ruff_failure_does_not_clear_pending 使用 patch 模擬失敗，assert 失敗訊息 + path 仍 in pending）。
+- Evidence: ruff clean, 6 tests in filter passed (success clears, failure keeps pending + reports; integration asserts no auto full + targeted + clear on success)。tasks id=4 in_progress。
+- 符合 AGENTX.md：小步 + 4C + 更新 tasks + 記 Lab Notes + 為 Codex 準備內容 + 回應 review 發現 + 逐步進行。
 
 ---
 

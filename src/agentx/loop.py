@@ -323,9 +323,9 @@ class AgentSession:
         verify_ctx = (
             f"【Hook-driven verify - stateful】{ctx.tool} on {path} succeeded. "
             "Path added to pending_verifies (persisted for resume/compact). "
-            "In this slice, full run_tests will auto-run next and pending cleared after the batch. "
-            f"For more targeted: read_file key region + consider `uv run ruff check {path}`. "
-            "Do not skip for Gemma4 reliability."
+            "Targeted ruff auto-run for pending paths (system default micro-verify). "
+            "Full run_tests is now explicit: call the run_tests tool when your batch is ready for full verification (e.g. before final or commit). "
+            f"Use the auto read-back snippet + targeted output above for quick verify. Do not skip for Gemma4 reliability."
         )
         # Auto read-back snippet for immediate verification (GREEN read, post-edit content)
         try:
@@ -615,15 +615,17 @@ class AgentSession:
             if result.ok:
                 self.consecutive_reflections = 0
 
-            # Micro-task 12：編輯工具成功後，自動執行測試（+ 條件式 Reflection）
+            # Micro-task 12：編輯工具成功後，自動執行 targeted 驗證（+ 條件式 Reflection）
             # Hook-driven: pending_verifies from POST hook (stateful).
             # This micro-slice: auto per-path ruff for each pending (targeted, efficient for small models)
             # + hook already provides auto read-back snippet in additional_context.
-            # Full run_tests kept at end for complex edits / safety; clear after verification.
+            # Full run_tests is explicit (model calls the tool when ready for full verification); clear only successful targeted paths.
             if action.tool in EDITING_TOOLS and result.ok:
                 self._edit_count = getattr(self, "_edit_count", 0) + 1
 
-                # Per-path targeted ruff for pending edits (instead of always full first)
+                # Per-path targeted ruff for pending edits (default auto after edit; full run_tests now explicit, see below)
+                # Only clear paths where ruff succeeded (returncode==0). On failure, keep in pending and report failure.
+                succeeded = []
                 for p in list(self.pending_verifies):
                     try:
                         import subprocess
@@ -636,33 +638,47 @@ class AgentSession:
                         )
                         ruff_out = f"$ uv run ruff check {p}\n{r.stdout}{r.stderr}".strip()
                         self.messages.append({"role": "tool", "content": ruff_out})
+                        if r.returncode == 0:
+                            succeeded.append(p)
+                        else:
+                            self.messages.append({
+                                "role": "system",
+                                "content": f"WARNING: Targeted ruff for {p} had issues (exit={r.returncode}). Path remains in pending_verifies until fixed/verified."
+                            })
                     except Exception as e:
                         self.messages.append({"role": "system", "content": f"targeted ruff for {p} failed: {e}"})
 
-                # Full build/test for overall verification (compat for complex)
-                test_result = self.tools.run("run_tests", {})
-                self.messages.append({"role": "tool", "content": self._format_tool_result(test_result)})
+                # Clear only the successfully verified paths from this batch.
+                for p in succeeded:
+                    self.pending_verifies.discard(p)
+                self._persist_state_event("pending_verifies", list(self.pending_verifies))
 
-                # Clear hook-managed pending after the verification step (targeted ruff + test batch) completes.
+                # Report and note that full run_tests is explicit.
                 if self.pending_verifies:
-                    self.pending_verifies.clear()
-                    self._persist_state_event("pending_verifies", [])
+                    self.messages.append({
+                        "role": "system",
+                        "content": f"Targeted ruff completed for some paths. {len(self.pending_verifies)} path(s) still pending (ruff issues or not yet verified). Call run_tests tool explicitly for full verification when ready."
+                    })
+                else:
+                    self.messages.append({
+                        "role": "system",
+                        "content": "Targeted ruff done for all pending paths (all passed). Call run_tests tool explicitly for full verification when ready."
+                    })
 
-                # 簡單編輯（累計 <=2 次）：只報告結果 + JSON 提醒，跳過重量級 reflection
+                # 簡單編輯（累計 <=2 次）：只報告 targeted 結果 + JSON 提醒，跳過重量級 reflection
                 if self._edit_count <= 2:
-                    build_status = "passed" if test_result.ok else "FAILED"
                     self.messages.append({
                         "role": "system",
                         "content": (
-                            f"Build/test {build_status}. "
+                            "Targeted ruff done for pending edits (full run_tests is explicit via tool call when ready). "
                             "Continue with the next action, or reply with "
                             '{"type":"final","content":"your summary"} if done.'
                         ),
                     })
                 else:
-                    # 複雜編輯（>=3 次）：完整 reflection
+                    # 複雜編輯（>=3 次）：完整 reflection (model can call run_tests explicitly before this for full results)
                     task_summary = self._get_current_task_summary()
-                    reflection = self._reflect(f"剛剛使用了 {action.tool} 工具，測試結果如下")
+                    reflection = self._reflect(f"剛剛使用了 {action.tool} 工具，驗證結果如下（targeted ruff 已自動執行；full run_tests 需模型顯式呼叫）")
                     self.messages.append(
                         {"role": "system", "content": f"=== Reflection ===\n{reflection}"}
                     )
