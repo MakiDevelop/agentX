@@ -2126,6 +2126,8 @@ def shell(
 
             # 退出指令最高優先，永遠最先處理（避免 dispatch 重構或 job 等待導致「退不出來」）
             if prompt in {"/exit", "/quit"}:
+                if current_cancel is not None:
+                    current_cancel.set()  # 強制取消目前進行中的 agent 工作，讓 /exit 能真正退出
                 job_queue.stop()  # 立即發送 sentinel 喚醒 worker thread，不阻塞使用者
                 # 只在沒有進行中 job 時才嘗試 auto handoff，避免無限等待
                 if not (job_queue.current is not None or job_queue.pending_count() > 0):
