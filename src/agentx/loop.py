@@ -327,6 +327,13 @@ class AgentSession:
             f"For more targeted: read_file key region + consider `uv run ruff check {path}`. "
             "Do not skip for Gemma4 reliability."
         )
+        # Auto read-back snippet for immediate verification (GREEN read, post-edit content)
+        try:
+            read_res = self.tools.run("read_file", {"path": path, "max_chars": 400})
+            snippet = getattr(read_res, "content", str(read_res))[:400]
+            verify_ctx += f"\n\nAuto read-back snippet (post-edit, first ~400 chars):\n{snippet}"
+        except Exception:
+            pass
         return HookResult(additional_context=verify_ctx)
 
     @classmethod
@@ -609,21 +616,34 @@ class AgentSession:
                 self.consecutive_reflections = 0
 
             # Micro-task 12：編輯工具成功後，自動執行測試（+ 條件式 Reflection）
-            # Hook-driven update: pending_verifies populated by _on_post_edit_verify (POST hook).
-            # Targeted verify encouraged via hook additional_context (ruff on path).
-            # For this slice: clear pending after edit success; full run_tests kept for compat
-            # (future: conditional targeted ruff per pending paths instead of always full).
+            # Hook-driven: pending_verifies from POST hook (stateful).
+            # This micro-slice: auto per-path ruff for each pending (targeted, efficient for small models)
+            # + hook already provides auto read-back snippet in additional_context.
+            # Full run_tests kept at end for complex edits / safety; clear after verification.
             if action.tool in EDITING_TOOLS and result.ok:
                 self._edit_count = getattr(self, "_edit_count", 0) + 1
 
-                # 自動跑 build/test (full; hook provides targeted guidance in tool result)
+                # Per-path targeted ruff for pending edits (instead of always full first)
+                for p in list(self.pending_verifies):
+                    try:
+                        import subprocess
+                        r = subprocess.run(
+                            ["uv", "run", "ruff", "check", p],
+                            cwd=self.settings.workspace,
+                            capture_output=True,
+                            text=True,
+                            timeout=30,
+                        )
+                        ruff_out = f"$ uv run ruff check {p}\n{r.stdout}{r.stderr}".strip()
+                        self.messages.append({"role": "tool", "content": ruff_out})
+                    except Exception as e:
+                        self.messages.append({"role": "system", "content": f"targeted ruff for {p} failed: {e}"})
+
+                # Full build/test for overall verification (compat for complex)
                 test_result = self.tools.run("run_tests", {})
                 self.messages.append({"role": "tool", "content": self._format_tool_result(test_result)})
 
-                # Clear hook-managed pending after the verification step (test batch) completes.
-                # This makes pending stateful during the edit (for resume if interrupted) and
-                # clears only after "verification" per the slice design. Updated hook message
-                # reflects the auto behavior to avoid model contradiction.
+                # Clear hook-managed pending after the verification step (targeted ruff + test batch) completes.
                 if self.pending_verifies:
                     self.pending_verifies.clear()
                     self._persist_state_event("pending_verifies", [])

@@ -419,7 +419,8 @@ AgentX Shell 三大原則：
   1. 補 focused unit tests（alias search_replace→edit_file、pending resume/persist/clear-after-verify、apply_patch case、duplicate guard）。
   2. 更積極 targeted（per-path ruff 當 pending 時，而非全 run_tests；auto read-back snippet 作為 additional_context）。
   3. 更新 prompts 提及 hook-driven verify。
-- Evidence：git diff + ruff clean + pytest 67 pass。Briefing 已更新 fixes section 並存 .agentx/handoff/。準備 re-briefing 給 Codex/Gemini/llm-hub re-review。
+- 本 micro-slice 完成（逐步）：POST hook 增強 auto read-back snippet（included in additional_context）；EDITING_TOOLS block 改為 per-path ruff for each pending (targeted before full test)；runtime_prompt (worker + deltas) 更新提及 stateful pending + hook verify + auto snippet + targeted；新增 integration test via full ask()（觸發 search_replace edit，assert hook context with read-back + pending clear after per-path ruff + test）。
+- Evidence：ruff clean；pytest 新 integration + previous hook tests 通過（68+ total）；tasks.json id=3 進行中；Lab Notes + briefing 更新；準備 re-briefing 給最終 review。
 - 符合 AGENTX.md：小步 + 4C + 更新 tasks + 記 Lab Notes + 為 Codex 準備內容 + 回應 review 發現 + 逐步進行。
 
 ---

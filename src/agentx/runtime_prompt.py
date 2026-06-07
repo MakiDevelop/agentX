@@ -152,7 +152,7 @@ def _interactive_delta() -> str:
 1. For complex or long tasks → Maintain an explicit task list using task_add / task_update / task_list.
 2. When given a complex task → First think whether you should enter planning mode or can proceed directly.
 3. When making changes → Use search_replace or insert_code (small, precise edits).
-4. After any meaningful edit → The system will automatically run tests and trigger reflection. Review your task list during reflection.
+4. After any meaningful edit → The POST hook auto-injects stateful verify context (pending_verifies + auto read-back snippet + targeted ruff suggestion). Full run_tests + reflection follow for complex cases. Review your task list / pending during reflection. Use the provided snippet for quick verify.
 5. After reflection → Clearly decide and state the next action (continue fixing, run more tests, suggest /review + /commit, or ask user).
 6. Before suggesting commit → Make sure tests pass and changes are stable. Update task list accordingly.
 
@@ -171,7 +171,7 @@ def _headless_delta() -> str:
 1. For complex or long tasks → Maintain an explicit task list using task_add / task_update / task_list from the beginning.
 2. When given a task → Quickly assess complexity. If it is non-trivial, start with structured planning. In headless mode, after completing a solid plan and reflection, you are allowed and encouraged to proceed to execution if the plan is clear and low-risk.
 3. When making changes → Use search_replace or insert_code (small, precise edits).
-4. After any meaningful edit → The system will automatically run tests and trigger reflection. Review your task list during reflection.
+4. After any meaningful edit → The POST hook auto-injects stateful verify context (pending_verifies + auto read-back snippet + targeted ruff suggestion). Full run_tests + reflection follow for complex cases. Review your task list / pending during reflection. Use the provided snippet for quick verify.
 5. After reflection → Clearly decide and state the next action. In headless mode, strongly prefer progressing the task over asking the user unless truly necessary.
 6. Before suggesting commit → Make sure tests pass and changes are stable. Update task list accordingly.
 
@@ -306,8 +306,12 @@ Workflow (for orchestrator sub-tasks, extra strict for Gemma4/small models):
 1. This subtask comes from a larger plan. Treat it as an independent, self-contained micro-mission. Your output must allow the parent orchestrator to verify completion without ambiguity.
 2. Read relevant files if needed (use small max_chars if possible).
 3. Make ONE precise, minimal edit using search_replace or insert_code.
-4. After tool result: internally (or via reflect) verify "Does the current file/state exactly satisfy the subtask_description + dependency_context? Use read_file on the edited region or a targeted test to confirm."
-5. Only output final when 100% verified for this subtask. Otherwise continue with reflect or fix tool call.
+4. After tool result: the POST hook automatically provides "【Hook-driven verify - stateful】" additional_context with:
+   - path added to pending_verifies (stateful across turns/resume/compact)
+   - auto read-back snippet of the edited file (post-edit content)
+   - suggestion for targeted ruff on the path.
+   Internally verify using the provided snippet/context + read_file on edited region or targeted test. pending_verifies tracks unverified edits.
+5. Only output final when 100% verified for this subtask (check pending cleared in context). Otherwise continue with reflect or fix tool call.
 6. Return {{"type":"final","content":"your summary in Traditional Chinese + explicit 'subtask X verified: <one sentence>' "}}.
 
 Do NOT plan, manage task lists, or reflect extensively unless the tool result shows a problem. Just execute the single focused micro-task efficiently and verify before finishing.

@@ -577,3 +577,57 @@ def test_duplicate_hook_registration_guard(tmp_path: Path) -> None:
 
     assert getattr(session, "_post_edit_verify_registered", False)
     assert post_listeners_after == post_listeners_before  # guard prevented duplicate
+
+
+def test_integration_full_ask_with_edit_triggers_hook_verify_and_clear(tmp_path: Path) -> None:
+    """Integration test via full ask(): prompt triggers edit tool call (search_replace),
+    hook injects stateful verify context (with auto read-back), pending populated then cleared after verification.
+    """
+    # Responses: model outputs tool_call for edit, then final
+    import json as _json
+    edit_call = _json.dumps({
+        "type": "tool_call",
+        "tool": "search_replace",
+        "args": {"path": "src/integration.py", "oldText": "old", "newText": "new code here"}
+    })
+    responses = [
+        edit_call,
+        '{"type":"final","content":"edit done and verified"}',
+        '{"type":"final","content":"done"}',
+        '{"type":"final","content":"done"}',
+        '{"type":"final","content":"done"}',
+        '{"type":"final","content":"done"}'  # enough for full ask flow with tool execution + reflections
+    ]
+
+    # Custom registry with auto_approve for YELLOW edit tools (search_replace etc.)
+    memory = FakeMemory()
+    registry = ToolRegistry(builtin_tools(tmp_path, memory), auto_approve_yellow=True)  # type: ignore[arg-type]
+    ollama = FakeOllama(responses)
+    settings = _make_settings(tmp_path, max_steps=5)
+    session = AgentSession(
+        settings=settings,
+        ollama=ollama,
+        tools=registry,
+        memory=memory,  # type: ignore[arg-type]
+    )
+
+    # Create a file so the edit "succeeds" in the real tool run
+    (tmp_path / "src").mkdir(exist_ok=True)
+    (tmp_path / "src/integration.py").write_text("old\n", encoding="utf-8")
+
+    # Run full ask - this exercises the real ask path, _run_tool, POST hook, EDITING_TOOLS block, clear
+    result = session.ask("please do a small edit to src/integration.py replacing old with new code")
+
+    # The edit tool's result (not the later run_tests) should contain the hook-injected verify context
+    tool_msgs = [m for m in session.messages if m.get("role") == "tool"]
+    assert len(tool_msgs) >= 1
+    assert any("Hook-driven verify - stateful" in m.get("content", "") for m in tool_msgs)
+    edit_tool_content = next((m["content"] for m in tool_msgs if "search_replace" in m.get("content", "") or "edit_file" in m.get("content", "")), "")
+    assert "src/integration.py" in edit_tool_content
+    assert "Auto read-back snippet" in edit_tool_content  # from the hook enhancement
+
+    # pending should have been cleared by the verification block (per-path ruff + full test)
+    assert not session.pending_verifies
+
+    # result is the final content
+    assert "edit done" in result
