@@ -324,8 +324,9 @@ class AgentSession:
             f"【Hook-driven verify - stateful】{ctx.tool} on {path} succeeded. "
             "Path added to pending_verifies (persisted for resume/compact). "
             "Targeted ruff auto-run for pending paths (system default micro-verify). "
+            "For .py files, system will also run targeted pytest (direct <path> if test file, else -k <module>) for test feedback (exit=0 or 5 = ok for this path). "
             "Full run_tests is now explicit: call the run_tests tool when your batch is ready for full verification (e.g. before final or commit). "
-            f"Use the auto read-back snippet + targeted output above for quick verify. Do not skip for Gemma4 reliability."
+            f"Use the auto read-back snippet + targeted outputs above for quick verify. Do not skip for Gemma4 reliability."
         )
         # Auto read-back snippet for immediate verification (GREEN read, post-edit content)
         try:
@@ -648,8 +649,42 @@ class AgentSession:
                     except Exception as e:
                         self.messages.append({"role": "system", "content": f"targeted ruff for {p} failed: {e}"})
 
-                # Clear only the successfully verified paths from this batch.
+                # Per-path targeted pytest for .py files that passed ruff (more targeted test feedback).
+                # Only add to verified if pytest exit in (0 pass, 5 no tests collected).
+                verified = []
                 for p in succeeded:
+                    if not p.endswith('.py'):
+                        verified.append(p)
+                        continue
+                    try:
+                        pp = Path(p)
+                        stem = pp.stem
+                        if pp.name.startswith("test_") or pp.name.endswith("_test.py") or "tests/" in str(pp) or "/test/" in str(pp):
+                            # Direct run for test files (stricter detection: startswith test_ or endswith _test.py or in tests/ dir, to avoid false positives like fail_pytest.py)
+                            cmd = ["uv", "run", "pytest", "-q", "--tb=no", p, "--maxfail=1"]
+                        else:
+                            cmd = ["uv", "run", "pytest", "-q", "--tb=no", "-k", stem, "--maxfail=1"]
+                        r = subprocess.run(
+                            cmd,
+                            cwd=self.settings.workspace,
+                            capture_output=True,
+                            text=True,
+                            timeout=60,
+                        )
+                        pytest_out = f"$ uv run pytest {' '.join(cmd[3:])} for {p}\n{r.stdout}{r.stderr}".strip()
+                        self.messages.append({"role": "tool", "content": pytest_out})
+                        if r.returncode in (0, 5):
+                            verified.append(p)
+                        else:
+                            self.messages.append({
+                                "role": "system",
+                                "content": f"WARNING: Targeted pytest for {p} had issues (exit={r.returncode}). Path remains in pending_verifies."
+                            })
+                    except Exception as e:
+                        self.messages.append({"role": "system", "content": f"targeted pytest for {p} failed: {e}"})
+
+                # Clear only the successfully verified paths (ruff + pytest if .py) from this batch.
+                for p in verified:
                     self.pending_verifies.discard(p)
                 self._persist_state_event("pending_verifies", list(self.pending_verifies))
 
@@ -657,12 +692,12 @@ class AgentSession:
                 if self.pending_verifies:
                     self.messages.append({
                         "role": "system",
-                        "content": f"Targeted ruff completed for some paths. {len(self.pending_verifies)} path(s) still pending (ruff issues or not yet verified). Call run_tests tool explicitly for full verification when ready."
+                        "content": f"Targeted ruff/pytest completed for some paths. {len(self.pending_verifies)} path(s) still pending (issues or not yet verified). Call run_tests tool explicitly for full verification when ready."
                     })
                 else:
                     self.messages.append({
                         "role": "system",
-                        "content": "Targeted ruff done for all pending paths (all passed). Call run_tests tool explicitly for full verification when ready."
+                        "content": "Targeted ruff/pytest done for all pending paths (all passed). Call run_tests tool explicitly for full verification when ready."
                     })
 
                 # 簡單編輯（累計 <=2 次）：只報告 targeted 結果 + JSON 提醒，跳過重量級 reflection
@@ -670,7 +705,7 @@ class AgentSession:
                     self.messages.append({
                         "role": "system",
                         "content": (
-                            "Targeted ruff done for pending edits (full run_tests is explicit via tool call when ready). "
+                            "ruff/pytest done for pending edits (full run_tests is explicit via tool call when ready). "
                             "Continue with the next action, or reply with "
                             '{"type":"final","content":"your summary"} if done.'
                         ),

@@ -152,7 +152,7 @@ def _interactive_delta() -> str:
 1. For complex or long tasks → Maintain an explicit task list using task_add / task_update / task_list.
 2. When given a complex task → First think whether you should enter planning mode or can proceed directly.
 3. When making changes → Use search_replace or insert_code (small, precise edits).
-4. After any meaningful edit → The POST hook auto-injects stateful verify context (pending_verifies + auto read-back snippet + targeted ruff output; full run_tests is NOT auto). Call run_tests tool explicitly when batch ready for full verification (e.g. before final/commit). Review your task list / pending during reflection. Use the provided snippet for quick verify.
+4. After any meaningful edit → The POST hook auto-injects stateful verify context (pending_verifies + auto read-back snippet + targeted ruff output + per-path pytest (direct for test files, -k <module> otherwise); full run_tests is NOT auto). Call run_tests tool explicitly when batch ready for full verification (e.g. before final/commit). Review your task list / pending during reflection. Use the provided snippet/outputs for quick verify.
 5. After reflection → Clearly decide and state the next action (continue fixing, run more tests, suggest /review + /commit, or ask user).
 6. Before suggesting commit → Make sure tests pass and changes are stable. Update task list accordingly.
 
@@ -171,7 +171,7 @@ def _headless_delta() -> str:
 1. For complex or long tasks → Maintain an explicit task list using task_add / task_update / task_list from the beginning.
 2. When given a task → Quickly assess complexity. If it is non-trivial, start with structured planning. In headless mode, after completing a solid plan and reflection, you are allowed and encouraged to proceed to execution if the plan is clear and low-risk.
 3. When making changes → Use search_replace or insert_code (small, precise edits).
-4. After any meaningful edit → The POST hook auto-injects stateful verify context (pending_verifies + auto read-back snippet + targeted ruff output; full run_tests is NOT auto). Call run_tests tool explicitly when batch ready for full verification (e.g. before final/commit). Review your task list / pending during reflection. Use the provided snippet for quick verify.
+4. After any meaningful edit → The POST hook auto-injects stateful verify context (pending_verifies + auto read-back snippet + targeted ruff output + per-path pytest (direct for test files, -k <module> otherwise); full run_tests is NOT auto). Call run_tests tool explicitly when batch ready for full verification (e.g. before final/commit). Review your task list / pending during reflection. Use the provided snippet/outputs for quick verify.
 5. After reflection → Clearly decide and state the next action. In headless mode, strongly prefer progressing the task over asking the user unless truly necessary.
 6. Before suggesting commit → Make sure tests pass and changes are stable. Update task list accordingly.
 
@@ -310,7 +310,8 @@ Workflow (for orchestrator sub-tasks, extra strict for Gemma4/small models):
    - path added to pending_verifies (stateful across turns/resume/compact)
    - auto read-back snippet of the edited file (post-edit content)
    - targeted ruff output for the path (system default micro-verify; full run_tests is NOT auto-called).
-   Internally verify using the provided snippet + targeted output + read_file on edited region if needed. pending_verifies tracks unverified edits.
+   - for .py files, targeted pytest (direct <path> if test file, else -k <module>) output (if tests found; exit 0/5 = ok for this path).
+   Internally verify using the provided snippet + targeted outputs + read_file on edited region if needed. pending_verifies tracks unverified edits.
 5. Call the run_tests tool explicitly (when your edit batch is complete and ready for full verification, e.g. before final or commit). Only output final when 100% verified (pending cleared in context). Otherwise continue with reflect or fix tool call.
 6. Return {{"type":"final","content":"your summary in Traditional Chinese + explicit 'subtask X verified: <one sentence>' "}}.
 
