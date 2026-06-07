@@ -40,7 +40,7 @@ from agentx.tools import ToolRegistry
 from agentx.learning import load_learning_manager, LearningManager
 from agentx.session_store import SessionStore
 
-EDITING_TOOLS = {"search_replace", "insert_code", "apply_patch"}
+EDITING_TOOLS = {"edit_file", "write_file", "search_replace", "insert_code", "apply_patch"}
 
 
 class AgentLoop:
@@ -119,10 +119,12 @@ class AgentSession:
                 self._learning_hooks_registered = True
         if self.hooks is not None:
             self.tools.hooks = self.hooks
-            # Hook-driven verify (next slice after InsertCodeTool): POST_TOOL_USE populates
-            # pending_verifies (stateful, persisted), provides targeted verify context via
-            # additional_context (injected into tool result). Replaces some hardcoded logic.
-            self.hooks.add(HookEvent.POST_TOOL_USE, self._on_post_edit_verify)
+            # Hook-driven verify: POST_TOOL_USE populates pending_verifies (stateful, persisted),
+            # provides targeted verify context via additional_context. Guard against duplicate reg
+            # (like learning hooks) in case HookManager is reused across sessions.
+            if not getattr(self, "_post_edit_verify_registered", False):
+                self.hooks.add(HookEvent.POST_TOOL_USE, self._on_post_edit_verify)
+                self._post_edit_verify_registered = True
 
         # Task List 持久化載入（Micro-task 21 A2）
         self.tasks: list[dict] = load_tasks(self.settings.workspace)
@@ -305,7 +307,11 @@ class AgentSession:
         - Injects verify guidance via additional_context (appears in tool result to model).
         This moves the previous hardcoded verify_msg (loop ~492) to hook for extensibility.
         """
-        if ctx.tool not in EDITING_TOOLS or not ctx.result.ok:
+        # Normalize for aliases (registry canonicalizes search_replace -> edit_file primary for ctx.tool)
+        tool = ctx.tool
+        if tool == "search_replace":
+            tool = "edit_file"
+        if tool not in EDITING_TOOLS or not ctx.result.ok:
             return None
         path = str((ctx.args or {}).get("path", "")) if ctx.args else ""
         if not path:
@@ -313,11 +319,13 @@ class AgentSession:
         self.pending_verifies.add(path)
         self._persist_state_event("pending_verifies", list(self.pending_verifies))
         # Provide targeted verify context (will be appended to tool result content by registry POST)
+        # Updated message to match current slice behavior (auto test + clear after), resolving model contradiction.
         verify_ctx = (
-            f"【Hook-driven verify】{ctx.tool} on {path} succeeded.\n"
-            "Stateful pending set. Next: read_file key region of the path (small max_chars), "
-            f"then targeted: uv run ruff check {path} (or run_tests at end). "
-            "Clear pending on success. Do not skip for Gemma4 reliability."
+            f"【Hook-driven verify - stateful】{ctx.tool} on {path} succeeded. "
+            "Path added to pending_verifies (persisted for resume/compact). "
+            "In this slice, full run_tests will auto-run next and pending cleared after the batch. "
+            f"For more targeted: read_file key region + consider `uv run ruff check {path}`. "
+            "Do not skip for Gemma4 reliability."
         )
         return HookResult(additional_context=verify_ctx)
 
@@ -608,14 +616,17 @@ class AgentSession:
             if action.tool in EDITING_TOOLS and result.ok:
                 self._edit_count = getattr(self, "_edit_count", 0) + 1
 
-                # Clear hook-managed pending after processing this edit batch
-                if self.pending_verifies:
-                    self.pending_verifies.clear()
-                    self._persist_state_event("pending_verifies", [])
-
                 # 自動跑 build/test (full; hook provides targeted guidance in tool result)
                 test_result = self.tools.run("run_tests", {})
                 self.messages.append({"role": "tool", "content": self._format_tool_result(test_result)})
+
+                # Clear hook-managed pending after the verification step (test batch) completes.
+                # This makes pending stateful during the edit (for resume if interrupted) and
+                # clears only after "verification" per the slice design. Updated hook message
+                # reflects the auto behavior to avoid model contradiction.
+                if self.pending_verifies:
+                    self.pending_verifies.clear()
+                    self._persist_state_event("pending_verifies", [])
 
                 # 簡單編輯（累計 <=2 次）：只報告結果 + JSON 提醒，跳過重量級 reflection
                 if self._edit_count <= 2:
