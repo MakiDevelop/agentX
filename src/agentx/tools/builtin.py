@@ -128,6 +128,56 @@ class EditFileTool(_WorkspaceTool):
         return f"applied {len(edits)} edit(s) to {target.relative_to(self.workspace)}"
 
 
+class InsertCodeTool(_WorkspaceTool):
+    """Precise insert for writing code. Insert new content immediately after a unique marker string.
+    Promoted heavily in prompts for small, safe additions (e.g. add a function after a marker line).
+    Must appear exactly once (like edit_file's oldText rule) to prevent accidental wrong inserts.
+    """
+    name = "insert_code"
+    description = (
+        "在 workspace 既有檔案的指定 marker 之後插入內容；"
+        "marker 必須在檔內出現恰好一次；適合新增函式、區塊等精準寫入"
+    )
+    risk = Risk.YELLOW
+    signature = 'path, insert_after="marker line or string", content="new code to insert"'
+
+    def run(self, args: dict[str, Any]) -> str:
+        path = args["path"]
+        target = resolve_inside_workspace(self.workspace, path)
+        if not target.is_file():
+            raise FileNotFoundError(path)
+        ensure_safe_write_path(self.workspace, target)
+
+        marker = str(args.get("insert_after", ""))
+        to_insert = str(args.get("content", ""))
+        if not marker:
+            raise ValueError("insert_after (marker) must not be empty")
+        if not isinstance(to_insert, str):
+            to_insert = str(to_insert)
+
+        content = target.read_text(encoding="utf-8", errors="replace")
+        count = content.count(marker)
+        if count == 0:
+            raise ValueError(
+                f"insert_after marker not found in {path}. "
+                "The marker string must appear exactly as provided."
+            )
+        if count > 1:
+            raise ValueError(
+                f"insert_after marker appears {count} times in {path}; "
+                "each marker must be unique — include more surrounding context."
+            )
+
+        idx = content.find(marker)
+        insert_pos = idx + len(marker)
+        new_content = content[:insert_pos] + to_insert + content[insert_pos:]
+        target.write_text(new_content, encoding="utf-8")
+
+        # Report relative path and size for clarity in transcripts / learning
+        rel = target.relative_to(self.workspace)
+        return f"inserted {len(to_insert)} bytes after marker in {rel}"
+
+
 def _coerce_edits(args: dict[str, Any]) -> list[dict[str, Any]]:
     edits = args.get("edits")
     if isinstance(edits, list):
@@ -498,6 +548,7 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
         ReadFileTool(workspace),
         WriteFileTool(workspace),
         EditFileTool(workspace),
+        InsertCodeTool(workspace),
         SearchTextTool(workspace),
         GitStatusTool(workspace),
         GitDiffTool(workspace),

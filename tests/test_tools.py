@@ -14,7 +14,7 @@ class FakeMemory:
 
 
 def test_read_file_blocks_workspace_escape(tmp_path: Path) -> None:
-    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()))  # type: ignore[arg-type]
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
     result = registry.run("read_file", {"path": "../outside.txt"})
     assert not result.ok
     assert "escapes workspace" in result.content
@@ -22,7 +22,7 @@ def test_read_file_blocks_workspace_escape(tmp_path: Path) -> None:
 
 def test_list_files(tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("hello", encoding="utf-8")
-    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()))  # type: ignore[arg-type]
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
     result = registry.run("list_files", {})
     assert result.ok
     assert result.content == "a.txt"
@@ -34,7 +34,7 @@ def test_run_command_prints_final_command_and_args(tmp_path: Path) -> None:
     # the allowlisted command and returns the output + exit code.
     # The old assertions ("final command:", "args:", "0: git") appear to be from a previous
     # implementation of the tool output format. Updated to match current RunCommandTool.
-    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()))  # type: ignore[arg-type]
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
     result = registry.run("run_command", {"command": "git status --short --branch"})
 
     assert result.ok
@@ -96,3 +96,102 @@ def test_web_fetch_blocks_private_network(monkeypatch) -> None:
 
     with pytest.raises(ValueError, match="blocked non-public"):
         validate_external_url("https://example.test")
+
+
+# === Focused tests for InsertCodeTool (added to address Codex review Medium item) ===
+
+def test_insert_code_success(tmp_path: Path) -> None:
+    target = tmp_path / "module.py"
+    target.write_text("def existing():\n    pass\n# MARKER\n", encoding="utf-8")
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run(
+        "insert_code",
+        {
+            "path": "module.py",
+            "insert_after": "# MARKER",
+            "content": "\ndef new_func():\n    return 42\n",
+        },
+    )
+
+    assert result.ok
+    assert "inserted" in result.content
+    content = target.read_text(encoding="utf-8")
+    assert "def new_func" in content
+    assert "return 42" in content
+    # Original content preserved
+    assert "def existing" in content
+
+
+def test_insert_code_marker_not_found(tmp_path: Path) -> None:
+    target = tmp_path / "code.py"
+    target.write_text("print('hello')\n", encoding="utf-8")
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run(
+        "insert_code",
+        {"path": "code.py", "insert_after": "# NONEXISTENT", "content": "x = 1"},
+    )
+
+    assert not result.ok
+    assert "not found" in result.content
+    assert "exactly as provided" in result.content
+
+
+def test_insert_code_marker_not_unique(tmp_path: Path) -> None:
+    target = tmp_path / "dup.py"
+    target.write_text("pass\n# DUP\nmore\n# DUP\n", encoding="utf-8")
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run(
+        "insert_code",
+        {"path": "dup.py", "insert_after": "# DUP", "content": "inserted"},
+    )
+
+    assert not result.ok
+    assert "appears" in result.content and "times" in result.content
+    assert "unique" in result.content
+
+
+def test_insert_code_blocks_workspace_escape(tmp_path: Path) -> None:
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run(
+        "insert_code",
+        {"path": "../outside.py", "insert_after": "x", "content": "y"},
+    )
+
+    assert not result.ok
+    assert "escapes workspace" in result.content
+
+
+def test_insert_code_rejects_protected_path(tmp_path: Path) -> None:
+    # .agentx is protected
+    protected_dir = tmp_path / ".agentx"
+    protected_dir.mkdir()
+    target = protected_dir / "secret.py"
+    target.write_text("# secret\n", encoding="utf-8")
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run(
+        "insert_code",
+        {"path": ".agentx/secret.py", "insert_after": "# secret", "content": "bad"},
+    )
+
+    assert not result.ok
+    assert "protected location" in result.content or "refusing to write" in result.content
+
+
+def test_insert_code_registry_name_resolution(tmp_path: Path) -> None:
+    """Ensure 'insert_code' name (as used in prompts) resolves correctly via aliases/primary."""
+    target = tmp_path / "t.py"
+    target.write_text("x = 1\n# END", encoding="utf-8")
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    # Direct name
+    res1 = registry.run("insert_code", {"path": "t.py", "insert_after": "# END", "content": "\ny=2"})
+    assert res1.ok
+
+    # Confirm tool is registered under the name
+    tool = registry.get("insert_code")
+    assert tool is not None
+    assert tool.name == "insert_code"

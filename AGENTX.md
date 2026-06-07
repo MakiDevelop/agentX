@@ -398,6 +398,19 @@ AgentX Shell 三大原則：
 - **Codex review**：已產生 docs/CODEX-REVIEW-TSUMU-ARCH-2026-06.md 並實際呼叫 codex-cli 跑過，High 項目（GREEN 安全、hook args 一致性、SESSION_END 完整性、post hook 掉 error 欄位）已修；Medium 多數已處理或加 comment。
 - **教訓**：新 hook/persistence 機制改變 side effect 數量與狀態重建，測試必須用 disable 或 defensive fakes，而非硬算 call count。重大架構必 Codex +  landing fixes 才算完成。
 
+**2026-06 Edit-Verify Micro-Loop 強化 (Option A, Maki 指示)**：
+- 發現 insert_code 在所有 prompt（runtime_prompt.py、worker prompt、Gemma delta）與常數（EDITING_TOOLS、_FILE_WRITE_TOOLS、safety.py、recovery.py、context_compactor.py）中被大力推薦用於「精準寫 code」，但 builtin_tools() 完全沒有實作（只有 ghost 引用）。這是寫 code 能力的一個明顯缺口。
+- 第一小片：實作 InsertCodeTool（與 EditFileTool 相同安全紀律：resolve_inside_workspace + ensure_safe_write_path + marker 必須出現恰好一次，否則清楚錯誤）。加到 builtin_tools 清單。現有 post-edit 自動驗證（loop.py 492 注入 verify_msg + 583 自動 run_tests + reflection 觸發 + file_ops 追蹤 + persistence state）立即覆蓋它。
+- 同時把此方向正式加入 .agentx/tasks.json（id=2, in_progress）。
+- ruff clean。
+- 新增 focused unit tests for InsertCodeTool（success insert、marker not found、duplicate marker、workspace escape、protected path、registry name resolution），全部通過（使用 auto_approve_yellow=True 繞過 YELLOW gate 測試 tool 本身邏輯，與其他 YELLOW tool 測試模式一致）。
+- 這直接強化「真正投入寫 code」：現在模型可以合法呼叫 insert_code 做 marker-based 精準新增，而不用總是 write_file 全檔或 apply_patch。現有 post-edit 驗證（auto run_tests + verify 訊息 + file tracking）自動覆蓋。
+- Codex review（codex-cli MCP）給 conditional green：實作概念正確、安全，與 Tsumu pillars 整合良好。主要 Medium 是 __init__.py 未 export InsertCodeTool（已在本 slice 修復） + 建議加 focused unit test（已新增）。Gemini 給明確 green。
+- 本 slice 現已處理 Codex 回饋，可視為完成（conditional green 已滿足）。
+- 後續 slice（待 Codex gate）：用 Hook (POST_TOOL_USE 或新事件) 讓 verify 更 stateful（pending_verifies persisted）、targeted（只對改動檔做輕量 ruff 而非全 pytest）、並可選 auto 輕量 read-back 作為 hook additional_context。
+- Evidence：git diff + 實際 ruff/pytest 執行 + codex-cli / gemini-cli review 回應（存於 .agentx/handoff/）。本動已按 AGENTX.md §2 Codex gate 執行 review 並處理回饋。
+- 符合 AGENTX.md：小步 + 4C + 更新 tasks + 記 Lab Notes + 為 Codex 準備內容 + 回應 review 發現。
+
 ---
 
 ## 14. Compact Instructions 結構（當需要壓縮時使用）
