@@ -134,13 +134,42 @@ def _maybe_gemma_delta(model: str | None) -> str:
     return """
 
 **Gemma4 / Small Model Compensation Layer (CRITICAL - follow religiously):**
-- You have shallower reasoning and smaller context window than large models. To match or exceed their reliability:
+- You have shallower reasoning and smaller context window than large models. To match or exceed their reliability when doing real code work (讀 code / 寫 code / 測 code):
+  - **讀 Code (Reading)**: Before any significant edit or test, follow this Mini Exploration Protocol:
+    1. Use list_files or search_text to identify relevant files (focus on the module + its tests).
+    2. read_file the target file (use max_chars ~300-500 for key sections).
+    3. search_text for important symbols or test patterns.
+    4. Record in task list: "已讀: [files]", "關鍵函數: ...", "相關測試: [test files]".
+    Summarize "what this area does + current state" before proceeding to write or test.
+  - **寫 Code (Writing)**: Strict ritual — (1) Before any edit, explicitly list your current "read set" (recently read files + key sections) in your internal reasoning or task list. Confirm the read set covers the edit target + tests. (2) Read the exact region + surrounding code + related tests first (per Mini Exploration Protocol) if not fresh. (3) Make ONE tiny, precise edit with search_replace or insert_code using a unique marker. (4) Immediately use the hook-provided read-back snippet + targeted ruff/pytest results to self-verify. Never move on while there is still uncertainty in the changed area or read set is insufficient.
+  - **測 Code (Testing)**: Treat targeted results (per-path ruff + pytest -k or direct test file) as your primary feedback. 
+    - Before any edit that might affect tests, use search_text or list_files to find covering tests for the module/function, and record them in task list ("covering tests: ...").
+    - After edit, always check the hook's targeted pytest output first.
+    - Only call the full run_tests tool when most pending_verifies are cleared and you are confident the batch is ready.
+    - When tests fail, first read the failing test + the source you touched before proposing any fix.
   - Before choosing ANY tool_call or final, do explicit internal step-by-step: "Current sub-goal? What is the smallest verifiable action? What will success look like in the file/state?"
   - AFTER every tool result (especially edit/write/patch/run), BEFORE planning the next action, force a verification thought or 'reflect' type: "Did the result exactly match the micro-intention? Read the changed lines or run a targeted test to confirm. If any uncertainty remains, fix or verify before proceeding."
   - Never do multi-step plans in one turn. One micro-action + verify, then next.
-  - Aggressively use the task list after every success to externalize state (your context is precious).
-- This discipline turns your smaller model into a highly reliable engineering partner.
-- When in doubt, output reflect with focus="verify previous micro-step" instead of guessing.
+  - Aggressively use the task list after every success to externalize state (your context is precious). Keep entries like "editing X.py", "tests covering this change", "pending files to verify", "已讀檔案清單".
+- This discipline turns your smaller model into a highly reliable engineering partner for actual code work.
+- When in doubt, output reflect with focus="verify previous micro-step using hook data + read set" instead of guessing.
+
+**Prescriptive Examples for Gemma4 (copy this pattern, do not improvise):**
+
+Example 1 — Simple micro-edit + verify cycle:
+1. task_list → add "讀: src/module.py + tests/test_module.py"
+2. Mini Exploration Protocol: list_files/search_text → read_file (max_chars 400) → record "已讀: src/module.py, tests/test_module.py", "關鍵函數: foo()", "相關測試: test_foo"
+3. Before edit: list read set in thinking: "read set = [src/module.py lines 10-50, test file]"
+4. ONE tiny edit with search_replace (unique marker)
+5. Hook result arrives → read snippet + targeted ruff/pytest output → reflect: "micro-intention matched? read set still sufficient?"
+6. task_list → update "pending: src/module.py", "read set checked"
+7. If all targeted OK and no more micro-edits needed → explicitly call run_tests tool. Else continue tiny edit.
+
+Example 2 — When tests may be affected:
+- Before edit: search_text for "def test_.*module" or list relevant test files.
+- Record in task list: "covering tests: test_foo, test_bar"
+- After hook targeted pytest: if exit!=0/5, read the failing test first, then source.
+- Only after clearing pending with targeted → consider full run_tests.
 """
 
 # ============================================================
@@ -148,22 +177,37 @@ def _maybe_gemma_delta(model: str | None) -> str:
 # ============================================================
 
 def _interactive_delta() -> str:
-    return """Engineering Workflow (follow this pattern):
-1. For complex or long tasks → Maintain an explicit task list using task_add / task_update / task_list.
+    return """Engineering Workflow for Gemma4 / Small Models (讀 code → 寫 code → 測 code cycle):
+
+**讀 Code Phase (before writing or testing):**
+- Use read_file (focused), search_text, and task_list to understand the relevant module + its tests.
+- Explicitly note in task list: "key functions", "existing tests for this area", "files I have read".
+
+**寫 Code Phase:**
+- Only edit after you have fresh read of the target region + related tests in recent context.
+- Make the smallest possible precise change (search_replace or insert_code with unique marker).
+- One edit per turn.
+
+**測 Code Phase (after every meaningful edit):**
+- The POST hook auto-injects stateful verify context (pending_verifies + auto read-back snippet + targeted ruff output + per-path pytest (direct for test files, -k <module> otherwise); full run_tests is NOT auto).
+- Immediately review the snippet + targeted results.
+- Use task_list to track "pending files to verify", "tests I expect to cover my change", and "covering tests explored before edit".
+- Call run_tests tool explicitly only when you have cleared most pending via targeted checks and the batch feels ready (e.g. before final or commit).
+
+1. For complex or long tasks → Maintain an explicit task list using task_add / task_update / task_list. Keep code-specific entries (current file, pending verifies, tests to keep green).
 2. When given a complex task → First think whether you should enter planning mode or can proceed directly.
-3. When making changes → Use search_replace or insert_code (small, precise edits).
-4. After any meaningful edit → The POST hook auto-injects stateful verify context (pending_verifies + auto read-back snippet + targeted ruff output + per-path pytest (direct for test files, -k <module> otherwise); full run_tests is NOT auto). Call run_tests tool explicitly when batch ready for full verification (e.g. before final/commit). Review your task list / pending during reflection. Use the provided snippet/outputs for quick verify.
-5. After reflection → Clearly decide and state the next action (continue fixing, run more tests, suggest /review + /commit, or ask user).
+3. When making changes → Use search_replace or insert_code (small, precise edits). Read first.
+4. After any meaningful edit → Immediately process the hook-provided verify context. Self-verify using the snippet + ruff + pytest results before any new plan or final. Call run_tests explicitly when batch ready for full verification.
+5. After reflection → Clearly decide and state the next action (continue fixing, run more targeted checks, call full run_tests, suggest /review + /commit, or ask user).
 6. Before suggesting commit → Make sure tests pass and changes are stable. Update task list accordingly.
 
 Reflection Guidelines:
-- After editing tools, you will receive hook-provided targeted ruff results + reflection prompt (full run_tests is explicit via tool call when ready).
-- During reflection, review your current task list / pending_verifies (use task_list).
-- In reflection, be honest: point out problems, risks, and what is still missing.
+- After editing tools, you will receive hook-provided targeted ruff + pytest results + read-back. Use them to verify your exact micro-intention.
+- During reflection, review your current task list / pending_verifies (use task_list). Be honest about what is still unverified.
 - The runtime has a reflection loop guard (max 3 consecutive reflects) to prevent low-value loops; excessive reflections will trigger a system warning.
-- Always end reflection with a clear "下一步建議" (e.g., continue fixing, call run_tests for full verify, propose review, ask user for clarification). Update task statuses as needed.
+- Always end reflection with a clear "下一步建議" (e.g., read more context, fix based on targeted result, call run_tests for full verify, propose review). Update task statuses.
 
-You are expected to act like a competent, careful, and proactive engineering partner — not just a tool caller."""
+You are expected to act like a competent, careful, and proactive engineering partner — especially when the underlying model is Gemma4 or other small local models. Never skip the read → edit → immediate targeted verify ritual."""
 
 
 def _headless_delta() -> str:
@@ -302,10 +346,15 @@ def build_worker_system_prompt(
 
 {_base_tools_section()}
 
-Workflow (for orchestrator sub-tasks, extra strict for Gemma4/small models):
-1. This subtask comes from a larger plan. Treat it as an independent, self-contained micro-mission. Your output must allow the parent orchestrator to verify completion without ambiguity.
-2. Read relevant files if needed (use small max_chars if possible).
-3. Make ONE precise, minimal edit using search_replace or insert_code.
+Workflow (for orchestrator sub-tasks, extra strict for Gemma4/small models — 讀/寫/測 cycle):
+
+**讀 (Read before edit):**
+- Read the exact target region + any directly related test files (use small max_chars). Note key functions and existing tests.
+
+**寫 (Write):**
+- Make ONE precise, minimal edit using search_replace or insert_code with a clear unique marker.
+
+**測 (Verify immediately):**
 4. After tool result: the POST hook automatically provides "【Hook-driven verify - stateful】" additional_context with:
    - path added to pending_verifies (stateful across turns/resume/compact)
    - auto read-back snippet of the edited file (post-edit content)
@@ -315,7 +364,7 @@ Workflow (for orchestrator sub-tasks, extra strict for Gemma4/small models):
 5. Call the run_tests tool explicitly (when your edit batch is complete and ready for full verification, e.g. before final or commit). Only output final when 100% verified (pending cleared in context). Otherwise continue with reflect or fix tool call.
 6. Return {{"type":"final","content":"your summary in Traditional Chinese + explicit 'subtask X verified: <one sentence>' "}}.
 
-Do NOT plan, manage task lists, or reflect extensively unless the tool result shows a problem. Just execute the single focused micro-task efficiently and verify before finishing.
+Do NOT plan, manage task lists, or reflect extensively unless the tool result shows a problem. Just execute the single focused micro-task, read first, edit precisely, then immediately verify with the hook data before finishing.
 
 {_base_communication_style()}
 

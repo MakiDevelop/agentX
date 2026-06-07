@@ -321,12 +321,22 @@ class AgentSession:
         # Provide targeted verify context (will be appended to tool result content by registry POST)
         # Updated message to match current slice behavior (auto test + clear after), resolving model contradiction.
         verify_ctx = (
-            f"【Hook-driven verify - stateful】{ctx.tool} on {path} succeeded. "
-            "Path added to pending_verifies (persisted for resume/compact). "
-            "Targeted ruff auto-run for pending paths (system default micro-verify). "
-            "For .py files, system will also run targeted pytest (direct <path> if test file, else -k <module>) for test feedback (exit=0 or 5 = ok for this path). "
-            "Full run_tests is now explicit: call the run_tests tool when your batch is ready for full verification (e.g. before final or commit). "
-            f"Use the auto read-back snippet + targeted outputs above for quick verify. Do not skip for Gemma4 reliability."
+            f"【Hook-driven verify - stateful】{ctx.tool} on {path} succeeded.\n"
+            "Path added to pending_verifies (persisted for resume/compact).\n\n"
+            "【Gemma4/Small Model Action Required】\n"
+            "1. 先讀上面的 Auto read-back snippet（確認你的 edit 內容）。\n"
+            "2. 看後面的 targeted ruff + pytest 結果（exit 0/5 = 此路徑 OK）。\n"
+            "3. 如果有 WARNING 或問題：用 search_replace/insert_code 修小問題，再等下次 hook。\n"
+            "4. 如果都 OK 且想驗證整批：明確呼叫 run_tests tool（不要自動假設已驗）。\n"
+            "5. 繼續前先用 task_list 記錄此 path 的驗證狀態 + 確認你的 read set（最近讀過的檔案）是否足夠覆蓋下次 edit。\n"
+            "【Gemma4 建議下一步讀取】（小模型請務必跟）：\n"
+            f"- 建議讀 {path} 對應的測試檔（例如 {Path(path).stem}_test.py 或 tests/ 相關）。\n"
+            f"- 如需更多 context，可用 search_text 找此模組的呼叫者或依賴：pattern='{Path(path).stem}'。\n"
+            "- 用 task_list 記錄 'next reads for verification'。\n\n"
+            "Targeted ruff auto-run for pending paths（micro-verify）。\n"
+            "For .py: 也會跑 targeted pytest（test file 直接跑，否則 -k module）。\n"
+            "Full run_tests 必須你自己顯式呼叫（batch 準備好時，例如 final 或 commit 前）。\n"
+            "Do not skip this ritual for Gemma4 reliability."
         )
         # Auto read-back snippet for immediate verification (GREEN read, post-edit content)
         try:
@@ -623,82 +633,7 @@ class AgentSession:
             # Full run_tests is explicit (model calls the tool when ready for full verification); clear only successful targeted paths.
             if action.tool in EDITING_TOOLS and result.ok:
                 self._edit_count = getattr(self, "_edit_count", 0) + 1
-
-                # Per-path targeted ruff for pending edits (default auto after edit; full run_tests now explicit, see below)
-                # Only clear paths where ruff succeeded (returncode==0). On failure, keep in pending and report failure.
-                succeeded = []
-                for p in list(self.pending_verifies):
-                    try:
-                        import subprocess
-                        r = subprocess.run(
-                            ["uv", "run", "ruff", "check", p],
-                            cwd=self.settings.workspace,
-                            capture_output=True,
-                            text=True,
-                            timeout=30,
-                        )
-                        ruff_out = f"$ uv run ruff check {p}\n{r.stdout}{r.stderr}".strip()
-                        self.messages.append({"role": "tool", "content": ruff_out})
-                        if r.returncode == 0:
-                            succeeded.append(p)
-                        else:
-                            self.messages.append({
-                                "role": "system",
-                                "content": f"WARNING: Targeted ruff for {p} had issues (exit={r.returncode}). Path remains in pending_verifies until fixed/verified."
-                            })
-                    except Exception as e:
-                        self.messages.append({"role": "system", "content": f"targeted ruff for {p} failed: {e}"})
-
-                # Per-path targeted pytest for .py files that passed ruff (more targeted test feedback).
-                # Only add to verified if pytest exit in (0 pass, 5 no tests collected).
-                verified = []
-                for p in succeeded:
-                    if not p.endswith('.py'):
-                        verified.append(p)
-                        continue
-                    try:
-                        pp = Path(p)
-                        stem = pp.stem
-                        if pp.name.startswith("test_") or pp.name.endswith("_test.py") or "tests/" in str(pp) or "/test/" in str(pp):
-                            # Direct run for test files (stricter detection: startswith test_ or endswith _test.py or in tests/ dir, to avoid false positives like fail_pytest.py)
-                            cmd = ["uv", "run", "pytest", "-q", "--tb=no", p, "--maxfail=1"]
-                        else:
-                            cmd = ["uv", "run", "pytest", "-q", "--tb=no", "-k", stem, "--maxfail=1"]
-                        r = subprocess.run(
-                            cmd,
-                            cwd=self.settings.workspace,
-                            capture_output=True,
-                            text=True,
-                            timeout=60,
-                        )
-                        pytest_out = f"$ uv run pytest {' '.join(cmd[3:])} for {p}\n{r.stdout}{r.stderr}".strip()
-                        self.messages.append({"role": "tool", "content": pytest_out})
-                        if r.returncode in (0, 5):
-                            verified.append(p)
-                        else:
-                            self.messages.append({
-                                "role": "system",
-                                "content": f"WARNING: Targeted pytest for {p} had issues (exit={r.returncode}). Path remains in pending_verifies."
-                            })
-                    except Exception as e:
-                        self.messages.append({"role": "system", "content": f"targeted pytest for {p} failed: {e}"})
-
-                # Clear only the successfully verified paths (ruff + pytest if .py) from this batch.
-                for p in verified:
-                    self.pending_verifies.discard(p)
-                self._persist_state_event("pending_verifies", list(self.pending_verifies))
-
-                # Report and note that full run_tests is explicit.
-                if self.pending_verifies:
-                    self.messages.append({
-                        "role": "system",
-                        "content": f"Targeted ruff/pytest completed for some paths. {len(self.pending_verifies)} path(s) still pending (issues or not yet verified). Call run_tests tool explicitly for full verification when ready."
-                    })
-                else:
-                    self.messages.append({
-                        "role": "system",
-                        "content": "Targeted ruff/pytest done for all pending paths (all passed). Call run_tests tool explicitly for full verification when ready."
-                    })
+                self._run_targeted_verifications()  # per-path ruff + pytest logic extracted for better testability (id=8)
 
                 # 簡單編輯（累計 <=2 次）：只報告 targeted 結果 + JSON 提醒，跳過重量級 reflection
                 if self._edit_count <= 2:
@@ -1153,6 +1088,108 @@ class AgentSession:
 
         except Exception as e:
             return ToolResult(tool=tool, ok=False, content=str(e))
+
+    def _run_targeted_verifications(self) -> None:
+        """Per-path targeted ruff + pytest for pending_verifies (extracted in id=8 for testability).
+
+        This makes it much easier to monkeypatch or override in tests, so the negative
+        "failure keeps pending" cases can be reliably tested without fragile subprocess patching.
+        """
+        # Per-path targeted ruff for pending edits (default auto after edit; full run_tests now explicit)
+        # Only clear paths where ruff succeeded (returncode==0). On failure, keep in pending and report failure.
+        succeeded = []
+        for p in list(self.pending_verifies):
+            try:
+                import subprocess
+                r = subprocess.run(
+                    ["uv", "run", "ruff", "check", p],
+                    cwd=self.settings.workspace,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                ruff_out = f"$ uv run ruff check {p}\n{r.stdout}{r.stderr}".strip()
+                self.messages.append({"role": "tool", "content": ruff_out})
+                if r.returncode == 0:
+                    succeeded.append(p)
+                else:
+                    self.messages.append({
+                        "role": "system",
+                        "content": f"WARNING: Targeted ruff for {p} had issues (exit={r.returncode}). Path remains in pending_verifies until fixed/verified."
+                    })
+            except Exception as e:
+                self.messages.append({"role": "system", "content": f"targeted ruff for {p} failed: {e}"})
+
+        # Per-path targeted pytest for .py files that passed ruff (more targeted test feedback).
+        # Only add to verified if pytest exit in (0 pass, 5 no tests collected).
+        verified = []
+        for p in succeeded:
+            if not p.endswith('.py'):
+                verified.append(p)
+                continue
+            try:
+                pp = Path(p)
+                stem = pp.stem
+                if pp.name.startswith("test_") or pp.name.endswith("_test.py") or "tests/" in str(pp) or "/test/" in str(pp):
+                    # Direct run for test files (stricter detection)
+                    cmd = ["uv", "run", "pytest", "-q", "--tb=no", p, "--maxfail=1"]
+                else:
+                    cmd = ["uv", "run", "pytest", "-q", "--tb=no", "-k", stem, "--maxfail=1"]
+                r = subprocess.run(
+                    cmd,
+                    cwd=self.settings.workspace,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                pytest_out = f"$ uv run pytest {' '.join(cmd[3:])} for {p}\n{r.stdout}{r.stderr}".strip()
+                self.messages.append({"role": "tool", "content": pytest_out})
+                if r.returncode in (0, 5):
+                    verified.append(p)
+                else:
+                    self.messages.append({
+                        "role": "system",
+                        "content": f"WARNING: Targeted pytest for {p} had issues (exit={r.returncode}). Path remains in pending_verifies."
+                    })
+            except Exception as e:
+                self.messages.append({"role": "system", "content": f"targeted pytest for {p} failed: {e}"})
+
+        # Clear only the successfully verified paths (ruff + pytest if .py) from this batch.
+        for p in verified:
+            self.pending_verifies.discard(p)
+        self._persist_state_event("pending_verifies", list(self.pending_verifies))
+
+        # Report and note that full run_tests is explicit.
+        # Structured, actionable feedback designed to help small models (Gemma4:31b etc.) decide next action.
+        if self.pending_verifies:
+            n = len(self.pending_verifies)
+            batch_hint = ""
+            if n > 1:
+                batch_hint = (
+                    f"目前有 {n} 個 pending（多筆改動累積）。"
+                    "如果這些是同一批次相關的微調，且最近 targeted 結果都 pass（無 WARNING），"
+                    "現在適合明確呼叫 run_tests 工具做 full batch verify。"
+                    "否則繼續針對單一 path 做 tiny edit + 驗證。\n"
+                )
+            self.messages.append({
+                "role": "system",
+                "content": (
+                    f"【Gemma4/Small Model Tip】Targeted ruff/pytest completed for some paths.\n"
+                    f"{n} path(s) still in pending_verifies.\n"
+                    f"{batch_hint}"
+                    f"Next action: Review the hook snippet + ruff/pytest output you just received. "
+                    f"Use task_list to decide if batch is ready, then explicitly call the run_tests tool when appropriate (不要自動假設已驗)."
+                )
+            })
+        else:
+            self.messages.append({
+                "role": "system",
+                "content": (
+                    "【Gemma4/Small Model Tip】All pending paths passed targeted ruff + pytest.\n"
+                    "Micro-verification complete. "
+                    "Now choose: continue with more small edits, or call the run_tests tool explicitly for full batch verification before outputting final."
+                )
+            })
 
     def _reflect(self, focus: str | None = None) -> str:
         """讓模型對最近的行為進行自我檢討，並明確建議下一步。"""
