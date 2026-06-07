@@ -407,8 +407,9 @@ AgentX Shell 三大原則：
 - 這直接強化「真正投入寫 code」：現在模型可以合法呼叫 insert_code 做 marker-based 精準新增，而不用總是 write_file 全檔或 apply_patch。現有 post-edit 驗證（auto run_tests + verify 訊息 + file tracking）自動覆蓋。
 - Codex review（codex-cli MCP）給 conditional green：實作概念正確、安全，與 Tsumu pillars 整合良好。主要 Medium 是 __init__.py 未 export InsertCodeTool（已在本 slice 修復） + 建議加 focused unit test（已新增）。Gemini 給明確 green。
 - 本 slice 現已處理 Codex 回饋，可視為完成（conditional green 已滿足）。
-- 後續 slice（待 Codex gate）：用 Hook (POST_TOOL_USE 或新事件) 讓 verify 更 stateful（pending_verifies persisted）、targeted（只對改動檔做輕量 ruff 而非全 pytest）、並可選 auto 輕量 read-back 作為 hook additional_context。
-- Evidence：git diff + 實際 ruff/pytest 執行 + codex-cli / gemini-cli review 回應（存於 .agentx/handoff/）。本動已按 AGENTX.md §2 Codex gate 執行 review 並處理回饋。
+- Hook-driven verify slice（本動繼續）：實作 _on_post_edit_verify (POST_TOOL_USE listener) 處理 pending_verifies stateful + persist（via append_state） + targeted verify guidance 注入（additional_context 進入 tool result，取代 loop hardcoded verify_msg）。擴充 _restore/_persist/clear/enable 支援 pending_verifies。更新 auto EDITING_TOOLS block 清 pending + 註記 targeted 方向。Hook 註冊於 __init__。測試通過（lifecycle/agent_session/tools）。
+- 後續（若需）：更積極 targeted（ruff per path 而非全 run_tests）、auto read-back snippet 作為 additional_context、更新 prompts 提及 hook verify、加 unit test for pending state。
+- Evidence：git diff + ruff/pytest 31 pass + push。push 已執行（f14927d + 本 hook 變更將另 commit/push）。
 - 符合 AGENTX.md：小步 + 4C + 更新 tasks + 記 Lab Notes + 為 Codex 準備內容 + 回應 review 發現。
 
 ---

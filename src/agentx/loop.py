@@ -25,6 +25,7 @@ from agentx.tasks import format_task_list_summary, get_next_task_id, load_tasks,
 from agentx.hooks import (
     HookEvent,
     HookManager,
+    HookResult,
     SessionStartContext,
     SessionEndContext,
     FinalAnswerContext,
@@ -32,6 +33,7 @@ from agentx.hooks import (
     TurnEndContext,
     CompactContext,
     ErrorHookContext,
+    ToolResultContext,
 )
 from agentx.memory_hall import MemoryHallClient
 from agentx.tools import ToolRegistry
@@ -117,6 +119,10 @@ class AgentSession:
                 self._learning_hooks_registered = True
         if self.hooks is not None:
             self.tools.hooks = self.hooks
+            # Hook-driven verify (next slice after InsertCodeTool): POST_TOOL_USE populates
+            # pending_verifies (stateful, persisted), provides targeted verify context via
+            # additional_context (injected into tool result). Replaces some hardcoded logic.
+            self.hooks.add(HookEvent.POST_TOOL_USE, self._on_post_edit_verify)
 
         # Task List 持久化載入（Micro-task 21 A2）
         self.tasks: list[dict] = load_tasks(self.settings.workspace)
@@ -144,6 +150,7 @@ class AgentSession:
         # prefixes of the summary).
         self.last_termination: str = "unknown"
         self.last_failing_tools: set[str] = set()
+        self.pending_verifies: set[str] = set()  # hook-driven edit-verify state (next slice)
         # Hysteresis state for auto-compact (review N8: don't re-compact every
         # turn when bootstrap alone is over threshold).
         self._last_compact_tokens: int | None = None
@@ -262,6 +269,7 @@ class AgentSession:
         self._persist_state_event("file_ops", {k: list(v) for k, v in self._file_ops.items()})
         self._persist_state_event("last_failing_tools", list(self.last_failing_tools))
         self._persist_state_event("compaction_count", self.compaction_count)
+        self._persist_state_event("pending_verifies", list(self.pending_verifies))
 
     def _persist_message(self, role: str, content: str, **metadata: Any) -> None:
         if self._session_store is not None:
@@ -287,6 +295,31 @@ class AgentSession:
             except (TypeError, ValueError):
                 pass
         # last_termination etc. can be added later if needed; start minimal for Codex item
+        elif name == "pending_verifies":
+            self.pending_verifies = set(data or [])
+
+    def _on_post_edit_verify(self, ctx: ToolResultContext) -> HookResult | None:
+        """Hook-driven post-edit verify listener (POST_TOOL_USE).
+        - Stateful: track paths in pending_verifies + persist via state event (for resume/compact).
+        - Targeted: suggest ruff on specific path (instead of always full run_tests).
+        - Injects verify guidance via additional_context (appears in tool result to model).
+        This moves the previous hardcoded verify_msg (loop ~492) to hook for extensibility.
+        """
+        if ctx.tool not in EDITING_TOOLS or not ctx.result.ok:
+            return None
+        path = str((ctx.args or {}).get("path", "")) if ctx.args else ""
+        if not path:
+            return None
+        self.pending_verifies.add(path)
+        self._persist_state_event("pending_verifies", list(self.pending_verifies))
+        # Provide targeted verify context (will be appended to tool result content by registry POST)
+        verify_ctx = (
+            f"【Hook-driven verify】{ctx.tool} on {path} succeeded.\n"
+            "Stateful pending set. Next: read_file key region of the path (small max_chars), "
+            f"then targeted: uv run ruff check {path} (or run_tests at end). "
+            "Clear pending on success. Do not skip for Gemma4 reliability."
+        )
+        return HookResult(additional_context=verify_ctx)
 
     @classmethod
     def from_session_store(
@@ -486,22 +519,10 @@ class AgentSession:
                     tool_name=action.tool, result_ok=result.ok,
                 ))
 
-            # === 自動驗證注入（opt4：提升 Gemma4 等弱模型的「聰明」與可靠性） ===
-            # 編輯類工具成功後，自動注入系統提示，強制模型在下一步先驗證（read or test）
-            # 這對小模型非常有效，避免「以為成功但實際有 bug」的情況。
+            # === Opt5: 成功編輯模式主動寫入 Memory Hall 作為經驗庫（供未來 few-shot recall） ===
+            # 讓 Gemma4 等模型可以從過去成功案例學到模式，增加「聰明」程度。
+            # (verify injection moved to _on_post_edit_verify POST hook for stateful/targeted)
             if result.ok and action.tool in ("edit_file", "write_file", "search_replace", "insert_code", "apply_patch"):
-                verify_msg = (
-                    "【系統自動建議 - 弱模型驗證強化 (Gemma4 優化)】\n"
-                    f"剛才的 {action.tool} 成功。為確保正確（Gemma4 等小模型容易 overlook 細節或格式問題），"
-                    "請在下一步優先輸出 tool_call 來驗證：\n"
-                    f"- read_file 剛修改的 path（建議用小 max_chars 只看關鍵區）確認內容完全符合預期\n"
-                    "- 或 run_tests / run_build_command 確認無誤\n"
-                    "驗證通過後再繼續其他動作或輸出 final。不要跳過這步！"
-                )
-                self.messages.append({"role": "system", "content": verify_msg})
-
-                # === Opt5: 成功編輯模式主動寫入 Memory Hall 作為經驗庫（供未來 few-shot recall） ===
-                # 讓 Gemma4 等模型可以從過去成功案例學到模式，增加「聰明」程度。
                 try:
                     path = action.args.get("path", "unknown")
                     lesson = f"成功 {action.tool} on {path}。結果摘要: {(result.content or '')[:400]}"
@@ -580,10 +601,19 @@ class AgentSession:
                 self.consecutive_reflections = 0
 
             # Micro-task 12：編輯工具成功後，自動執行測試（+ 條件式 Reflection）
+            # Hook-driven update: pending_verifies populated by _on_post_edit_verify (POST hook).
+            # Targeted verify encouraged via hook additional_context (ruff on path).
+            # For this slice: clear pending after edit success; full run_tests kept for compat
+            # (future: conditional targeted ruff per pending paths instead of always full).
             if action.tool in EDITING_TOOLS and result.ok:
                 self._edit_count = getattr(self, "_edit_count", 0) + 1
 
-                # 自動跑 build/test
+                # Clear hook-managed pending after processing this edit batch
+                if self.pending_verifies:
+                    self.pending_verifies.clear()
+                    self._persist_state_event("pending_verifies", [])
+
+                # 自動跑 build/test (full; hook provides targeted guidance in tool result)
                 test_result = self.tools.run("run_tests", {})
                 self.messages.append({"role": "tool", "content": self._format_tool_result(test_result)})
 
@@ -654,10 +684,12 @@ class AgentSession:
         self._final_guard_retries = 0
         self.last_termination = "unknown"
         self.last_failing_tools = set()
+        self.pending_verifies = set()
         # Persist the cleared state
         self._persist_state_event("tool_outcomes", {})
         self._persist_state_event("file_ops", {})
         self._persist_state_event("last_failing_tools", [])
+        self._persist_state_event("pending_verifies", [])
 
     # === Task Management (for complex long-horizon tasks) ===
 
