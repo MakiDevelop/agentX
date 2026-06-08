@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from .provider_registry import register_llm_backend
+from .sse import iterate_sse_messages
 
 
 class LlamaCppClient:
@@ -62,23 +63,32 @@ class LlamaCppClient:
         on_delta: Callable[[str], None] | None,
         cancel_event: threading.Event | None,
     ) -> str:
+        """Streaming implementation using the zero-dep SSE parser.
+
+        This integrates the SSE reference (from BORROW-FROM-PI LOW item)
+        into the actual OpenAI-compatible streaming path (llama.cpp /v1/chat/completions).
+        It is more robust than the previous manual "data: " stripping:
+        - Proper handling of \r\n / \r / \n endings
+        - Ignores comment lines (: ...)
+        - Correct multi-line data accumulation
+        - Clean event separation on blank lines
+        """
         chunks: list[str] = []
         with self._client.stream(
             "POST", f"{self.base_url}/v1/chat/completions", json=payload,
         ) as response:
             response.raise_for_status()
-            for line in response.iter_lines():
+            for event in iterate_sse_messages(response.iter_lines()):
                 if cancel_event is not None and cancel_event.is_set():
                     from agentx.ollama import OllamaCancelledError
                     raise OllamaCancelledError("Request cancelled")
-                if not line:
+                data_str = event.get("data", "").strip()
+                if not data_str:
                     continue
-                if line.startswith("data: "):
-                    line = line[6:]
-                if line.strip() == "[DONE]":
+                if data_str == "[DONE]":
                     break
                 try:
-                    data = json.loads(line)
+                    data = json.loads(data_str)
                 except json.JSONDecodeError:
                     continue
                 delta = _extract_delta(data)

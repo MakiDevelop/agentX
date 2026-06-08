@@ -118,14 +118,16 @@ pi 的 `anthropic.ts` 裡有一個手寫的 SSE parser（`iterateSseMessages` / 
 
 agentX 目前走 Ollama HTTP API（JSON streaming），不需要 SSE。但如果未來直接接 Anthropic / OpenAI 的 streaming API（繞過 SDK），這段可以翻成 Python。
 
-### 已準備
+### 已實作並整合
 
-- 新增 `src/agentx/sse.py`：零依賴實作，函式命名與行為盡量對齊 pi（`iterate_sse_messages`、`decode_sse_line`、`consume_line`、`parse_sse`）。
-- 處理所有提到的 edge case：不同 line ending、: comment、無 data 事件、data 多行累積。
-- 提供方便的 generator 介面，適合搭配 httpx.stream / any line iterator 使用。
-- 目前**不主動引入**到其他模組（符合 LOW 定位），純粹作為未來可直接取用的參考。
+- 新增 `src/agentx/sse.py`：零依賴實作，函式命名與行為對齊 pi（`iterate_sse_messages`、`decode_sse_line`、`consume_line`、`parse_sse`）。
+- 處理所有提到的 edge case：\r\n/\r/\n line endings、: comment lines、data: 多行累積（用 \n 串接）、標準 event/data/id/retry。
+- **真正接進 streaming 路徑**：整合到 `LlamaCppClient._chat_stream`（OpenAI 相容 SSE 格式 `/v1/chat/completions`）。取代原本手動 "data: " 字串處理，更 robust。
+- Ollama 維持其原生 NDJSON streaming（非 SSE）。
+- 提供 generator 介面，適合 httpx.stream 等。
+- 更新文件與 __init__.py export。
 
-### 實作成本：Very Low（已完成，純參考模組）
+### 實作成本：Low（已完成 + 實際整合）
 
 使用時直接 `from agentx.sse import iterate_sse_messages` 即可。
 

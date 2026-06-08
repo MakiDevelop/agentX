@@ -16,20 +16,24 @@ Key features ported / ensured:
 - Yields complete events only when a blank line (event delimiter) is seen.
 
 Current agentX usage:
-- We primarily use Ollama (JSON line streaming) and llama.cpp (OpenAI-compatible).
-- This module is **not wired in** yet (LOW priority, "目前不需要").
-- It is left as a clean, self-contained reference so we can pull it in later
-  when we want to speak raw SSE to providers that only expose SSE (or when
-  we want to avoid SDK bloat / version skew).
+- Integrated into LlamaCppClient._chat_stream for its OpenAI-compatible
+  streaming (/v1/chat/completions). This replaces the previous brittle
+  manual "data: " line stripping with the full robust parser.
+- OllamaClient continues to use its native NDJSON streaming (not SSE).
+- The module remains useful as a zero-dep building block for any future
+  direct Anthropic / raw OpenAI SSE usage (bypassing SDKs), as originally
+  intended from the pi borrow.
 
-Example future usage:
+Example usage (now active in LlamaCpp, and available for others):
     import httpx
     from agentx.sse import iterate_sse_messages
 
     with httpx.stream("POST", url, ...) as r:
         for event in iterate_sse_messages(r.iter_lines()):
-            if event.get("event") == "message" or "data" in event:
-                handle(event["data"])
+            data_str = event.get("data", "").strip()
+            if data_str == "[DONE]":
+                break
+            # ...
 """
 
 from __future__ import annotations
@@ -65,7 +69,7 @@ def decode_sse_line(line: str) -> tuple[str, str] | None:
     return (field, value)
 
 
-def consume_line(buffer: list[str], line: str) -> dict[str, Any] | None:
+def consume_line(buffer: list[tuple[str, str]], line: str) -> dict[str, Any] | None:
     """Process one line into the current event buffer.
 
     Returns a complete event dict when a blank line (event delimiter) is
