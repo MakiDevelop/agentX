@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  UV_PYTHON_PREFERENCE: only-managed
+  # 2-day "exclude newer" gate (pi's min-release-age=2 equivalent).
+  # See uv docs for --exclude-newer / UV_EXCLUDE_NEWER (supports "2d" relative form
+  # in recent uv). This is the age gate, not a minimum-age env var.
+  UV_EXCLUDE_NEWER: "2d"
+
+jobs:
+  lint-and-supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install the project (dev)
+        run: uv sync --all-extras --dev --frozen
+
+      # === Supply chain hardening layers (HIGH priority, borrowed from pi) ===
+
+      - name: Check exact pins in pyproject.toml (layer 1)
+        run: python scripts/check-pinned-deps.py
+
+      - name: uv lock consistency (lockfile is ground truth)
+        run: uv lock --check
+
+      - name: Lockfile review gate script (layer 4 — primarily local pre-commit)
+        # The script only acts on staged files (git diff --cached), so in CI this
+        # is a no-op / advisory. Real protection for uv.lock changes in PRs comes
+        # from human review of the diff + `uv lock --check` + pinned checker + audit.
+        # We keep the call so the step is visible and for future "PR diff mode".
+        run: python scripts/check-lockfile-commit.py || true
+
+      - name: Vulnerability audit (pip-audit on the locked tree)
+        # Equivalent to the "pip-audit / safety check" layer. We pin the tool via
+        # uvx --from for determinism (no new permanent dev dep yet). Audit
+        # findings are currently blocking for supply-chain changes; add
+        # --ignore-vuln or a baseline file only with explicit review.
+        run: uvx --from 'pip-audit==2.4.0' pip-audit --requirement <(uv export --format requirements-txt --frozen --no-dev)
+
+      # === Existing hygiene ===
+
+      - name: Ruff (via pre-commit config if present, or direct)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Run tests (quick)
+        run: uv run pytest -q --tb=no
+
+  # Future: when we have a published artifact / PyPI path, add a job that
+  # exercises the "shrinkwrap equivalent" export + hash-pinned install.
+  # See docs/BORROW-FROM-PI.md for the planned constraints.txt / --require-hashes step.

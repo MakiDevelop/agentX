@@ -1,0 +1,57 @@
+# Pre-commit hooks for agentX.
+#
+# Supply-chain hardening (HIGH priority borrow from earendil-works/pi):
+#   - exact pins in pyproject.toml (check-pinned-deps.py)
+#   - uv.lock treated as reviewed code (check-lockfile-commit.py)
+#
+# Also delivers the long-standing intention from AGENTX.md:
+#   "Python 專案：使用 pre-commit hook 自動執行 `ruff check`"
+#
+# Install once:
+#   uv run pre-commit install
+#
+# Or with system pre-commit:
+#   pre-commit install
+#
+# Run manually on all files:
+#   uv run pre-commit run --all-files
+#
+# The two custom hooks below are "local" so they stay in-tree and have zero
+# external hook repo version drift.
+
+repos:
+  # Ruff (lint + format). Keep rev reasonably close to the version pinned in
+  # pyproject.toml [tool.uv] / uv.lock dev extras.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.13
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # Local hooks (our supply chain layers).
+  - repo: local
+    hooks:
+      - id: check-pinned-deps
+        name: check-pinned-deps (exact version pins only)
+        entry: uv run --frozen python scripts/check-pinned-deps.py
+        language: system
+        pass_filenames: false
+        files: ^pyproject\.toml$
+        description: >
+          Fail if any direct dependency (runtime or optional) uses a loose
+          specifier (>=, ~=, etc.). Direct deps must be ==X.Y.Z exact.
+          See docs/BORROW-FROM-PI.md (HIGH priority item).
+
+      - id: check-lockfile-commit
+        name: check-lockfile-commit (uv.lock review gate)
+        entry: uv run --frozen python scripts/check-lockfile-commit.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+        always_run: true
+        description: >
+          If uv.lock appears in the staged changes, block the commit unless
+          AGENTX_ALLOW_LOCKFILE_CHANGE=1 (or true/yes). This forces every
+          lockfile change (direct or transitive) to be a deliberate reviewed
+          action. See scripts/check-lockfile-commit.py and pi's equivalent.
