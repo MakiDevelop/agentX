@@ -30,7 +30,7 @@ from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaCancelledError, OllamaClient
-from agentx.llama_cpp import LlamaCppClient
+from agentx.provider_registry import get_llm_client, LLMClient, register_builtin_backends
 from agentx.persona import list_personas, normalize_persona
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
@@ -879,26 +879,27 @@ def build_runtime(
     settings: Settings,
     *,
     approval_policy: ApprovalPolicy | None = None,
-) -> tuple[OllamaClient, MemoryHallClient, ToolRegistry]:
-    """建立執行時需要的核心物件（Ollama、Memory Hall、Tool Registry）。
+) -> tuple[LLMClient, MemoryHallClient, ToolRegistry]:
+    """建立執行時需要的核心物件（LLM client、Memory Hall、Tool Registry）。
 
     注意（MT22）：此函式已完全與舊的單一任務系統（TaskState）解耦，
     不再回傳或依賴舊的 task 物件。所有任務相關狀態請改用新多任務清單。
+
+    Backend selection now goes through the Provider Registry (borrowed from pi).
+    See src/agentx/provider_registry.py and the self-registration in ollama.py / llama_cpp.py.
     """
     import os
+    # Ensure built-in backends are registered (idempotent). This must happen
+    # at runtime inside the function so it occurs after the whole cli module
+    # has finished its top-level imports (avoids E402).
+    register_builtin_backends()
     backend = os.getenv("AGENTX_BACKEND", "ollama").lower()
-    if backend == "llama_cpp":
-        ollama = LlamaCppClient(
-            base_url=settings.ollama_url,
-            model=settings.model,
-            timeout=settings.ollama_timeout,
-        )
-    else:
-        ollama = OllamaClient(
-            base_url=settings.ollama_url,
-            model=settings.model,
-            timeout=settings.ollama_timeout,
-        )
+    llm_client = get_llm_client(
+        backend,
+        base_url=settings.ollama_url,
+        model=settings.model,
+        timeout=settings.ollama_timeout,
+    )
     memory = MemoryHallClient(
         base_url=settings.memory_hall_url,
         token=settings.memory_hall_token,
@@ -912,7 +913,7 @@ def build_runtime(
         builtin_tools(settings.workspace, memory),
         approver=approve if approval_policy is not None else None,
     )
-    return ollama, memory, tools
+    return llm_client, memory, tools
 
 
 def run_print_prompt(
@@ -1830,8 +1831,13 @@ def shell(
         new_settings = state.update_settings(model=model)
 
         # 切換模型需要重建 LLM client（外部相依）
+        # Use registry so AGENTX_BACKEND=llama_cpp continues to work.
+        register_builtin_backends()
+        import os as _os
+        backend = _os.getenv("AGENTX_BACKEND", "ollama").lower()
         nonlocal ollama
-        ollama = OllamaClient(
+        ollama = get_llm_client(
+            backend,
             base_url=new_settings.ollama_url,
             model=new_settings.model,
             timeout=new_settings.ollama_timeout,
@@ -2471,7 +2477,12 @@ def shell(
                     continue
                 new_settings = state.update_settings(model=model)
                 # model 切換需要重建 LLM client（這是外部相依，不適合全藏在 state）
-                ollama = OllamaClient(
+                # Use registry so AGENTX_BACKEND=llama_cpp continues to work.
+                register_builtin_backends()
+                import os as _os
+                backend = _os.getenv("AGENTX_BACKEND", "ollama").lower()
+                ollama = get_llm_client(
+                    backend,
                     base_url=new_settings.ollama_url,
                     model=new_settings.model,
                     timeout=new_settings.ollama_timeout,

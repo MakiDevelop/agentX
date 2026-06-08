@@ -8,6 +8,8 @@ from typing import Any
 
 import httpx
 
+from .provider_registry import register_llm_backend
+
 
 class LlamaCppClient:
     """OpenAI-compatible client for llama.cpp server.
@@ -107,6 +109,10 @@ class LlamaCppClient:
     ) -> None:
         self.close()
 
+
+# Self-register with the provider registry so that simply importing
+# agentx.llama_cpp makes the "llama_cpp" backend available.
+register_llm_backend("llama_cpp", LlamaCppClient)
 
 def _extract_content(data: dict[str, Any]) -> str:
     choices = data.get("choices", [])

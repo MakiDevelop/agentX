@@ -23,6 +23,13 @@ from agentx.hooks import (
     TurnStartContext,
 )
 from agentx.protocol import Tool, ToolResult
+from agentx.provider_registry import (
+    LLMClient,
+    get_llm_client,
+    list_registered_backends,
+    register_llm_backend,
+    resolve_llm_backend,
+)
 from agentx.safety import Risk
 from agentx.tools import ApprovalCallback, ToolRegistry, builtin_tools
 from agentx.learning import LearningManager, load_learning_manager
@@ -58,6 +65,11 @@ __all__ = [
     "builtin_tools",
     "LearningManager",
     "load_learning_manager",
+    "LLMClient",
+    "get_llm_client",
+    "list_registered_backends",
+    "register_llm_backend",
+    "resolve_llm_backend",
     "SessionEntry",
     "SessionStore",
     "fork_session",

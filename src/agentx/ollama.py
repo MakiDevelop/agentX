@@ -8,6 +8,8 @@ from typing import Any
 
 import httpx
 
+from .provider_registry import register_llm_backend
+
 
 class OllamaCancelledError(RuntimeError):
     pass
@@ -88,3 +90,8 @@ class OllamaClient:
 
 def _message_content(data: dict[str, Any]) -> str:
     return str(data.get("message", {}).get("content", ""))
+
+
+# Self-register with the provider registry so that simply importing
+# agentx.ollama makes the "ollama" backend available.
+register_llm_backend("ollama", OllamaClient)
