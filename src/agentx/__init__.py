@@ -30,6 +30,7 @@ from agentx.provider_registry import (
     register_llm_backend,
     resolve_llm_backend,
 )
+from agentx.sse import iterate_sse_messages, parse_sse  # LOW reference (SSE parser)
 from agentx.safety import Risk
 from agentx.tools import ApprovalCallback, ToolRegistry, builtin_tools
 from agentx.learning import LearningManager, load_learning_manager
@@ -70,6 +71,8 @@ __all__ = [
     "list_registered_backends",
     "register_llm_backend",
     "resolve_llm_backend",
+    "iterate_sse_messages",
+    "parse_sse",
     "SessionEntry",
     "SessionStore",
     "fork_session",
