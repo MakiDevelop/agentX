@@ -271,3 +271,34 @@ class TestAmhClient:
 
         assert len(events) >= 2
         assert all("mem-456" in str(e) for e in events)
+
+    def test_amh_client_different_stores_build_correct_flags(self, monkeypatch):
+        """Verify expanded --store support for json, sqlite, postgres, memhall etc."""
+        monkeypatch.setattr("shutil.which", lambda x: "/usr/bin/amh")
+
+        test_cases = [
+            ("json", "/tmp/m.json", ["--store", "json", "--path", "/tmp/m.json"]),
+            ("sqlite", "/tmp/m.db", ["--store", "sqlite", "--path", "/tmp/m.db"]),
+            ("postgres", "postgres://user:pass@host/db", ["--store", "postgres", "--path", "postgres://user:pass@host/db"]),
+            ("memhall", "http://100.89.41.50:9100", ["--store", "memhall", "--path", "http://100.89.41.50:9100"]),
+        ]
+
+        for store, path, expected in test_cases:
+            captured = {}
+            def fake_run(cmd, **kwargs):
+                captured["cmd"] = cmd
+                class R:
+                    returncode = 0
+                    stdout = b"ok"
+                    stderr = b""
+                return R()
+            monkeypatch.setattr("subprocess.run", fake_run)
+
+            client = AmhClient(store=store, store_path=path)
+            client.write("test content", namespace="p:storetest")
+
+            for flag in expected:
+                assert flag in captured["cmd"], f"store={store} missing flag {flag}"
+            # cmd should start with amh + the write args + store flags
+            assert captured["cmd"][0] == "amh"
+            assert "write" in captured["cmd"]

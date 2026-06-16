@@ -314,6 +314,12 @@ class AmhClient:
     This makes agentX a proper participant in Agent Civilization Architecture
     when memory_backend=amh.
 
+    Supports common --store values:
+      - "json" (default, --store json --path <file>)
+      - "sqlite" (--store sqlite --path <file>)
+      - "postgres" (--store postgres --path <connstr>)
+      - "memhall" (--store memhall --path <url>)
+
     Uses subprocess to call `amh` (preferred) or full npx command.
     Supports the same interface as MemoryHallClient for drop-in replacement
     in bootstrap, tools, loop, etc.
@@ -323,9 +329,18 @@ class AmhClient:
         self.timeout = timeout
         self._amh_cmd = self._resolve_amh_cmd()
         self.store = store
-        self.store_path = store_path or str(Path(".agentx/amh/memory.json").resolve())
-        # Ensure dir for json store
-        if store == "json":
+        # Support common AMH stores: json, sqlite (need --path file), postgres/memhall (need --path connstr/url)
+        # Default path only for file-based stores if not provided
+        if store_path is None:
+            if store in ("json", "sqlite"):
+                ext = "json" if store == "json" else "db"
+                self.store_path = str(Path(f".agentx/amh/memory.{ext}").resolve())
+            else:
+                self.store_path = None
+        else:
+            self.store_path = store_path
+        # Ensure parent dir for file-based stores
+        if self.store in ("json", "sqlite") and self.store_path:
             Path(self.store_path).parent.mkdir(parents=True, exist_ok=True)
 
     def _resolve_amh_cmd(self) -> list[str]:
@@ -335,8 +350,10 @@ class AmhClient:
 
     def _run_amh(self, *args: str, input_text: str | None = None) -> str:
         cmd = self._amh_cmd + list(args)
-        if self.store == "json":
-            cmd += ["--store", "json", "--path", self.store_path]
+        # Always include --store for any supported store (json, sqlite, postgres, memhall, ...)
+        cmd += ["--store", self.store]
+        if self.store_path:
+            cmd += ["--path", self.store_path]
         result = subprocess.run(
             cmd,
             input=input_text.encode() if input_text else None,
