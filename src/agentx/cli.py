@@ -722,6 +722,7 @@ def print_config(
     latest_probe_expires = None  # for /status posture + table
     latest_probe_audit = "N/A"
     latest_probe_gov = None
+    latest_probe_gov_audit_full = None
     client_type = "N/A"
     if getattr(settings, "memory_backend", "memhall") == "amh" and memory is not None:
         client_type = type(memory).__name__
@@ -732,31 +733,36 @@ def print_config(
                 tags=["aca", "doctor", "probe"],
                 limit=5,
             )
+            probe_marker = None
             for e in entries or []:
                 if isinstance(e, dict):
                     e_str = str(e)
-                    if "aca-doctor-probe-write" in e_str:
+                    if "aca-doctor-probe-write" in e_str and not probe_marker:
+                        # extract marker 
+                        start = e_str.find("aca-doctor-probe-write:")
+                        if start >= 0:
+                            probe_marker = e_str[start:start+50].split()[0]
                         latest_probe_expires = e.get("valid_until") or (e.get("metadata") or {}).get("valid_until")
-                        if latest_probe_expires:
-                            # extract marker for audit
-                            start = e_str.find("aca-doctor-probe-write:")
-                            if start >= 0:
-                                marker_part = e_str[start:start+50].split()[0]
-                                try:
-                                    events = memory.audit(marker_part) if hasattr(memory, "audit") else []
-                                    latest_probe_audit = f"{len(events)} events"
-                                    if events:
-                                        latest_probe_audit += f" (first: {str(events[0])[:60]})"
-                                except Exception:
-                                    latest_probe_audit = "audit error"
-                            break
+                        if latest_probe_expires and probe_marker:
+                            try:
+                                events = memory.audit(probe_marker) if hasattr(memory, "audit") else []
+                                latest_probe_audit = f"{len(events)} events"
+                                if events:
+                                    latest_probe_audit += f" (first: {str(events[0])[:60]})"
+                            except Exception:
+                                latest_probe_audit = "audit error"
                     # look for governance record (has "governance" or "probe_completed" or "probe 完成")
-                    if "governance" in e_str or "probe_completed" in e_str or "probe 完成" in e_str:
+                    if ("governance" in e_str or "probe_completed" in e_str or "probe 完成" in e_str) and probe_marker:
                         meta = e.get("metadata") or {}
                         evidence = meta.get("evidence_ids", [])
                         gov_type = meta.get("governance_type")
                         if evidence or gov_type:
                             latest_probe_gov = f"type={gov_type}, evidence_ids={evidence}"
+                            try:
+                                events = memory.audit(probe_marker) if hasattr(memory, "audit") else []
+                                latest_probe_gov_audit_full = events
+                            except Exception:
+                                latest_probe_gov_audit_full = []
         except Exception:
             pass
     table = Table(title="agentX config", show_header=False)
@@ -795,6 +801,9 @@ def print_config(
         table.add_row("最新 probe audit (ACA)", latest_probe_audit)
     if latest_probe_gov:
         table.add_row("最新 probe governance record (ACA)", latest_probe_gov)
+    if latest_probe_gov_audit_full is not None:
+        events_str = "\n".join(str(e)[:80] for e in (latest_probe_gov_audit_full or [])[:5]) or "(none)"
+        table.add_row("最新 probe gov audit events (ACA)", events_str)
 
     # MT22 後：只顯示新多任務清單
     current_tasks = load_tasks(settings.workspace)
@@ -876,6 +885,9 @@ def print_doctor(
         gov = locals().get("latest_probe_gov")
         if gov:
             mh_text += f" | probe gov record: {gov}"
+        gov_full = locals().get("latest_probe_gov_audit_full")
+        if gov_full is not None:
+            mh_text += f" | gov audit events: {len(gov_full or [])} (full list in table above)"
         posture.add_row("Memory Hall", mh_text)
     else:
         posture.add_row("Memory Hall", "跨 session 記憶與交接已啟用（/handoff /resume）")
