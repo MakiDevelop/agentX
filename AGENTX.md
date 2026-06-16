@@ -412,6 +412,15 @@ AgentX Shell 三大原則：
 - 範圍控制：保留對既有 memhall 後端的相容；未來可切換至 @chibakuma/agent-memory-hall MCP 作為真正 ACA 後端。
 - 狀態：ruff clean。尚未執行 Codex review（按 AGENTX.md §2，此為重大改動，需 review 後才算完成）。
 - 教訓：記憶寫入是組織知識的邊界，必須從源頭注入治理（tier），不能事後補。直接在 client 層加 guard 比散落各處好。
+- 後續微步（逐步完成）：
+  - 新增 memory_tier_upgrade / memory_audit 工具 + AmhClient 適配器（使用官方 amh CLI / npx）。
+  - 設定 memory_backend（memhall | amh）支援，可透過 .agentx/config.toml 或 env 切換。
+  - 接線 build_runtime 與 /status / doctor，清楚顯示當前後端與 ACA 相容狀態。
+  - runtime_prompt 更新工具說明與 backend 選擇。
+  - 補 focused unit tests（test_memory_hall.py 涵蓋 write_aca payload、flat metadata keys、驗證、tool 行為）。
+  - Codex review（conditional green → fixes + tests 滿足）。
+  - Evidence：多個小 commit（config, AmhClient, wiring, prompt, doctor, tests）；ruff + pytest 通過；Codex handoff 已寫入。
+- 目前狀態：agentX 記憶層完整支援 ACA L1 (Memory) + L2 (Trust) 形狀 + 操作；可切官方 AMH 後端即獲得完整治理。
 
 **2026-06 Tsumu 四大架構改善 (hooks / unified error / file tracking / JSONL persistence) + 後續 landing 修正**：
 - **失敗模式暴露**：把 learning 移到 hooks 後，coordinator/plan_mode 等使用多 session 的地方 response 預算爆炸；ShellState 瘦身後舊測試 ctor 崩；GREEN 裡不小心放了執行型 npm test / vitest（Codex 抓到）。
