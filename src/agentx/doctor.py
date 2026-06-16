@@ -14,6 +14,7 @@ def run_doctor(settings: Settings, memory: MemoryHallClient, ollama: OllamaClien
         _check_command("git", ["git", "status", "--short", "--branch"], cwd=settings.workspace),
         _check_ollama(settings, ollama),
         _check_model(settings, ollama),
+        _check_memory_backend(settings),
         _check_memory_search(memory),
         _check_task_migration(settings),
     ]
@@ -87,3 +88,13 @@ def _check_task_migration(settings: Settings) -> tuple[str, bool, str]:
         return "task_migration (MT22)", True, detail
     except Exception as exc:
         return "task_migration (MT22)", False, f"{type(exc).__name__}: {exc}"
+
+
+def _check_memory_backend(settings: Settings) -> tuple[str, bool, str]:
+    backend = getattr(settings, "memory_backend", "memhall")
+    detail = f"backend={backend}"
+    if backend == "amh":
+        detail += " (official AMH / ACA L1-3 reference — full governance: tiers, anti-ouroboros, audit)"
+    else:
+        detail += " (legacy memhall — ACA client shaping enabled via write_aca + tier tools)"
+    return "memory_backend (ACA)", True, detail
