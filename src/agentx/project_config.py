@@ -10,7 +10,7 @@ from agentx.approval import normalize_approval_mode
 from agentx.persona import normalize_persona
 
 
-CONFIG_KEYS = {"model", "namespace", "mode", "auto_handoff", "approval", "persona"}
+CONFIG_KEYS = {"model", "namespace", "mode", "auto_handoff", "approval", "persona", "memory_backend"}
 
 
 @dataclass(frozen=True)
@@ -21,6 +21,7 @@ class ProjectConfig:
     auto_handoff: bool | None = None
     approval: str | None = None
     persona: str | None = None
+    memory_backend: str | None = None
 
 
 def config_path(workspace: Path) -> Path:
@@ -48,6 +49,7 @@ def load_project_config(workspace: Path) -> ProjectConfig:
         auto_handoff=agentx.get("auto_handoff"),
         approval=approval,
         persona=agentx.get("persona"),
+        memory_backend=agentx.get("memory_backend"),
     )
 
 
@@ -62,6 +64,7 @@ def set_project_config(workspace: Path, key: str, value: str) -> ProjectConfig:
         "auto_handoff": current.auto_handoff,
         "approval": current.approval,
         "persona": current.persona,
+        "memory_backend": current.memory_backend,
     }
     data[key] = _parse_value(key, value)
     updated = ProjectConfig(**data)
@@ -73,7 +76,7 @@ def write_project_config(workspace: Path, config: ProjectConfig) -> None:
     path = config_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = ["[agentx]"]
-    for key in ("model", "namespace", "mode", "approval", "persona"):
+    for key in ("model", "namespace", "mode", "approval", "persona", "memory_backend"):
         value = getattr(config, key)
         if value is not None:
             lines.append(f"{key} = {json.dumps(value)}")
@@ -109,4 +112,9 @@ def _parse_value(key: str, value: str) -> str | bool:
         if normalized in {"0", "false", "no", "off"}:
             return False
         raise ValueError("auto_handoff must be true or false")
+    if key == "memory_backend":
+        normalized = value.lower().strip()
+        if normalized not in {"memhall", "amh"}:
+            raise ValueError("memory_backend must be memhall or amh")
+        return normalized
     return value

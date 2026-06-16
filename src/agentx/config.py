@@ -17,6 +17,7 @@ class Settings:
     ollama_timeout: float
     memory_hall_url: str
     memory_hall_token: str | None
+    memory_backend: str
     max_steps: int
     context_limit_tokens: int
     auto_handoff: bool
@@ -36,6 +37,7 @@ class Settings:
             ollama_timeout=float(os.getenv("AGENTX_OLLAMA_TIMEOUT", "60")),
             memory_hall_url=os.getenv("AGENTX_MEMORY_HALL_URL", "http://100.122.171.74:9100"),
             memory_hall_token=os.getenv("AGENTX_MEMORY_HALL_TOKEN") or os.getenv("MH_API_TOKEN"),
+            memory_backend=os.getenv("AGENTX_MEMORY_BACKEND") or config.memory_backend or "memhall",
             max_steps=int(os.getenv("AGENTX_MAX_STEPS", "8")),
             context_limit_tokens=int(os.getenv("AGENTX_CONTEXT_LIMIT", "32768")),
             auto_handoff=auto_handoff,
@@ -53,6 +55,7 @@ class Settings:
         ollama_timeout: float,
         memory_hall_url: str,
         memory_hall_token: str | None,
+        memory_backend: str,
         max_steps: int,
         context_limit_tokens: int,
         auto_handoff: bool,
@@ -67,6 +70,7 @@ class Settings:
             ollama_timeout=ollama_timeout,
             memory_hall_url=memory_hall_url,
             memory_hall_token=memory_hall_token,
+            memory_backend=memory_backend,
             max_steps=max_steps,
             context_limit_tokens=context_limit_tokens,
             auto_handoff=auto_handoff,
@@ -83,6 +87,7 @@ class Settings:
             "ollama_timeout": self.ollama_timeout,
             "memory_hall_url": self.memory_hall_url,
             "memory_hall_token": self.memory_hall_token,
+            "memory_backend": self.memory_backend,
             "max_steps": self.max_steps,
             "context_limit_tokens": self.context_limit_tokens,
             "auto_handoff": self.auto_handoff,
@@ -101,6 +106,7 @@ class Settings:
         ollama_timeout: float,
         memory_hall_url: str,
         memory_hall_token: str | None,
+        memory_backend: str,
         max_steps: int,
         context_limit_tokens: int,
         auto_handoff: bool,
@@ -113,6 +119,7 @@ class Settings:
         object.__setattr__(self, "ollama_timeout", ollama_timeout)
         object.__setattr__(self, "memory_hall_url", memory_hall_url)
         object.__setattr__(self, "memory_hall_token", memory_hall_token)
+        object.__setattr__(self, "memory_backend", memory_backend)
         object.__setattr__(self, "max_steps", max_steps)
         object.__setattr__(self, "context_limit_tokens", context_limit_tokens)
         object.__setattr__(self, "auto_handoff", auto_handoff)
