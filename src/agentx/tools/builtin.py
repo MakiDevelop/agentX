@@ -295,6 +295,47 @@ class MemoryWriteTool:
         )
 
 
+class MemoryTierUpgradeTool:
+    name = "memory_tier_upgrade"
+    description = (
+        "ACA L2 Trust 操作：將一筆記憶的 source tier 升級（通常 llm_derived → human_confirmed）。"
+        "需提供 memory_id、confirmed_by（人類 principal）、可選 evidence_ids。會寫入 TrustProof 紀錄。"
+    )
+    risk = Risk.YELLOW
+    signature = 'memory_id, new_tier="human_confirmed", confirmed_by, method="human_review", evidence_ids=[], namespace="project:agentX"'
+
+    def __init__(self, memory: MemoryHallClient) -> None:
+        self.memory = memory
+
+    def run(self, args: dict[str, Any]) -> str:
+        self.memory.tier_upgrade(
+            args["memory_id"],
+            new_tier=args.get("new_tier", "human_confirmed"),
+            confirmed_by=args["confirmed_by"],
+            method=args.get("method", "human_review"),
+            evidence_ids=args.get("evidence_ids") or [],
+            namespace=args.get("namespace"),
+        )
+        return f"tier_upgrade ok for {args['memory_id']} -> {args.get('new_tier', 'human_confirmed')}"
+
+
+class MemoryAuditTool:
+    name = "memory_audit"
+    description = "ACA L1/L2：讀取某筆記憶的 append-only 事件紀錄（寫入、tier 變更、轉移等）。"
+    risk = Risk.GREEN
+    signature = 'memory_id'
+
+    def __init__(self, memory: MemoryHallClient) -> None:
+        self.memory = memory
+
+    def run(self, args: dict[str, Any]) -> str:
+        events = self.memory.audit(args["memory_id"])
+        if not events:
+            return f"no audit events found for {args['memory_id']}"
+        lines = [f"- {e.get('event', 'unknown')}: {str(e.get('data', ''))[:200]}" for e in events[:10]]
+        return "\n".join(lines)
+
+
 class RunCommandTool(_WorkspaceTool):
     name = "run_command"
     description = "執行 GREEN allowlist 命令（read-only 檢查、純語法掃描）"
@@ -572,6 +613,8 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
         GitDiffTool(workspace),
         MemorySearchTool(memory),
         MemoryWriteTool(memory),
+        MemoryTierUpgradeTool(memory),
+        MemoryAuditTool(memory),
         RunCommandTool(workspace),
         RunBuildCommandTool(workspace),
         RunTestsTool(workspace),

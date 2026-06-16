@@ -226,3 +226,78 @@ class MemoryHallClient:
             response.raise_for_status()
             data = response.json()
         return data.get("entries", [])
+
+    # === ACA L2 Trust operations (tier upgrade + audit) ===
+
+    def tier_upgrade(
+        self,
+        memory_id: str,
+        *,
+        new_tier: str = "human_confirmed",
+        confirmed_by: str,
+        method: str = "human_review",
+        evidence_ids: list[str] | None = None,
+        namespace: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        ACA Tier upgrade (promote llm_derived -> human_confirmed with TrustProof).
+        For current memhall backend this writes a structured governance record.
+        When switched to full AMH this will map to native tier_upgrade.
+        """
+        if new_tier not in ACA_SOURCE_TIERS:
+            raise ValueError(f"new_tier must be one of {ACA_SOURCE_TIERS}")
+
+        now = datetime.now().isoformat(timespec="seconds") + "Z"
+        content = f"Tier upgrade for {memory_id} -> {new_tier} by {confirmed_by}"
+        payload = {
+            "agent_id": "agentx",
+            "namespace": namespace or "project:agentX",
+            "type": "tier_upgrade",
+            "content": content,
+            "summary": f"Upgrade {memory_id} to {new_tier}",
+            "tags": ["aca", "tier_upgrade", new_tier],
+            "references": [memory_id] + (evidence_ids or []),
+            "metadata": {
+                "aca_version": "0.1",
+                "target_memory_id": memory_id,
+                "new_tier": new_tier,
+                "trust_proof": {
+                    "tier": new_tier,
+                    "confirmed_by": confirmed_by,
+                    "confirmed_at": now,
+                    "evidence_ids": evidence_ids or [],
+                    "method": method,
+                },
+            },
+        }
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.post(
+                f"{self.base_url}/v1/memory/write",
+                headers=self.headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()
+
+    def audit(self, memory_id: str) -> list[dict[str, Any]]:
+        """
+        Return append-only audit events for a memory (ACA L1/L2).
+        Current backend best-effort: list related records or return the record itself.
+        Full AMH will have dedicated /audit endpoint.
+        """
+        # Best effort with current memhall: try to get the record + any linked
+        try:
+            record = self.get(memory_id)
+            events = [{"event": "current_record", "data": record}]
+            # Also list recent tier_upgrade records referencing it
+            upgrades = self.list_entries(
+                namespace=record.get("namespace", "project:agentX"),
+                entry_type="tier_upgrade",
+                limit=20,
+            )
+            for u in upgrades:
+                if memory_id in (u.get("references") or []):
+                    events.append({"event": "tier_upgrade", "data": u})
+            return events
+        except Exception:
+            return []
