@@ -167,6 +167,7 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                                 summary=f"probe completed {marker}",
                                 tags=["aca", "doctor", "probe", "governance"],
                                 metadata=completion_metadata,
+                                valid_until=valid_until,
                             )
                         else:
                             memory.write_structured(
@@ -176,6 +177,7 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                                 summary=f"probe completed {marker}",
                                 tags=["aca", "doctor", "probe", "governance"],
                                 metadata=completion_metadata,
+                                valid_until=valid_until,
                             )
                         detail += " | governance record written with evidence_id"
                     except Exception:
