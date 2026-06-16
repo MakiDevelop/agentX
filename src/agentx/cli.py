@@ -720,6 +720,7 @@ def print_config(
     memory: "MemoryHallClient | None" = None,
 ) -> None:
     latest_probe_expires = None  # for /status posture + table
+    latest_probe_audit = "N/A"
     if getattr(settings, "memory_backend", "memhall") == "amh" and memory is not None:
         try:
             entries = memory.list_entries(
@@ -734,6 +735,17 @@ def print_config(
                     if "aca-doctor-probe-write" in e_str:
                         latest_probe_expires = e.get("valid_until") or (e.get("metadata") or {}).get("valid_until")
                         if latest_probe_expires:
+                            # extract marker for audit
+                            start = e_str.find("aca-doctor-probe-write:")
+                            if start >= 0:
+                                marker_part = e_str[start:start+50].split()[0]
+                                try:
+                                    events = memory.audit(marker_part) if hasattr(memory, "audit") else []
+                                    latest_probe_audit = f"{len(events)} events"
+                                    if events:
+                                        latest_probe_audit += f" (first: {str(events[0])[:60]})"
+                                except Exception:
+                                    latest_probe_audit = "audit error"
                             break
         except Exception:
             pass
@@ -767,6 +779,8 @@ def print_config(
 
     if latest_probe_expires:
         table.add_row("最新 probe entry 過期時間 (ACA)", latest_probe_expires)
+    if latest_probe_audit != "N/A":
+        table.add_row("最新 probe audit (ACA)", latest_probe_audit)
 
     # MT22 後：只顯示新多任務清單
     current_tasks = load_tasks(settings.workspace)
@@ -841,6 +855,9 @@ def print_doctor(
         probe_exp = locals().get("latest_probe_expires")
         if probe_exp:
             mh_text += f" | 最近 probe entry 過期時間: {probe_exp}"
+        probe_audit = locals().get("latest_probe_audit")
+        if probe_audit and probe_audit != "N/A":
+            mh_text += f" | probe audit: {probe_audit}"
         posture.add_row("Memory Hall", mh_text)
     else:
         posture.add_row("Memory Hall", "跨 session 記憶與交接已啟用（/handoff /resume）")
