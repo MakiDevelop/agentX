@@ -370,9 +370,9 @@ persona = "tutor"
 auto_handoff = true
 memory_backend = "memhall"   # 或 "amh" 以使用官方 AMH / ACA 後端
 
-# 當 memory_backend = "amh" 時，可透過環境變數指定不同 store（json / sqlite / postgres / memhall）
-# AGENTX_AMH_STORE=postgres
-# AGENTX_AMH_PATH="postgres://user:pass@host/db"
+# amh 後端 store 設定（直接在 config.toml 生效，優先於 env）
+# memory_amh_store = "postgres"   # json（預設）、sqlite、postgres、memhall
+# memory_amh_path = "postgres://user:pass@host:5432/amh"
 ```
 
 載入優先序：
@@ -390,7 +390,7 @@ memory_backend = "memhall"   # 或 "amh" 以使用官方 AMH / ACA 後端
 | `mode` | shell 啟動模式，`chat` / `agent`；`ask` 是 `agent` 的 alias |
 | `approval` | YELLOW 工具 approval policy，`ask` / `auto` / `off`；也支援 `strict` / `auto-approve` / `deny` aliases |
 | `auto_handoff` | 離開 shell 時是否自動寫 Memory Hall handoff |
-| `memory_backend` | Memory Hall 後端，`memhall`（預設，舊相容）或 `amh`（官方 Agent Memory Hall，完整 ACA L1-3 治理 + tier/audit 工具）。amh 時可搭配 AGENTX_AMH_STORE / AGENTX_AMH_PATH 指定 json/sqlite/postgres/memhall 等不同 store |
+| `memory_backend` | Memory Hall 後端，`memhall`（預設，舊相容）或 `amh`（官方 Agent Memory Hall，完整 ACA L1-3 治理 + tier/audit 工具）。amh 時可用 `memory_amh_store` / `memory_amh_path` 指定 json/sqlite/postgres/memhall 等不同 store（或用對應 env 覆蓋） |
 
 ## 上下文限制
 
@@ -492,6 +492,16 @@ agentX 記憶層已逐步對齊 Agent Civilization Architecture（ACA）：
 - 透過 `memory_backend = "amh"`（或 `AGENTX_MEMORY_BACKEND=amh`）可切換使用官方 AMH 參考實作，獲得完整 ACA 治理（anti-ouroboros、dedup、provenance 等）
 
 **不同 store 用法範例**（amh 後端）：
+
+在 `.agentx/config.toml` 中：
+
+```toml
+memory_backend = "amh"
+memory_amh_store = "postgres"
+memory_amh_path = "postgres://user:pass@host:5432/amh"
+```
+
+或用 env（config 中的值優先，但 env 可覆蓋）：
 
 ```bash
 # 預設 json store（輕量、本地）

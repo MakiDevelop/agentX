@@ -6,8 +6,8 @@ approval = "ask"
 auto_handoff = true
 memory_backend = "memhall"  # 或 "amh" 以使用官方 AMH / ACA 後端
 
-# amh 後端不同 store 範例（透過環境變數生效）：
+# amh 後端不同 store 範例（直接在 config.toml 設定）
 # memory_backend = "amh"
-# AGENTX_AMH_STORE=postgres
-# AGENTX_AMH_PATH="postgres://user:pass@host:5432/amh"
-# 常見值：json（預設）、sqlite、postgres、memhall（轉發既有 memory-hall）
+# memory_amh_store = "postgres"
+# memory_amh_path = "postgres://user:pass@host:5432/amh"
+# 常見值：json（預設）、sqlite、postgres、memhall（轉發既有）
