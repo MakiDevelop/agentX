@@ -246,7 +246,7 @@ class GitDiffTool(_WorkspaceTool):
 
 class MemorySearchTool:
     name = "memory_search"
-    description = "查詢 Memory Hall"
+    description = "查詢 Memory Hall（支援 ACA namespace 與 tier 標記的記憶）"
     risk = Risk.GREEN
     signature = 'query, namespace="shared", limit=5'
 
@@ -263,14 +263,33 @@ class MemorySearchTool:
 
 class MemoryWriteTool:
     name = "memory_write"
-    description = "寫入 Memory Hall"
+    description = (
+        "寫入 Memory Hall。ACA 相容：建議傳 tier=llm_derived|human_confirmed|raw_source 與 "
+        "memory_type=lesson|decision|fact|...  以符合 Agent Civilization Architecture 治理規則 "
+        "（Anti-Ouroboros：llm_derived 不得無人為介入就 supersede 另一個 llm_derived）。"
+    )
     risk = Risk.YELLOW
-    signature = 'content, namespace="agent:agentx"'
+    signature = 'content, namespace="agent:agentx", tier="llm_derived", memory_type="note"'
 
     def __init__(self, memory: MemoryHallClient) -> None:
         self.memory = memory
 
     def run(self, args: dict[str, Any]) -> str:
+        tier = args.get("tier")
+        memory_type = args.get("memory_type") or args.get("type")
+        if tier or memory_type:
+            # Prefer ACA path when tier or memory_type supplied
+            try:
+                resp = self.memory.write_aca(
+                    content=args["content"],
+                    namespace=args.get("namespace", "agent:agentx"),
+                    source_tier=tier or "llm_derived",
+                    memory_type=memory_type or "note",
+                )
+                return f"aca_write ok (tier={tier or 'llm_derived'}) entry_id={resp.get('entry_id', 'n/a')}"
+            except Exception:
+                # fall through to legacy on error
+                pass
         return self.memory.write(
             content=args["content"],
             namespace=args.get("namespace", "agent:agentx"),

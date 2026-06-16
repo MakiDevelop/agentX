@@ -210,7 +210,17 @@ class AgentSession:
         if self.memory and proposals:
             try:
                 summary = f"Self-learning proposals from session: {len(proposals)} new. Titles: {[p.title for p in proposals]}"
-                self.memory.write(summary, namespace=self.namespace)
+                if hasattr(self.memory, "write_aca"):
+                    self.memory.write_aca(
+                        content=summary,
+                        namespace=self.namespace,
+                        memory_type="lesson",
+                        source_tier="llm_derived",
+                        tags=["self-learning", "proposals"],
+                        metadata={"aca_compliant": True},
+                    )
+                else:
+                    self.memory.write(summary, namespace=self.namespace)
             except Exception:
                 pass
 
@@ -552,14 +562,25 @@ class AgentSession:
                 try:
                     path = action.args.get("path", "unknown")
                     lesson = f"成功 {action.tool} on {path}。結果摘要: {(result.content or '')[:400]}"
-                    if hasattr(self.memory, "write_structured"):
+                    if hasattr(self.memory, "write_aca"):
+                        self.memory.write_aca(
+                            content=lesson,
+                            namespace=self.namespace,
+                            memory_type="lesson",
+                            source_tier="llm_derived",
+                            agent_id="agentx",
+                            summary=f"成功 {action.tool} @{path}",
+                            tags=["edit-success", "gemma-lesson", action.tool],
+                            metadata={"tool": action.tool, "path": str(path), "aca_compliant": True},
+                        )
+                    elif hasattr(self.memory, "write_structured"):
                         self.memory.write_structured(
                             content=lesson,
                             namespace=self.namespace,
-                            entry_type="success_pattern",
+                            entry_type="lesson",
                             summary=f"成功 {action.tool} @{path}",
                             tags=["edit-success", "gemma-lesson", action.tool],
-                            metadata={"tool": action.tool, "path": str(path)},
+                            metadata={"tool": action.tool, "path": str(path), "source_tier": "llm_derived"},
                         )
                     else:
                         self.memory.write(lesson, namespace=self.namespace)

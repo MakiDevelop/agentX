@@ -97,8 +97,8 @@ IMPORTANT: When creating a NEW file, always use write_file. Never use apply_patc
 - task_add: {"description":"task"} — add task to list
 - task_update: {"task_id":1,"status":"done"} — update task status
 - task_list: {} — show all tasks
-- memory_search: {"query":"keyword"} — search Memory Hall
-- memory_write: {"content":"note"} — write to Memory Hall"""
+- memory_search: {"query":"keyword", "namespace":"project:xxx"} — search Memory Hall (ACA namespaces supported)
+- memory_write: {"content":"...", "namespace":"project:xxx", "tier":"llm_derived|human_confirmed|raw_source", "memory_type":"lesson|decision|fact|..."} — write to Memory Hall. **ACA 治理**：使用 tier 標記來源（llm_derived 為模型產生，human_confirmed 需人類確認）。Anti-Ouroboros 規則：llm_derived 記憶不可在無 human intervention 下 supersede 另一 llm_derived 記憶。優先使用 write_aca 路徑。"""
 
 
 def _base_capabilities_limits() -> str:

@@ -5,7 +5,7 @@
 - 互動式 shell + 三種模式（chat / ask / shell）自由切換
 - 內建豐富工具（檔案、Git、測試、Docker、Memory Hall）
 - 清楚的風險分級：GREEN 自動、YELLOW 依策略、RED 永遠受保護
-- Memory Hall 跨 session 記憶與自動交接
+- Memory Hall 跨 session 記憶與自動交接（正朝 ACA / Agent Civilization Architecture L1+L2 對齊：source_tier、Anti-Ouroboros 標記、memory_type）
 - 上下文壓縮、錯誤恢復、任務清單
 - **2026-06 四大架構改善**：lifecycle hooks（SESSION_START/END、FINAL_ANSWER、COMPACT、ERROR 等）、統一錯誤編碼（ToolResult error_type/details）、file ops tracking（compact 後仍保留修改檔案清單）、JSONL session 持久化（enable_persistence / from_session_store / fork_session）
 - 支援 llama.cpp OpenAI-compatible 後端（LlamaCppClient，適合本地 gemma4:31b 長程式碼生成）
@@ -485,7 +485,7 @@ AGENTX_AUTO_HANDOFF=0 ax
 - `git_status`
 - `git_diff`
 - `memory_search`
-- `memory_write`
+- `memory_write`（支援 tier/memory_type 以符合 ACA）
 - `run_command`
 - `web_fetch`
 - `run_tests`

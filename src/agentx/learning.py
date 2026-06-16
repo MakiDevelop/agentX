@@ -135,10 +135,19 @@ class LearningManager:
         if self.memory:
             try:
                 ns = getattr(self.settings, "namespace", None) or "project:agentX"
-                self.memory.write(
-                    f"Learning proposal {proposal.id}: {proposal.title}\n{proposal.description}\nEvidence: {proposal.evidence}",
-                    namespace=ns,
-                )
+                content = f"Learning proposal {proposal.id}: {proposal.title}\n{proposal.description}\nEvidence: {proposal.evidence}"
+                if hasattr(self.memory, "write_aca"):
+                    self.memory.write_aca(
+                        content=content,
+                        namespace=ns,
+                        memory_type="lesson",
+                        source_tier="llm_derived",
+                        summary=f"Learning proposal: {proposal.title}",
+                        tags=["learning", "proposal", "llm_derived"],
+                        metadata={"proposal_id": proposal.id, "aca_compliant": True},
+                    )
+                else:
+                    self.memory.write(content, namespace=ns)
             except Exception:
                 pass  # non-fatal
 

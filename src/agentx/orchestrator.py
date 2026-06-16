@@ -330,6 +330,19 @@ class Orchestrator:
         refs = kwargs.pop("references", None) or []
         kwargs["references"] = [r for r in refs if r]  # filter empty
         try:
+            # Prefer ACA write for organizational plans (llm_derived decision)
+            if hasattr(self.memory, "write_aca") and "content" in kwargs:
+                aca_resp = self.memory.write_aca(
+                    content=kwargs["content"],
+                    namespace=kwargs.get("namespace", "project:agentX"),
+                    memory_type="decision",
+                    source_tier="llm_derived",
+                    agent_id=kwargs.get("agent_id", "agentx"),
+                    summary=kwargs.get("summary"),
+                    tags=kwargs.get("tags", ["plan", "orchestrator"]),
+                    metadata={"aca_compliant": True, **(kwargs.get("metadata") or {})},
+                )
+                return aca_resp.get("entry_id", "") or aca_resp.get("memory_id", "")
             resp = self.memory.write_structured(**kwargs)
             return resp.get("entry_id", "")
         except Exception as e:

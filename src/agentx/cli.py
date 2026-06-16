@@ -843,9 +843,18 @@ def run_commit_flow(settings: Settings, tools: ToolRegistry, message: str | None
 
 def run_init(settings: Settings, tools: ToolRegistry, namespace: str) -> str:
     profile = build_project_profile(settings.workspace, namespace)
-    result = tools.run("memory_write", {"content": profile, "namespace": namespace})
+    # /init is explicit user action → human_confirmed (ACA L2)
+    result = tools.run(
+        "memory_write",
+        {
+            "content": profile,
+            "namespace": namespace,
+            "tier": "human_confirmed",
+            "memory_type": "fact",
+        },
+    )
     if result.ok:
-        return "project profile written to Memory Hall\n\n" + profile[:4000]
+        return "project profile written to Memory Hall (human_confirmed, ACA L2)\n\n" + profile[:4000]
     return "project profile write failed\n\n" + result.content
 
 
@@ -1121,9 +1130,20 @@ def write_handoff(
         note=note,
         task_summary=task_summary,
     )
-    result = tools.run("memory_write", {"content": content, "namespace": namespace})
+    # Handoff content is largely system-generated from agent run (llm_derived).
+    # Human note (if any) is appended but tier remains llm_derived for the record as a whole.
+    # Future: support tier_upgrade to human_confirmed on explicit human handoff.
+    result = tools.run(
+        "memory_write",
+        {
+            "content": content,
+            "namespace": namespace,
+            "tier": "llm_derived",
+            "memory_type": "handoff",
+        },
+    )
     if result.ok:
-        return f"handoff written to {namespace}"
+        return f"handoff written to {namespace} (llm_derived, ACA)"
     return f"handoff failed: {result.content}"
 
 
@@ -1889,10 +1909,14 @@ def shell(
         if not content:
             print_raw("usage: /remember 要寫入 Memory Hall 的內容")
             return
-        result = tools.run("memory_write", {"content": content, "namespace": state.namespace})
+        # /remember is explicit human input → human_confirmed (ACA L2 Trust)
+        result = tools.run(
+            "memory_write",
+            {"content": content, "namespace": state.namespace, "tier": "human_confirmed", "memory_type": "note"},
+        )
         transcript.write("tool", {"command": "/remember", "ok": result.ok, "content": content})
         if result.ok:
-            console.print(f"remembered in {state.namespace}")
+            console.print(f"remembered in {state.namespace} (human_confirmed)")
         else:
             print_raw(f"remember failed: {result.content}")
 
@@ -2437,10 +2461,14 @@ def shell(
                 if not content:
                     console.print("usage: /remember 要寫入 Memory Hall 的內容")
                     continue
-                result = tools.run("memory_write", {"content": content, "namespace": namespace})
+                # /remember explicit human → human_confirmed (ACA)
+                result = tools.run(
+                    "memory_write",
+                    {"content": content, "namespace": namespace, "tier": "human_confirmed", "memory_type": "note"},
+                )
                 transcript.write("tool", {"command": "/remember", "ok": result.ok, "content": content})
                 if result.ok:
-                    console.print(f"remembered in {namespace}")
+                    console.print(f"remembered in {namespace} (human_confirmed)")
                 else:
                     console.print(f"remember failed: {result.content}")
                 continue

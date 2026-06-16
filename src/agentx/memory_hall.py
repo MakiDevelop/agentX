@@ -1,8 +1,20 @@
 from __future__ import annotations
 
+import hashlib
+from datetime import datetime
 from typing import Any
 
 import httpx
+
+# === ACA (Agent Civilization Architecture) constants ===
+# See docs from agent-memory-hall: Agent_Civilization_Architecture.md + Anti_Ouroboros_Evidence.md
+# agentX aims for L1 (Memory) + L2 (Trust) conformance when writing organizational memory.
+
+ACA_SOURCE_TIERS = ("raw_source", "llm_derived", "human_confirmed")
+ACA_MEMORY_TYPES = ("decision", "fact", "preference", "constraint", "lesson", "risk", "handoff", "note")
+
+# Anti-Ouroboros rule (L2 Trust invariant):
+# LLM-derived knowledge MUST NOT supersede LLM-derived knowledge without human intervention.
 
 
 class MemoryHallClient:
@@ -34,7 +46,12 @@ class MemoryHallClient:
             response.raise_for_status()
             return response.text
 
+    def _compute_content_hash(self, content: str) -> str:
+        # BLAKE3 preferred in ACA spec; fall back to sha256 for now (compatible hash)
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
     def write(self, content: str, namespace: str = "agent:agentx") -> str:
+        """Legacy write. For ACA conformance prefer write_aca or write_structured with tier."""
         payload: dict[str, Any] = {
             "agent_id": "agentx",
             "namespace": namespace,
@@ -54,6 +71,80 @@ class MemoryHallClient:
             response.raise_for_status()
             return response.text
 
+    def write_aca(
+        self,
+        *,
+        content: str,
+        namespace: str,
+        memory_type: str = "note",
+        source_tier: str = "llm_derived",
+        agent_id: str = "agentx",
+        summary: str | None = None,
+        tags: list[str] | None = None,
+        references: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        created_by: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        ACA-conformant write (L1 Memory + L2 Trust).
+        - Enforces source_tier from ACA_SOURCE_TIERS.
+        - Records content_hash for future dedup/audit.
+        - Embeds source.tier + aca_version for interoperability with AMH / Agent Civilization Architecture.
+        - Client-side Anti-Ouroboros guard: llm_derived should not blindly supersede llm_derived.
+          (Full gate belongs in AMH backend; here we surface the signal.)
+        """
+        if source_tier not in ACA_SOURCE_TIERS:
+            raise ValueError(f"source_tier must be one of {ACA_SOURCE_TIERS}, got {source_tier}")
+        if memory_type not in ACA_MEMORY_TYPES:
+            # allow graceful fallback
+            memory_type = "note"
+
+        now = datetime.now().isoformat(timespec="seconds") + "Z"
+        content_hash = self._compute_content_hash(content)
+        summary = (summary or (content.splitlines()[0][:160] if content else ""))[:160]
+
+        aca_metadata = {
+            "aca_version": "0.1",
+            "source": {
+                "type": "agent" if "agent" in (agent_id or "") else "human",
+                "ref": f"agentx:{datetime.now().strftime('%Y-%m-%d')}",
+                "tier": source_tier,
+            },
+            "content_hash": content_hash,
+            "created_at": now,
+            "created_by": created_by or agent_id,
+            **(metadata or {}),
+        }
+
+        payload: dict[str, Any] = {
+            "agent_id": agent_id,
+            "namespace": namespace,
+            "type": memory_type,
+            "content": content,
+            "summary": summary,
+            "tags": tags or ["agentx", f"tier:{source_tier}"],
+            "references": references or [],
+            "metadata": aca_metadata,
+        }
+
+        # Simple client-side Anti-Ouroboros signal (best-effort).
+        # In real ACA/AMH the TierGate lives in the server.
+        if source_tier == "llm_derived":
+            # We do not block here (to preserve existing flows), but we annotate.
+            # Future: query recent and attach "anti_ouroboros_check": "llm_derived_chain" if needed.
+            payload["metadata"]["anti_ouroboros"] = "llm_derived_write"
+
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.post(
+                f"{self.base_url}/v1/memory/write",
+                headers=self.headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+            data.setdefault("governance_applied", []).append({"rule": "aca_tier", "tier": source_tier})
+            return data
+
     def write_structured(
         self,
         *,
@@ -66,6 +157,7 @@ class MemoryHallClient:
         metadata: dict[str, Any] | None = None,
         agent_id: str = "agentx",
     ) -> dict[str, Any]:
+        """Backward-compatible structured write. New code should prefer write_aca for ACA records."""
         payload: dict[str, Any] = {
             "agent_id": agent_id,
             "namespace": namespace,

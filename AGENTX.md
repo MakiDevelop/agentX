@@ -401,6 +401,18 @@ AgentX Shell 三大原則：
 - 重大改動必走 Codex review + 更新 AGENTX.md。
 - 善用 .agentx/handoff/ 記錄即時決策。
 
+**2026-06 ACA 對齊（agentX 記憶層符合 Agent Civilization Architecture）**：
+- 目標：讓 agentX 成為 ACA L1 (Memory) + L2 (Trust) 的參與者。解決 Ouroboros 問題（LLM 記憶自我強化導致崩壞）。
+- 證據：讀取 agent-memory-hall/docs/Anti_Ouroboros_Evidence.md + Agent_Civilization_Architecture.md（完整 6 層 spec + 13 來源實證）。
+- 實作：
+  - memory_hall.py 新增 ACA_SOURCE_TIERS、ACA_MEMORY_TYPES、_compute_content_hash、write_aca（嵌入 source.tier、content_hash、aca_version、anti_ouroboros 標記）。
+  - 所有主要記憶寫入點標記正確 tier：llm_derived 用於 loop success_pattern / learning proposals / orchestrator plan / handoff；human_confirmed 用於 /remember 與 /init（人類主動）。
+  - MemoryWriteTool 支援 tier/memory_type 參數，優先走 write_aca 路徑。
+  - runtime_prompt 更新說明 Anti-Ouroboros 規則。
+- 範圍控制：保留對既有 memhall 後端的相容；未來可切換至 @chibakuma/agent-memory-hall MCP 作為真正 ACA 後端。
+- 狀態：ruff clean。尚未執行 Codex review（按 AGENTX.md §2，此為重大改動，需 review 後才算完成）。
+- 教訓：記憶寫入是組織知識的邊界，必須從源頭注入治理（tier），不能事後補。直接在 client 層加 guard 比散落各處好。
+
 **2026-06 Tsumu 四大架構改善 (hooks / unified error / file tracking / JSONL persistence) + 後續 landing 修正**：
 - **失敗模式暴露**：把 learning 移到 hooks 後，coordinator/plan_mode 等使用多 session 的地方 response 預算爆炸；ShellState 瘦身後舊測試 ctor 崩；GREEN 裡不小心放了執行型 npm test / vitest（Codex 抓到）。
 - **解法**：學習 hook 在 coordinator/plan 測試明確 disable；_state 動態 attach + module-level testable cmd/dispatch shim 維持相容；npm test 類移到 BUILD_COMMANDS (YELLOW)；registry 支援 _return_effective 讓 file tracking 看到 hook rewrite 後的 args；SESSION_END 也在正常 final 發；fork 先驗證再寫檔；error_details 真的填；Fake 全部接受 **kwargs 防未來。
