@@ -719,52 +719,14 @@ def print_config(
     approval_policy: ApprovalPolicy,
     memory: "MemoryHallClient | None" = None,
 ) -> None:
-    latest_probe_expires = None  # for /status posture + table
-    latest_probe_audit = "N/A"
-    latest_probe_gov = None
-    latest_probe_gov_audit_full = None
-    client_type = "N/A"
-    if getattr(settings, "memory_backend", "memhall") == "amh" and memory is not None:
-        client_type = type(memory).__name__
-        try:
-            entries = memory.list_entries(
-                namespace="project:agentX",
-                entry_type="note",
-                tags=["aca", "doctor", "probe"],
-                limit=5,
-            )
-            probe_marker = None
-            for e in entries or []:
-                if isinstance(e, dict):
-                    e_str = str(e)
-                    if "aca-doctor-probe-write" in e_str and not probe_marker:
-                        # extract marker 
-                        start = e_str.find("aca-doctor-probe-write:")
-                        if start >= 0:
-                            probe_marker = e_str[start:start+50].split()[0]
-                        latest_probe_expires = e.get("valid_until") or (e.get("metadata") or {}).get("valid_until")
-                        if latest_probe_expires and probe_marker:
-                            try:
-                                events = memory.audit(probe_marker) if hasattr(memory, "audit") else []
-                                latest_probe_audit = f"{len(events)} events"
-                                if events:
-                                    latest_probe_audit += f" (first: {str(events[0])[:60]})"
-                            except Exception:
-                                latest_probe_audit = "audit error"
-                    # look for governance record (has "governance" or "probe_completed" or "probe 完成")
-                    if ("governance" in e_str or "probe_completed" in e_str or "probe 完成" in e_str) and probe_marker:
-                        meta = e.get("metadata") or {}
-                        evidence = meta.get("evidence_ids", [])
-                        gov_type = meta.get("governance_type")
-                        if evidence or gov_type:
-                            latest_probe_gov = f"type={gov_type}, evidence_ids={evidence}"
-                            try:
-                                events = memory.audit(probe_marker) if hasattr(memory, "audit") else []
-                                latest_probe_gov_audit_full = events
-                            except Exception:
-                                latest_probe_gov_audit_full = []
-        except Exception:
-            pass
+    # Use shared collector so /status, /config and /doctor all see the same live ACA signals
+    # (incl. the complete post-gov audit event list for the probe governance record).
+    probe_info = _collect_aca_probe_info(settings, memory)
+    latest_probe_expires = probe_info["latest_probe_expires"]
+    latest_probe_audit = probe_info["latest_probe_audit"]
+    latest_probe_gov = probe_info["latest_probe_gov"]
+    latest_probe_gov_audit_full = probe_info["latest_probe_gov_audit_full"]
+    client_type = probe_info["client_type"]
     table = Table(title="agentX config", show_header=False)
     table.add_column("Key", style="cyan")
     table.add_column("Value")
@@ -803,15 +765,15 @@ def print_config(
         table.add_row("最新 probe governance record (ACA)", latest_probe_gov)
     if latest_probe_gov_audit_full is not None:
         evs = latest_probe_gov_audit_full or []
-        max_show = 10
+        # Show COMPLETE list (no artificial cap) per "完整 audit 事件列表" request.
+        # Keep per-event truncation for readability; append explicit 「全部事件」 + 捲動提示.
         formatted = []
-        for i, e in enumerate(evs[:max_show], 1):
-            s = str(e).replace('\n', ' | ')[:120]  # better for multi-line events
+        for i, e in enumerate(evs, 1):
+            s = str(e).replace("\n", " | ")[:120]
             formatted.append(f"{i}. {s}")
         events_str = "\n".join(formatted) or "(none)"
-        if len(evs) > max_show:
-            events_str += f"\n... +{len(evs)-max_show} more (see audit for complete)"
-        table.add_row("最新 probe gov audit events (ACA)", events_str)
+        events_str += "\n（已列出全部事件；長列表請向上捲動查看；完整原始 audit 可經 /doctor 或 memory_audit 取得）"
+        table.add_row("最新 probe gov audit events (ACA, 完整列表)", events_str)
 
     # MT22 後：只顯示新多任務清單
     current_tasks = load_tasks(settings.workspace)
@@ -837,6 +799,67 @@ def print_config(
         "[dim]安全原則：GREEN 永遠自動允許 ｜ YELLOW 依上方策略 ｜ "
         "RED 永遠受保護。你永遠可以透過 /approval 即時調整。[/dim]"
     )
+
+
+def _collect_aca_probe_info(
+    settings: Settings, memory: "MemoryHallClient | None"
+) -> dict:
+    """Collect live ACA probe/governance/audit signals for /status, /config and /doctor.
+
+    This enables /status to also display the complete post-governance-record audit event list
+    (with full events + 捲動提示), without duplicating collection logic.
+    """
+    info = {
+        "client_type": "N/A",
+        "latest_probe_expires": None,
+        "latest_probe_audit": "N/A",
+        "latest_probe_gov": None,
+        "latest_probe_gov_audit_full": None,
+    }
+    if getattr(settings, "memory_backend", "memhall") != "amh" or memory is None:
+        return info
+    info["client_type"] = type(memory).__name__
+    try:
+        entries = memory.list_entries(
+            namespace="project:agentX",
+            entry_type="note",
+            tags=["aca", "doctor", "probe"],
+            limit=5,
+        )
+        probe_marker = None
+        for e in entries or []:
+            if isinstance(e, dict):
+                e_str = str(e)
+                if "aca-doctor-probe-write" in e_str and not probe_marker:
+                    start = e_str.find("aca-doctor-probe-write:")
+                    if start >= 0:
+                        probe_marker = e_str[start : start + 50].split()[0]
+                    info["latest_probe_expires"] = e.get("valid_until") or (e.get("metadata") or {}).get(
+                        "valid_until"
+                    )
+                    if info["latest_probe_expires"] and probe_marker:
+                        try:
+                            events = memory.audit(probe_marker) if hasattr(memory, "audit") else []
+                            info["latest_probe_audit"] = f"{len(events)} events"
+                            if events:
+                                info["latest_probe_audit"] += f" (first: {str(events[0])[:60]})"
+                        except Exception:
+                            info["latest_probe_audit"] = "audit error"
+                # governance record (post probe write)
+                if ("governance" in e_str or "probe_completed" in e_str or "probe 完成" in e_str) and probe_marker:
+                    meta = e.get("metadata") or {}
+                    evidence = meta.get("evidence_ids", [])
+                    gov_type = meta.get("governance_type")
+                    if evidence or gov_type:
+                        info["latest_probe_gov"] = f"type={gov_type}, evidence_ids={evidence}"
+                        try:
+                            events = memory.audit(probe_marker) if hasattr(memory, "audit") else []
+                            info["latest_probe_gov_audit_full"] = events
+                        except Exception:
+                            info["latest_probe_gov_audit_full"] = []
+    except Exception:
+        pass
+    return info
 
 
 def print_doctor(
@@ -882,20 +905,21 @@ def print_doctor(
     backend = getattr(settings, "memory_backend", "memhall")
     if backend == "amh":
         store = getattr(settings, "memory_amh_store", "json")
-        client = locals().get("client_type") or "AmhClient"
+        probe_info = _collect_aca_probe_info(settings, memory)
+        client = probe_info["client_type"] or "AmhClient"
         mh_text = f"跨 session 記憶與交接已啟用（/handoff /resume） | ACA amh backend (store={store}, client={client})"
-        probe_exp = locals().get("latest_probe_expires")
+        probe_exp = probe_info["latest_probe_expires"]
         if probe_exp:
             mh_text += f" | 最近 probe entry 過期時間: {probe_exp}"
-        probe_audit = locals().get("latest_probe_audit")
+        probe_audit = probe_info["latest_probe_audit"]
         if probe_audit and probe_audit != "N/A":
             mh_text += f" | probe audit: {probe_audit}"
-        gov = locals().get("latest_probe_gov")
+        gov = probe_info["latest_probe_gov"]
         if gov:
             mh_text += f" | probe gov record: {gov}"
-        gov_full = locals().get("latest_probe_gov_audit_full")
+        gov_full = probe_info["latest_probe_gov_audit_full"]
         if gov_full is not None:
-            mh_text += f" | gov audit events: {len(gov_full or [])} (top 10 in table; | separates lines)"
+            mh_text += f" | gov audit events: {len(gov_full or [])} (完整列表見 /config 表格，含全部事件 + 捲動提示)"
         posture.add_row("Memory Hall", mh_text)
     else:
         posture.add_row("Memory Hall", "跨 session 記憶與交接已啟用（/handoff /resume）")
@@ -1527,6 +1551,39 @@ def shell(
             f"namespace={state.namespace}  persona={state.settings.persona}\n"
             f"context ~{approx_tokens} tokens  |  messages={len(chat_messages)}"
         )
+
+        # ACA live conformance signals: make /status also show the complete post-governance-record
+        # audit event list (full list + 「全部事件」/捲動提示), using the shared collector.
+        try:
+            mem = getattr(state, "memory", None)
+            if getattr(state.settings, "memory_backend", "memhall") == "amh" and mem is not None:
+                pinfo = _collect_aca_probe_info(state.settings, mem)
+                if pinfo["client_type"] != "N/A":
+                    console.print(
+                        f"[dim]記憶 client: {pinfo['client_type']} | "
+                        f"最新 probe 過期: {pinfo['latest_probe_expires'] or 'N/A'} | "
+                        f"gov record: {pinfo['latest_probe_gov'] or 'N/A'}[/dim]"
+                    )
+                    gov_evs = pinfo.get("latest_probe_gov_audit_full")
+                    if gov_evs is not None:
+                        evs = gov_evs or []
+                        formatted = []
+                        for i, e in enumerate(evs, 1):
+                            s = str(e).replace("\n", " | ")[:120]
+                            formatted.append(f"{i}. {s}")
+                        events_str = "\n".join(formatted) or "(none)"
+                        events_str += (
+                            "\n（已列出全部事件；長列表請向上捲動查看；完整列表亦見 /config 表格）"
+                        )
+                        console.print(
+                            Panel(
+                                events_str,
+                                title="最新 probe gov audit events (ACA, 完整列表) — /status",
+                                border_style="cyan",
+                            )
+                        )
+        except Exception:
+            pass  # non-fatal for status display
 
     register_handler("/status", handle_status)
 
