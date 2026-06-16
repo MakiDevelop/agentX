@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agentx.memory_hall import (
+    AmhClient,
     MemoryHallClient,
 )
 from agentx.tools.builtin import MemoryWriteTool
@@ -152,3 +153,121 @@ class TestMemoryWriteToolAca:
                 "content": "this should not fallback",
                 "tier": "llm_derived",
             })
+
+
+class TestAmhClient:
+    """More complete tests for AmhClient using mocks for amh CLI (subprocess)."""
+
+    def test_amh_client_write_uses_cli(self, monkeypatch):
+        # Patch shutil.which BEFORE instantiating (it runs in __init__)
+        monkeypatch.setattr("shutil.which", lambda x: "/usr/bin/amh" if x == "amh" else None)
+
+        client = AmhClient(store="json", store_path="/tmp/test-amh.json")
+        captured = {}
+
+        def fake_run(cmd, input=None, capture_output=True, timeout=None, check=False):
+            captured["cmd"] = cmd
+            captured["input"] = input
+            class Result:
+                returncode = 0
+                stdout = b"written"
+                stderr = b""
+            return Result()
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+
+        out = client.write("test content for write", namespace="project:foo")
+
+        assert "written" in out
+        assert captured["cmd"][0] == "amh"
+        assert "--store" in captured["cmd"]
+        assert "json" in captured["cmd"]
+        # Content appears as a CLI argument (before the --store flags which are appended later)
+        assert "test content for write" in captured["cmd"]
+
+    def test_amh_client_search_filters_results(self, monkeypatch):
+        # Patch before client creation
+        monkeypatch.setattr("shutil.which", lambda x: "/usr/bin/amh")
+
+        client = AmhClient()
+        output_lines = [
+            "some irrelevant line",
+            "important decision about postgres",
+            "another line with query",
+            "query keyword here"
+        ]
+
+        def fake_run(cmd, input=None, capture_output=True, timeout=None, check=False):
+            class Result:
+                returncode = 0
+                stdout = "\n".join(output_lines).encode()
+                stderr = b""
+            return Result()
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+
+        result = client.search("query", namespace="project:bar", limit=5)
+
+        assert "query keyword here" in result
+        assert "another line with query" in result
+        # Irrelevant filtered out in basic impl
+        assert "some irrelevant line" not in result
+
+    def test_amh_client_tier_upgrade_falls_back_on_error(self, monkeypatch):
+        # Patch before client creation
+        monkeypatch.setattr("shutil.which", lambda x: "/usr/bin/amh")
+
+        client = AmhClient()
+        calls = []
+
+        def fake_run(cmd, input=None, capture_output=True, timeout=None, check=False):
+            calls.append(cmd)
+            class Result:
+                returncode = 1  # simulate failure of native tier-upgrade subcommand
+                stdout = b""
+                stderr = b"unknown subcommand"
+            return Result()
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+
+        # Patch write_structured to capture fallback
+        def capture_write_structured(**kwargs):
+            calls.append(("fallback", kwargs))
+            return {"status": "ok", "memory_id": "fallback-id"}
+        client.write_structured = capture_write_structured
+
+        resp = client.tier_upgrade(
+            "mem-123",
+            new_tier="human_confirmed",
+            confirmed_by="human:maki",
+            method="human_review",
+            evidence_ids=["ev1"],
+            namespace="project:test",
+        )
+
+        assert resp["status"] == "ok"
+        # First call was the failing tier-upgrade attempt
+        assert any("tier-upgrade" in str(c) for c in calls)
+        # Then fallback happened
+        assert any(c[0] == "fallback" for c in calls if isinstance(c, tuple))
+
+    def test_amh_client_audit_best_effort(self, monkeypatch):
+        # Patch before client creation
+        monkeypatch.setattr("shutil.which", lambda x: "/usr/bin/amh")
+
+        client = AmhClient()
+        mock_output = "line with mem-456\nirrelevant\nanother with mem-456"
+
+        def fake_run(cmd, input=None, capture_output=True, timeout=None, check=False):
+            class Result:
+                returncode = 0
+                stdout = mock_output.encode()
+                stderr = b""
+            return Result()
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+
+        events = client.audit("mem-456")
+
+        assert len(events) >= 2
+        assert all("mem-456" in str(e) for e in events)
