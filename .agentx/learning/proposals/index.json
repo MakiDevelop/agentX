@@ -1,0 +1,40 @@
+{
+  "proposals": [
+    {
+      "id": "0d675428",
+      "timestamp": "2026-06-02T19:34:08.213436",
+      "type": "recovery_strategy",
+      "status": "proposed",
+      "title": "Test self-learn proposal",
+      "json": ".agentx/learning/proposals/2026-06-02-0d675428.json",
+      "md": ".agentx/learning/proposals/2026-06-02-0d675428.md"
+    },
+    {
+      "id": "0f18c0ea",
+      "timestamp": "2026-06-05T12:29:30.317349",
+      "type": "recovery_strategy",
+      "status": "proposed",
+      "title": "Handle missing system dependencies (ripgrep)",
+      "json": ".agentx/learning/proposals/2026-06-05-0f18c0ea.json",
+      "md": ".agentx/learning/proposals/2026-06-05-0f18c0ea.md"
+    },
+    {
+      "id": "e3ecbf7b",
+      "timestamp": "2026-06-05T12:46:48.232375",
+      "type": "recovery_strategy",
+      "status": "proposed",
+      "title": "Early Warning System for Step Limits",
+      "json": ".agentx/learning/proposals/2026-06-05-e3ecbf7b.json",
+      "md": ".agentx/learning/proposals/2026-06-05-e3ecbf7b.md"
+    },
+    {
+      "id": "0d91c13d",
+      "timestamp": "2026-06-05T12:49:31.485119",
+      "type": "tool_usage_pattern",
+      "status": "proposed",
+      "title": "Strictly verify tool output before summarizing",
+      "json": ".agentx/learning/proposals/2026-06-05-0d91c13d.json",
+      "md": ".agentx/learning/proposals/2026-06-05-0d91c13d.md"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "id": "0d675428",
+  "timestamp": "2026-06-02T19:34:08.213436",
+  "source": "",
+  "lesson_type": "recovery_strategy",
+  "title": "Test self-learn proposal",
+  "description": "After repeated same-file fails, always verify state first.",
+  "evidence": [
+    "test session: 3x consecutive edit fail on same path"
+  ],
+  "proposed_change": "Emphasize BACKTRACK + read in RecoveryPlaybook for weak models.",
+  "fitness": {
+    "ruff_ok": null,
+    "tests_relevant_pass": null,
+    "respects_agentyx_md_principles": null,
+    "evidence_based": true
+  },
+  "status": "proposed",
+  "applied_to": []
+}

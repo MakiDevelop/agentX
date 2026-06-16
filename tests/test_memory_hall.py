@@ -1,11 +1,8 @@
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from agentx.memory_hall import (
-    ACA_MEMORY_TYPES,
-    ACA_SOURCE_TIERS,
     MemoryHallClient,
 )
 from agentx.tools.builtin import MemoryWriteTool

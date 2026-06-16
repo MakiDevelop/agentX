@@ -1,0 +1,20 @@
+{
+  "id": "0f18c0ea",
+  "timestamp": "2026-06-05T12:29:30.317349",
+  "source": "session_reflection",
+  "lesson_type": "recovery_strategy",
+  "title": "Handle missing system dependencies (ripgrep)",
+  "description": "The agent failed several times to use `search_text` because `rg` was not installed on the host machine. Instead of reporting it and stopping, the agent attempted to manually read files in a loop without ensuring those files were actually relevant or providing full context.",
+  "evidence": [
+    "\"FileNotFoundError: [Errno 2] No such file or directory: 'rg'\"",
+    "assistant: {\"type\":\"tool_call\",\"tool\":\"read_file\",\"args\":{\"path\":\"src/agentx/tools/builtin.py\"}} (repeated 3 times)"
+  ],
+  "proposed_change": "Add a 'System Dependency Recovery' section to the recovery playbook. If a tool fails due to a missing binary (FileNotFoundError), the agent must: 1. Immediately report the current environment deficiency to the user; 2. Identify if there alternative tools available (e.g., `grep` or manually listing directories); 3. Stop attempting the same failed operation with an alternative that provides insufficient context (like reading a single file multiple times) unless explicitly directed by the user.",
+  "fitness": {
+    "respects_agentyx_md_principles": true,
+    "evidence_based": true,
+    "notes": "Directly addresses the '撞牆' (Hitting the Wall) principle in AGENTX.md by preventing repetitive failed attempts to recover."
+  },
+  "status": "proposed",
+  "applied_to": []
+}

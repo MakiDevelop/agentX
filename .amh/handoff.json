@@ -1,0 +1,35 @@
+{
+  "records": [
+    {
+      "amh_version": "0.1",
+      "memory_id": "3b9452af-f83c-4fd6-bb48-72b6f1c66dd6",
+      "version": 1,
+      "status": "active",
+      "agent_id": "codex",
+      "namespace": "project:agentX",
+      "memory_type": "lesson",
+      "content": {
+        "format": "text/plain",
+        "value": "2026-06-16 Codex reviewed commit c4b7f9a agentX ACA memory layer. Verdict: conditional green; tests passed with UV_CACHE_DIR=/private/tmp/agentx-uv-cache (ruff clean, pytest -k memory/doctor/loop/cli 38 passed). Main required fixes before next slice: MemoryWriteTool must not silently fall back to legacy write when ACA write/validation fails; write_aca should include AMH memhall adapter-compatible metadata keys source_type/source_ref/source_tier because current nested metadata.source.tier will be read back as default llm_derived by AMH memhall adapter; add unit tests for write_aca payload and MemoryWriteTool failure behavior. Existing untracked files ignored: .agentx/learning/ and scripts/simple_crawler.py."
+      },
+      "source": {
+        "type": "agent",
+        "ref": "",
+        "tier": "llm_derived"
+      },
+      "created_at": "2026-06-16T02:18:50.072Z",
+      "created_by": "codex",
+      "content_hash": "db1adf299972c3c07923b8e69fcadf120a26da6e5bc9f33e16d39ca8a2f5ecab"
+    }
+  ],
+  "audit": [
+    {
+      "event_id": "d8cf5e19-e99c-4264-a4ed-e90c1d1a83bb",
+      "memory_id": "3b9452af-f83c-4fd6-bb48-72b6f1c66dd6",
+      "operation": "write",
+      "principal_id": "codex",
+      "timestamp": "2026-06-16T02:18:50.072Z",
+      "details": "Created lesson in project:agentX"
+    }
+  ]
+}

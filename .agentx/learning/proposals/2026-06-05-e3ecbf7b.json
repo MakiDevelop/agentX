@@ -1,0 +1,19 @@
+{
+  "id": "e3ecbf7b",
+  "timestamp": "2026-06-05T12:46:48.232375",
+  "source": "session_reflection",
+  "lesson_type": "recovery_strategy",
+  "title": "Early Warning System for Step Limits",
+  "description": "The session ended abruptly due to reaching max_steps, leaving a task pending. This indicates a lack of proactive monitoring of the remaining step budget relative to the task complexity.",
+  "evidence": [
+    "session ended without final answer (max_steps reached)"
+  ],
+  "proposed_change": "Add a recovery strategy in the system prompt or operational guidelines: 'When current_step > 70% of max_steps and task is not near completion, the agent must explicitly state the remaining budget and provide a partial progress report + handoff state for the next session to ensure no work is lost.'",
+  "fitness": {
+    "respects_agentyx_md_principles": true,
+    "evidence_based": true,
+    "notes": "Aligns with the need for reliable session handoffs and the stability of the project."
+  },
+  "status": "proposed",
+  "applied_to": []
+}

@@ -1,0 +1,20 @@
+{
+  "id": "0d91c13d",
+  "timestamp": "2026-06-05T12:49:31.485119",
+  "source": "session_reflection",
+  "lesson_type": "tool_usage_pattern",
+  "title": "Strictly verify tool output before summarizing",
+  "description": "The agent failed to interpret the result of a search_text tool call correctly, claiming no results were found when the evidence was clearly provided in the tool response. This is a hallucination regarding the state of the world (tool output), and it prevents progress on technical tasks.",
+  "evidence": [
+    "tool: { \"tool\": \"search_text\", \"ok\": true, \"content\": \"/Users/maki/GitHub/agentX/src/agentx/safety.py:20...\" }",
+    "assistant: 搜尋結果顯示 `web_fetch` 並未在專案中出現。"
+  ],
+  "proposed_change": "Update the internal reasoning process (or system prompt) to require a mandatory 'Verification Step' before reporting results of search/grep tools. The agent must explicitly check if the 'content' field in the tool response is empty or contains text, and if the 'ok' status is true, only then report absence of matches.",
+  "fitness": {
+    "respects_agentyx_md_principles": true,
+    "evidence_based": true,
+    "notes": "Directly addresses a clear failure in fidelity to tool output."
+  },
+  "status": "proposed",
+  "applied_to": []
+}
