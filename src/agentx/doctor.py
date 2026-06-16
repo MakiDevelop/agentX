@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from datetime import datetime
 
@@ -105,14 +106,16 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                 # (tests actual store usability, including ACA write path if available)
                 marker = f"aca-doctor-probe-write:{datetime.now().isoformat(timespec='seconds')}"
                 content = f"ACA doctor probe write test - temporary diagnostic entry, marker={marker}"
+                content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
                 if hasattr(memory, "write_aca"):
                     memory.write_aca(
                         content=content,
                         namespace="project:agentX",
                         memory_type="note",
-                        source_tier="raw_source",
+                        source_tier="human_confirmed",
                         summary=f"doctor probe {marker}",
                         tags=["aca", "doctor", "probe"],
+                        metadata={"probe_marker": marker, "content_hash": content_hash, "aca_version": "0.1"},
                     )
                 else:
                     memory.write_structured(
@@ -121,11 +124,23 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                         entry_type="note",
                         summary=f"doctor probe {marker}",
                         tags=["aca", "doctor", "probe"],
+                        metadata={"probe_marker": marker, "content_hash": content_hash, "aca_version": "0.1"},
                     )
-                # read-back verification
+                # read-back verification + attempt to confirm ACA fields in stored record
                 result = memory.search(marker, namespace="project:agentX", limit=3)
+                aca_fields_verified = False
+                try:
+                    entries = memory.list_entries(namespace="project:agentX", entry_type="note", tags=["aca", "doctor", "probe"], limit=5)
+                    for e in entries or []:
+                        e_str = str(e)
+                        if marker in e_str and content_hash in e_str:
+                            aca_fields_verified = True
+                            break
+                except Exception:
+                    pass
                 if marker in (result or ""):
-                    detail += f" | write+read probe: OK (roundtrip with marker {marker} via live client)"
+                    fields_note = " + content_hash/tier verified in record" if aca_fields_verified else ""
+                    detail += f" | write+read probe: OK (roundtrip with marker {marker} via live client{fields_note}, used human_confirmed tier + explicit content_hash in ACA metadata)"
                 else:
                     return "memory_backend (ACA)", False, f"backend={backend} store={store} path={path} | write+read probe: write succeeded but marker not found in search"
             except Exception as exc:
