@@ -739,6 +739,8 @@ def print_config(
     table.add_row("config_file_approval", str(project_config.approval))
     table.add_row("config_file_persona", str(project_config.persona))
     table.add_row("config_file_auto_handoff", str(project_config.auto_handoff))
+    table.add_row("config_file_memory_amh_store", str(project_config.memory_amh_store))
+    table.add_row("config_file_memory_amh_path", str(project_config.memory_amh_path))
 
     # MT22 後：只顯示新多任務清單
     current_tasks = load_tasks(settings.workspace)
@@ -1972,6 +1974,34 @@ def shell(
             transcript.write("slash_command", {"command": prompt, "config": key})
             console.print(f"config updated: {key}")
             print_raw(updated)
+
+            if key in ("memory_backend", "memory_amh_store", "memory_amh_path"):
+                # Hot-reload for ACA AmhClient so /memory etc take effect immediately
+                project_config = load_project_config(state.settings.workspace)
+                if (project_config.memory_backend or "memhall").lower() == "amh":
+                    from agentx.memory_hall import AmhClient
+                    new_memory = AmhClient(
+                        store=project_config.memory_amh_store or "json",
+                        store_path=project_config.memory_amh_path,
+                    )
+                else:
+                    new_memory = MemoryHallClient(
+                        base_url=state.settings.memory_hall_url,
+                        token=state.settings.memory_hall_token,
+                    )
+                # Update in-memory settings so /status /config etc reflect new values
+                state.update_settings(
+                    memory_backend=project_config.memory_backend or state.settings.memory_backend,
+                    memory_amh_store=project_config.memory_amh_store,
+                    memory_amh_path=project_config.memory_amh_path,
+                )
+                # Patch the live tool instances (the ones bound to current tools registry)
+                for mem_name in ("memory_search", "memory_write", "memory_tier_upgrade", "memory_audit"):
+                    t = tools.get(mem_name)
+                    if t is not None and hasattr(t, "memory"):
+                        t.memory = new_memory
+                console.print("memory client hot-swapped (immediate effect for memory commands, no restart)")
+
             return
 
     register_handler("/config", handle_config)
@@ -2219,6 +2249,32 @@ def shell(
                 transcript.write("slash_command", {"command": prompt, "config": key})
                 console.print(f"config updated: {key}")
                 print_raw(updated)
+
+                if key in ("memory_backend", "memory_amh_store", "memory_amh_path"):
+                    # Hot-reload for ACA AmhClient (same as TUI handler)
+                    project_config = load_project_config(state.settings.workspace)
+                    if (project_config.memory_backend or "memhall").lower() == "amh":
+                        from agentx.memory_hall import AmhClient
+                        new_memory = AmhClient(
+                            store=project_config.memory_amh_store or "json",
+                            store_path=project_config.memory_amh_path,
+                        )
+                    else:
+                        new_memory = MemoryHallClient(
+                            base_url=state.settings.memory_hall_url,
+                            token=state.settings.memory_hall_token,
+                        )
+                    state.update_settings(
+                        memory_backend=project_config.memory_backend or state.settings.memory_backend,
+                        memory_amh_store=project_config.memory_amh_store,
+                        memory_amh_path=project_config.memory_amh_path,
+                    )
+                    for mem_name in ("memory_search", "memory_write", "memory_tier_upgrade", "memory_audit"):
+                        t = tools.get(mem_name)
+                        if t is not None and hasattr(t, "memory"):
+                            t.memory = new_memory
+                    console.print("memory client hot-swapped (immediate effect)")
+
                 continue
             if prompt == "/task" or prompt.startswith("/task "):
                 transcript.write("slash_command", {"command": prompt})
