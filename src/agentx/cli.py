@@ -724,6 +724,9 @@ def print_config(
     table.add_row("model", settings.model)
     table.add_row("ollama_url", settings.ollama_url)
     table.add_row("memory_backend", getattr(settings, "memory_backend", "memhall"))
+    if getattr(settings, "memory_backend", "memhall") == "amh":
+        table.add_row("memory_amh_store", getattr(settings, "memory_amh_store", "json"))
+        table.add_row("memory_amh_path", getattr(settings, "memory_amh_path", "(default)"))
     table.add_row("memory_hall_url", settings.memory_hall_url)
     table.add_row("memory_hall_token", "set" if settings.memory_hall_token else "missing")
     table.add_row("workspace", str(settings.workspace))
@@ -809,7 +812,12 @@ def print_doctor(
     posture.add_row("目前模式", f"{mode_str}（chat = 純聊天，agent = 可使用工具）")
     posture.add_row("核准策略 (approval)", f"{approval_str} → {approval_meaning}")
     posture.add_row("安全邊界", "GREEN 自動允許 ｜ YELLOW 依策略 ｜ RED 永遠受保護（設計如此）")
-    posture.add_row("Memory Hall", "跨 session 記憶與交接已啟用（/handoff /resume）")
+    backend = getattr(settings, "memory_backend", "memhall")
+    if backend == "amh":
+        store = getattr(settings, "memory_amh_store", "json")
+        posture.add_row("Memory Hall", f"跨 session 記憶與交接已啟用（/handoff /resume） | ACA amh backend (store={store})")
+    else:
+        posture.add_row("Memory Hall", "跨 session 記憶與交接已啟用（/handoff /resume）")
     posture.add_row("建議", "想更自主就輸入 /approval auto；想最安全就保持 ask 或 off")
 
     console.print(posture)

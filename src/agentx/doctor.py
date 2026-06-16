@@ -94,7 +94,9 @@ def _check_memory_backend(settings: Settings) -> tuple[str, bool, str]:
     backend = getattr(settings, "memory_backend", "memhall")
     detail = f"backend={backend}"
     if backend == "amh":
-        detail += " (official AMH / ACA L1-3 reference — full governance: tiers, anti-ouroboros, audit)"
+        store = getattr(settings, "memory_amh_store", "json")
+        path = getattr(settings, "memory_amh_path", "(default)")
+        detail += f" (official AMH / ACA L1-3 reference — store={store}, path={path}; full governance: tiers, anti-ouroboros, audit)"
     else:
         detail += " (legacy memhall — ACA client shaping enabled via write_aca + tier tools)"
     return "memory_backend (ACA)", True, detail
