@@ -912,7 +912,12 @@ def build_runtime(
     )
     if (settings.memory_backend or "memhall").lower() == "amh":
         from agentx.memory_hall import AmhClient
-        memory = AmhClient()
+        # Support different AMH stores via env for now (json/sqlite/postgres/memhall)
+        # e.g. AGENTX_AMH_STORE=postgres AGENTX_AMH_PATH="postgres://user:pass@host/db"
+        memory = AmhClient(
+            store=os.getenv("AGENTX_AMH_STORE", "json"),
+            store_path=os.getenv("AGENTX_AMH_PATH"),
+        )
     else:
         memory = MemoryHallClient(
             base_url=settings.memory_hall_url,

@@ -4,4 +4,10 @@ namespace = "project:agentX"
 mode = "chat"
 approval = "ask"
 auto_handoff = true
-memory_backend = "memhall"  # amh for full ACA / official AMH backend
+memory_backend = "memhall"  # 或 "amh" 以使用官方 AMH / ACA 後端
+
+# amh 後端不同 store 範例（透過環境變數生效）：
+# memory_backend = "amh"
+# AGENTX_AMH_STORE=postgres
+# AGENTX_AMH_PATH="postgres://user:pass@host:5432/amh"
+# 常見值：json（預設）、sqlite、postgres、memhall（轉發既有 memory-hall）

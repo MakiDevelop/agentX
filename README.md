@@ -368,7 +368,11 @@ mode = "chat"
 approval = "ask"
 persona = "tutor"
 auto_handoff = true
-memory_backend = "memhall"   # 或 "amh" 以使用官方 ACA 後端
+memory_backend = "memhall"   # 或 "amh" 以使用官方 AMH / ACA 後端
+
+# 當 memory_backend = "amh" 時，可透過環境變數指定不同 store（json / sqlite / postgres / memhall）
+# AGENTX_AMH_STORE=postgres
+# AGENTX_AMH_PATH="postgres://user:pass@host/db"
 ```
 
 載入優先序：
@@ -386,7 +390,7 @@ memory_backend = "memhall"   # 或 "amh" 以使用官方 ACA 後端
 | `mode` | shell 啟動模式，`chat` / `agent`；`ask` 是 `agent` 的 alias |
 | `approval` | YELLOW 工具 approval policy，`ask` / `auto` / `off`；也支援 `strict` / `auto-approve` / `deny` aliases |
 | `auto_handoff` | 離開 shell 時是否自動寫 Memory Hall handoff |
-| `memory_backend` | Memory Hall 後端，`memhall`（預設，舊相容）或 `amh`（官方 Agent Memory Hall，完整 ACA L1-3 治理 + tier/audit 工具） |
+| `memory_backend` | Memory Hall 後端，`memhall`（預設，舊相容）或 `amh`（官方 Agent Memory Hall，完整 ACA L1-3 治理 + tier/audit 工具）。amh 時可搭配 AGENTX_AMH_STORE / AGENTX_AMH_PATH 指定 json/sqlite/postgres/memhall 等不同 store |
 
 ## 上下文限制
 
@@ -486,6 +490,22 @@ agentX 記憶層已逐步對齊 Agent Civilization Architecture（ACA）：
 - 寫入自動支援 `tier`（llm_derived / human_confirmed 等）與 `memory_type`
 - 提供 `memory_tier_upgrade` 與 `memory_audit` 工具（L2 Trust）
 - 透過 `memory_backend = "amh"`（或 `AGENTX_MEMORY_BACKEND=amh`）可切換使用官方 AMH 參考實作，獲得完整 ACA 治理（anti-ouroboros、dedup、provenance 等）
+
+**不同 store 用法範例**（amh 後端）：
+
+```bash
+# 預設 json store（輕量、本地）
+AGENTX_MEMORY_BACKEND=amh ax
+
+# sqlite
+AGENTX_MEMORY_BACKEND=amh AGENTX_AMH_STORE=sqlite AGENTX_AMH_PATH="./.agentx/amh/memory.db" ax
+
+# postgres（生產 / 多 agent 共享）
+AGENTX_MEMORY_BACKEND=amh AGENTX_AMH_STORE=postgres AGENTX_AMH_PATH="postgres://user:pass@host:5432/amh" ax
+
+# 轉發到既有 memory-hall（搭配 AMH adapter）
+AGENTX_MEMORY_BACKEND=amh AGENTX_AMH_STORE=memhall AGENTX_AMH_PATH="http://100.89.41.50:9100" ax
+```
 
 預設為 `memhall` 以維持相容性。詳細見 AGENTX.md Lab Notes 與 `docs/`。
 
