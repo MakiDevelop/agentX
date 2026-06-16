@@ -14,7 +14,7 @@ def run_doctor(settings: Settings, memory: MemoryHallClient, ollama: OllamaClien
         _check_command("git", ["git", "status", "--short", "--branch"], cwd=settings.workspace),
         _check_ollama(settings, ollama),
         _check_model(settings, ollama),
-        _check_memory_backend(settings),
+        _check_memory_backend(settings, memory),
         _check_memory_search(memory),
         _check_task_migration(settings),
     ]
@@ -90,13 +90,21 @@ def _check_task_migration(settings: Settings) -> tuple[str, bool, str]:
         return "task_migration (MT22)", False, f"{type(exc).__name__}: {exc}"
 
 
-def _check_memory_backend(settings: Settings) -> tuple[str, bool, str]:
+def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -> tuple[str, bool, str]:
     backend = getattr(settings, "memory_backend", "memhall")
     detail = f"backend={backend}"
     if backend == "amh":
         store = getattr(settings, "memory_amh_store", "json")
         path = getattr(settings, "memory_amh_path", "(default)")
         detail += f" (official AMH / ACA L1-3 reference — store={store}, path={path}; full governance: tiers, anti-ouroboros, audit)"
+        # Actual usability probe for the current store (e.g. when user did /config set memory_amh_store)
+        if memory is not None:
+            try:
+                # Lightweight probe: search should work for any store without side effects
+                _ = memory.search("aca-doctor-probe", namespace="project:agentX", limit=1)
+                detail += " | store probe: OK (search succeeded via live client)"
+            except Exception as exc:
+                return "memory_backend (ACA)", False, f"backend={backend} store={store} path={path} | store probe FAILED: {type(exc).__name__}: {exc}"
     else:
         detail += " (legacy memhall — ACA client shaping enabled via write_aca + tier tools)"
     return "memory_backend (ACA)", True, detail
