@@ -415,13 +415,14 @@ AgentX Shell 三大原則：
 - 後續微步（逐步完成）：
   - 新增 memory_tier_upgrade / memory_audit 工具 + AmhClient 適配器（使用官方 amh CLI / npx）。
   - 設定 memory_backend（memhall | amh）支援，可透過 .agentx/config.toml 或 env 切換。
+  - 進一步讓 config.toml 直接讀取 memory_amh_store / memory_amh_path（優先於 env），支援不同 store（json/sqlite/postgres/memhall）無需額外 env。
   - 接線 build_runtime 與 /status / doctor，清楚顯示當前後端與 ACA 相容狀態。
   - runtime_prompt 更新工具說明與 backend 選擇。
   - 補 focused unit tests（test_memory_hall.py 涵蓋 write_aca payload、flat metadata keys、驗證、tool 行為）。
   - Codex review（conditional green → fixes + tests 滿足）。
   - Evidence：多個小 commit（config, AmhClient, wiring, prompt, doctor, tests）；ruff + pytest 通過；Codex handoff 已寫入。
   - 補充完整 AmhClient 測試：使用 monkeypatch 模擬 subprocess.run 與 shutil.which，涵蓋 write (CLI argv)、search 過濾、tier_upgrade fallback 行為、audit。
-- 目前狀態：agentX 記憶層完整支援 ACA L1 (Memory) + L2 (Trust) 形狀 + 操作；可切官方 AMH 後端即獲得完整治理。 AmhClient 有 mock 測試覆蓋 CLI 行為。
+- 目前狀態：agentX 記憶層完整支援 ACA L1 (Memory) + L2 (Trust) 形狀 + 操作；可切官方 AMH 後端即獲得完整治理。 AmhClient 有 mock 測試覆蓋 CLI 行為。config.toml 可直接指定 amh store 與 path。
 
 **2026-06 Tsumu 四大架構改善 (hooks / unified error / file tracking / JSONL persistence) + 後續 landing 修正**：
 - **失敗模式暴露**：把 learning 移到 hooks 後，coordinator/plan_mode 等使用多 session 的地方 response 預算爆炸；ShellState 瘦身後舊測試 ctor 崩；GREEN 裡不小心放了執行型 npm test / vitest（Codex 抓到）。
