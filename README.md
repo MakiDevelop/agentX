@@ -368,6 +368,7 @@ mode = "chat"
 approval = "ask"
 persona = "tutor"
 auto_handoff = true
+memory_backend = "memhall"   # 或 "amh" 以使用官方 ACA 後端
 ```
 
 載入優先序：

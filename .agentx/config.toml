@@ -4,3 +4,4 @@ namespace = "project:agentX"
 mode = "chat"
 approval = "ask"
 auto_handoff = true
+memory_backend = "memhall"  # amh for full ACA / official AMH backend
