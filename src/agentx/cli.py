@@ -909,10 +909,14 @@ def build_runtime(
         model=settings.model,
         timeout=settings.ollama_timeout,
     )
-    memory = MemoryHallClient(
-        base_url=settings.memory_hall_url,
-        token=settings.memory_hall_token,
-    )
+    if (settings.memory_backend or "memhall").lower() == "amh":
+        from agentx.memory_hall import AmhClient
+        memory = AmhClient()
+    else:
+        memory = MemoryHallClient(
+            base_url=settings.memory_hall_url,
+            token=settings.memory_hall_token,
+        )
     def approve(tool: str, args: dict[str, object], risk: Risk) -> bool:
         if approval_policy is None:
             return False
