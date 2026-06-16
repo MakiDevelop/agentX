@@ -721,6 +721,7 @@ def print_config(
 ) -> None:
     latest_probe_expires = None  # for /status posture + table
     latest_probe_audit = "N/A"
+    latest_probe_gov = None
     client_type = "N/A"
     if getattr(settings, "memory_backend", "memhall") == "amh" and memory is not None:
         client_type = type(memory).__name__
@@ -749,6 +750,13 @@ def print_config(
                                 except Exception:
                                     latest_probe_audit = "audit error"
                             break
+                    # look for governance record (has "governance" or "probe_completed" or "probe 完成")
+                    if "governance" in e_str or "probe_completed" in e_str or "probe 完成" in e_str:
+                        meta = e.get("metadata") or {}
+                        evidence = meta.get("evidence_ids", [])
+                        gov_type = meta.get("governance_type")
+                        if evidence or gov_type:
+                            latest_probe_gov = f"type={gov_type}, evidence_ids={evidence}"
         except Exception:
             pass
     table = Table(title="agentX config", show_header=False)
@@ -785,6 +793,8 @@ def print_config(
         table.add_row("最新 probe entry 過期時間 (ACA)", latest_probe_expires)
     if latest_probe_audit != "N/A":
         table.add_row("最新 probe audit (ACA)", latest_probe_audit)
+    if latest_probe_gov:
+        table.add_row("最新 probe governance record (ACA)", latest_probe_gov)
 
     # MT22 後：只顯示新多任務清單
     current_tasks = load_tasks(settings.workspace)
@@ -863,6 +873,9 @@ def print_doctor(
         probe_audit = locals().get("latest_probe_audit")
         if probe_audit and probe_audit != "N/A":
             mh_text += f" | probe audit: {probe_audit}"
+        gov = locals().get("latest_probe_gov")
+        if gov:
+            mh_text += f" | probe gov record: {gov}"
         posture.add_row("Memory Hall", mh_text)
     else:
         posture.add_row("Memory Hall", "跨 session 記憶與交接已啟用（/handoff /resume）")
