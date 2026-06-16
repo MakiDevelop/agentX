@@ -802,7 +802,15 @@ def print_config(
     if latest_probe_gov:
         table.add_row("最新 probe governance record (ACA)", latest_probe_gov)
     if latest_probe_gov_audit_full is not None:
-        events_str = "\n".join(str(e)[:80] for e in (latest_probe_gov_audit_full or [])[:5]) or "(none)"
+        evs = latest_probe_gov_audit_full or []
+        max_show = 10
+        formatted = []
+        for i, e in enumerate(evs[:max_show], 1):
+            s = str(e).replace('\n', ' | ')[:120]  # better for multi-line events
+            formatted.append(f"{i}. {s}")
+        events_str = "\n".join(formatted) or "(none)"
+        if len(evs) > max_show:
+            events_str += f"\n... +{len(evs)-max_show} more (see audit for complete)"
         table.add_row("最新 probe gov audit events (ACA)", events_str)
 
     # MT22 後：只顯示新多任務清單
@@ -887,7 +895,7 @@ def print_doctor(
             mh_text += f" | probe gov record: {gov}"
         gov_full = locals().get("latest_probe_gov_audit_full")
         if gov_full is not None:
-            mh_text += f" | gov audit events: {len(gov_full or [])} (full list in table above)"
+            mh_text += f" | gov audit events: {len(gov_full or [])} (top 10 in table; | separates lines)"
         posture.add_row("Memory Hall", mh_text)
     else:
         posture.add_row("Memory Hall", "跨 session 記憶與交接已啟用（/handoff /resume）")
