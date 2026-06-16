@@ -70,6 +70,7 @@ class ShellState:
     """管理互動式 shell 的狀態（階段一基礎版）"""
     settings: "Settings"
     agent_session: "AgentSession | None" = None
+    memory: "MemoryHallClient | None" = None  # for hot-reload of ACA amh backend
     plan_mode: bool = False
     mode: str = "chat"           # "chat" 或 "agent"
     namespace: str = "project:agentX"
@@ -1248,6 +1249,7 @@ def shell(
         memory=memory,
     )
     state.agent_session = agent_session
+    state.memory = memory  # for hot-reload support (ACA amh backend)
     chat_messages = [
         {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona, model=settings.model)}
     ]
@@ -2000,6 +2002,9 @@ def shell(
                     t = tools.get(mem_name)
                     if t is not None and hasattr(t, "memory"):
                         t.memory = new_memory
+                state.memory = new_memory
+                if state.agent_session is not None:
+                    state.agent_session.memory = new_memory
                 console.print("memory client hot-swapped (immediate effect for memory commands, no restart)")
 
             return
@@ -2273,6 +2278,9 @@ def shell(
                         t = tools.get(mem_name)
                         if t is not None and hasattr(t, "memory"):
                             t.memory = new_memory
+                    state.memory = new_memory
+                    if state.agent_session is not None:
+                        state.agent_session.memory = new_memory
                     console.print("memory client hot-swapped (immediate effect)")
 
                 continue
