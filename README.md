@@ -487,6 +487,8 @@ AGENTX_AUTO_HANDOFF=0 ax
 - `git_diff`
 - `memory_search`
 - `memory_write`（支援 tier/memory_type 以符合 ACA）
+- `memory_tier_upgrade`（ACA L2：llm_derived → human_confirmed）
+- `memory_audit`（ACA 事件紀錄）
 - `run_command`
 - `web_fetch`
 - `run_tests`
