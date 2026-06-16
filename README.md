@@ -478,6 +478,16 @@ project:agentX
 AGENTX_AUTO_HANDOFF=0 ax
 ```
 
+### ACA 符合度與 Memory Backend
+
+agentX 記憶層已逐步對齊 Agent Civilization Architecture（ACA）：
+
+- 寫入自動支援 `tier`（llm_derived / human_confirmed 等）與 `memory_type`
+- 提供 `memory_tier_upgrade` 與 `memory_audit` 工具（L2 Trust）
+- 透過 `memory_backend = "amh"`（或 `AGENTX_MEMORY_BACKEND=amh`）可切換使用官方 AMH 參考實作，獲得完整 ACA 治理（anti-ouroboros、dedup、provenance 等）
+
+預設為 `memhall` 以維持相容性。詳細見 AGENTX.md Lab Notes 與 `docs/`。
+
 ## 目前工具
 
 - `list_files`
