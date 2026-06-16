@@ -385,6 +385,7 @@ auto_handoff = true
 | `mode` | shell 啟動模式，`chat` / `agent`；`ask` 是 `agent` 的 alias |
 | `approval` | YELLOW 工具 approval policy，`ask` / `auto` / `off`；也支援 `strict` / `auto-approve` / `deny` aliases |
 | `auto_handoff` | 離開 shell 時是否自動寫 Memory Hall handoff |
+| `memory_backend` | Memory Hall 後端，`memhall`（預設，舊相容）或 `amh`（官方 Agent Memory Hall，完整 ACA L1-3 治理 + tier/audit 工具） |
 
 ## 上下文限制
 
