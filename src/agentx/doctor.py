@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime
 
 from agentx.config import Settings
 from agentx.memory_hall import MemoryHallClient
@@ -100,9 +101,33 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
         # Actual usability probe for the current store (e.g. when user did /config set memory_amh_store)
         if memory is not None:
             try:
-                # Lightweight probe: search should work for any store without side effects
-                _ = memory.search("aca-doctor-probe", namespace="project:agentX", limit=1)
-                detail += " | store probe: OK (search succeeded via live client)"
+                # Enhanced probe: test write + read-back verification with temporary marker
+                # (tests actual store usability, including ACA write path if available)
+                marker = f"aca-doctor-probe-write:{datetime.now().isoformat(timespec='seconds')}"
+                content = f"ACA doctor probe write test - temporary diagnostic entry, marker={marker}"
+                if hasattr(memory, "write_aca"):
+                    memory.write_aca(
+                        content=content,
+                        namespace="project:agentX",
+                        memory_type="note",
+                        source_tier="raw_source",
+                        summary=f"doctor probe {marker}",
+                        tags=["aca", "doctor", "probe"],
+                    )
+                else:
+                    memory.write_structured(
+                        content=content,
+                        namespace="project:agentX",
+                        entry_type="note",
+                        summary=f"doctor probe {marker}",
+                        tags=["aca", "doctor", "probe"],
+                    )
+                # read-back verification
+                result = memory.search(marker, namespace="project:agentX", limit=3)
+                if marker in (result or ""):
+                    detail += f" | write+read probe: OK (roundtrip with marker {marker} via live client)"
+                else:
+                    return "memory_backend (ACA)", False, f"backend={backend} store={store} path={path} | write+read probe: write succeeded but marker not found in search"
             except Exception as exc:
                 return "memory_backend (ACA)", False, f"backend={backend} store={store} path={path} | store probe FAILED: {type(exc).__name__}: {exc}"
     else:
