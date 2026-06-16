@@ -88,6 +88,7 @@ class MemoryHallClient:
         references: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
         created_by: str | None = None,
+        valid_until: str | None = None,
     ) -> dict[str, Any]:
         """
         ACA-conformant write (L1 Memory + L2 Trust).
@@ -139,6 +140,8 @@ class MemoryHallClient:
             "references": references or [],
             "metadata": aca_metadata,
         }
+        if valid_until:
+            payload["valid_until"] = valid_until
 
         # Simple client-side Anti-Ouroboros signal (best-effort).
         # In real ACA/AMH the TierGate lives in the server.
@@ -169,6 +172,7 @@ class MemoryHallClient:
         references: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
         agent_id: str = "agentx",
+        valid_until: str | None = None,
     ) -> dict[str, Any]:
         """Backward-compatible structured write. New code should prefer write_aca for ACA records."""
         payload: dict[str, Any] = {
@@ -181,6 +185,8 @@ class MemoryHallClient:
             "references": references or [],
             "metadata": metadata or {},
         }
+        if valid_until:
+            payload["valid_until"] = valid_until
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(
                 f"{self.base_url}/v1/memory/write",
@@ -400,6 +406,7 @@ class AmhClient:
         references: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
         agent_id: str = "agentx",
+        valid_until: str | None = None,
     ) -> dict[str, Any]:
         # For AMH, we can pass metadata in a structured way via the content or use write with extra
         # For now, embed ACA metadata in the written content as JSON prefix (AMH stores it)
@@ -410,6 +417,8 @@ class AmhClient:
             "references": references or [],
             "metadata": {"aca": metadata or {}},
         }
+        if valid_until:
+            payload["valid_until"] = valid_until
         text = json.dumps(payload, ensure_ascii=False)
         out = self._run_amh(
             "write",

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from agentx.config import Settings
 from agentx.memory_hall import MemoryHallClient
@@ -107,6 +107,8 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                 marker = f"aca-doctor-probe-write:{datetime.now().isoformat(timespec='seconds')}"
                 content = f"ACA doctor probe write test - temporary diagnostic entry, marker={marker}"
                 content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+                # short TTL for diagnostic entry (auto-expire)
+                valid_until = (datetime.now() + timedelta(minutes=10)).isoformat(timespec="seconds") + "Z"
                 write_resp = None
                 if hasattr(memory, "write_aca"):
                     write_resp = memory.write_aca(
@@ -117,6 +119,7 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                         summary=f"doctor probe {marker}",
                         tags=["aca", "doctor", "probe"],
                         metadata={"probe_marker": marker, "content_hash": content_hash, "aca_version": "0.1"},
+                        valid_until=valid_until,
                     )
                 else:
                     write_resp = memory.write_structured(
@@ -126,6 +129,7 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                         summary=f"doctor probe {marker}",
                         tags=["aca", "doctor", "probe"],
                         metadata={"probe_marker": marker, "content_hash": content_hash, "aca_version": "0.1"},
+                        valid_until=valid_until,
                     )
                 # read-back verification + attempt to confirm ACA fields in stored record
                 result = memory.search(marker, namespace="project:agentX", limit=3)
