@@ -145,7 +145,21 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                     pass
                 if marker in (result or ""):
                     fields_note = " + content_hash/tier verified in record" if aca_fields_verified else ""
+                    # try to surface the actual expiration from stored record (for "最近 probe entry 的過期時間")
+                    probe_expires = valid_until
+                    try:
+                        entries = memory.list_entries(namespace="project:agentX", entry_type="note", tags=["aca", "doctor", "probe"], limit=5)
+                        for e in entries or []:
+                            e_str = str(e)
+                            if marker in e_str:
+                                # extract valid_until if the list_entries result contains it (structure depends on backend)
+                                if isinstance(e, dict):
+                                    probe_expires = e.get("valid_until") or (e.get("metadata") or {}).get("valid_until") or valid_until
+                                break
+                    except Exception:
+                        pass
                     detail += f" | write+read probe: OK (roundtrip with marker {marker} via live client{fields_note}, used human_confirmed tier + explicit content_hash in ACA metadata)"
+                    detail += f" | latest probe entry expires at {probe_expires}"
                     # Write "probe 完成" governance record with evidence_id pointing to the probe entry
                     try:
                         evidence_id = marker
