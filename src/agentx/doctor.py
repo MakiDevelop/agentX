@@ -107,8 +107,9 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                 marker = f"aca-doctor-probe-write:{datetime.now().isoformat(timespec='seconds')}"
                 content = f"ACA doctor probe write test - temporary diagnostic entry, marker={marker}"
                 content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+                write_resp = None
                 if hasattr(memory, "write_aca"):
-                    memory.write_aca(
+                    write_resp = memory.write_aca(
                         content=content,
                         namespace="project:agentX",
                         memory_type="note",
@@ -118,7 +119,7 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                         metadata={"probe_marker": marker, "content_hash": content_hash, "aca_version": "0.1"},
                     )
                 else:
-                    memory.write_structured(
+                    write_resp = memory.write_structured(
                         content=content,
                         namespace="project:agentX",
                         entry_type="note",
@@ -141,6 +142,40 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                 if marker in (result or ""):
                     fields_note = " + content_hash/tier verified in record" if aca_fields_verified else ""
                     detail += f" | write+read probe: OK (roundtrip with marker {marker} via live client{fields_note}, used human_confirmed tier + explicit content_hash in ACA metadata)"
+                    # Write "probe 完成" governance record with evidence_id pointing to the probe entry
+                    try:
+                        evidence_id = marker
+                        if isinstance(write_resp, dict):
+                            evidence_id = write_resp.get("memory_id") or write_resp.get("id") or write_resp.get("entry_id") or marker
+                        completion_content = f"probe 完成 for {marker} - governance record for ACA doctor store probe"
+                        completion_metadata = {
+                            "probe_marker": marker,
+                            "evidence_ids": [evidence_id],
+                            "governance_type": "probe_completed",
+                            "aca_version": "0.1",
+                        }
+                        if hasattr(memory, "write_aca"):
+                            memory.write_aca(
+                                content=completion_content,
+                                namespace="project:agentX",
+                                memory_type="note",
+                                source_tier="human_confirmed",
+                                summary=f"probe completed {marker}",
+                                tags=["aca", "doctor", "probe", "governance"],
+                                metadata=completion_metadata,
+                            )
+                        else:
+                            memory.write_structured(
+                                content=completion_content,
+                                namespace="project:agentX",
+                                entry_type="note",
+                                summary=f"probe completed {marker}",
+                                tags=["aca", "doctor", "probe", "governance"],
+                                metadata=completion_metadata,
+                            )
+                        detail += " | governance record written with evidence_id"
+                    except Exception:
+                        pass  # non-fatal, main probe succeeded
                 else:
                     return "memory_backend (ACA)", False, f"backend={backend} store={store} path={path} | write+read probe: write succeeded but marker not found in search"
             except Exception as exc:
