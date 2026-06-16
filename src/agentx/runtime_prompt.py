@@ -98,7 +98,10 @@ IMPORTANT: When creating a NEW file, always use write_file. Never use apply_patc
 - task_update: {"task_id":1,"status":"done"} — update task status
 - task_list: {} — show all tasks
 - memory_search: {"query":"keyword", "namespace":"project:xxx"} — search Memory Hall (ACA namespaces supported)
-- memory_write: {"content":"...", "namespace":"project:xxx", "tier":"llm_derived|human_confirmed|raw_source", "memory_type":"lesson|decision|fact|..."} — write to Memory Hall. **ACA 治理**：使用 tier 標記來源（llm_derived 為模型產生，human_confirmed 需人類確認）。Anti-Ouroboros 規則：llm_derived 記憶不可在無 human intervention 下 supersede 另一 llm_derived 記憶。優先使用 write_aca 路徑。"""
+- memory_write: {"content":"...", "namespace":"project:xxx", "tier":"llm_derived|human_confirmed|raw_source", "memory_type":"lesson|decision|fact|..."} — write to Memory Hall. **ACA 治理**：使用 tier 標記來源（llm_derived 為模型產生，human_confirmed 需人類確認）。Anti-Ouroboros 規則：llm_derived 記憶不可在無 human intervention 下 supersede 另一 llm_derived 記憶。優先使用 write_aca 路徑。
+- memory_tier_upgrade: {"memory_id": "...", "new_tier": "human_confirmed", "confirmed_by": "human:maki", "evidence_ids": [...] } — ACA L2 操作，將 llm_derived 升級為 human_confirmed（需人類確認）。
+- memory_audit: {"memory_id": "..."} — 讀取記憶的 append-only 治理事件紀錄（ACA 相容）。
+目前 memory_backend = memhall（相容舊後端）或 amh（官方 Agent Memory Hall 參考實作，完整 ACA L1-3 治理）。設定可透過 .agentx/config.toml 或 AGENTX_MEMORY_BACKEND 切換。"""
 
 
 def _base_capabilities_limits() -> str:
