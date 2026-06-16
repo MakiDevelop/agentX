@@ -722,6 +722,7 @@ def print_config(
     table.add_column("Value")
     table.add_row("model", settings.model)
     table.add_row("ollama_url", settings.ollama_url)
+    table.add_row("memory_backend", getattr(settings, "memory_backend", "memhall"))
     table.add_row("memory_hall_url", settings.memory_hall_url)
     table.add_row("memory_hall_token", "set" if settings.memory_hall_token else "missing")
     table.add_row("workspace", str(settings.workspace))
