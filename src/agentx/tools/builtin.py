@@ -277,19 +277,18 @@ class MemoryWriteTool:
     def run(self, args: dict[str, Any]) -> str:
         tier = args.get("tier")
         memory_type = args.get("memory_type") or args.get("type")
+
         if tier or memory_type:
-            # Prefer ACA path when tier or memory_type supplied
-            try:
-                resp = self.memory.write_aca(
-                    content=args["content"],
-                    namespace=args.get("namespace", "agent:agentx"),
-                    source_tier=tier or "llm_derived",
-                    memory_type=memory_type or "note",
-                )
-                return f"aca_write ok (tier={tier or 'llm_derived'}) entry_id={resp.get('entry_id', 'n/a')}"
-            except Exception:
-                # fall through to legacy on error
-                pass
+            # Explicit ACA request → must use write_aca, fail closed on error (Codex Medium)
+            resp = self.memory.write_aca(
+                content=args["content"],
+                namespace=args.get("namespace", "agent:agentx"),
+                source_tier=tier or "llm_derived",
+                memory_type=memory_type or "note",
+            )
+            return f"aca_write ok (tier={tier or 'llm_derived'}) entry_id={resp.get('entry_id', 'n/a')}"
+
+        # Pure legacy path (no tier/memory_type requested)
         return self.memory.write(
             content=args["content"],
             namespace=args.get("namespace", "agent:agentx"),

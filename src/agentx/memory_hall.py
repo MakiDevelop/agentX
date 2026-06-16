@@ -96,21 +96,30 @@ class MemoryHallClient:
         if source_tier not in ACA_SOURCE_TIERS:
             raise ValueError(f"source_tier must be one of {ACA_SOURCE_TIERS}, got {source_tier}")
         if memory_type not in ACA_MEMORY_TYPES:
-            # allow graceful fallback
-            memory_type = "note"
+            # Fail closed (per ACA spirit + Codex Low feedback)
+            raise ValueError(f"memory_type must be one of {ACA_MEMORY_TYPES}, got {memory_type}")
 
         now = datetime.now().isoformat(timespec="seconds") + "Z"
         content_hash = self._compute_content_hash(content)
         summary = (summary or (content.splitlines()[0][:160] if content else ""))[:160]
 
+        source_type = "agent" if "agent" in (agent_id or "") else "human"
+        source_ref = f"agentx:{datetime.now().strftime('%Y-%m-%d')}"
+
         aca_metadata = {
             "aca_version": "0.1",
+            # Flat keys for AMH memhall adapter compatibility (Codex Medium fix)
+            "source_type": source_type,
+            "source_ref": source_ref,
+            "source_tier": source_tier,
+            # Rich nested form for full ACA consumers
             "source": {
-                "type": "agent" if "agent" in (agent_id or "") else "human",
-                "ref": f"agentx:{datetime.now().strftime('%Y-%m-%d')}",
+                "type": source_type,
+                "ref": source_ref,
                 "tier": source_tier,
             },
             "content_hash": content_hash,
+            "hash_algorithm": "sha256",  # explicit; AMH native prefers BLAKE3
             "created_at": now,
             "created_by": created_by or agent_id,
             **(metadata or {}),
