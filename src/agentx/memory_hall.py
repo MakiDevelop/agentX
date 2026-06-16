@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import shutil
+import subprocess
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -301,3 +305,157 @@ class MemoryHallClient:
             return events
         except Exception:
             return []
+
+
+class AmhClient:
+    """
+    ACA-conformant client using the official AMH reference implementation
+    (npx @chibakuma/agent-memory-hall or global `amh` CLI).
+    This makes agentX a proper participant in Agent Civilization Architecture
+    when memory_backend=amh.
+
+    Uses subprocess to call `amh` (preferred) or full npx command.
+    Supports the same interface as MemoryHallClient for drop-in replacement
+    in bootstrap, tools, loop, etc.
+    """
+
+    def __init__(self, store: str = "json", store_path: str | None = None, timeout: float = 30.0) -> None:
+        self.timeout = timeout
+        self._amh_cmd = self._resolve_amh_cmd()
+        self.store = store
+        self.store_path = store_path or str(Path(".agentx/amh/memory.json").resolve())
+        # Ensure dir for json store
+        if store == "json":
+            Path(self.store_path).parent.mkdir(parents=True, exist_ok=True)
+
+    def _resolve_amh_cmd(self) -> list[str]:
+        if shutil.which("amh"):
+            return ["amh"]
+        return ["npx", "@chibakuma/agent-memory-hall"]
+
+    def _run_amh(self, *args: str, input_text: str | None = None) -> str:
+        cmd = self._amh_cmd + list(args)
+        if self.store == "json":
+            cmd += ["--store", "json", "--path", self.store_path]
+        result = subprocess.run(
+            cmd,
+            input=input_text.encode() if input_text else None,
+            capture_output=True,
+            timeout=self.timeout,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"amh command failed: {result.stderr.decode(errors='replace')}")
+        return result.stdout.decode(errors="replace")
+
+    def search(self, query: str, namespace: str = "shared", limit: int = 5) -> str:
+        # AMH CLI read supports ns filter; we do post-filter for query for simplicity
+        out = self._run_amh("read", "--ns", namespace, "--limit", str(limit))
+        # Simple text filter for query (real AMH would have better search)
+        lines = []
+        for line in out.splitlines():
+            if query.lower() in line.lower():
+                lines.append(line)
+            if len(lines) >= limit:
+                break
+        return "\n".join(lines) or out[:2000]
+
+    def write(self, content: str, namespace: str = "agent:agentx") -> str:
+        # Use ACA-shaped if possible, but CLI accepts text
+        entry_type = "handoff" if "handoff" in content.lower() else "note"
+        out = self._run_amh(
+            "write",
+            "--agent", "agentx",
+            "--ns", namespace,
+            "--type", entry_type,
+            content,
+        )
+        return out.strip()
+
+    def write_structured(
+        self,
+        *,
+        content: str,
+        namespace: str,
+        entry_type: str,
+        summary: str,
+        tags: list[str],
+        references: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        agent_id: str = "agentx",
+    ) -> dict[str, Any]:
+        # For AMH, we can pass metadata in a structured way via the content or use write with extra
+        # For now, embed ACA metadata in the written content as JSON prefix (AMH stores it)
+        payload = {
+            "content": content,
+            "summary": summary,
+            "tags": tags,
+            "references": references or [],
+            "metadata": {"aca": metadata or {}},
+        }
+        text = json.dumps(payload, ensure_ascii=False)
+        out = self._run_amh(
+            "write",
+            "--agent", agent_id,
+            "--ns", namespace,
+            "--type", entry_type,
+            text,
+        )
+        # Return synthetic dict
+        return {"status": "ok", "output": out.strip(), "memory_id": "amh-cli"}
+
+    def tier_upgrade(
+        self,
+        memory_id: str,
+        *,
+        new_tier: str = "human_confirmed",
+        confirmed_by: str,
+        method: str = "human_review",
+        evidence_ids: list[str] | None = None,
+        namespace: str | None = None,
+    ) -> dict[str, Any]:
+        # Use AMH tier-upgrade if available in newer version, fallback to write
+        try:
+            out = self._run_amh(
+                "tier-upgrade",
+                "--id", memory_id,
+                "--tier", new_tier,
+                "--by", confirmed_by,
+            )
+            return {"status": "ok", "output": out}
+        except Exception:
+            # Fallback to writing a governance record
+            content = f"Tier upgrade: {memory_id} -> {new_tier} by {confirmed_by} ({method}) evidence={evidence_ids or []}"
+            return self.write_structured(
+                content=content,
+                namespace=namespace or "project:agentX",
+                entry_type="tier_upgrade",
+                summary=f"Upgrade {memory_id} to {new_tier}",
+                tags=["aca", "tier", new_tier],
+                metadata={
+                    "target_memory_id": memory_id,
+                    "new_tier": new_tier,
+                    "trust_proof": {
+                        "confirmed_by": confirmed_by,
+                        "method": method,
+                        "evidence_ids": evidence_ids or [],
+                    },
+                },
+            )
+
+    def audit(self, memory_id: str) -> list[dict[str, Any]]:
+        # Best effort: read recent records and filter
+        out = self._run_amh("read", "--limit", "50")
+        events = []
+        for line in out.splitlines():
+            if memory_id in line:
+                events.append({"event": "log", "data": line})
+        return events or [{"event": "no_audit", "data": "AMH CLI audit limited; use full AMH for rich logs"}]
+
+    # Minimal compatibility for get / list if needed by existing code
+    def get(self, entry_id: str) -> dict[str, Any]:
+        return {"memory_id": entry_id, "note": "AMH CLI get is limited"}
+
+    def list_entries(self, namespace: str, entry_type: str | None = None, tags: list[str] | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        out = self._run_amh("read", "--ns", namespace, "--limit", str(limit))
+        return [{"content": line} for line in out.splitlines()[:limit]]
