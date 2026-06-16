@@ -717,7 +717,26 @@ def print_config(
     namespace: str,
     mode: str,
     approval_policy: ApprovalPolicy,
+    memory: "MemoryHallClient | None" = None,
 ) -> None:
+    latest_probe_expires = None  # for /status posture + table
+    if getattr(settings, "memory_backend", "memhall") == "amh" and memory is not None:
+        try:
+            entries = memory.list_entries(
+                namespace="project:agentX",
+                entry_type="note",
+                tags=["aca", "doctor", "probe"],
+                limit=5,
+            )
+            for e in entries or []:
+                if isinstance(e, dict):
+                    e_str = str(e)
+                    if "aca-doctor-probe-write" in e_str:
+                        latest_probe_expires = e.get("valid_until") or (e.get("metadata") or {}).get("valid_until")
+                        if latest_probe_expires:
+                            break
+        except Exception:
+            pass
     table = Table(title="agentX config", show_header=False)
     table.add_column("Key", style="cyan")
     table.add_column("Value")
@@ -745,6 +764,9 @@ def print_config(
     table.add_row("config_file_auto_handoff", str(project_config.auto_handoff))
     table.add_row("config_file_memory_amh_store", str(project_config.memory_amh_store))
     table.add_row("config_file_memory_amh_path", str(project_config.memory_amh_path))
+
+    if latest_probe_expires:
+        table.add_row("最新 probe entry 過期時間 (ACA)", latest_probe_expires)
 
     # MT22 後：只顯示新多任務清單
     current_tasks = load_tasks(settings.workspace)
@@ -815,7 +837,11 @@ def print_doctor(
     backend = getattr(settings, "memory_backend", "memhall")
     if backend == "amh":
         store = getattr(settings, "memory_amh_store", "json")
-        posture.add_row("Memory Hall", f"跨 session 記憶與交接已啟用（/handoff /resume） | ACA amh backend (store={store})")
+        mh_text = f"跨 session 記憶與交接已啟用（/handoff /resume） | ACA amh backend (store={store})"
+        probe_exp = locals().get("latest_probe_expires")
+        if probe_exp:
+            mh_text += f" | 最近 probe entry 過期時間: {probe_exp}"
+        posture.add_row("Memory Hall", mh_text)
     else:
         posture.add_row("Memory Hall", "跨 session 記憶與交接已啟用（/handoff /resume）")
     posture.add_row("建議", "想更自主就輸入 /approval auto；想最安全就保持 ask 或 off")
@@ -1967,7 +1993,7 @@ def shell(
         """查看或設定專案 config"""
         if prompt == "/config":
             transcript.write("slash_command", {"command": prompt})
-            print_config(state.settings, state.namespace, state.mode, approval_policy)
+            print_config(state.settings, state.namespace, state.mode, approval_policy, memory=getattr(state, "memory", None))
             return
 
         if prompt.startswith("/config set "):
@@ -2246,7 +2272,7 @@ def shell(
                 continue
             if prompt == "/config":
                 transcript.write("slash_command", {"command": prompt})
-                print_config(state.settings, state.namespace, state.mode, approval_policy)
+                print_config(state.settings, state.namespace, state.mode, approval_policy, memory=getattr(state, "memory", None))
                 continue
             if prompt.startswith("/config set "):
                 parts = prompt.split(maxsplit=3)
