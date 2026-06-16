@@ -721,7 +721,9 @@ def print_config(
 ) -> None:
     latest_probe_expires = None  # for /status posture + table
     latest_probe_audit = "N/A"
+    client_type = "N/A"
     if getattr(settings, "memory_backend", "memhall") == "amh" and memory is not None:
+        client_type = type(memory).__name__
         try:
             entries = memory.list_entries(
                 namespace="project:agentX",
@@ -758,6 +760,8 @@ def print_config(
     if getattr(settings, "memory_backend", "memhall") == "amh":
         table.add_row("memory_amh_store", getattr(settings, "memory_amh_store", "json"))
         table.add_row("memory_amh_path", getattr(settings, "memory_amh_path", "(default)"))
+        if client_type != "N/A":
+            table.add_row("記憶 client 類型 (ACA)", client_type)
     table.add_row("memory_hall_url", settings.memory_hall_url)
     table.add_row("memory_hall_token", "set" if settings.memory_hall_token else "missing")
     table.add_row("workspace", str(settings.workspace))
@@ -851,7 +855,8 @@ def print_doctor(
     backend = getattr(settings, "memory_backend", "memhall")
     if backend == "amh":
         store = getattr(settings, "memory_amh_store", "json")
-        mh_text = f"跨 session 記憶與交接已啟用（/handoff /resume） | ACA amh backend (store={store})"
+        client = locals().get("client_type") or "AmhClient"
+        mh_text = f"跨 session 記憶與交接已啟用（/handoff /resume） | ACA amh backend (store={store}, client={client})"
         probe_exp = locals().get("latest_probe_expires")
         if probe_exp:
             mh_text += f" | 最近 probe entry 過期時間: {probe_exp}"
