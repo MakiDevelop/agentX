@@ -483,6 +483,29 @@ def cancel_jobs(
     return f"cancelled queued jobs: {ids}"
 
 
+def handle_keyboard_interrupt(
+    job_queue: PromptJobQueue,
+    current_cancel: threading.Event | None = None,
+) -> str | None:
+    """Return an interrupt message, or None when Ctrl+C should exit the shell."""
+    if job_queue.current is not None:
+        if current_cancel is not None:
+            current_cancel.set()
+        cancelled = job_queue.cancel_pending()
+        suffix = ""
+        if cancelled:
+            ids = ", ".join(str(job.id) for job in cancelled)
+            suffix = f"; cancelled queued jobs: {ids}"
+        return f"cancelling running job: {job_queue.current.id}{suffix}"
+
+    cancelled = job_queue.cancel_pending()
+    if cancelled:
+        ids = ", ".join(str(job.id) for job in cancelled)
+        return f"cancelled queued jobs: {ids}"
+
+    return None
+
+
 def print_sessions(settings: Settings) -> None:
     table = Table(title="agentX sessions", show_header=True, header_style="bold")
     table.add_column("Name", style="cyan")
@@ -2296,7 +2319,11 @@ def shell(
                 else:
                     with patch_stdout(raw=True):
                         prompt = prompt_session.prompt("agentX: ").strip()
-            except (EOFError, KeyboardInterrupt):
+            except KeyboardInterrupt:
+                interrupt_message = handle_keyboard_interrupt(job_queue, current_cancel)
+                if interrupt_message is not None:
+                    print_raw(f"\n{interrupt_message}")
+                    continue
                 wait_for_prompt_worker()
                 if history and state.settings.auto_handoff:
                     fresh_tasks, fresh_task_summary = task_snapshot()
@@ -2312,6 +2339,26 @@ def shell(
                     )
                     transcript.write("handoff", {"auto": True, "result": message})
                     print_raw(f"\n{message}")
+                transcript.write("session_end", {"reason": "keyboard_interrupt", "forced": False})
+                console.print("\nbye")
+                break
+            except EOFError:
+                wait_for_prompt_worker()
+                if history and state.settings.auto_handoff:
+                    fresh_tasks, fresh_task_summary = task_snapshot()
+                    message = write_handoff(
+                        tools,
+                        settings=state.settings,
+                        namespace=state.namespace,
+                        mode=state.mode,
+                        history=history,
+                        transcript=transcript,
+                        tasks=fresh_tasks,
+                        task_summary=fresh_task_summary,
+                    )
+                    transcript.write("handoff", {"auto": True, "result": message})
+                    print_raw(f"\n{message}")
+                transcript.write("session_end", {"reason": "eof", "forced": False})
                 console.print("\nbye")
                 break
 

@@ -1,7 +1,7 @@
 import threading
 
+from agentx.cli import cancel_jobs, handle_keyboard_interrupt
 from agentx.jobs import PromptJobQueue
-from agentx.cli import cancel_jobs
 
 
 def test_prompt_job_queue_cancel_pending_by_id():
@@ -56,3 +56,34 @@ def test_cancel_current_sets_cancel_event_for_running_job():
 
     assert result == f"cancelling running job: {submitted.id}"
     assert cancel_event.is_set()
+
+
+def test_keyboard_interrupt_cancels_running_and_queued_jobs():
+    jobs = PromptJobQueue()
+    running = jobs.submit("running")
+    queued = jobs.submit("queued")
+    jobs.get()
+    cancel_event = threading.Event()
+
+    result = handle_keyboard_interrupt(jobs, cancel_event)
+
+    assert result == f"cancelling running job: {running.id}; cancelled queued jobs: {queued.id}"
+    assert cancel_event.is_set()
+    assert jobs.pending() == []
+
+
+def test_keyboard_interrupt_cancels_queued_jobs_before_exit():
+    jobs = PromptJobQueue()
+    first = jobs.submit("first")
+    second = jobs.submit("second")
+
+    result = handle_keyboard_interrupt(jobs, threading.Event())
+
+    assert result == f"cancelled queued jobs: {first.id}, {second.id}"
+    assert jobs.pending() == []
+
+
+def test_keyboard_interrupt_exits_when_idle():
+    jobs = PromptJobQueue()
+
+    assert handle_keyboard_interrupt(jobs, threading.Event()) is None
