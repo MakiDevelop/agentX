@@ -66,6 +66,7 @@ agentx handoff-inspect tests/fixtures/headless_result_failure.json --output-form
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --next-prompt "照上一輪繼續"
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --next-prompt-file .agentx/handoff/next.md
+agentx handoff-inspect tests/fixtures/headless_result_failure.json --briefing-output .agentx/handoff/next.md --next-prompt-file .agentx/handoff/next.md --field resume_command
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --resume-output-format jsonl
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --use-payload-exit-code
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --require-handoff
@@ -86,6 +87,10 @@ the requested inspection output before exiting.
 `--next-prompt-file PATH` rewrites the generated `resume_command` to use
 `--prompt-file PATH` instead of `-p '<next prompt>'`; it is mutually exclusive
 with `--next-prompt`.
+`--briefing-output PATH` writes a deterministic Markdown takeover briefing inside
+the current workspace and refuses to overwrite an existing file. It is useful
+with `--next-prompt-file PATH` so the printed `resume_command` points at the same
+artifact that was just created.
 `--resume-output-format json|jsonl` rewrites the generated `resume_command`
 output mode. Use `jsonl` when the next runner expects event envelopes.
 

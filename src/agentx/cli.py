@@ -1560,6 +1560,80 @@ def format_handoff_inspect_plain(payload: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
+def format_handoff_briefing_markdown(payload: dict[str, object]) -> str:
+    def scalar(value: object) -> str:
+        if isinstance(value, dict):
+            return json.dumps(value, ensure_ascii=False, sort_keys=True)
+        if value is None:
+            return ""
+        return str(value)
+
+    def markdown_list(values: object) -> list[str]:
+        if isinstance(values, list) and values:
+            return [f"- {scalar(value)}" for value in values]
+        return ["- (none)"]
+
+    lines = [
+        "# agentX Handoff Briefing",
+        "",
+        f"Schema Version: {scalar(payload.get('schema_version'))}",
+        f"Status: {scalar(payload.get('status'))}",
+        f"Termination: {scalar(payload.get('termination'))}",
+        f"Exit Code: {scalar(payload.get('exit_code'))}",
+        f"Needs Handoff: {str(bool(payload.get('needs_handoff'))).lower()}",
+        f"Session Path: {scalar(payload.get('session_path'))}",
+        f"Resume Session: {scalar(payload.get('resume_session'))}",
+        "",
+        "## Resume Command",
+        "",
+        "```bash",
+        scalar(payload.get("resume_command")),
+        "```",
+        "",
+        "## Failing Tools",
+        *markdown_list(payload.get("failing_tools")),
+        "",
+        "## Pending Verifies",
+        *markdown_list(payload.get("pending_verifies")),
+        "",
+        "## Recovery Actions",
+        *markdown_list(payload.get("recovery_actions")),
+        "",
+        "## Primary Recovery",
+        "",
+        scalar(payload.get("primary_recovery")) or "(none)",
+        "",
+        "## Recovery Checklist",
+        *markdown_list(payload.get("recovery_checklist")),
+        "",
+        "## Next Steps",
+        *markdown_list(payload.get("next_steps")),
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def resolve_handoff_briefing_output(workspace: Path, value: str | None) -> Path | None:
+    if value is None:
+        return None
+    try:
+        target = resolve_inside_workspace(workspace, value)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if target.exists():
+        raise typer.BadParameter(f"briefing output already exists: {value}")
+    if target.name in {"", ".", ".."}:
+        raise typer.BadParameter(f"invalid briefing output path: {value}")
+    return target
+
+
+def write_handoff_briefing_output(path: Path | None, payload: dict[str, object]) -> None:
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(format_handoff_briefing_markdown(payload), encoding="utf-8")
+
+
 def handoff_inspect_field_payload(payload: dict[str, object], field: str) -> dict[str, object]:
     normalized = field.strip()
     if normalized not in payload:
@@ -2691,6 +2765,7 @@ def handoff_inspect(
     next_prompt: str | None = typer.Option(None, "--next-prompt", help="Replace the resume command placeholder with this prompt."),
     next_prompt_file: str | None = typer.Option(None, "--next-prompt-file", help="Replace the resume command placeholder with --prompt-file PATH."),
     resume_output_format: str | None = typer.Option(None, "--resume-output-format", help="Rewrite resume_command output mode: json or jsonl."),
+    briefing_output: str | None = typer.Option(None, "--briefing-output", help="Write a Markdown handoff briefing inside the current workspace."),
     use_payload_exit_code: bool = typer.Option(
         False,
         "--use-payload-exit-code",
@@ -2717,6 +2792,7 @@ def handoff_inspect(
     payload = apply_handoff_next_prompt(payload, next_prompt)
     payload = apply_handoff_next_prompt_file(payload, next_prompt_file)
     payload = apply_handoff_resume_output_format(payload, resume_output_format)
+    write_handoff_briefing_output(resolve_handoff_briefing_output(Path.cwd(), briefing_output), payload)
     exit_code = handoff_inspect_exit_code(payload, use_payload_exit_code=use_payload_exit_code)
     if require_handoff and not handoff_takeover_ready(payload):
         exit_code = 1

@@ -619,6 +619,104 @@ def test_handoff_inspect_next_prompt_file_jsonl_output() -> None:
     )
 
 
+def test_format_handoff_briefing_markdown_includes_takeover_fields() -> None:
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    payload = cli.inspect_headless_handoff_payload(cli.load_headless_payload_file(fixture))
+    payload = cli.apply_handoff_next_prompt_file(payload, ".agentx/handoff/next.md")
+    briefing = cli.format_handoff_briefing_markdown(payload)
+
+    assert briefing.startswith("# agentX Handoff Briefing\n")
+    assert "Schema Version: agentx.headless_result.v1" in briefing
+    assert "Needs Handoff: true" in briefing
+    assert "```bash\nagentx --prompt-file .agentx/handoff/next.md --agent --resume-session contract.session.jsonl --json\n```" in briefing
+    assert "## Recovery Checklist" in briefing
+    assert "- Run the smallest targeted verification" in briefing
+
+
+def test_handoff_inspect_briefing_output_writes_markdown(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = CliRunner()
+    fixture = Path("tests/fixtures/headless_result_failure.json").resolve()
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            str(fixture),
+            "--briefing-output",
+            "artifacts/handoff.md",
+            "--next-prompt-file",
+            "artifacts/handoff.md",
+            "--field",
+            "resume_command",
+        ],
+    )
+    briefing = tmp_path / "artifacts" / "handoff.md"
+
+    assert result.exit_code == 0
+    assert result.output == (
+        "agentx --prompt-file artifacts/handoff.md --agent --resume-session contract.session.jsonl --json\n"
+    )
+    assert briefing.is_file()
+    content = briefing.read_text(encoding="utf-8")
+    assert "# agentX Handoff Briefing" in content
+    assert "agentx --prompt-file artifacts/handoff.md --agent --resume-session contract.session.jsonl --json" in content
+    assert "## Next Steps" in content
+
+
+def test_handoff_inspect_briefing_output_rejects_existing_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = CliRunner()
+    fixture = Path("tests/fixtures/headless_result_failure.json").resolve()
+    monkeypatch.chdir(tmp_path)
+    output = tmp_path / "artifacts" / "handoff.md"
+    output.parent.mkdir()
+    output.write_text("existing", encoding="utf-8")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            str(fixture),
+            "--briefing-output",
+            "artifacts/handoff.md",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "briefing output already exists" in result.output
+    assert output.read_text(encoding="utf-8") == "existing"
+
+
+def test_handoff_inspect_briefing_output_rejects_workspace_escape(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = CliRunner()
+    fixture = Path("tests/fixtures/headless_result_failure.json").resolve()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            str(fixture),
+            "--briefing-output",
+            "../handoff.md",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "escapes workspace" in result.output
+
+
 def test_handoff_inspect_resume_output_format_jsonl_updates_resume_command() -> None:
     runner = CliRunner()
     result = runner.invoke(

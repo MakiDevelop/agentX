@@ -74,6 +74,7 @@
 - [x] `agentx handoff-inspect --require-handoff` 可把 result artifact 當成接手 gate：需要 `needs_handoff=true` 與 `resume_command`，否則 exit 1；可搭配 `--field`、`--output-format jsonl` 與 `--use-payload-exit-code`。
 - [x] `agentx handoff-inspect --require-schema-version` 可拒絕舊版或未知 headless result payload contract；inspection output 也會顯示 `schema_version`。
 - [x] `agentx handoff-inspect --next-prompt-file PATH` 可把 `resume_command` 的 `-p '<next prompt>'` 改成 `--prompt-file PATH`，方便 Codex/Grok runner 用長 briefing 接手。
+- [x] `agentx handoff-inspect --briefing-output PATH` 可把 deterministic 接手摘要寫成 workspace 內 Markdown artifact，拒絕覆寫與 workspace escape；可搭配 `--next-prompt-file PATH` 讓 resume command 指向同一份 briefing。
 - [x] `agentx handoff-inspect --resume-output-format json|jsonl` 可改寫接手命令的輸出格式；JSONL runner 可直接產生 `--output-format jsonl` 續跑命令。
 - [x] `--dry-run` 可驗證 headless prompt/workspace/config/override 解析結果，不呼叫模型、不跑工具、不寫 session；支援 JSON 輸出。
 - [x] `--no-memory` 可在單次 headless run 關閉 Memory Hall / AMH 讀寫；工具介面保留但使用 no-op NullMemoryClient，適合 CI、多代理隔離與不可污染記憶的任務。
