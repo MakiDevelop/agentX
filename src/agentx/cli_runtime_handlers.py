@@ -2,17 +2,21 @@
 
 These implement the real interactive-shell logic for a small set of
 commands (``/plan``, ``/execute``, ``/mode``, plus read-only tool-backed
-``/files``, ``/read``, ``/search``, ``/git``, ``/diff``, and low-risk
-inspection handlers ``/status``, ``/sessions``, ``/jobs``, and the
-read-only ``/task`` empty/status/list branch). Nested handlers inside
-``cli.run_shell()`` should delegate here so unit tests can exercise the
-same path without driving the full interactive loop.
+``/files``, ``/read``, ``/search``, ``/git``, ``/diff``, low-risk
+inspection handlers ``/status``, ``/sessions``, ``/jobs``, the read-only
+``/task`` empty/status/list branch, and pure info/display handlers
+``/help``, ``/guide``, ``/workflows``, ``/tools``, ``/context``,
+``/history``, ``/transcript``). Nested handlers inside ``cli.run_shell()``
+should delegate here so unit tests can exercise the same path without
+driving the full interactive loop.
 
 Do not confuse with ``cli_slash_shims`` — those are simplified test-only
 dispatch stubs and are *not* the runtime shell path.
 
 Side-effect branches (``/cancel``, ``/task add|update|done|clear``,
-``/apply``, ``/commit``, ``/run``, ``/docker``) stay in ``cli.py``.
+``/apply``, ``/commit``, ``/run``, ``/docker``, ``/clear``, ``/compact``,
+``/resume``, ``/handoff``, ``/memory``, ``/fetch``, ``/attach``) stay
+in ``cli.py``.
 """
 
 from __future__ import annotations
@@ -361,3 +365,107 @@ def handle_task_readonly(
     if tasks:
         emit("[dim]提示：使用 /task update <id> done|in_progress [notes] 來更新[/dim]")
     return True
+
+
+# --- pure info / display handlers -----------------------------------------
+
+
+def handle_help(
+    state: Any,
+    prompt: str,
+    *,
+    transcript: Any,
+    print_slash_help: Callable[[], None],
+) -> None:
+    """Show slash-command help; rendering stays in the shell layer."""
+    _ = state
+    transcript.write("slash_command", {"command": prompt})
+    print_slash_help()
+
+
+def handle_guide(
+    state: Any,
+    prompt: str,
+    *,
+    transcript: Any,
+    print_guide: Callable[[], None],
+    mark_guide_hint_seen: Callable[[Any], None],
+) -> None:
+    """Show 60-second guide and mark the first-run hint as seen.
+
+    ``mark_guide_hint_seen`` is injected so this module does not import
+    ``project_state`` (or ``cli``); nested shell code passes the real
+    ``mark_guide_hint_seen(state.settings.workspace)`` callback.
+    """
+    transcript.write("slash_command", {"command": prompt})
+    mark_guide_hint_seen(state.settings.workspace)
+    print_guide()
+
+
+def handle_workflows(
+    state: Any,
+    prompt: str,
+    *,
+    transcript: Any,
+    print_workflows: Callable[[], None],
+) -> None:
+    """Show practical workflow recipes."""
+    _ = state
+    transcript.write("slash_command", {"command": prompt})
+    print_workflows()
+
+
+def handle_tools(
+    state: Any,
+    prompt: str,
+    *,
+    transcript: Any,
+    tools: Any,
+    print_tools: Callable[[Any], None],
+) -> None:
+    """List available tools (risk grouping stays in ``print_tools``)."""
+    _ = state
+    transcript.write("slash_command", {"command": prompt})
+    print_tools(tools)
+
+
+def handle_context(
+    state: Any,
+    prompt: str,
+    *,
+    transcript: Any,
+    agent_session: Any,
+    chat_messages: Any,
+    print_context: Callable[[Any, Any], None],
+) -> None:
+    """Show agent context usage; caller resolves which session to pass."""
+    _ = state
+    transcript.write("slash_command", {"command": prompt})
+    print_context(agent_session, chat_messages)
+
+
+def handle_history(
+    state: Any,
+    prompt: str,
+    *,
+    transcript: Any,
+    history: Any,
+    print_history: Callable[[Any], None],
+) -> None:
+    """Show short shell interaction history."""
+    _ = state
+    transcript.write("slash_command", {"command": prompt})
+    print_history(history)
+
+
+def handle_transcript(
+    state: Any,
+    prompt: str,
+    *,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Emit the current JSONL transcript path."""
+    _ = state
+    transcript.write("slash_command", {"command": prompt})
+    emit(str(transcript.path))

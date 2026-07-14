@@ -1468,24 +1468,36 @@ def shell(
     register_handler("/status", handle_status)
 
     def handle_help(state: ShellState, prompt: str):
-        """顯示 slash command 說明"""
-        transcript.write("slash_command", {"command": prompt})
-        print_slash_help()
+        """顯示 slash command 說明 — delegates to runtime handler."""
+        _runtime_handlers.handle_help(
+            state,
+            prompt,
+            transcript=transcript,
+            print_slash_help=print_slash_help,
+        )
 
     register_handler("/help", handle_help)
 
     def handle_guide(state: ShellState, prompt: str):
-        """顯示 60 秒快速導覽"""
-        transcript.write("slash_command", {"command": prompt})
-        mark_guide_hint_seen(state.settings.workspace)
-        print_guide()
+        """顯示 60 秒快速導覽 — delegates to runtime handler."""
+        _runtime_handlers.handle_guide(
+            state,
+            prompt,
+            transcript=transcript,
+            print_guide=print_guide,
+            mark_guide_hint_seen=mark_guide_hint_seen,
+        )
 
     register_handler("/guide", handle_guide)
 
     def handle_workflows(state: ShellState, prompt: str):
-        """顯示常用 workflow recipe"""
-        transcript.write("slash_command", {"command": prompt})
-        print_workflows()
+        """顯示常用 workflow recipe — delegates to runtime handler."""
+        _runtime_handlers.handle_workflows(
+            state,
+            prompt,
+            transcript=transcript,
+            print_workflows=print_workflows,
+        )
 
     register_handler("/workflows", handle_workflows)
 
@@ -1517,9 +1529,13 @@ def shell(
     register_handler("/sessions", handle_sessions)
 
     def handle_transcript(state: ShellState, prompt: str):
-        """顯示本輪 JSONL transcript 檔案路徑"""
-        transcript.write("slash_command", {"command": prompt})
-        console.print(str(transcript.path))
+        """顯示本輪 JSONL transcript 檔案路徑 — delegates to runtime handler."""
+        _runtime_handlers.handle_transcript(
+            state,
+            prompt,
+            transcript=transcript,
+            emit=console.print,
+        )
 
     register_handler("/transcript", handle_transcript)
 
@@ -1547,16 +1563,27 @@ def shell(
     register_handler("/init", handle_init)
 
     def handle_tools(state: ShellState, prompt: str):
-        """列出目前可用的工具與說明"""
-        transcript.write("slash_command", {"command": prompt})
-        print_tools(tools)
+        """列出目前可用的工具與說明 — delegates to runtime handler."""
+        _runtime_handlers.handle_tools(
+            state,
+            prompt,
+            transcript=transcript,
+            tools=tools,
+            print_tools=print_tools,
+        )
 
     register_handler("/tools", handle_tools)
 
     def handle_context(state: ShellState, prompt: str):
-        """顯示目前 agent context 使用情況"""
-        transcript.write("slash_command", {"command": prompt})
-        print_context(state.agent_session or agent_session, chat_messages)
+        """顯示目前 agent context 使用情況 — delegates to runtime handler."""
+        _runtime_handlers.handle_context(
+            state,
+            prompt,
+            transcript=transcript,
+            agent_session=state.agent_session or agent_session,
+            chat_messages=chat_messages,
+            print_context=print_context,
+        )
 
     register_handler("/context", handle_context)
 
@@ -1570,9 +1597,14 @@ def shell(
     register_handler("/compact", handle_compact)
 
     def handle_history(state: ShellState, prompt: str):
-        """顯示本輪 shell 互動歷史"""
-        transcript.write("slash_command", {"command": prompt})
-        print_history(history)
+        """顯示本輪 shell 互動歷史 — delegates to runtime handler."""
+        _runtime_handlers.handle_history(
+            state,
+            prompt,
+            transcript=transcript,
+            history=history,
+            print_history=print_history,
+        )
 
     register_handler("/history", handle_history)
 

@@ -2,8 +2,9 @@
 
 These tests exercise ``agentx.cli_runtime_handlers`` — the real interactive
 logic for /plan, /execute, /mode, /files, /read, /search, /git, /diff,
-and low-risk inspection handlers /status, /sessions, /jobs, /task readonly —
-not the simplified ``cli_slash_shims``.
+low-risk inspection handlers /status, /sessions, /jobs, /task readonly,
+and pure info/display handlers /help, /guide, /workflows, /tools,
+/context, /history, /transcript — not the simplified ``cli_slash_shims``.
 """
 
 from __future__ import annotations
@@ -15,10 +16,14 @@ from typing import Any
 from agentx.cli import ShellState, format_plan_status
 from agentx.cli_runtime_handlers import (
     EXECUTE_SYSTEM_MESSAGE,
+    handle_context,
     handle_diff,
     handle_execute,
     handle_files,
     handle_git,
+    handle_guide,
+    handle_help,
+    handle_history,
     handle_jobs,
     handle_mode,
     handle_plan,
@@ -27,6 +32,9 @@ from agentx.cli_runtime_handlers import (
     handle_sessions,
     handle_status,
     handle_task_readonly,
+    handle_tools,
+    handle_transcript,
+    handle_workflows,
 )
 from agentx.protocol import ToolResult
 from helpers import make_settings
@@ -35,6 +43,7 @@ from helpers import make_settings
 @dataclass
 class FakeTranscript:
     events: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+    path: Path = field(default_factory=lambda: Path("/tmp/fake-transcript.jsonl"))
 
     def write(self, event: str, data: dict[str, Any]) -> None:
         self.events.append((event, data))
@@ -693,3 +702,138 @@ def test_handle_task_readonly_does_not_claim_write_branches() -> None:
         assert handled is False
 
     assert calls == []
+
+
+# --- /help /guide /workflows /tools /context /history /transcript ---------
+
+
+def test_handle_help_writes_transcript_and_calls_print(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    calls: list[str] = []
+
+    handle_help(
+        state,
+        "/help",
+        transcript=transcript,
+        print_slash_help=lambda: calls.append("help"),
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/help"})]
+    assert calls == ["help"]
+
+
+def test_handle_guide_marks_seen_then_prints(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    order: list[str] = []
+    seen_workspaces: list[Any] = []
+
+    def mark_seen(workspace: Any) -> None:
+        order.append("mark_seen")
+        seen_workspaces.append(workspace)
+
+    def print_guide() -> None:
+        order.append("print_guide")
+
+    handle_guide(
+        state,
+        "/guide",
+        transcript=transcript,
+        print_guide=print_guide,
+        mark_guide_hint_seen=mark_seen,
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/guide"})]
+    assert seen_workspaces == [state.settings.workspace]
+    # Historical order: transcript write → mark_seen(workspace) → print_guide
+    assert order == ["mark_seen", "print_guide"]
+
+
+def test_handle_workflows_writes_transcript_and_calls_print(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    calls: list[str] = []
+
+    handle_workflows(
+        state,
+        "/workflows",
+        transcript=transcript,
+        print_workflows=lambda: calls.append("workflows"),
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/workflows"})]
+    assert calls == ["workflows"]
+
+
+def test_handle_tools_passes_tools_registry(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    tools = object()
+    seen: list[Any] = []
+
+    handle_tools(
+        state,
+        "/tools",
+        transcript=transcript,
+        tools=tools,
+        print_tools=lambda t: seen.append(t),
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/tools"})]
+    assert seen == [tools]
+
+
+def test_handle_context_passes_session_and_messages(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    session = FakeAgentSession(context_chars=100)
+    messages = [{"role": "user", "content": "hi"}]
+    seen: list[tuple[Any, Any]] = []
+
+    handle_context(
+        state,
+        "/context",
+        transcript=transcript,
+        agent_session=session,
+        chat_messages=messages,
+        print_context=lambda sess, msgs: seen.append((sess, msgs)),
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/context"})]
+    assert seen == [(session, messages)]
+
+
+def test_handle_history_passes_history(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    history = [("chat", "hello"), ("agent", "do stuff")]
+    seen: list[Any] = []
+
+    handle_history(
+        state,
+        "/history",
+        transcript=transcript,
+        history=history,
+        print_history=lambda h: seen.append(h),
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/history"})]
+    assert seen == [history]
+
+
+def test_handle_transcript_emits_path(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    path = tmp_path / "session.jsonl"
+    transcript = FakeTranscript(path=path)
+    lines, emit = _capture()
+
+    handle_transcript(
+        state,
+        "/transcript",
+        transcript=transcript,
+        emit=emit,
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/transcript"})]
+    assert lines == [str(path)]
