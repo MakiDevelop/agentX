@@ -36,6 +36,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx diff --json` | `agentx.diff.v1` | `diff` |
 | `agentx review --json` | `agentx.review.v1` | `review` |
 | `agentx commit-plan --json` | `agentx.commit_plan.v1` | `commit_plan` |
+| `agentx gate --json` | `agentx.gate.v1` | `gate` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
@@ -197,6 +198,34 @@ Required stable keys:
 | `files_to_stage` | array of string | Explicit workspace-relative paths that `/commit` would stage one by one. |
 | `file_count` | integer | Number of files in `files_to_stage`. |
 | `review` | object | Embedded `agentx.review.v1`. |
+| `next_commands` | array of string | Suggested follow-up commands for humans or runners. |
+
+## Gate Payload
+
+`agentx gate --json` emits `agentx.gate.v1`.
+
+This is an aggregate deterministic gate for external runners that want one
+payload before handing off, committing, or asking a human to approve the next
+step. It embeds `agentx.review.v1`, static `agentx.doctor.v1`, and latest
+`agentx.approvals.v1` by default. It does not stage, commit, push, deploy, or
+call an LLM. Use `--skip-verify`, `--skip-doctor`, or `--skip-approvals` when
+the caller intentionally wants a narrower gate. Use `--fail-on-blocker` to print
+the payload and exit `1` when blockers are present.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.gate.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `generated_at` | string | Local ISO timestamp. |
+| `ok` | boolean | True when no blockers are present. |
+| `commit_ready` | boolean | True when embedded review is commit-ready and aggregate blockers are empty. |
+| `blockers` | array of string | Machine-readable blockers such as `verify_failed`, `doctor_failed`, or `approval_denied`. |
+| `warnings` | array of string | Non-blocking warnings such as `verify_skipped`, `doctor_skipped`, `approvals_skipped`, or `approvals_unavailable`. |
+| `review` | object | Embedded `agentx.review.v1`. |
+| `doctor` | object or null | Embedded static `agentx.doctor.v1`, or null when `--skip-doctor` was used. |
+| `approvals` | object or null | Embedded latest `agentx.approvals.v1`, or null when `--skip-approvals` was used. |
 | `next_commands` | array of string | Suggested follow-up commands for humans or runners. |
 
 ## Artifacts Payload

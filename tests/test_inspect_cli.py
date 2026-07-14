@@ -68,6 +68,7 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
         {"command": "uv run pytest -q", "argv": ["uv", "run", "pytest", "-q"]},
     ]
     assert "agentx diff --json" in payload["next_commands"]
+    assert "agentx gate --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx review --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker" in payload["next_commands"]
     assert "secret-token" not in json.dumps(payload)
@@ -86,6 +87,7 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["diff"]["schema"] == "agentx.diff.v1"
     assert payload["verify_commands"][0]["command"] == "uv run ruff check ."
     assert payload["next_commands"][0] == "agentx diff --json"
+    assert "agentx gate --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx review --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx verify --json --fail-on-error" in payload["next_commands"]

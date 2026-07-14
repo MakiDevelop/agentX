@@ -47,6 +47,7 @@ uv run agentx shell
 需要 review/commit 前先看機器可讀變更摘要時，用 `agentx diff --json` 取得 `agentx.diff.v1`；`--staged` 看 index，`--patch` 才附 patch text。
 需要 deterministic review gate 時，用 `agentx review --json` 取得 `agentx.review.v1`；它會聚合 diff + verify 並輸出 `commit_ready`、blockers、warnings 與 next commands，`--fail-on-blocker` 可供 CI/wrapper 擋流程。
 需要 commit 前的機器可讀計畫時，用 `agentx commit-plan --message TEXT --json` 取得 `agentx.commit_plan.v1`；它列出將逐檔 stage 的檔案、review gate 與 blockers，但不會 stage、commit 或 push。
+需要單一 runner gate 時，用 `agentx gate --json` 取得 `agentx.gate.v1`；它聚合 review、doctor static 與 latest approvals audit，讓 Codex/Grok wrapper 不必自行拼多個 JSON。
 外部 wrapper 可用 `agentx config --json` 取得目前 workspace、model、memory backend、approval、persona 等解析後設定；token 只會顯示 set/missing。
 初次接入 repo 時可用 `agentx init --json` 取得 `agentx.init.v1` project profile；預設只讀，加 `--write-memory` 才寫入 Memory Hall。
 需要接續工作時可用 `agentx sessions --json` 取得 `agentx.sessions.v1` transcript overview，外部 runner 可依最新 session、approval denied counts 或 transcript path 決定下一步。

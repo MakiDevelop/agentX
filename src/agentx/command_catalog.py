@@ -164,6 +164,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local git inspection and existing verification commands",
     },
     {
+        "command": "agentx gate",
+        "usage": "agentx gate --json",
+        "description": "Run an aggregate runner gate: review, static doctor, and latest approval-denial audit.",
+        "examples": ["agentx gate --json", "agentx gate --json --fail-on-blocker", "agentx gate --skip-verify --skip-approvals --output-format jsonl"],
+        "schemas": ["agentx.gate.v1"],
+        "jsonl_event": "gate",
+        "risk": "GREEN - read-only local inspection and existing verification commands",
+    },
+    {
         "command": "agentx tasks",
         "usage": "agentx tasks [STATUS] --json",
         "description": "List project task state from .agentx/tasks.json.",
