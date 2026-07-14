@@ -42,6 +42,11 @@ def infrastructure_maps(home: Path | None = None) -> dict[str, InfrastructureMap
             path=root / "resource-map.md",
             section_headings=("外網主機 / VPS", "VPS 對照"),
         ),
+        "resource-bundle": InfrastructureMap(
+            key="resource-bundle",
+            title="resource-home-vps-map-bundle",
+            path=root / "resource-map.md",
+        ),
     }
     maps["all"] = InfrastructureMap(key="all", title="all infrastructure maps", path=root)
     return maps
@@ -84,14 +89,18 @@ MAP_ALIASES = {
     "resource map": "resource",
     "resource-map": "resource",
     "資源地圖": "resource",
-    "資源地圖+家庭ai設施/vps地圖": "all",
-    "資源地圖 + 家庭ai設施 / vps地圖": "all",
-    "資源地圖+家庭 ai 設施/vps 地圖": "all",
-    "資源地圖 + 家庭 ai 設施 / vps 地圖": "all",
-    "資源地圖+家庭ai設施／vps地圖": "all",
-    "資源地圖 + 家庭ai設施 ／ vps地圖": "all",
-    "資源地圖+家庭 ai 設施／vps 地圖": "all",
-    "資源地圖 + 家庭 ai 設施 ／ vps 地圖": "all",
+    "resource bundle": "resource-bundle",
+    "resource-bundle": "resource-bundle",
+    "resource home vps": "resource-bundle",
+    "resource+home+vps": "resource-bundle",
+    "資源地圖+家庭ai設施/vps地圖": "resource-bundle",
+    "資源地圖 + 家庭ai設施 / vps地圖": "resource-bundle",
+    "資源地圖+家庭 ai 設施/vps 地圖": "resource-bundle",
+    "資源地圖 + 家庭 ai 設施 / vps 地圖": "resource-bundle",
+    "資源地圖+家庭ai設施／vps地圖": "resource-bundle",
+    "資源地圖 + 家庭ai設施 ／ vps地圖": "resource-bundle",
+    "資源地圖+家庭 ai 設施／vps 地圖": "resource-bundle",
+    "資源地圖 + 家庭 ai 設施 ／ vps 地圖": "resource-bundle",
     "project map": "project",
     "project-map": "project",
     "專案地圖": "project",
@@ -103,6 +112,7 @@ MAP_ALIASES = {
 
 
 PRIMARY_MAP_KEYS = ("quick", "project", "resource")
+RESOURCE_BUNDLE_MAP_KEYS = ("resource", "home", "vps")
 
 
 def _heading_level(line: str) -> int | None:
@@ -165,7 +175,12 @@ def build_infrastructure_context(
         allowed = ", ".join(sorted([*maps, *MAP_ALIASES]))
         raise ValueError(f"unknown infrastructure map: {map_key}. Use one of: {allowed}")
 
-    selected = [maps[item_key] for item_key in PRIMARY_MAP_KEYS] if key == "all" else [maps[key]]
+    if key == "all":
+        selected = [maps[item_key] for item_key in PRIMARY_MAP_KEYS]
+    elif key == "resource-bundle":
+        selected = [maps[item_key] for item_key in RESOURCE_BUNDLE_MAP_KEYS]
+    else:
+        selected = [maps[key]]
     sections = [
         "Infrastructure maps are read-only references. For SSH/deploy/production actions, confirm runtime state and get explicit approval before acting.",
     ]

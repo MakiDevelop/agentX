@@ -15,9 +15,10 @@ Canonical sources stay outside this repo:
 | Home AI facilities | `~/infrastructure/resource-map.md` section `家庭 AI 中心` | Which home AI node should handle this workload? | `/infra home`, `/infra 家庭AI設施` |
 | VPS map | `~/infrastructure/resource-map.md` section `外網主機 / VPS` or `VPS 對照` | Which public VPS/domain hosts this service? | `/infra vps`, `/infra VPS地圖`, `/infra 外網主機` |
 
-`/infra all` loads quick ref, project map, and resource map together. It is useful
-for orientation, but targeted maps are preferred before remote operations because
-they reduce irrelevant context.
+`/infra all` loads quick ref, project map, and resource map together. `/infra
+resource-bundle` loads the resource map plus the extracted home AI and VPS
+sections. The bundle is the canonical route for Maki's mixed wording
+`資源地圖+家庭AI設施/VPS地圖`.
 
 Snapshot status:
 
@@ -38,7 +39,7 @@ or deployment target:
 | `專案地圖`, `project map` | `/infra project` | domain/service to repo ownership |
 | `家庭AI地圖`, `家庭AI設施`, `設施地圖`, `home ai map` | `/infra home` | node role, workload route, stop condition |
 | `VPS地圖`, `外網主機`, `vps map` | `/infra vps` | public host, service, repo association, caution |
-| `資源地圖+家庭AI設施/VPS地圖`, `資源地圖+家庭AI設施／VPS地圖` | `/infra all` | quick ref + project ownership + resource/home/VPS context |
+| `資源地圖+家庭AI設施/VPS地圖`, `資源地圖+家庭AI設施／VPS地圖` | `/infra resource-bundle` | resource map + extracted home AI and VPS sections |
 | mixed or unclear resource | `/infra all` | quick ref + project map + resource map context |
 
 The lookup result is evidence for planning. It is not permission to perform SSH,
@@ -52,7 +53,7 @@ When Maki asks agentX to "make the resource map", "家庭 AI 設施地圖", or
 | Layer | File / command | Purpose |
 |-------|----------------|---------|
 | Repo contract | `docs/RESOURCE_MAPS.md` | Stable rules, aliases, stop conditions, and current routing snapshot for agentX developers. |
-| Runtime context | `/infra home`, `/infra vps`, `/infra all` | Read-only extraction from `~/infrastructure/*` for the current machine before answering or acting. |
+| Runtime context | `/infra home`, `/infra vps`, `/infra resource-bundle`, `/infra all` | Read-only extraction from `~/infrastructure/*` for the current machine before answering or acting. |
 | Local constitution | `AGENTX.md` resource-map gate | Always-on instruction that forces runtime state pre-flight for SSH/deploy/cross-machine work. |
 
 Acceptance criteria for this map package:
@@ -73,6 +74,7 @@ cross-machine operation, or answer that maps a domain to a repo:
    - home AI / local compute pool -> `/infra home`
    - public VPS / domain host -> `/infra vps`
    - repo ownership / project boundary -> `/infra project`
+   - Maki's mixed resource/home/VPS request -> `/infra resource-bundle`
    - unknown or mixed resource -> `/infra all`
 3. Fill the runtime state block from the map and current repo docs.
 4. If any runtime state field is unknown, stop and ask Maki or perform more
@@ -239,6 +241,7 @@ Current aliases intentionally include:
 /infra vps
 /infra VPS地圖
 /infra 外網主機
+/infra resource-bundle
 /infra 資源地圖+家庭AI設施/VPS地圖
 /infra 資源地圖+家庭AI設施／VPS地圖
 ```

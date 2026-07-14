@@ -13,6 +13,7 @@ def test_infrastructure_maps_point_to_expected_files(tmp_path: Path) -> None:
     assert maps["resource"].path == tmp_path / "infrastructure" / "resource-map.md"
     assert maps["home"].path == tmp_path / "infrastructure" / "resource-map.md"
     assert maps["vps"].path == tmp_path / "infrastructure" / "resource-map.md"
+    assert maps["resource-bundle"].path == tmp_path / "infrastructure" / "resource-map.md"
     assert maps["all"].path == tmp_path / "infrastructure"
 
 
@@ -195,12 +196,49 @@ def test_build_infrastructure_context_accepts_combined_resource_aliases(
 
     context = build_infrastructure_context(alias, home=tmp_path)
 
-    assert "Map alias:" in context
-    assert "QUICK_MARKER" in context
-    assert "PROJECT_MARKER" in context
+    assert f"Map alias: {alias.lower()} -> resource-bundle" in context
     assert "RESOURCE_MARKER" in context
+    assert "--- resource-map" in context
+    assert "--- home-ai-facilities-map" in context
     assert "HOME_MARKER" in context
+    assert "--- vps-map" in context
     assert "VPS_MARKER" in context
+    assert "QUICK_MARKER" not in context
+    assert "PROJECT_MARKER" not in context
+
+
+def test_build_infrastructure_context_combined_alias_extracts_home_and_vps_sections_after_resource_cap(
+    tmp_path: Path,
+) -> None:
+    infra = tmp_path / "infrastructure"
+    infra.mkdir()
+    (infra / "resource-map.md").write_text(
+        "\n".join(
+            [
+                "# RESOURCE_MARKER",
+                "GENERAL_RESOURCE_LINE",
+                "X" * 400,
+                "",
+                "## 家庭 AI 中心",
+                "HOME_AFTER_CAP_MARKER",
+                "",
+                "## 外網主機 / VPS",
+                "VPS_AFTER_CAP_MARKER",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    context = build_infrastructure_context(
+        "資源地圖+家庭AI設施／VPS地圖",
+        home=tmp_path,
+        per_file_chars=80,
+        max_chars=1000,
+    )
+
+    assert "GENERAL_RESOURCE_LINE" in context
+    assert "HOME_AFTER_CAP_MARKER" in context
+    assert "VPS_AFTER_CAP_MARKER" in context
 
 
 def test_build_infrastructure_context_rejects_unknown_map(tmp_path: Path) -> None:

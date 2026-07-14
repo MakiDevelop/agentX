@@ -342,7 +342,7 @@ class InfrastructureContextTool:
     name = "infrastructure_context"
     description = "讀取 Maki 的專案/資源地圖，或抽取家庭 AI 設施/VPS 地圖（read-only；SSH/deploy 前用於確認目標）"
     risk = Risk.GREEN
-    signature = 'map="all|quick|project|resource|home|vps", max_chars=14000'
+    signature = 'map="all|quick|project|resource|home|vps|resource-bundle", max_chars=14000'
 
     def run(self, args: dict[str, Any]) -> str:
         return build_infrastructure_context(
