@@ -433,6 +433,34 @@ def test_handoff_inspect_reads_jsonl_input(tmp_path: Path) -> None:
     assert inspected["resume_session"] == "contract.session.jsonl"
 
 
+def test_handoff_inspect_reads_stdin_jsonl() -> None:
+    runner = CliRunner()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    event = json.loads(fixture.read_text(encoding="utf-8"))
+    jsonl_input = "\n".join([
+        json.dumps({"event": "dry_run", "data": {"ok": True}}),
+        json.dumps(event),
+    ])
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "-",
+            "--field",
+            "resume_command",
+            "--next-prompt",
+            "照上一輪繼續",
+        ],
+        input=jsonl_input,
+    )
+
+    assert result.exit_code == 0
+    assert result.output == (
+        "agentx -p '照上一輪繼續' --agent --resume-session contract.session.jsonl --json\n"
+    )
+
+
 def test_headless_payload_keeps_resume_fields_null_without_session_path() -> None:
     payload = cli.headless_payload(
         cli.HeadlessRunResult(

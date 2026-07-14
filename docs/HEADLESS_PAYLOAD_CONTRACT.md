@@ -63,6 +63,7 @@ agentx handoff-inspect tests/fixtures/headless_result_failure.json --output-form
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --next-prompt "照上一輪繼續"
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field recovery_checklist
+agentx -p "..." --agent --output-format jsonl | agentx handoff-inspect - --field resume_command --next-prompt "照上一輪繼續"
 ```
 
 ## `log_summary`

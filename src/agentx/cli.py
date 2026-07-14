@@ -1383,8 +1383,8 @@ def print_structured_payload(payload: object, *, output_format: str = "json", ev
     print_json_output(structured_payload_text(payload, output_format=output_format, event=event))
 
 
-def load_headless_payload_file(path: Path) -> dict[str, object]:
-    text = path.read_text(encoding="utf-8").strip()
+def parse_headless_payload_text(text: str) -> dict[str, object]:
+    text = text.strip()
     if not text:
         raise typer.BadParameter("payload file is empty")
 
@@ -1409,6 +1409,19 @@ def load_headless_payload_file(path: Path) -> dict[str, object]:
     if not isinstance(data, dict):
         raise typer.BadParameter("payload data must be a JSON object")
     return data
+
+
+def load_headless_payload_file(path: Path) -> dict[str, object]:
+    return parse_headless_payload_text(path.read_text(encoding="utf-8"))
+
+
+def load_headless_payload_source(source: str) -> dict[str, object]:
+    if source == "-":
+        return parse_headless_payload_text(sys.stdin.read())
+    path = Path(source)
+    if not path.is_file():
+        raise typer.BadParameter(f"payload file not found: {source}")
+    return load_headless_payload_file(path)
 
 
 def inspect_headless_handoff_payload(payload: dict[str, object]) -> dict[str, object]:
@@ -2516,7 +2529,7 @@ def version_command(
 
 @app.command("handoff-inspect")
 def handoff_inspect(
-    path: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True, help="Headless JSON/JSONL payload file to inspect."),
+    source: str = typer.Argument(..., help="Headless JSON/JSONL payload file to inspect, or '-' for stdin."),
     field: str | None = typer.Option(None, "--field", help="Print one takeover field, e.g. resume_command or recovery_checklist."),
     next_prompt: str | None = typer.Option(None, "--next-prompt", help="Replace the resume command placeholder with this prompt."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
@@ -2525,7 +2538,7 @@ def handoff_inspect(
     """Inspect a headless payload and print takeover fields."""
     structured_format = structured_output_format(json_output, output_format)
     payload = apply_handoff_next_prompt(
-        inspect_headless_handoff_payload(load_headless_payload_file(path)),
+        inspect_headless_handoff_payload(load_headless_payload_source(source)),
         next_prompt,
     )
     if field:
