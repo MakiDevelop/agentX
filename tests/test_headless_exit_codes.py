@@ -104,6 +104,51 @@ def test_headless_json_payload_includes_stats() -> None:
     assert "phases" not in data
 
 
+def test_headless_payload_enriches_handoff_with_resume_command() -> None:
+    payload = cli.headless_payload(
+        cli.HeadlessRunResult(
+            output="stopped",
+            termination="max_steps_exceeded",
+            log_summary={
+                "handoff_summary": {
+                    "status": "max_steps_exceeded",
+                    "needs_handoff": True,
+                    "next_steps": [],
+                }
+            },
+            session_path="/repo/.agentx/sessions/20260715-123456.session.jsonl",
+        ),
+        exit_code=2,
+    )
+
+    handoff = payload["log_summary"]["handoff_summary"]
+
+    assert handoff["session_path"] == "/repo/.agentx/sessions/20260715-123456.session.jsonl"
+    assert handoff["resume_session"] == "20260715-123456.session.jsonl"
+    assert (
+        handoff["resume_command"]
+        == "agentx -p '<next prompt>' --agent --resume-session 20260715-123456.session.jsonl --json"
+    )
+    assert "Resume with the provided resume_command." in handoff["next_steps"]
+
+
+def test_headless_payload_keeps_resume_fields_null_without_session_path() -> None:
+    payload = cli.headless_payload(
+        cli.HeadlessRunResult(
+            output="stopped",
+            termination="timeout",
+            log_summary={"handoff_summary": {"status": "timeout", "needs_handoff": True}},
+        ),
+        exit_code=124,
+    )
+
+    handoff = payload["log_summary"]["handoff_summary"]
+
+    assert handoff["session_path"] is None
+    assert handoff["resume_session"] is None
+    assert handoff["resume_command"] is None
+
+
 def test_headless_json_payload_includes_optional_phases() -> None:
     payload = cli.headless_json_payload(
         cli.HeadlessRunResult(

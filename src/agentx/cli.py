@@ -1090,18 +1090,48 @@ def _headless_recovery_suggestions(session: AgentSession) -> list[dict[str, obje
 
 
 def headless_payload(result: HeadlessRunResult, exit_code: int) -> dict[str, object]:
+    log_summary = dict(result.log_summary)
+    if isinstance(log_summary.get("handoff_summary"), dict):
+        log_summary["handoff_summary"] = headless_handoff_with_resume(
+            log_summary["handoff_summary"],  # type: ignore[arg-type]
+            result.session_path,
+        )
     payload = {
         "output": result.output,
         "exit_code": exit_code,
         "termination": result.termination,
         "failing_tools": list(result.failing_tools),
         "stats": result.stats,
-        "log_summary": result.log_summary,
+        "log_summary": log_summary,
         "session_path": result.session_path,
     }
     if result.phases:
         payload["phases"] = list(result.phases)
     return payload
+
+
+def headless_handoff_with_resume(
+    handoff_summary: dict[str, object],
+    session_path: str | None,
+) -> dict[str, object]:
+    enriched = dict(handoff_summary)
+    enriched["session_path"] = session_path
+    if not session_path:
+        enriched["resume_session"] = None
+        enriched["resume_command"] = None
+        return enriched
+
+    resume_session = Path(session_path).name
+    enriched["resume_session"] = resume_session
+    enriched["resume_command"] = (
+        "agentx -p '<next prompt>' --agent "
+        f"--resume-session {shlex.quote(resume_session)} --json"
+    )
+    next_steps = list(enriched.get("next_steps", []) or [])
+    if not any("resume-session" in str(step) for step in next_steps):
+        next_steps.append("Resume with the provided resume_command.")
+    enriched["next_steps"] = next_steps
+    return enriched
 
 
 def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
