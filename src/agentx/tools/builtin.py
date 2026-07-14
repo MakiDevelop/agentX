@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from agentx.git_workflow import GitPushError, push_current_branch, stage_paths, unstage_paths
+from agentx.infrastructure_context import build_infrastructure_context
 from agentx.memory_hall import MemoryHallClient
 from agentx.protocol import Tool
 from agentx.safety import Risk
@@ -334,6 +335,19 @@ class FindFilesTool(_WorkspaceTool):
                 return suggestions
 
         return suggestions
+
+
+class InfrastructureContextTool:
+    name = "infrastructure_context"
+    description = "讀取 Maki 的專案地圖與家庭 AI 設施地圖（read-only；SSH/deploy 前用於確認目標）"
+    risk = Risk.GREEN
+    signature = 'map="all|quick|project|resource|home|vps", max_chars=14000'
+
+    def run(self, args: dict[str, Any]) -> str:
+        return build_infrastructure_context(
+            str(args.get("map", "all")),
+            max_chars=int(args.get("max_chars", 14000)),
+        )
 
 
 _WHERE_STOPWORDS = {
@@ -987,6 +1001,7 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
         InsertCodeTool(workspace),
         SearchTextTool(workspace),
         FindFilesTool(workspace),
+        InfrastructureContextTool(),
         LocateTopicTool(workspace),
         GitStatusTool(workspace),
         GitBranchTool(workspace),

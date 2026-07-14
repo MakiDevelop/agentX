@@ -13,6 +13,7 @@ READ_ONLY_TOOLS = {
     "list_files",
     "read_file",
     "search_text",
+    "infrastructure_context",
     "locate_topic",
     "git_status",
     "git_branch",

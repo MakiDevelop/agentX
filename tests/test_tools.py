@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from agentx import infrastructure_context
 from agentx.tools import ToolRegistry, builtin_tools, docker_compose_command, extract_web_text, validate_external_url
 
 
@@ -26,6 +27,20 @@ def test_list_files(tmp_path: Path) -> None:
     result = registry.run("list_files", {})
     assert result.ok
     assert result.content == "a.txt"
+
+
+def test_infrastructure_context_tool_reads_resource_map(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    infra = tmp_path / "infrastructure"
+    infra.mkdir()
+    (infra / "resource-map.md").write_text("RESOURCE_MAP_MARKER", encoding="utf-8")
+    monkeypatch.setattr(infrastructure_context.Path, "home", staticmethod(lambda: tmp_path))
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    result = registry.run("infrastructure_context", {"map": "resource"})
+
+    assert result.ok
+    assert "RESOURCE_MAP_MARKER" in result.content
+    assert "read-only references" in result.content
 
 
 def test_find_files_path_match_without_content_match(tmp_path: Path) -> None:

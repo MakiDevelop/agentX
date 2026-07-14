@@ -1,7 +1,7 @@
 """Coverage for runtime slash handlers used by run_shell() nested handlers.
 
 These tests exercise ``agentx.cli_runtime_handlers`` — the real interactive
-logic for /plan, /execute, /mode, /files, /read, /find, /where, /grep, /search, /git, /diff,
+logic for /plan, /execute, /mode, /files, /read, /find, /where, /infra, /grep, /search, /git, /diff,
 low-risk git handlers /stage, /unstage, /push, tool-backed /memory, /fetch, /run, /test,
 low-risk inspection
 handlers /status, /sessions, /jobs, /task readonly, and pure info/display
@@ -29,6 +29,7 @@ from agentx.cli_runtime_handlers import (
     handle_guide,
     handle_help,
     handle_history,
+    handle_infra,
     handle_jobs,
     handle_memory,
     handle_mode,
@@ -481,6 +482,44 @@ def test_handle_where_dispatches_topic_and_failure_prefix() -> None:
 
     assert fail_lines == ["定位失敗：topic is required"]
     assert fail_transcript.events[0][1]["topic"] == ""
+
+
+def test_handle_infra_dispatches_map_and_failure_prefix() -> None:
+    tools = FakeTools(ToolResult(tool="infrastructure_context", ok=True, content="RESOURCE MAP"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_infra("/infra project", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("infrastructure_context", {"map": "project"})]
+    assert lines == ["RESOURCE MAP"]
+    assert transcript.events == [
+        (
+            "tool",
+            {
+                "command": "/infra",
+                "map": "project",
+                "ok": True,
+                "content": "RESOURCE MAP",
+            },
+        )
+    ]
+
+    default_tools = FakeTools(ToolResult(tool="infrastructure_context", ok=True, content="ALL MAPS"))
+    default_transcript = FakeTranscript()
+    default_lines, default_emit = _capture()
+    handle_infra("/infra", tools=default_tools, transcript=default_transcript, emit=default_emit)
+
+    assert default_tools.calls == [("infrastructure_context", {"map": "all"})]
+    assert default_lines == ["ALL MAPS"]
+
+    fail_tools = FakeTools(ToolResult(tool="infrastructure_context", ok=False, content="unknown map"))
+    fail_transcript = FakeTranscript()
+    fail_lines, fail_emit = _capture()
+    handle_infra("/infra nope", tools=fail_tools, transcript=fail_transcript, emit=fail_emit)
+
+    assert fail_lines == ["基礎設施地圖讀取失敗：unknown map"]
+    assert fail_transcript.events[0][1]["map"] == "nope"
 
 
 def test_handle_grep_uses_search_text_with_optional_path() -> None:

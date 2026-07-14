@@ -2,7 +2,7 @@
 
 These implement the real interactive-shell logic for a small set of
 commands (``/plan``, ``/execute``, ``/mode``, plus read-only tool-backed
-``/files``, ``/read``, ``/find``, ``/where``, ``/grep``, ``/search``, ``/git``, ``/diff``,
+``/files``, ``/read``, ``/find``, ``/where``, ``/infra``, ``/grep``, ``/search``, ``/git``, ``/diff``,
 YELLOW git handlers ``/stage``, ``/unstage`` and ``/push``, low-risk
 tool-backed ``/memory``, ``/fetch``, ``/run``, ``/test``, low-risk
 inspection handlers ``/status``, ``/sessions``, ``/jobs``, the read-only
@@ -247,6 +247,28 @@ def handle_where(
         emit=emit,
         fail_prefix="定位失敗：",
         transcript_extra={"topic": topic},
+    )
+
+
+def handle_infra(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Read Maki's project/resource/home-AI/VPS maps as read-only context."""
+    map_key = prompt.removeprefix("/infra").strip() or "all"
+    _run_tool_slash(
+        command="/infra",
+        tool_name="infrastructure_context",
+        tool_args={"map": map_key},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="基礎設施地圖讀取失敗：",
+        transcript_extra={"map": map_key},
+        transcript_limit=_TOOL_TRANSCRIPT_LIMIT_LONG,
     )
 
 
