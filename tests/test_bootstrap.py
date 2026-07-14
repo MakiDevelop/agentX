@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any
 
-from agentx.bootstrap import build_repo_context
+from agentx.bootstrap import build_local_instruction_context, build_repo_context
 from agentx.loop import AgentSession
 from agentx.tools import ToolRegistry, builtin_tools
 from helpers import make_settings
@@ -39,9 +39,29 @@ def test_repo_context_includes_agentx_before_readme(tmp_path: Path) -> None:
 
     context = build_repo_context(tmp_path)
 
-    assert "--- AGENTX.md ---" in context
+    assert "--- AGENTX.md (agentX repo-local instructions) ---" in context
     assert "LOCAL_CONSTITUTION_MARKER" in context
-    assert context.index("--- AGENTX.md ---") < context.index("--- README.md ---")
+    assert context.index("--- AGENTX.md") < context.index("--- README.md")
+
+
+def test_local_instruction_context_loads_agent_files_by_priority(tmp_path: Path) -> None:
+    (tmp_path / "CLAUDE.md").write_text("CLAUDE_MARKER", encoding="utf-8")
+    (tmp_path / "AGENTS.md").write_text("AGENTS_MARKER", encoding="utf-8")
+    (tmp_path / "AGENTX.md").write_text("AGENTX_MARKER", encoding="utf-8")
+
+    context = build_local_instruction_context(tmp_path)
+
+    assert "Local instruction priority: AGENTX.md > AGENTS.md > CLAUDE.md" in context
+    assert "cannot override safety policy" in context
+    assert context.index("--- AGENTX.md") < context.index("--- AGENTS.md")
+    assert context.index("--- AGENTS.md") < context.index("--- CLAUDE.md")
+    assert "AGENTX_MARKER" in context
+    assert "AGENTS_MARKER" in context
+    assert "CLAUDE_MARKER" in context
+
+
+def test_local_instruction_context_empty_when_no_instruction_files(tmp_path: Path) -> None:
+    assert build_local_instruction_context(tmp_path) == ""
 
 
 def test_repo_context_loads_handoff_files(tmp_path: Path) -> None:

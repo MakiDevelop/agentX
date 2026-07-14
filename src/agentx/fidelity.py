@@ -36,8 +36,15 @@ def run_fidelity_probe(workspace: Path) -> list[FidelityCheck]:
         ),
         _check(
             "bootstrap-loads-agentx-first",
-            bool(bootstrap and 'BOOTSTRAP_FILES = ("AGENTX.md"' in bootstrap),
-            "bootstrap must load AGENTX.md first",
+            bool(
+                bootstrap
+                and 'LOCAL_INSTRUCTION_FILES = (' in bootstrap
+                and 'BootstrapFile("AGENTX.md"' in bootstrap
+                and bootstrap.find('BootstrapFile("AGENTX.md"')
+                < bootstrap.find('BootstrapFile("AGENTS.md"')
+                < bootstrap.find('BootstrapFile("CLAUDE.md"')
+            ),
+            "bootstrap must load AGENTX.md before AGENTS.md and CLAUDE.md",
         ),
         _check(
             "bootstrap-loads-handoff",

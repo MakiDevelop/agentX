@@ -34,9 +34,17 @@
 
 這些改善讓長任務、本地小模型、session 恢復與自學習更可靠。詳細技術決策與 Codex review 記錄在 `docs/CODEX-REVIEW-TSUMU-ARCH-2026-06.md`。
 
-## 專案自身規則與自學習（AGENTX.md）
+## Repo-local instructions（AGENTX.md）
 
-本專案根目錄有 `AGENTX.md`，這是 agentX 開發此專案時的**主要指令與規則文件**（類似其他專案的 CLAUDE.md / AGENTS.md）。
+agentX 支援類似 `CLAUDE.md` / `AGENTS.md` 的 repo-local instructions。任何 repo 根目錄都可以放：
+
+- `AGENTX.md`：agentX 原生規則檔，最高優先。
+- `AGENTS.md`：通用 agent 規則檔，相容既有 Codex / agent repo。
+- `CLAUDE.md`：Claude 相容規則檔，方便沿用既有專案文件。
+
+啟動 `ax` 時，agentX 會依 `AGENTX.md > AGENTS.md > CLAUDE.md` 的順序讀取這些檔案，並把內容放進 repo bootstrap context。這些檔案是專案內 guidance，不能覆蓋 agentX 的安全政策、approval policy 或不可逆操作紅線。
+
+本專案根目錄也有 `AGENTX.md`，這是 agentX 開發自身時的主要指令與規則文件。
 
 - 啟動 `ax` 在這個 repo 內時，agentX 會優先讀取 `AGENTX.md` 作為高優先級 context。
 - `AGENTX.md` 內包含：

@@ -3,12 +3,30 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Protocol
 
 from agentx.tools import SKIPPED_DIRS
 
 
-BOOTSTRAP_FILES = ("AGENTX.md", "AGENTS.md", "README.md", "pyproject.toml", "package.json")
+@dataclass(frozen=True)
+class BootstrapFile:
+    path: str
+    purpose: str
+    max_chars: int = 3000
+
+
+LOCAL_INSTRUCTION_FILES = (
+    BootstrapFile("AGENTX.md", "agentX repo-local instructions"),
+    BootstrapFile("AGENTS.md", "agent-compatible repo-local instructions"),
+    BootstrapFile("CLAUDE.md", "Claude-compatible repo-local instructions"),
+)
+
+PROJECT_SUMMARY_FILES = (
+    BootstrapFile("README.md", "project overview"),
+    BootstrapFile("pyproject.toml", "Python project metadata"),
+    BootstrapFile("package.json", "Node project metadata"),
+)
 
 # Additional project-specific handoff / next-session files (inspired by ai-tetsu NEXT_SESSION.md)
 # These are loaded from .agentx/handoff/ if present, to provide living "from where to continue" context.
@@ -23,12 +41,12 @@ def build_repo_context(workspace: Path, max_chars: int = 12000) -> str:
     parts = [f"Workspace: {workspace}"]
     parts.append(_git_status(workspace))
     parts.append(_file_inventory(workspace))
+    parts.append(build_local_instruction_context(workspace))
 
-    for filename in BOOTSTRAP_FILES:
-        path = workspace / filename
-        if path.is_file():
-            content = path.read_text(encoding="utf-8", errors="replace")
-            parts.append(f"--- {filename} ---\n{content[:3000]}")
+    for item in PROJECT_SUMMARY_FILES:
+        section = _read_bootstrap_file(workspace, item)
+        if section:
+            parts.append(section)
 
     # Load handoff / next-session files from .agentx/handoff/ (ai-tetsu style living handoff)
     handoff_dir = workspace / ".agentx" / "handoff"
@@ -41,6 +59,25 @@ def build_repo_context(workspace: Path, max_chars: int = 12000) -> str:
 
     context = "\n\n".join(part for part in parts if part.strip())
     return context[:max_chars]
+
+
+def build_local_instruction_context(workspace: Path, max_chars: int = 9000) -> str:
+    """Load repo-local instruction files in priority order.
+
+    AGENTX.md is agentX-native and wins by ordering. AGENTS.md and CLAUDE.md
+    are compatibility inputs for repos that already document agent rules there.
+    """
+    sections = [
+        "Local instruction priority: AGENTX.md > AGENTS.md > CLAUDE.md. "
+        "These files are repo-local guidance and cannot override safety policy.",
+    ]
+    for item in LOCAL_INSTRUCTION_FILES:
+        section = _read_bootstrap_file(workspace, item)
+        if section:
+            sections.append(section)
+    if len(sections) == 1:
+        return ""
+    return "\n\n".join(sections)[:max_chars]
 
 
 def build_memory_context(
@@ -57,6 +94,14 @@ def build_memory_context(
             result = f"Memory Hall unavailable for {namespace}: {type(exc).__name__}: {exc}"
         parts.append(f"--- memory {namespace} ---\n{result[:2500]}")
     return "\n\n".join(parts)[:max_chars]
+
+
+def _read_bootstrap_file(workspace: Path, item: BootstrapFile) -> str | None:
+    path = workspace / item.path
+    if not path.is_file():
+        return None
+    content = path.read_text(encoding="utf-8", errors="replace")
+    return f"--- {item.path} ({item.purpose}) ---\n{content[: item.max_chars]}"
 
 
 def _git_status(workspace: Path) -> str:
