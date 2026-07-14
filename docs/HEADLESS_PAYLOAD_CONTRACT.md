@@ -61,6 +61,7 @@ For a local inspection helper:
 agentx handoff-inspect tests/fixtures/headless_result_failure.json
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --output-format jsonl
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command
+agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --next-prompt "照上一輪繼續"
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field recovery_checklist
 ```
 

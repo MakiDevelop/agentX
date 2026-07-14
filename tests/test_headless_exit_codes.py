@@ -303,6 +303,46 @@ def test_handoff_inspect_field_resume_command_plain() -> None:
     assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
 
 
+def test_handoff_inspect_next_prompt_updates_resume_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--next-prompt",
+            "照上一輪繼續",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == (
+        "agentx -p '照上一輪繼續' --agent --resume-session contract.session.jsonl --json\n"
+    )
+
+
+def test_handoff_inspect_next_prompt_quotes_shell_sensitive_text() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--next-prompt",
+            "fix Bob's test",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == (
+        'agentx -p \'fix Bob\'"\'"\'s test\' --agent --resume-session contract.session.jsonl --json\n'
+    )
+
+
 def test_handoff_inspect_field_recovery_checklist_plain() -> None:
     runner = CliRunner()
     result = runner.invoke(
@@ -338,6 +378,29 @@ def test_handoff_inspect_field_jsonl_output() -> None:
         "field": "resume_command",
         "value": "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json",
     }
+
+
+def test_handoff_inspect_next_prompt_jsonl_output() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--next-prompt",
+            "照上一輪繼續",
+            "--output-format",
+            "jsonl",
+        ],
+    )
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event["data"]["value"] == (
+        "agentx -p '照上一輪繼續' --agent --resume-session contract.session.jsonl --json"
+    )
 
 
 def test_handoff_inspect_field_rejects_unknown() -> None:

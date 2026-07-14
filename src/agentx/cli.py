@@ -1436,6 +1436,20 @@ def inspect_headless_handoff_payload(payload: dict[str, object]) -> dict[str, ob
     }
 
 
+def apply_handoff_next_prompt(payload: dict[str, object], next_prompt: str | None) -> dict[str, object]:
+    if not next_prompt:
+        return payload
+    enriched = dict(payload)
+    command = enriched.get("resume_command")
+    if isinstance(command, str) and "<next prompt>" in command:
+        quoted_prompt = shlex.quote(next_prompt)
+        if "'<next prompt>'" in command:
+            enriched["resume_command"] = command.replace("'<next prompt>'", quoted_prompt)
+        else:
+            enriched["resume_command"] = command.replace("<next prompt>", quoted_prompt)
+    return enriched
+
+
 def format_handoff_inspect_plain(payload: dict[str, object]) -> str:
     lines = [
         f"status: {payload.get('status')}",
@@ -2504,12 +2518,16 @@ def version_command(
 def handoff_inspect(
     path: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True, help="Headless JSON/JSONL payload file to inspect."),
     field: str | None = typer.Option(None, "--field", help="Print one takeover field, e.g. resume_command or recovery_checklist."),
+    next_prompt: str | None = typer.Option(None, "--next-prompt", help="Replace the resume command placeholder with this prompt."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
     """Inspect a headless payload and print takeover fields."""
     structured_format = structured_output_format(json_output, output_format)
-    payload = inspect_headless_handoff_payload(load_headless_payload_file(path))
+    payload = apply_handoff_next_prompt(
+        inspect_headless_handoff_payload(load_headless_payload_file(path)),
+        next_prompt,
+    )
     if field:
         field_payload = handoff_inspect_field_payload(payload, field)
         if structured_format != "plain":
