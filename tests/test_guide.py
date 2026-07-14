@@ -1,6 +1,8 @@
 from unittest.mock import MagicMock, patch
 
 from agentx.cli import (
+    COMMAND_EXAMPLES,
+    COMMAND_RELATED,
     GUIDE_MODE_ROWS,
     GUIDE_WORKFLOW_ROWS,
     SLASH_COMMANDS,
@@ -70,6 +72,19 @@ def test_slash_command_help_formats_single_command() -> None:
     assert "/workflow headless" in output
     assert "Risk:" in output
     assert "Related:" in output
+
+
+def test_all_slash_commands_have_help_metadata() -> None:
+    commands = {command.split()[0] for command, _ in SLASH_COMMANDS}
+    missing_examples = sorted(commands - set(COMMAND_EXAMPLES))
+    missing_related = sorted(commands - set(COMMAND_RELATED))
+
+    assert missing_examples == []
+    assert missing_related == []
+    for command in commands:
+        assert COMMAND_EXAMPLES[command]
+        assert COMMAND_RELATED[command]
+        assert any(example.startswith(command) for example in COMMAND_EXAMPLES[command])
 
 
 def test_slash_command_help_reports_unknown_command() -> None:

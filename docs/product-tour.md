@@ -49,6 +49,7 @@ uv run agentx shell
 ```
 
 用 `/help workflow` 或 `/help /infra` 查單一命令的 usage、examples、risk 與 related commands。
+核心 slash command 都有 examples 與 related commands，適合用來快速探索下一步。
 如果輸入錯字，例如 `/wrkflow`，agentX 會提示最接近的候選命令。
 
 用 `/workflows` 看常用路徑：
