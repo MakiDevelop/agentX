@@ -30,6 +30,7 @@ from agentx.approval import ApprovalMode, ApprovalPolicy, approval_decision_sour
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from agentx.config import Settings
 from agentx.command_catalog import (
+    COMMAND_CATALOG,
     SLASH_COMMANDS,
     command_catalog_payload,
     format_unknown_slash_command,
@@ -3254,7 +3255,7 @@ def shell(
     ui_mode = os.getenv("AGENTX_TUI", "1").lower()
     if sys.stdin.isatty() and ui_mode not in {"0", "false", "classic"}:
         tui = AgentXTui(
-            commands=SLASH_COMMANDS,
+            command_catalog=COMMAND_CATALOG,
             status_text=status_line,
             full_screen=ui_mode in {"fullscreen", "full-screen"},
         )
@@ -3262,7 +3263,7 @@ def shell(
         console = Console(file=tui.writer, force_terminal=False, color_system=None, width=100)
     elif sys.stdin.isatty():
         prompt_session = PromptSession(
-            completer=SlashCommandCompleter(SLASH_COMMANDS),
+            completer=SlashCommandCompleter(catalog=COMMAND_CATALOG),
             complete_while_typing=True,
             erase_when_done=True,
             refresh_interval=0.2,

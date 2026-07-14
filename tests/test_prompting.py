@@ -1,6 +1,11 @@
 from prompt_toolkit.document import Document
 
-from agentx.prompting import SlashCommandCompleter, slash_completion_text
+from agentx.command_catalog import COMMAND_CATALOG
+from agentx.prompting import (
+    SlashCommandCompleter,
+    slash_completion_items_from_catalog,
+    slash_completion_text,
+)
 
 
 def test_slash_completion_text_keeps_literal_prefix():
@@ -22,3 +27,25 @@ def test_slash_completer_filters_by_prefix():
     completions = list(completer.get_completions(Document("/config s"), object()))
 
     assert [completion.text for completion in completions] == ["/config set "]
+
+
+def test_slash_completion_items_from_catalog_include_metadata():
+    items = slash_completion_items_from_catalog(COMMAND_CATALOG)
+    workflow = next(item for item in items if item.display == "/workflow NAME")
+
+    assert workflow.text == "/workflow "
+    assert workflow.risk.startswith("GREEN")
+    assert workflow.examples[0] == "/workflow headless"
+    assert "/workflows" in workflow.related
+    assert "e.g. /workflow headless" in workflow.meta
+
+
+def test_slash_completer_uses_catalog_metadata():
+    completer = SlashCommandCompleter(catalog=COMMAND_CATALOG)
+
+    completions = list(completer.get_completions(Document("/workflow"), object()))
+    workflow = next(completion for completion in completions if completion.display_text == "/workflow NAME")
+
+    assert workflow.text == "/workflow "
+    assert "GREEN" in workflow.display_meta_text
+    assert "e.g. /workflow headless" in workflow.display_meta_text

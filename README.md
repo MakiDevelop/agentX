@@ -237,7 +237,7 @@ uv run agentx shell
 
 會列出所有 slash command 與中文說明。
 
-互動式 terminal 支援 slash command 自動補完：
+互動式 terminal 支援 slash command 自動補完，補完資料直接來自同一份 command catalog，會帶 usage、風險與 example metadata：
 
 ```text
 /con<Tab>

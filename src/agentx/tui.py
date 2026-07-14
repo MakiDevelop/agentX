@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import queue
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.key_binding import KeyBindings
@@ -39,7 +39,7 @@ class AgentXTui:
     def __init__(
         self,
         *,
-        commands: list[tuple[str, str]],
+        command_catalog: list[Mapping[str, object]],
         status_text: Callable[[], str],
         full_screen: bool = False,
     ) -> None:
@@ -57,7 +57,7 @@ class AgentXTui:
             height=1,
             multiline=False,
             prompt="agentX: ",
-            completer=SlashCommandCompleter(commands),
+            completer=SlashCommandCompleter(catalog=command_catalog),
             complete_while_typing=True,
             accept_handler=self._accept_input,
         )
