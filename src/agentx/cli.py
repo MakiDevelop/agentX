@@ -1204,6 +1204,76 @@ def task_status_payload(workspace: Path) -> dict[str, object]:
     }
 
 
+TASK_STATUS_FILTERS = {"all", "active", "pending", "in_progress", "done", "blocked"}
+
+
+def tasks_payload(settings: Settings, *, status_filter: str = "all") -> dict[str, object]:
+    """Return the complete project task list for headless automation."""
+    normalized_filter = status_filter.strip().lower()
+    if normalized_filter not in TASK_STATUS_FILTERS:
+        allowed = ", ".join(sorted(TASK_STATUS_FILTERS))
+        raise typer.BadParameter(f"status must be one of: {allowed}")
+
+    all_tasks = load_tasks(settings.workspace)
+    if normalized_filter == "all":
+        filtered_tasks = all_tasks
+    elif normalized_filter == "active":
+        filtered_tasks = [
+            task
+            for task in all_tasks
+            if task.get("status") in {"pending", "in_progress", "blocked"}
+        ]
+    else:
+        filtered_tasks = [task for task in all_tasks if task.get("status") == normalized_filter]
+
+    return {
+        "schema": "agentx.tasks.v1",
+        "workspace": str(settings.workspace),
+        "status_filter": normalized_filter,
+        "count": len(filtered_tasks),
+        "total_count": len(all_tasks),
+        "by_status": _headless_task_counts(all_tasks),
+        "tasks": filtered_tasks,
+        "summary": format_task_list_summary(all_tasks),
+    }
+
+
+def print_tasks_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="tasks",
+        )
+        return
+
+    table = Table(title="agentX tasks", show_header=True, header_style="bold")
+    table.add_column("ID", justify="right", style="cyan")
+    table.add_column("Status")
+    table.add_column("Description")
+    table.add_column("Notes")
+    for task in payload["tasks"]:  # type: ignore[index]
+        row = dict(task)
+        table.add_row(
+            str(row.get("id", "")),
+            str(row.get("status", "")),
+            str(row.get("description", "")),
+            str(row.get("notes", "")),
+        )
+    console.print(table)
+    console.print(
+        "[dim]"
+        f"count={payload['count']} total={payload['total_count']} "
+        f"by_status={json.dumps(payload['by_status'], ensure_ascii=False)}"
+        "[/dim]"
+    )
+
+
 def status_payload(
     settings: Settings,
     *,
@@ -3718,6 +3788,20 @@ def approvals_command(
     structured_format = structured_output_format(json_output, output_format)
     print_approvals_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=approvals_exit_code(payload, fail_on_denied=fail_on_denied))
+
+
+@app.command("tasks")
+def tasks_command(
+    status: str = typer.Argument("all", help="Task status filter: all, active, pending, in_progress, done, or blocked."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for task discovery."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """List project tasks from .agentx/tasks.json."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = tasks_payload(settings, status_filter=status)
+    structured_format = structured_output_format(json_output, output_format)
+    print_tasks_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("status")

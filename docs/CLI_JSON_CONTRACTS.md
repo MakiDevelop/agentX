@@ -29,6 +29,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx init --json` | `agentx.init.v1` | `init` |
 | `agentx sessions --json` | `agentx.sessions.v1` | `sessions` |
 | `agentx approvals --json` | `agentx.approvals.v1` | `approvals` |
+| `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
 | `agentx doctor --json` | `agentx.doctor.v1` | `doctor` |
 | `agentx commands --json` | `agentx.command_catalog.v1` | `commands` |
@@ -212,6 +213,36 @@ Each receipt preserves the transcript approval event fields, including:
 | `approval_mode` | string |
 | `source` | string |
 | `allowed` | boolean |
+
+## Tasks Payload
+
+`agentx tasks [STATUS] --json` emits `agentx.tasks.v1`.
+
+`STATUS` defaults to `all`. Supported filters are `all`, `active`, `pending`,
+`in_progress`, `done`, and `blocked`. `active` means `pending`, `in_progress`,
+or `blocked`.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.tasks.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `status_filter` | string | Applied status filter. |
+| `count` | integer | Number of returned tasks after filtering. |
+| `total_count` | integer | Total number of tasks in `.agentx/tasks.json`. |
+| `by_status` | object | Counts for `pending`, `in_progress`, `done`, and `blocked`. |
+| `tasks` | array of object | Filtered task objects in storage order. |
+| `summary` | string | Human-readable task summary used by prompts and handoff. |
+
+Each task object includes:
+
+| Key | Type |
+|-----|------|
+| `id` | integer |
+| `description` | string |
+| `status` | string |
+| `notes` | string |
 
 ## Doctor Payload
 
