@@ -828,6 +828,7 @@ Required stable keys:
 | `signature` | string | Tool signature metadata from the catalog. |
 | `description` | string | Tool description metadata from the catalog. |
 | `aliases` | array of string | Registered aliases for the canonical tool. |
+| `command_plan` | object or null | Embedded `agentx.command_plan.v1` for `run_command` / `run_build_command`, otherwise null. |
 | `blockers` | array of string | Machine-readable blockers such as `unknown_tool`, `invalid_args_json`, `unsafe_write_path`, or `run_command_requires_green_allowlist`. |
 | `warnings` | array of string | Non-blocking diagnostics. |
 | `next_commands` | array of string | Suggested follow-up actions. |

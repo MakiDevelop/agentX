@@ -16,6 +16,7 @@ def test_tool_plan_payload_allows_green_tool(tmp_path) -> None:  # noqa: ANN001
     assert payload["risk"] == "GREEN"
     assert payload["approval_required"] is False
     assert payload["args"] == {"path": "README.md"}
+    assert payload["command_plan"] is None
     assert payload["blockers"] == []
 
 
@@ -56,7 +57,12 @@ def test_tool_plan_payload_integrates_run_command_policy(tmp_path) -> None:  # n
 
     assert good["ok"] is True
     assert good["blockers"] == []
+    assert good["command_plan"]["schema"] == "agentx.command_plan.v1"  # type: ignore[index]
+    assert good["command_plan"]["matched_policy"] == "allowed_command"  # type: ignore[index]
+    assert good["command_plan"]["allowed"] is True  # type: ignore[index]
     assert bad["ok"] is False
+    assert bad["command_plan"]["schema"] == "agentx.command_plan.v1"  # type: ignore[index]
+    assert bad["command_plan"]["matched_policy"] == "build_command"  # type: ignore[index]
     assert "run_command_requires_green_allowlist" in bad["blockers"]
 
 

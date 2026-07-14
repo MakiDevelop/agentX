@@ -1142,6 +1142,19 @@ def _tool_plan_arg_blockers(settings: Settings, canonical_tool: str, args: dict[
     return blockers
 
 
+def _tool_plan_embedded_command_plan(
+    settings: Settings,
+    canonical_tool: str | None,
+    args: dict[str, object],
+) -> dict[str, object] | None:
+    if canonical_tool not in {"run_command", "run_build_command"}:
+        return None
+    command = args.get("command")
+    if not isinstance(command, str) or not command.strip():
+        return None
+    return command_plan_payload(settings, command)
+
+
 def tool_plan_payload(settings: Settings, tool_name: str, args_json: str | None = None) -> dict[str, object]:
     registry = ToolRegistry(builtin_tools(settings.workspace, NullMemoryClient()))
     args, blockers, detail = _parse_tool_args(args_json)
@@ -1166,6 +1179,7 @@ def tool_plan_payload(settings: Settings, tool_name: str, args_json: str | None 
         "signature": tool_signature(tool) if tool is not None else "",
         "description": str(getattr(tool, "description", "")) if tool is not None else "",
         "aliases": tool_aliases(tool) if tool is not None else [],
+        "command_plan": _tool_plan_embedded_command_plan(settings, canonical_tool, args),
         "blockers": blockers,
         "warnings": [],
         "next_commands": [],
