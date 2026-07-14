@@ -111,6 +111,48 @@ def test_build_infrastructure_context_vps_can_fallback_to_quick_ref_heading(tmp_
     assert "OTHER_MARKER" not in context
 
 
+@pytest.mark.parametrize(
+    ("alias", "expected_marker"),
+    [
+        ("家庭AI設施", "HOME_MARKER"),
+        ("家庭 AI 設施地圖", "HOME_MARKER"),
+        ("VPS地圖", "VPS_MARKER"),
+        ("外網主機", "VPS_MARKER"),
+        ("資源地圖", "RESOURCE_MARKER"),
+        ("專案地圖", "PROJECT_MARKER"),
+        ("基礎設施速查", "QUICK_MARKER"),
+    ],
+)
+def test_build_infrastructure_context_accepts_chinese_aliases(
+    tmp_path: Path,
+    alias: str,
+    expected_marker: str,
+) -> None:
+    infra = tmp_path / "infrastructure"
+    infra.mkdir()
+    (infra / "infrastructure-quick-ref.md").write_text("QUICK_MARKER", encoding="utf-8")
+    (infra / "project-map.md").write_text("PROJECT_MARKER", encoding="utf-8")
+    (infra / "resource-map.md").write_text(
+        "\n".join(
+            [
+                "# RESOURCE_MARKER",
+                "",
+                "## 家庭 AI 中心",
+                "HOME_MARKER",
+                "",
+                "## 外網主機 / VPS",
+                "VPS_MARKER",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    context = build_infrastructure_context(alias, home=tmp_path)
+
+    assert expected_marker in context
+    assert f"Map alias: {alias.lower()}" in context
+
+
 def test_build_infrastructure_context_rejects_unknown_map(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="unknown infrastructure map"):
         build_infrastructure_context("unknown", home=tmp_path)
