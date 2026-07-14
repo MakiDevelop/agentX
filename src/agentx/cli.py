@@ -33,6 +33,7 @@ from agentx.command_catalog import (
     COMMAND_CATALOG,
     SLASH_COMMANDS,
     command_catalog_payload,
+    filtered_command_catalog_payload,
     format_unknown_slash_command,
     normalize_slash_command_topic,
     slash_command_help,
@@ -1766,8 +1767,13 @@ def print_version(*, json_output: bool = False, jsonl_output: bool = False) -> N
     print_raw(f"agentx {payload['agentx']}\npython {payload['python']}")
 
 
-def print_command_catalog(*, json_output: bool = False, jsonl_output: bool = False) -> None:
-    payload = command_catalog_payload()
+def print_command_catalog(
+    query: str | None = None,
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    payload = command_catalog_payload() if query is None else filtered_command_catalog_payload(query)
     if json_output:
         print_structured_payload(
             payload,
@@ -1776,7 +1782,10 @@ def print_command_catalog(*, json_output: bool = False, jsonl_output: bool = Fal
         )
         return
 
-    table = Table(title="agentX command catalog", show_header=True, header_style="bold")
+    title = "agentX command catalog"
+    if payload["query"]:
+        title = f"{title}: {payload['query']}"
+    table = Table(title=title, show_header=True, header_style="bold")
     table.add_column("Command", style="cyan", no_wrap=True)
     table.add_column("Usage")
     table.add_column("Risk")
@@ -2985,12 +2994,13 @@ def backends(
 
 @app.command("commands")
 def commands_command(
+    query: str | None = typer.Argument(None, help="Optional command or keyword filter, e.g. /workflow or memory."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
-    """List slash command catalog entries."""
+    """List or search slash command catalog entries."""
     structured_format = structured_output_format(json_output, output_format)
-    print_command_catalog(json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_command_catalog(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("models")

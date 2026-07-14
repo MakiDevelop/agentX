@@ -82,25 +82,60 @@ COMMAND_RISK_HINTS = {
 
 
 def command_catalog_payload() -> dict[str, object]:
+    return filtered_command_catalog_payload()
+
+
+def filtered_command_catalog_payload(query: str | None = None) -> dict[str, object]:
+    normalized_query = (query or "").strip().lower()
     commands: list[dict[str, object]] = []
     for item in COMMAND_CATALOG:
         usage = str(item["usage"])
         command = usage.split()[0]
+        examples = [str(example) for example in item["examples"]]
+        related = [str(related) for related in item["related"]]
+        risk = str(item.get("risk", "GREEN - read-only, local display, or low-risk routing"))
+        if normalized_query and not _catalog_item_matches(
+            normalized_query,
+            usage=usage,
+            command=command,
+            description=str(item["description"]),
+            examples=examples,
+            related=related,
+            risk=risk,
+        ):
+            continue
         commands.append(
             {
                 "command": command,
                 "usage": usage,
                 "description": str(item["description"]),
-                "examples": [str(example) for example in item["examples"]],
-                "related": [str(related) for related in item["related"]],
-                "risk": str(item.get("risk", "GREEN - read-only, local display, or low-risk routing")),
+                "examples": examples,
+                "related": related,
+                "risk": risk,
             }
         )
     return {
         "schema": "agentx.command_catalog.v1",
+        "query": query or "",
         "count": len(commands),
         "commands": commands,
     }
+
+
+def _catalog_item_matches(
+    query: str,
+    *,
+    usage: str,
+    command: str,
+    description: str,
+    examples: list[str],
+    related: list[str],
+    risk: str,
+) -> bool:
+    if query.startswith("/"):
+        return command.lower().startswith(query) or usage.lower().startswith(query)
+    haystack = " ".join([command, usage, description, *examples, *related, risk]).lower()
+    return query in haystack
 
 
 def slash_command_entries() -> dict[str, tuple[str, str]]:
