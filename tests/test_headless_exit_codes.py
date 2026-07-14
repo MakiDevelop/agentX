@@ -973,6 +973,103 @@ def test_handoff_inspect_reads_stdin_jsonl() -> None:
     )
 
 
+def test_handoff_resume_uses_bundle_handoff_markdown_as_prompt_file(tmp_path: Path) -> None:
+    runner = CliRunner()
+    bundle = tmp_path / "run"
+    bundle.mkdir()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    (bundle / "result.json").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+    (bundle / "handoff.md").write_text("# next\n", encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["handoff-resume", str(bundle)])
+
+    assert result.exit_code == 0
+    assert result.output == (
+        f"agentx --prompt-file {bundle / 'handoff.md'} --agent --resume-session contract.session.jsonl --json\n"
+    )
+
+
+def test_handoff_resume_result_file_keeps_prompt_placeholder() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["handoff-resume", "tests/fixtures/headless_result_failure.json"])
+
+    assert result.exit_code == 0
+    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+
+
+def test_handoff_resume_accepts_next_prompt_and_output_format(tmp_path: Path) -> None:
+    runner = CliRunner()
+    bundle = tmp_path / "run"
+    bundle.mkdir()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    (bundle / "result.json").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+    (bundle / "handoff.md").write_text("# next\n", encoding="utf-8")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-resume",
+            str(bundle),
+            "--next-prompt",
+            "照上一輪繼續",
+            "--resume-output-format",
+            "jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == (
+        "agentx -p '照上一輪繼續' --agent --resume-session contract.session.jsonl --output-format jsonl\n"
+    )
+
+
+def test_handoff_resume_jsonl_output(tmp_path: Path) -> None:
+    runner = CliRunner()
+    bundle = tmp_path / "run"
+    bundle.mkdir()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    (bundle / "result.jsonl").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+    (bundle / "handoff.md").write_text("# next\n", encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["handoff-resume", str(bundle), "--output-format", "jsonl"])
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event["event"] == "handoff_resume"
+    assert event["data"]["field"] == "resume_command"
+    assert event["data"]["value"].startswith("agentx --prompt-file ")
+
+
+def test_handoff_resume_rejects_bundle_with_both_result_formats(tmp_path: Path) -> None:
+    runner = CliRunner()
+    bundle = tmp_path / "run"
+    bundle.mkdir()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    content = fixture.read_text(encoding="utf-8")
+    (bundle / "result.json").write_text(content, encoding="utf-8")
+    (bundle / "result.jsonl").write_text(content, encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["handoff-resume", str(bundle)])
+
+    assert result.exit_code != 0
+    assert "both result.json and result.jsonl" in result.output
+
+
+def test_handoff_resume_missing_handoff_exits_nonzero(tmp_path: Path) -> None:
+    runner = CliRunner()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    event = json.loads(fixture.read_text(encoding="utf-8"))
+    event["data"]["log_summary"]["handoff_summary"]["needs_handoff"] = False
+    target = tmp_path / "result.json"
+    target.write_text(json.dumps(event), encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["handoff-resume", str(target)])
+
+    assert result.exit_code == 1
+    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+
+
 def test_headless_payload_keeps_resume_fields_null_without_session_path() -> None:
     payload = cli.headless_payload(
         cli.HeadlessRunResult(

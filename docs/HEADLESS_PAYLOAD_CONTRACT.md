@@ -73,6 +73,9 @@ agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resum
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --require-schema-version
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field recovery_checklist
 agentx -p "..." --agent --output-format jsonl | agentx handoff-inspect - --field resume_command --next-prompt "照上一輪繼續" --use-payload-exit-code
+agentx handoff-resume .agentx/runs/latest
+agentx handoff-resume .agentx/runs/latest --resume-output-format jsonl
+agentx handoff-resume tests/fixtures/headless_result_failure.json --next-prompt "照上一輪繼續"
 ```
 
 `--use-payload-exit-code` is opt-in. Without it, `handoff-inspect` exits zero
@@ -93,6 +96,10 @@ with `--next-prompt-file PATH` so the printed `resume_command` points at the sam
 artifact that was just created.
 `--resume-output-format json|jsonl` rewrites the generated `resume_command`
 output mode. Use `jsonl` when the next runner expects event envelopes.
+`handoff-resume SOURCE` prints only the generated `resume_command`. If `SOURCE`
+is an artifact bundle directory, it reads `result.json` or `result.jsonl` and
+uses `handoff.md` as the default `--prompt-file` when present. If `SOURCE` is a
+payload file, it behaves like `handoff-inspect --field resume_command`.
 
 For automation that needs a stable artifact path instead of stdout parsing:
 

@@ -1441,6 +1441,25 @@ def load_headless_payload_source(source: str) -> dict[str, object]:
     return load_headless_payload_file(path)
 
 
+def resolve_handoff_resume_payload_source(source: str) -> tuple[Path, Path | None]:
+    path = Path(source).expanduser()
+    if path.is_dir():
+        candidates = [candidate for candidate in (path / "result.json", path / "result.jsonl") if candidate.is_file()]
+        if not candidates:
+            raise typer.BadParameter(f"artifact dir missing result.json or result.jsonl: {source}")
+        if len(candidates) > 1:
+            raise typer.BadParameter(f"artifact dir has both result.json and result.jsonl: {source}")
+        return candidates[0], path / "handoff.md"
+    if path.is_file():
+        return path, None
+    raise typer.BadParameter(f"handoff resume source not found: {source}")
+
+
+def load_handoff_resume_payload_source(source: str) -> tuple[dict[str, object], Path | None]:
+    payload_path, default_prompt_file = resolve_handoff_resume_payload_source(source)
+    return load_headless_payload_file(payload_path), default_prompt_file
+
+
 def inspect_headless_handoff_payload(payload: dict[str, object]) -> dict[str, object]:
     log_summary = payload.get("log_summary")
     if not isinstance(log_summary, dict):
@@ -2965,6 +2984,51 @@ def handoff_inspect(
         print_structured_payload(payload, output_format=structured_format, event="handoff_inspect")
         raise typer.Exit(code=exit_code)
     sys.stdout.write(format_handoff_inspect_plain(payload))
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+    raise typer.Exit(code=exit_code)
+
+
+@app.command("handoff-resume")
+def handoff_resume(
+    source: str = typer.Argument(..., help="Headless artifact directory or result JSON/JSONL payload file."),
+    next_prompt: str | None = typer.Option(None, "--next-prompt", help="Replace the resume command placeholder with this prompt."),
+    next_prompt_file: str | None = typer.Option(None, "--next-prompt-file", help="Replace the resume command placeholder with --prompt-file PATH."),
+    resume_output_format: str | None = typer.Option(None, "--resume-output-format", help="Rewrite resume_command output mode: json or jsonl."),
+    allow_missing_handoff: bool = typer.Option(False, "--allow-missing-handoff", help="Exit 0 even when the payload is not ready for takeover."),
+    require_schema_version: bool = typer.Option(
+        False,
+        "--require-schema-version",
+        help=f"Exit 1 unless schema_version is {HEADLESS_PAYLOAD_SCHEMA_VERSION}.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Print a resume command from a headless artifact bundle or result payload."""
+    structured_format = structured_output_format(json_output, output_format)
+    if next_prompt and next_prompt_file:
+        raise typer.BadParameter("use only one continuation source: --next-prompt or --next-prompt-file")
+
+    raw_payload, default_prompt_file = load_handoff_resume_payload_source(source)
+    payload = inspect_headless_handoff_payload(raw_payload)
+    prompt_file = next_prompt_file
+    if prompt_file is None and next_prompt is None and default_prompt_file is not None and default_prompt_file.is_file():
+        prompt_file = str(default_prompt_file)
+    payload = apply_handoff_next_prompt(payload, next_prompt)
+    payload = apply_handoff_next_prompt_file(payload, prompt_file)
+    payload = apply_handoff_resume_output_format(payload, resume_output_format)
+
+    exit_code = 0
+    if not allow_missing_handoff and not handoff_takeover_ready(payload):
+        exit_code = 1
+    if require_schema_version and not handoff_schema_version_matches(payload):
+        exit_code = 1
+
+    field_payload = handoff_inspect_field_payload(payload, "resume_command")
+    if structured_format != "plain":
+        print_structured_payload(field_payload, output_format=structured_format, event="handoff_resume")
+        raise typer.Exit(code=exit_code)
+    sys.stdout.write(format_handoff_inspect_field_plain(field_payload))
     sys.stdout.write("\n")
     sys.stdout.flush()
     raise typer.Exit(code=exit_code)

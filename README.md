@@ -169,6 +169,7 @@ agentx ask "照上一輪下一步繼續" --resume-session latest --save-session 
 
 `--resume-session` 只會讀取目前 workspace 的 `.agentx/sessions/*.session.jsonl`；JSON payload 的 `session_path` 會回報實際保存或恢復的 session 檔，`log_summary.handoff_summary` 也會在可用時附上 `resume_session` 與可複製的 `resume_command`。Resume 會還原關鍵 runtime state，包括 tool outcomes、file ops、pending verifies、termination 與 observability counters。
 已保存的 JSON/JSONL payload 可用 `agentx handoff-inspect PATH` 抽出接手資訊，例如 resume command 與 recovery checklist；script 可用 `--field resume_command --next-prompt "照上一輪繼續"` 只取可直接執行的續跑命令，長 briefing 可用 `--next-prompt-file .agentx/handoff/next.md` 產生 `--prompt-file` 續跑命令，並可用 `--briefing-output .agentx/handoff/next.md` 同步寫出 Markdown 接手檔。需要 JSONL 接手時可加 `--resume-output-format jsonl`，也可用 `agentx ... --output-format jsonl | agentx handoff-inspect - --field resume_command` 走 stdin pipeline。需要讓 wrapper 同時感知原 headless run 的失敗或 timeout 時，加上 `--use-payload-exit-code`，會先輸出接手資訊再用 payload 的 `exit_code` 結束。需要把 artifact 當成接手 gate 時，加上 `--require-handoff`，若沒有 `needs_handoff=true` 與 `resume_command` 會 exit 1；加上 `--require-schema-version` 可拒絕舊版或未知 payload contract。
+已保存的 artifact bundle 可用 `agentx handoff-resume .agentx/runs/latest` 直接輸出續跑命令；若 bundle 內有 `handoff.md`，預設會輸出 `--prompt-file <bundle>/handoff.md` 版本的 resume command。可加 `--next-prompt`、`--next-prompt-file` 或 `--resume-output-format jsonl` 改寫續跑命令。
 需要穩定 artifact path 給 CI 或其他 agent 時，可用 `--session-output PATH` 指定 workspace 內 JSONL 檔；它會隱含開啟 session persistence，且拒絕覆蓋既有檔案：
 
 ```bash
