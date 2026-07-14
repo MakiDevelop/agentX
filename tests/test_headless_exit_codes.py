@@ -984,9 +984,11 @@ def test_build_headless_dry_run_payload_records_result_output(tmp_path: Path) ->
         workspace_override=tmp_path,
         agent_mode=True,
         result_output=target,
+        result_output_format="jsonl",
     )
 
     assert payload["result_output"] == str(target)
+    assert payload["result_output_format"] == "jsonl"
 
 
 def test_build_headless_dry_run_payload_session_output_implies_save(tmp_path: Path) -> None:
@@ -1172,6 +1174,19 @@ def test_resolve_headless_result_output_accepts_workspace_path(tmp_path: Path) -
         cli.resolve_headless_result_output(tmp_path, "artifacts/result.json")
         == tmp_path / "artifacts" / "result.json"
     )
+
+
+def test_resolve_headless_result_output_format_defaults_from_stdout() -> None:
+    assert cli.resolve_headless_result_output_format(None, stdout_format="plain") == "json"
+    assert cli.resolve_headless_result_output_format("auto", stdout_format="json") == "json"
+    assert cli.resolve_headless_result_output_format("auto", stdout_format="jsonl") == "jsonl"
+    assert cli.resolve_headless_result_output_format("jsonl", stdout_format="plain") == "jsonl"
+    assert cli.resolve_headless_result_output_format("json", stdout_format="jsonl") == "json"
+
+
+def test_resolve_headless_result_output_format_rejects_unknown() -> None:
+    with pytest.raises(Exception, match="result output format"):
+        cli.resolve_headless_result_output_format("yaml", stdout_format="plain")
 
 
 def test_headless_run_stats_summarizes_session_state() -> None:
@@ -1530,6 +1545,77 @@ def test_print_prompt_result_output_writes_jsonl_artifact(tmp_path: Path, monkey
     assert event["event"] == "result"
     assert event["data"]["termination"] == "final_failed"
     assert parsed["failing_tools"] == ["run_tests"]
+
+
+def test_print_prompt_result_output_format_jsonl_with_plain_stdout(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    result_path = tmp_path / "artifacts" / "result.jsonl"
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "-p",
+            "demo",
+            "--agent",
+            "--workspace",
+            str(tmp_path),
+            "--result-output",
+            "artifacts/result.jsonl",
+            "--result-output-format",
+            "jsonl",
+        ],
+    )
+    event = json.loads(result_path.read_text(encoding="utf-8"))
+
+    assert result.exit_code == 0
+    assert result.output == "ok\n"
+    assert event["event"] == "result"
+    assert event["data"]["output"] == "ok"
+
+
+def test_print_prompt_result_output_format_json_with_jsonl_stdout(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    result_path = tmp_path / "artifacts" / "result.json"
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "-p",
+            "demo",
+            "--agent",
+            "--workspace",
+            str(tmp_path),
+            "--output-format",
+            "jsonl",
+            "--result-output",
+            "artifacts/result.json",
+            "--result-output-format",
+            "json",
+        ],
+    )
+    stdout_event = json.loads(result.output)
+    artifact = json.loads(result_path.read_text(encoding="utf-8"))
+
+    assert result.exit_code == 0
+    assert stdout_event["event"] == "result"
+    assert artifact["output"] == "ok"
+    assert "event" not in artifact
 
 
 def test_print_prompt_quiet_suppresses_plain_output(monkeypatch) -> None:  # noqa: ANN001
@@ -2442,6 +2528,39 @@ def test_ask_result_output_writes_json_artifact(tmp_path: Path, monkeypatch) -> 
     assert result.output == ""
     assert payload["output"] == "ok"
     assert payload["exit_code"] == 0
+
+
+def test_ask_result_output_format_jsonl_with_plain_stdout(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    result_path = tmp_path / "artifacts" / "ask-result.jsonl"
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "ask",
+            "demo",
+            "--workspace",
+            str(tmp_path),
+            "--result-output",
+            "artifacts/ask-result.jsonl",
+            "--result-output-format",
+            "jsonl",
+        ],
+    )
+    event = json.loads(result_path.read_text(encoding="utf-8"))
+
+    assert result.exit_code == 0
+    assert result.output == "ok\n"
+    assert event["event"] == "result"
+    assert event["data"]["output"] == "ok"
 
 
 def test_ask_forwards_plan_then_execute(monkeypatch) -> None:  # noqa: ANN001

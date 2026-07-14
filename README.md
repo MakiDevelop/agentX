@@ -101,6 +101,7 @@ agentx -p "幫我看 repo" --agent --approval auto-approve
 agentx -p "幫我看 repo" --agent --quiet
 agentx -p "幫我看 repo" --agent --dry-run --json
 agentx -p "幫我看 repo" --agent --result-output .agentx/results/run.json --quiet
+agentx -p "幫我看 repo" --agent --result-output .agentx/results/run.jsonl --result-output-format jsonl
 agentx --list-backends
 agentx --list-models --json
 agentx backends --json
@@ -148,7 +149,7 @@ JSON payload 會包含 `output`、`exit_code`、`termination`、`failing_tools` 
 `stats` 目前包含 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies 與 task counts。
 `log_summary` 會提供精簡可機讀執行摘要：termination、tool outcomes、successful/failing tools、recent errors、recovery suggestions、pending verifies 與 deterministic `handoff_summary`。
 `--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、models 會分別使用 `dry_run`、`version`、`backends`、`models` event。
-`--result-output PATH` 可把同一份 result payload 寫成 workspace 內 artifact，plain stdout 時預設寫 JSON，`--output-format jsonl` 時寫 JSONL event；路徑拒絕 workspace escape 與覆蓋既有檔案。
+`--result-output PATH` 可把同一份 result payload 寫成 workspace 內 artifact，plain stdout 時預設寫 JSON，`--output-format jsonl` 時寫 JSONL event；路徑拒絕 workspace escape 與覆蓋既有檔案。需要 artifact 格式和 stdout 格式分開時，可用 `--result-output-format auto|json|jsonl`。
 穩定欄位契約見 [`docs/HEADLESS_PAYLOAD_CONTRACT.md`](docs/HEADLESS_PAYLOAD_CONTRACT.md)。
 使用 `--plan-then-execute --json` 時，payload 會額外包含 `phases`，分別提供 `plan` 與 `execution` 的輸出，方便上游 agent 或 script 解析。
 

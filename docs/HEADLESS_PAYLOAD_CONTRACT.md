@@ -77,6 +77,7 @@ For automation that needs a stable artifact path instead of stdout parsing:
 ```bash
 agentx -p "..." --agent --result-output .agentx/results/run.json --quiet
 agentx -p "..." --agent --output-format jsonl --result-output .agentx/results/run.jsonl
+agentx -p "..." --agent --result-output .agentx/results/run.jsonl --result-output-format jsonl
 agentx ask "..." --result-output .agentx/results/ask.json --quiet
 ```
 
@@ -84,6 +85,8 @@ agentx ask "..." --result-output .agentx/results/ask.json --quiet
 an existing file, and creates parent directories as needed. With plain stdout the
 artifact is JSON. With `--output-format jsonl` the artifact is the same single
 `result` event envelope that can be passed to `agentx handoff-inspect`.
+`--result-output-format auto|json|jsonl` can decouple artifact format from
+stdout format; `auto` keeps the default behavior.
 
 ## `log_summary`
 

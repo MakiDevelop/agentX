@@ -70,7 +70,7 @@
 - [x] `--output-format json` 可作為 `--json` 的 script-friendly 等價入口；非法格式會直接失敗。
 - [x] `--output-format jsonl` 可輸出單行 event envelope（`result` / `dry_run` / `version` / `backends` / `models`），方便 pipeline 用同一套 event parser 消費。
 - [x] `--quiet` 可壓掉 plain stdout、保留 exit code；搭配 `--json` 時仍輸出 JSON payload。
-- [x] `--result-output PATH` 可把 headless result payload 寫入 workspace 內 artifact；plain stdout 時寫 JSON，`--output-format jsonl` 時寫 JSONL event，拒絕 workspace escape 與覆蓋既有檔案。
+- [x] `--result-output PATH` 可把 headless result payload 寫入 workspace 內 artifact；plain stdout 時寫 JSON，`--output-format jsonl` 時寫 JSONL event，拒絕 workspace escape 與覆蓋既有檔案；`--result-output-format auto|json|jsonl` 可讓 artifact 格式獨立於 stdout。
 - [x] `--dry-run` 可驗證 headless prompt/workspace/config/override 解析結果，不呼叫模型、不跑工具、不寫 session；支援 JSON 輸出。
 - [x] `--no-memory` 可在單次 headless run 關閉 Memory Hall / AMH 讀寫；工具介面保留但使用 no-op NullMemoryClient，適合 CI、多代理隔離與不可污染記憶的任務。
 - Payload 包含 `output`、`exit_code`、`termination`、`failing_tools`、`stats`。
