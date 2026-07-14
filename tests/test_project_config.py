@@ -75,3 +75,12 @@ def test_settings_normalizes_persona_env(tmp_path, monkeypatch):
     settings = Settings()
 
     assert settings.persona == "tutor"
+
+
+def test_settings_default_memory_hall_url_matches_home_ai_main_path(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTX_WORKSPACE", str(tmp_path))
+    monkeypatch.delenv("AGENTX_MEMORY_HALL_URL", raising=False)
+
+    settings = Settings()
+
+    assert settings.memory_hall_url == "http://100.89.41.50:9100"

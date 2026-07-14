@@ -8,6 +8,7 @@ from agentx.persona import normalize_persona
 from agentx.project_config import load_project_config
 
 DEFAULT_MODEL = "gemma4:31b"
+DEFAULT_MEMORY_HALL_URL = "http://100.89.41.50:9100"
 
 
 @dataclass(frozen=True)
@@ -37,7 +38,7 @@ class Settings:
             model=os.getenv("AGENTX_MODEL") or config.model or DEFAULT_MODEL,
             ollama_url=os.getenv("AGENTX_OLLAMA_URL", "http://127.0.0.1:11434"),
             ollama_timeout=float(os.getenv("AGENTX_OLLAMA_TIMEOUT", "60")),
-            memory_hall_url=os.getenv("AGENTX_MEMORY_HALL_URL", "http://100.122.171.74:9100"),
+            memory_hall_url=os.getenv("AGENTX_MEMORY_HALL_URL", DEFAULT_MEMORY_HALL_URL),
             memory_hall_token=os.getenv("AGENTX_MEMORY_HALL_TOKEN") or os.getenv("MH_API_TOKEN"),
             memory_backend=os.getenv("AGENTX_MEMORY_BACKEND") or config.memory_backend or "memhall",
             memory_amh_store=config.memory_amh_store or os.getenv("AGENTX_AMH_STORE") or "json",

@@ -667,7 +667,8 @@ AGENTX_MEMORY_BACKEND=amh AGENTX_AMH_STORE=postgres AGENTX_AMH_PATH="postgres://
 AGENTX_MEMORY_BACKEND=amh AGENTX_AMH_STORE=memhall AGENTX_AMH_PATH="http://100.89.41.50:9100" ax
 ```
 
-預設為 `memhall` 以維持相容性。詳細見 AGENTX.md Lab Notes 與 `docs/`。
+預設為 `memhall` 以維持相容性；legacy memhall endpoint 預設對齊家庭 AI 地圖的
+mini2 主路徑 `http://100.89.41.50:9100`。詳細見 AGENTX.md Lab Notes 與 `docs/`。
 
 ## 目前工具
 
