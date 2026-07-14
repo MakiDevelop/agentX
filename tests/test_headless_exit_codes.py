@@ -648,6 +648,14 @@ def test_headless_log_summary_summarizes_tool_outcomes_and_errors() -> None:
             )
         ],
         pending_verifies={"src/a.py"},
+        last_recovery_suggestion_details=[
+            {
+                "action": "verify_assumption",
+                "confidence": 0.75,
+                "description": "read the file before editing",
+                "rationale": "state may be stale",
+            }
+        ],
     )
 
     summary = cli.headless_log_summary(session)  # type: ignore[arg-type]
@@ -664,6 +672,31 @@ def test_headless_log_summary_summarizes_tool_outcomes_and_errors() -> None:
             "message": "pytest failed\nwith details",
             "attempt_count": 2,
         }
+    ]
+    assert summary["recovery_suggestions"] == [
+        {
+            "action": "verify_assumption",
+            "confidence": 0.75,
+            "description": "read the file before editing",
+            "rationale": "state may be stale",
+        }
+    ]
+
+
+def test_headless_log_summary_falls_back_to_recovery_actions() -> None:
+    session = SimpleNamespace(
+        last_termination="max_steps_exceeded",
+        _tool_outcomes={},
+        error_history=[],
+        pending_verifies=set(),
+        last_recovery_suggestions=["backtrack", "change_strategy"],
+    )
+
+    summary = cli.headless_log_summary(session)  # type: ignore[arg-type]
+
+    assert summary["recovery_suggestions"] == [
+        {"action": "backtrack"},
+        {"action": "change_strategy"},
     ]
 
 

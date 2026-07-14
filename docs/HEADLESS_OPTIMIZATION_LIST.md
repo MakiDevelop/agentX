@@ -73,7 +73,7 @@
 - [x] `--no-memory` 可在單次 headless run 關閉 Memory Hall / AMH 讀寫；工具介面保留但使用 no-op NullMemoryClient，適合 CI、多代理隔離與不可污染記憶的任務。
 - Payload 包含 `output`、`exit_code`、`termination`、`failing_tools`、`stats`。
 - `stats` 目前提供 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies、task counts。
-- `log_summary` 目前提供 termination、tool outcomes、successful/failing tools、recent errors、pending verifies，讓 script/其他 agent 不必解析自然語言輸出即可判斷執行狀態。
+- `log_summary` 目前提供 termination、tool outcomes、successful/failing tools、recent errors、recovery suggestions、pending verifies，讓 script/其他 agent 不必解析自然語言輸出即可判斷執行狀態與下一個恢復動作。
 - 一般文字輸出保持相容；JSON 模式會抑制 trace，避免污染 stdout。
 
 **Progress Update (Headless Session Resume, 2026-07)**：
@@ -112,6 +112,7 @@
   - 實作 `_detect_stuck`：同工具連續同類錯誤達到門檻即判定為 STUCK
   - 實作 `_generate_recovery_suggestions`：根據錯誤歷史自動產生具體建議（BACKTRACK、CHANGE_STRATEGY、ESCALATE_TO_USER 等）
   - STUCK 時自動插入強烈介入訊息 + 恢復建議，並強制模型進行深度 Reflection
+  - Headless JSON `log_summary.recovery_suggestions` 會輸出結構化 action/confidence/description/rationale，方便 script 或其他 agent 接手恢復。
 - 相關測試：新增 `tests/test_error_classifier.py`（8 個測試全通過）
 - 已 commit 並 push（commit 2fd440c）
 

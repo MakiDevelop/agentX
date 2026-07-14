@@ -14,6 +14,7 @@ class RecoveryRecord:
     error_type: ErrorType = ErrorType.UNKNOWN
     tool_name: str = ""
     suggested_actions: list[str] = field(default_factory=list)
+    suggestions: list[dict[str, str | float]] = field(default_factory=list)
     chosen_action: str | None = None
     was_successful: bool | None = None
 
@@ -148,14 +149,25 @@ class RecoveryPlaybook:
                 confidence=0.58,
             ))
 
+        selected = sorted(suggestions, key=lambda s: s.confidence, reverse=True)[:3]
+
         # 記錄這次建議
         self.last_record = RecoveryRecord(
             error_type=error_ctx.error_type,
             tool_name=error_ctx.tool_name,
-            suggested_actions=[s.action.value for s in suggestions],
+            suggested_actions=[s.action.value for s in selected],
+            suggestions=[
+                {
+                    "action": s.action.value,
+                    "confidence": round(float(s.confidence), 3),
+                    "description": s.description,
+                    "rationale": s.rationale,
+                }
+                for s in selected
+            ],
         )
 
-        return sorted(suggestions, key=lambda s: s.confidence, reverse=True)[:3]
+        return selected
 
     # === 內部輔助偵測 ===
     def _count_same_file_failures(self, recent: list[ErrorContext], current: ErrorContext) -> int:

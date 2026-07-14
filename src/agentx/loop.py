@@ -933,6 +933,13 @@ class AgentSession:
             return self.recovery_playbook.last_record.suggested_actions
         return []
 
+    @property
+    def last_recovery_suggestion_details(self) -> list[dict[str, str | float]]:
+        """Structured recovery suggestions for headless JSON/log observability."""
+        if self.recovery_playbook.last_record:
+            return list(self.recovery_playbook.last_record.suggestions)
+        return []
+
     def _maybe_auto_compact(self) -> None:
         limit = getattr(self.settings, "context_limit_tokens", 8192)
         if not isinstance(limit, (int, float)) or limit <= 0:

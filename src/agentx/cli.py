@@ -998,14 +998,36 @@ def headless_log_summary(session: AgentSession) -> dict[str, object]:
             }
         )
     failing_tools = sorted(name for name, ok in tool_outcomes.items() if not ok)
+    recovery_suggestions = _headless_recovery_suggestions(session)
     return {
         "termination": getattr(session, "last_termination", "unknown"),
         "tool_outcomes": tool_outcomes,
         "successful_tools": sorted(name for name, ok in tool_outcomes.items() if ok),
         "failing_tools": failing_tools,
         "recent_errors": recent_errors,
+        "recovery_suggestions": recovery_suggestions,
         "pending_verifies": sorted(getattr(session, "pending_verifies", set())),
     }
+
+
+def _headless_recovery_suggestions(session: AgentSession) -> list[dict[str, object]]:
+    details = getattr(session, "last_recovery_suggestion_details", None)
+    if details:
+        return [
+            {
+                "action": str(item.get("action", "")),
+                "confidence": float(item.get("confidence", 0.0) or 0.0),
+                "description": str(item.get("description", "")),
+                "rationale": str(item.get("rationale", "")),
+            }
+            for item in details
+            if isinstance(item, dict)
+        ]
+
+    actions = getattr(session, "last_recovery_suggestions", None)
+    if actions:
+        return [{"action": str(action)} for action in actions]
+    return []
 
 
 def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
@@ -1042,6 +1064,7 @@ def headless_exception_result(exc: Exception, *, session_path: str | None = None
                     "attempt_count": 1,
                 }
             ],
+            "recovery_suggestions": [],
             "pending_verifies": [],
         },
     )
@@ -1066,6 +1089,7 @@ def headless_timeout_result(seconds: float, *, session_path: str | None = None) 
                     "attempt_count": 1,
                 }
             ],
+            "recovery_suggestions": [],
             "pending_verifies": [],
         },
     )

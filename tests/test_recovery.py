@@ -15,6 +15,12 @@ def test_playbook_prefers_backtrack_on_repeated_same_tool():
     actions = [s.action for s in suggestions]
     assert RecoveryAction.BACKTRACK in actions
     assert any(s.confidence > 0.7 for s in suggestions)
+    assert playbook.last_record is not None
+    assert playbook.last_record.suggested_actions == [s.action.value for s in suggestions]
+    assert playbook.last_record.suggestions[0]["action"] == suggestions[0].action.value
+    assert playbook.last_record.suggestions[0]["description"] == suggestions[0].description
+    assert playbook.last_record.suggestions[0]["rationale"] == suggestions[0].rationale
+    assert isinstance(playbook.last_record.suggestions[0]["confidence"], float)
 
 
 def test_playbook_escalates_when_too_many_errors():
