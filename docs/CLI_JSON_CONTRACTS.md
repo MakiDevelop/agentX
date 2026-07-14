@@ -190,6 +190,9 @@ Required stable keys:
 | `safe_paths_ok` | boolean | True when every detected patch target passed write-path safety checks. |
 | `file_count` | integer | Number of detected touched files. |
 | `files` | array of object | Per-file path, added/deleted stats when available, binary flag, safe flag, detail, and source list. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. Successful checks recommend `/apply PATCH`; blockers recommend fixing patch blockers and rerunning patch-check. |
+| `recommended_kind` | string | `apply_patch` when checks pass, otherwise `fix_patch_blockers`. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
 | `next_commands` | array of string | Suggested follow-up commands. Successful checks include `/apply PATCH`. |
 | `detail` | string | Combined diagnostic text for blockers. |
 

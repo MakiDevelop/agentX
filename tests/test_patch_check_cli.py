@@ -55,6 +55,9 @@ def test_patch_check_payload_reports_valid_patch(tmp_path: Path) -> None:
     assert payload["files"][0]["path"] == "note.txt"  # type: ignore[index]
     assert payload["files"][0]["safe"] is True  # type: ignore[index]
     assert payload["files"][0]["added"] == 1  # type: ignore[index]
+    assert payload["recommended_command"] == "/apply fix.patch"
+    assert payload["recommended_kind"] == "apply_patch"
+    assert payload["recommended_risk"] == "YELLOW"
     assert "/apply fix.patch" in payload["next_commands"]
 
 
@@ -63,6 +66,9 @@ def test_patch_check_payload_blocks_workspace_escape_patch_file(tmp_path: Path) 
 
     assert payload["ok"] is False
     assert payload["blockers"] == ["patch_file_escapes_workspace"]
+    assert payload["recommended_command"] == "fix patch blockers, then rerun agentx patch-check PATCH --json"
+    assert payload["recommended_kind"] == "fix_patch_blockers"
+    assert payload["recommended_risk"] == "UNKNOWN"
     assert patch_check_exit_code(payload, fail_on_blocker=True) == 1
 
 
@@ -119,6 +125,7 @@ def test_patch_check_json_outputs_payload(tmp_path: Path) -> None:
     payload = json.loads(result.output)
     assert payload["schema"] == "agentx.patch_check.v1"
     assert payload["ok"] is True
+    assert payload["recommended_command"] == "/apply fix.patch"
     assert payload["files"][0]["path"] == "note.txt"
 
 

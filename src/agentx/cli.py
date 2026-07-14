@@ -2678,8 +2678,14 @@ def patch_check_payload(
     next_commands = ["agentx diff --json"]
     if ok:
         next_commands.append(f"/apply {relative_patch}")
+        recommended_command = f"/apply {relative_patch}"
+        recommended_kind = "apply_patch"
+        recommended_risk = "YELLOW"
     else:
         next_commands.append("fix patch blockers, then rerun agentx patch-check PATCH --json")
+        recommended_command = "fix patch blockers, then rerun agentx patch-check PATCH --json"
+        recommended_kind = "fix_patch_blockers"
+        recommended_risk = "UNKNOWN"
 
     return {
         "schema": "agentx.patch_check.v1",
@@ -2693,6 +2699,9 @@ def patch_check_payload(
         "safe_paths_ok": not unsafe_paths,
         "file_count": len(files),
         "files": files,
+        "recommended_command": recommended_command,
+        "recommended_kind": recommended_kind,
+        "recommended_risk": recommended_risk,
         "next_commands": next_commands,
         "detail": "\n".join(detail for detail in details if detail),
     }
@@ -2734,7 +2743,8 @@ def print_patch_check_payload(
     console.print(table)
     console.print(
         f"[dim]ok={payload['ok']} files={payload['file_count']} "
-        f"blockers={','.join(str(item) for item in payload['blockers']) or '-'}[/dim]"
+        f"blockers={','.join(str(item) for item in payload['blockers']) or '-'} "
+        f"recommended={payload.get('recommended_command') or '-'}[/dim]"
     )
 
 
