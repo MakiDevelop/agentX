@@ -228,11 +228,12 @@ Required stable keys:
 
 For `matched_policy="agentx_headless"`, `tool_args` includes runner posture
 metadata such as `agent_mode`, `prompt_source`, `workspace_override`,
-`artifact_dir`, `result_output`, `session_output`, `handoff_briefing_output`,
-`save_session`, `resume_session`, `quiet`, and `output_format`. Both
-`--option value` and `--option=value` forms are recognized for these metadata
-fields.
-Headless blockers include `headless_artifact_dir_conflicts_with_output_options`,
+`prompt_source_count`, `artifact_dir`, `result_output`, `session_output`,
+`handoff_briefing_output`, `save_session`, `resume_session`, `quiet`, and
+`output_format`. Both `--option value` and `--option=value` forms are
+recognized for these metadata fields.
+Headless blockers include `headless_prompt_sources_conflict`,
+`headless_artifact_dir_conflicts_with_output_options`,
 `headless_artifact_dir_requires_agent`,
 `headless_handoff_briefing_output_requires_agent`, and
 `headless_session_output_conflicts_with_resume_session`.

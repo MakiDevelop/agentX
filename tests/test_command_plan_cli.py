@@ -86,6 +86,7 @@ def test_command_plan_payload_marks_agentx_agent_run_yellow(tmp_path) -> None:  
     assert payload["tool_args"] == {
         "agent_mode": True,
         "prompt_source": "inline_prompt",
+        "prompt_source_count": 1,
         "workspace_override": False,
         "artifact_dir": ".agentx/runs/latest",
         "result_output": None,
@@ -109,6 +110,7 @@ def test_command_plan_payload_marks_agentx_prompt_file_metadata(tmp_path) -> Non
     assert payload["risk"] == "GREEN"
     assert payload["approval_required"] is False
     assert payload["tool_args"]["prompt_source"] == "prompt_file"  # type: ignore[index]
+    assert payload["tool_args"]["prompt_source_count"] == 1  # type: ignore[index]
     assert payload["tool_args"]["resume_session"] == "latest"  # type: ignore[index]
     assert payload["tool_args"]["save_session"] is True  # type: ignore[index]
     assert payload["tool_args"]["output_format"] == "jsonl"  # type: ignore[index]
@@ -125,6 +127,7 @@ def test_command_plan_payload_marks_agentx_equals_options(tmp_path) -> None:  # 
     assert payload["ok"] is True
     assert payload["matched_policy"] == "agentx_headless"
     assert payload["tool_args"]["prompt_source"] == "prompt_file"  # type: ignore[index]
+    assert payload["tool_args"]["prompt_source_count"] == 1  # type: ignore[index]
     assert payload["tool_args"]["artifact_dir"] == ".agentx/runs/latest"  # type: ignore[index]
     assert payload["tool_args"]["resume_session"] == "latest"  # type: ignore[index]
     assert payload["tool_args"]["workspace_override"] is True  # type: ignore[index]
@@ -161,6 +164,28 @@ def test_command_plan_payload_blocks_agentx_session_resume_conflict(tmp_path) ->
     assert payload["ok"] is False
     assert payload["allowed"] is False
     assert "headless_session_output_conflicts_with_resume_session" in payload["blockers"]
+
+
+def test_command_plan_payload_blocks_agentx_prompt_source_conflict(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx -p x --prompt-file briefing.md --agent --json")
+
+    assert payload["ok"] is False
+    assert payload["allowed"] is False
+    assert payload["matched_policy"] == "agentx_headless"
+    assert payload["tool_args"]["prompt_source"] == "multiple"  # type: ignore[index]
+    assert payload["tool_args"]["prompt_source_count"] == 2  # type: ignore[index]
+    assert "headless_prompt_sources_conflict" in payload["blockers"]
+
+
+def test_command_plan_payload_marks_agentx_stdin_prompt_source(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx --stdin --agent --output-format=jsonl")
+
+    assert payload["ok"] is True
+    assert payload["risk"] == "YELLOW"
+    assert payload["matched_policy"] == "agentx_headless"
+    assert payload["tool_args"]["prompt_source"] == "stdin"  # type: ignore[index]
+    assert payload["tool_args"]["prompt_source_count"] == 1  # type: ignore[index]
+    assert payload["tool_args"]["output_format"] == "jsonl"  # type: ignore[index]
 
 
 def test_command_plan_json_outputs_payload() -> None:

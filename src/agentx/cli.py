@@ -685,9 +685,12 @@ def _agentx_headless_tool_args(argv: list[str]) -> dict[str, object]:
     output_format_option = _option_value(argv, "--output-format")
     if output_format_option:
         output_format = output_format_option
+    prompt_sources = _agentx_headless_prompt_sources(argv)
+    prompt_source = prompt_sources[0] if len(prompt_sources) == 1 else "multiple"
     return {
         "agent_mode": "--agent" in argv,
-        "prompt_source": "prompt_file" if _has_option(argv, "--prompt-file") else "inline_prompt",
+        "prompt_source": prompt_source,
+        "prompt_source_count": len(prompt_sources),
         "workspace_override": _has_option(argv, "--workspace") or _has_option(argv, "--cwd"),
         "artifact_dir": _option_value(argv, "--artifact-dir"),
         "result_output": _option_value(argv, "--result-output"),
@@ -702,6 +705,8 @@ def _agentx_headless_tool_args(argv: list[str]) -> dict[str, object]:
 
 def _agentx_headless_blockers(tool_args: dict[str, object]) -> list[str]:
     blockers: list[str] = []
+    if int(tool_args.get("prompt_source_count", 0) or 0) > 1:
+        blockers.append("headless_prompt_sources_conflict")
     if tool_args.get("artifact_dir"):
         conflicting_outputs = [
             name
@@ -721,6 +726,17 @@ def _agentx_headless_blockers(tool_args: dict[str, object]) -> list[str]:
     if tool_args.get("session_output") and tool_args.get("resume_session"):
         blockers.append("headless_session_output_conflicts_with_resume_session")
     return blockers
+
+
+def _agentx_headless_prompt_sources(argv: list[str]) -> list[str]:
+    sources: list[str] = []
+    if "-p" in argv or _has_option(argv, "--prompt"):
+        sources.append("inline_prompt")
+    if _has_option(argv, "--prompt-file"):
+        sources.append("prompt_file")
+    if "--stdin" in argv:
+        sources.append("stdin")
+    return sources
 
 
 def _has_option(argv: list[str], option: str) -> bool:
@@ -744,7 +760,8 @@ def _agentx_command_plan(argv: list[str]) -> dict[str, object] | None:
     if not argv or Path(argv[0]).name not in {"agentx", "ax"}:
         return None
     if len(argv) >= 2 and (
-        argv[1] in {"-p", "--prompt", "--prompt-file"} or argv[1].startswith(("--prompt=", "--prompt-file="))
+        argv[1] in {"-p", "--prompt", "--prompt-file", "--stdin"}
+        or argv[1].startswith(("--prompt=", "--prompt-file="))
     ):
         tool_args = _agentx_headless_tool_args(argv)
         blockers = _agentx_headless_blockers(tool_args)
@@ -927,6 +944,8 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
                 {
                     "risk": "UNKNOWN",
                     "matched_policy": agentx_plan.get("matched_policy"),
+                    "tool": agentx_plan.get("tool"),
+                    "tool_args": agentx_plan.get("tool_args", {}),
                     "resolved_argv": agentx_plan.get("resolved_argv"),
                     "next_commands": ["agentx capabilities --json"],
                 }
