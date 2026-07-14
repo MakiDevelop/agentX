@@ -32,6 +32,9 @@ Required keys:
 | `exit_code` | integer | Process-compatible outcome code. |
 | `termination` | string | Structured termination reason. |
 | `failing_tools` | array of string | Tools with unresolved failures. |
+| `recommended_command` | string or null | First suggested follow-up command for simple runners, copied from deterministic handoff state when available. |
+| `recommended_kind` | string or null | Machine-readable recommendation kind such as `resume_headless` or `manual_handoff`. |
+| `recommended_risk` | string or null | Risk label for the recommended follow-up. |
 | `stats` | object | Runtime counters and task counts. |
 | `log_summary` | object | Machine-readable execution summary. |
 | `session_path` | string or null | Saved or resumed session JSONL path, if available. |
@@ -41,6 +44,15 @@ Optional keys:
 | Key | Type | Meaning |
 |-----|------|---------|
 | `phases` | array of object | Present for plan-then-execute results. |
+
+Top-level `recommended_command`, `recommended_kind`, and `recommended_risk`
+exist so simple Codex/Grok-style wrappers can choose the next action without
+parsing nested `log_summary.handoff_summary`. Successful runs return null
+recommendation fields. Failed, timed out, or max-step runs with a saved session
+return the generated resume command as `recommended_command` with
+`recommended_kind="resume_headless"` and `recommended_risk="YELLOW"` because it
+starts another agent-mode run. Runs that need handoff but lack a resumable
+session return `recommended_kind="manual_handoff"`.
 
 ## JSONL Envelope
 

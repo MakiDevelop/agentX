@@ -146,6 +146,9 @@ def test_headless_json_payload_includes_stats() -> None:
             "allowed": True,
         }
     ]
+    assert data["recommended_command"] is None
+    assert data["recommended_kind"] is None
+    assert data["recommended_risk"] is None
     assert data["session_path"] is None
     assert "phases" not in data
 
@@ -176,6 +179,9 @@ def test_headless_payload_enriches_handoff_with_resume_command() -> None:
         == "agentx -p '<next prompt>' --agent --resume-session 20260715-123456.session.jsonl --json"
     )
     assert "Resume with the provided resume_command." in handoff["next_steps"]
+    assert payload["recommended_command"] == handoff["resume_command"]
+    assert payload["recommended_kind"] == "resume_headless"
+    assert payload["recommended_risk"] == "YELLOW"
 
 
 def test_headless_payload_contract_required_keys() -> None:
@@ -241,11 +247,17 @@ def test_headless_payload_contract_required_keys() -> None:
         "exit_code",
         "termination",
         "failing_tools",
+        "recommended_command",
+        "recommended_kind",
+        "recommended_risk",
         "stats",
         "log_summary",
         "session_path",
     }.issubset(payload)
     assert payload["schema_version"] == cli.HEADLESS_PAYLOAD_SCHEMA_VERSION
+    assert payload["recommended_command"] == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json"
+    assert payload["recommended_kind"] == "resume_headless"
+    assert payload["recommended_risk"] == "YELLOW"
 
     log_summary = payload["log_summary"]
     assert {
@@ -1184,6 +1196,9 @@ def test_headless_payload_keeps_resume_fields_null_without_session_path() -> Non
     assert handoff["session_path"] is None
     assert handoff["resume_session"] is None
     assert handoff["resume_command"] is None
+    assert payload["recommended_command"] == "inspect log_summary.handoff_summary before continuing"
+    assert payload["recommended_kind"] == "manual_handoff"
+    assert payload["recommended_risk"] == "UNKNOWN"
 
 
 def test_headless_json_payload_includes_optional_phases() -> None:

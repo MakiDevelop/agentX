@@ -4126,12 +4126,16 @@ def headless_payload(result: HeadlessRunResult, exit_code: int) -> dict[str, obj
             log_summary["handoff_summary"],  # type: ignore[arg-type]
             result.session_path,
         )
+    recommended_command, recommended_kind, recommended_risk = _headless_recommendation(log_summary)
     payload = {
         "schema_version": HEADLESS_PAYLOAD_SCHEMA_VERSION,
         "output": result.output,
         "exit_code": exit_code,
         "termination": result.termination,
         "failing_tools": list(result.failing_tools),
+        "recommended_command": recommended_command,
+        "recommended_kind": recommended_kind,
+        "recommended_risk": recommended_risk,
         "stats": result.stats,
         "log_summary": log_summary,
         "session_path": result.session_path,
@@ -4139,6 +4143,18 @@ def headless_payload(result: HeadlessRunResult, exit_code: int) -> dict[str, obj
     if result.phases:
         payload["phases"] = list(result.phases)
     return payload
+
+
+def _headless_recommendation(log_summary: dict[str, object]) -> tuple[str | None, str | None, str | None]:
+    handoff = log_summary.get("handoff_summary")
+    if not isinstance(handoff, dict):
+        return None, None, None
+    if handoff.get("needs_handoff") is not True:
+        return None, None, None
+    resume_command = handoff.get("resume_command")
+    if resume_command:
+        return str(resume_command), "resume_headless", "YELLOW"
+    return "inspect log_summary.handoff_summary before continuing", "manual_handoff", "UNKNOWN"
 
 
 def headless_handoff_with_resume(

@@ -8,6 +8,9 @@
     "failing_tools": [
       "run_tests"
     ],
+    "recommended_command": "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json",
+    "recommended_kind": "resume_headless",
+    "recommended_risk": "YELLOW",
     "stats": {
       "message_count": 3,
       "task_counts": {

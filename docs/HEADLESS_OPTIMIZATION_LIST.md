@@ -116,6 +116,7 @@
 - [x] `agentx handoff-resume DIR_OR_RESULT` 可從 artifact bundle 或 result payload 直接輸出續跑命令；bundle 目錄會預設使用同目錄 `handoff.md` 作為 `--prompt-file`；`--dry-run` 顯示 argv，`--execute` 才明確執行。
 - [x] `--dry-run` 可驗證 headless prompt/workspace/config/override 解析結果，不呼叫模型、不跑工具、不寫 session；支援 JSON 輸出。
 - [x] `--no-memory` 可在單次 headless run 關閉 Memory Hall / AMH 讀寫；工具介面保留但使用 no-op NullMemoryClient，適合 CI、多代理隔離與不可污染記憶的任務。
+- [x] Headless result payload 會提供 top-level `recommended_command` / `recommended_kind` / `recommended_risk`，失敗、timeout 或 max-steps 且有 session 時直接推薦 resume command，讓簡單 runner 不必深入解析 `log_summary.handoff_summary`。
 - Payload 包含 `schema_version`、`output`、`exit_code`、`termination`、`failing_tools`、`stats`。
 - `stats` 目前提供 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies、task counts。
 - `log_summary` 目前提供 termination、tool outcomes、successful/failing tools、recent errors、recovery suggestions、pending verifies、approval receipts、handoff summary，讓 script/其他 agent 不必解析自然語言輸出即可判斷執行狀態、安全決策與下一個恢復動作。
