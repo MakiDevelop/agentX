@@ -1135,6 +1135,7 @@ def main(
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan thoroughly first, then seamlessly continue into execution in the same run (recommended for complex tasks)."),
     orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
+    backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
     max_steps: int | None = typer.Option(None, "--max-steps", help="Override max agent loop steps for -p."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for headless automation."),
@@ -1162,6 +1163,7 @@ def main(
         plan_mode=plan,
         plan_then_execute=plan_then_execute,
         orchestrate=orchestrate,
+        backend_override=backend,
         model_override=model,
         return_metadata=True,
         suppress_trace=structured_output,
@@ -1194,6 +1196,7 @@ def build_runtime(
     settings: Settings,
     *,
     approval_policy: ApprovalPolicy | None = None,
+    backend_override: str | None = None,
 ) -> tuple[LLMClient, MemoryHallClient, ToolRegistry]:
     """建立執行時需要的核心物件（LLM client、Memory Hall、Tool Registry）。
 
@@ -1208,7 +1211,7 @@ def build_runtime(
     # at runtime inside the function so it occurs after the whole cli module
     # has finished its top-level imports (avoids E402).
     register_builtin_backends()
-    backend = os.getenv("AGENTX_BACKEND", "ollama").lower()
+    backend = (backend_override or os.getenv("AGENTX_BACKEND", "ollama")).lower()
     llm_client = get_llm_client(
         backend,
         base_url=settings.ollama_url,
@@ -1246,6 +1249,7 @@ def run_print_prompt(
     plan_mode: bool = False,
     plan_then_execute: bool = False,
     orchestrate: bool = False,
+    backend_override: str | None = None,
     model_override: str | None = None,
     return_metadata: bool = False,
     suppress_trace: bool = False,
@@ -1268,7 +1272,11 @@ def run_print_prompt(
     if project_config.approval:
         mode = normalize_approval_mode(project_config.approval)
         approval_policy = ApprovalPolicy(mode)
-    ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
+    ollama, memory, tools = build_runtime(
+        settings,
+        approval_policy=approval_policy,
+        backend_override=backend_override,
+    )
     attachment_context, _ = build_attachment_context(prompt, settings.workspace)
     if attachment_context:
         prompt = f"{prompt}\n\n{attachment_context}"
@@ -1531,6 +1539,7 @@ def write_handoff(
 def ask(
     prompt: str = typer.Argument(..., help="Task or question for agentX."),
     namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
+    backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan first, then execute in the same headless run."),
@@ -1545,6 +1554,7 @@ def ask(
         namespace=namespace,
         agent_mode=True,
         plan_then_execute=plan_then_execute,
+        backend_override=backend,
         model_override=model,
         return_metadata=True,
         suppress_trace=structured_output,
