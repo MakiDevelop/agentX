@@ -223,6 +223,64 @@ def format_workflow_recipe(name: str) -> str:
     return f"{goal}\n{path}"
 
 
+def workflow_catalog_payload(query: str | None = None) -> dict[str, object]:
+    normalized_query = (query or "").strip()
+    recipes = []
+    for goal, path in WORKFLOW_ROWS:
+        aliases = sorted(alias for alias, target in WORKFLOW_ALIASES.items() if target == goal)
+        recipes.append(
+            {
+                "goal": goal,
+                "path": path,
+                "aliases": aliases,
+            }
+        )
+    if normalized_query:
+        recipe = workflow_recipe(normalized_query)
+        recipes = [
+            item
+            for item in recipes
+            if recipe is not None and item["goal"] == recipe[0]
+        ]
+    return {
+        "schema": "agentx.workflow_catalog.v1",
+        "query": normalized_query or None,
+        "count": len(recipes),
+        "workflows": recipes,
+    }
+
+
+def print_workflow_catalog(
+    query: str | None = None,
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    payload = workflow_catalog_payload(query)
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="workflows",
+        )
+        return
+    if query and not payload["workflows"]:
+        print_raw(format_workflow_recipe(query))
+        return
+    table = Table(title="agentX workflows", show_header=True, header_style="bold")
+    table.add_column("Goal", style="cyan", no_wrap=True)
+    table.add_column("Path")
+    table.add_column("Aliases")
+    for item in payload["workflows"]:  # type: ignore[index]
+        workflow = dict(item)
+        table.add_row(
+            str(workflow["goal"]),
+            str(workflow["path"]),
+            ", ".join(str(alias) for alias in workflow["aliases"]),
+        )
+    console.print(table)
+
+
 def print_trace(message: str) -> None:
     console.print(f"[dim][trace] {escape(message)}[/dim]")
 
@@ -3353,6 +3411,17 @@ def commands_command(
     """List or search slash command catalog entries."""
     structured_format = structured_output_format(json_output, output_format)
     print_command_catalog(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("workflows")
+def workflows_command(
+    query: str | None = typer.Argument(None, help="Optional workflow name or alias, e.g. headless, audit, commit."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """List or inspect practical workflow recipes."""
+    structured_format = structured_output_format(json_output, output_format)
+    print_workflow_catalog(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("tools")
