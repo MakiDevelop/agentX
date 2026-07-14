@@ -205,7 +205,7 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `agentx review --json` 會輸出 `agentx.review.v1` deterministic review gate，聚合 diff + verify，給出 `commit_ready`、blockers、warnings 與 next commands；加 `--fail-on-blocker` 可讓 CI/wrapper 在未達 commit 條件時 exit 1。
 `agentx commit-plan --message TEXT --json` 會輸出 `agentx.commit_plan.v1` read-only commit plan，列出將逐檔 stage 的檔案、commit message、review gate 與 blockers；它不 stage、不 commit、不 push。
 `agentx gate --json` 會輸出 `agentx.gate.v1` aggregate runner gate，聚合 review、doctor static 與 latest approvals audit；它用 denied approval、doctor failure、review blocker 擋流程，`--fail-on-blocker` 可供 CI/wrapper 使用。
-`agentx next --json` 會輸出 `agentx.next.v1` deterministic next-step planner，根據 diff、active tasks、latest artifacts、denied approvals 推薦下一個 runner command；它不跑測試、不呼叫 LLM、不 mutate。
+`agentx next --json` 會輸出 `agentx.next.v1` deterministic next-step planner，根據 diff、active tasks、latest artifacts、denied approvals 推薦下一個 runner command；每個 recommendation 會附 `command_plan`，且它不跑測試、不呼叫 LLM、不 mutate。
 `agentx init --json` 會輸出 `agentx.init.v1` project profile；預設 read-only，加 `--write-memory` 才會寫入 Memory Hall。
 `agentx sessions --json` 會輸出 `agentx.sessions.v1` transcript overview，方便外部 runner 找最近 session、approval denials 與 resume 目標。
 `agentx artifacts --json` 會輸出 `agentx.artifacts.v1` headless artifact bundle catalog，預設掃 `.agentx/runs`，方便外部 runner 找到上一輪 `result.json/jsonl`、`session.session.jsonl` 與 `handoff.md`。

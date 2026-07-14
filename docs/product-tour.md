@@ -50,7 +50,7 @@ uv run agentx shell
 需要 deterministic review gate 時，用 `agentx review --json` 取得 `agentx.review.v1`；它會聚合 diff + verify 並輸出 `commit_ready`、blockers、warnings 與 next commands，`--fail-on-blocker` 可供 CI/wrapper 擋流程。
 需要 commit 前的機器可讀計畫時，用 `agentx commit-plan --message TEXT --json` 取得 `agentx.commit_plan.v1`；它列出將逐檔 stage 的檔案、review gate 與 blockers，但不會 stage、commit 或 push。
 需要單一 runner gate 時，用 `agentx gate --json` 取得 `agentx.gate.v1`；它聚合 review、doctor static 與 latest approvals audit，讓 Codex/Grok wrapper 不必自行拼多個 JSON。
-需要決定下一個 runner command 時，用 `agentx next --json` 取得 `agentx.next.v1`；它根據 denied approvals、dirty diff、latest artifacts 與 active tasks 排序推薦下一步。
+需要決定下一個 runner command 時，用 `agentx next --json` 取得 `agentx.next.v1`；它根據 denied approvals、dirty diff、latest artifacts 與 active tasks 排序推薦下一步，且每個 recommendation 內嵌 command-plan 預檢。
 需要在 SSH/deploy/cross-machine 前讀 Maki 的資源地圖時，用 `agentx infra resource-bundle --json` 取得 `agentx.infrastructure_context.v1`；`home` 與 `vps` 會分別抽取家庭 AI 設施與 VPS 地圖，這是 read-only evidence，不是遠端操作授權。
 外部 wrapper 可用 `agentx config --json` 取得目前 workspace、model、memory backend、approval、persona 等解析後設定；token 只會顯示 set/missing。
 初次接入 repo 時可用 `agentx init --json` 取得 `agentx.init.v1` project profile；預設只讀，加 `--write-memory` 才寫入 Memory Hall。

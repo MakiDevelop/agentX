@@ -645,6 +645,63 @@ def _docker_plan(settings: Settings, argv: list[str]) -> dict[str, object] | Non
     }
 
 
+def _risk_label_from_capability(capability: dict[str, object]) -> str:
+    risk_text = str(capability.get("risk") or "UNKNOWN").upper()
+    if "RED" in risk_text:
+        return "RED"
+    if "YELLOW" in risk_text:
+        return "YELLOW"
+    if "GREEN" in risk_text:
+        return "GREEN"
+    return "UNKNOWN"
+
+
+def _agentx_command_plan(argv: list[str]) -> dict[str, object] | None:
+    if not argv or Path(argv[0]).name not in {"agentx", "ax"}:
+        return None
+    if len(argv) >= 2 and argv[1] in {"-p", "--prompt", "--prompt-file"}:
+        return {
+            "matched": True,
+            "risk": "YELLOW" if "--agent" in argv else "GREEN",
+            "approval_required": "--agent" in argv,
+            "matched_policy": "agentx_headless",
+            "tool": None,
+            "tool_args": {},
+            "resolved_argv": argv,
+            "blockers": [],
+            "warnings": [],
+        }
+    subcommand = argv[1] if len(argv) >= 2 else ""
+    for capability in capabilities_payload().get("capabilities", []):  # type: ignore[union-attr]
+        if not isinstance(capability, dict):
+            continue
+        command = str(capability.get("command") or "")
+        if command == f"agentx {subcommand}":
+            risk = _risk_label_from_capability(capability)
+            return {
+                "matched": True,
+                "risk": risk,
+                "approval_required": risk == "YELLOW",
+                "matched_policy": "agentx_cli_capability",
+                "tool": None,
+                "tool_args": {},
+                "resolved_argv": argv,
+                "blockers": [],
+                "warnings": [],
+            }
+    return {
+        "matched": False,
+        "risk": "UNKNOWN",
+        "approval_required": False,
+        "matched_policy": "agentx_cli_capability",
+        "tool": None,
+        "tool_args": {},
+        "resolved_argv": argv,
+        "blockers": ["agentx_command_not_in_capabilities"],
+        "warnings": [],
+    }
+
+
 def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
     command_text = command.strip()
     blockers: list[str] = []
@@ -752,8 +809,37 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
             )
         return payload
 
+    agentx_plan = _agentx_command_plan(argv)
+    if agentx_plan is not None:
+        blockers.extend(str(item) for item in agentx_plan.get("blockers", []))
+        warnings.extend(str(item) for item in agentx_plan.get("warnings", []))
+        if agentx_plan.get("matched") and not blockers:
+            payload.update(
+                {
+                    "ok": True,
+                    "allowed": True,
+                    "risk": agentx_plan["risk"],
+                    "approval_required": agentx_plan["approval_required"],
+                    "matched_policy": agentx_plan["matched_policy"],
+                    "tool": agentx_plan["tool"],
+                    "tool_args": agentx_plan["tool_args"],
+                    "resolved_argv": agentx_plan["resolved_argv"],
+                    "next_commands": ["Run through agentX CLI policy; do not bypass approval gates"],
+                }
+            )
+        else:
+            payload.update(
+                {
+                    "risk": "UNKNOWN",
+                    "matched_policy": agentx_plan.get("matched_policy"),
+                    "resolved_argv": agentx_plan.get("resolved_argv"),
+                    "next_commands": ["agentx capabilities --json"],
+                }
+            )
+        return payload
+
     blockers.append("command_not_allowlisted")
-    payload["detail"] = "Command is not in ALLOWED_COMMANDS, BUILD_COMMANDS, or docker compose allowlist"
+    payload["detail"] = "Command is not in ALLOWED_COMMANDS, BUILD_COMMANDS, docker compose policy, or agentx CLI capabilities"
     payload["next_commands"] = ["Use agentx tools --json to inspect runnable tools", "Ask Maki before expanding command policy"]
     return payload
 
@@ -2963,6 +3049,8 @@ def next_payload(
                 "risk": "GREEN",
             }
         )
+    for recommendation in recommendations:
+        recommendation["command_plan"] = command_plan_payload(settings, str(recommendation["command"]))
 
     return {
         "schema": "agentx.next.v1",

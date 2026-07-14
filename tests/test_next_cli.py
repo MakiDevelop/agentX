@@ -72,6 +72,8 @@ def test_next_payload_recommends_gate_for_dirty_workspace(tmp_path: Path) -> Non
     assert payload["recommended_command"] == "agentx gate --json --fail-on-blocker"
     assert payload["recommendations"][0]["kind"] == "gate"  # type: ignore[index]
     assert payload["recommendations"][1]["kind"] == "commit_plan"  # type: ignore[index]
+    assert payload["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"  # type: ignore[index]
+    assert payload["recommendations"][0]["command_plan"]["allowed"] is True  # type: ignore[index]
 
 
 def test_next_payload_prioritizes_denied_approval(tmp_path: Path) -> None:
@@ -115,15 +117,12 @@ def test_next_payload_defaults_to_inspect_when_idle(tmp_path: Path) -> None:
 
     assert payload["signals"]["dirty"] is False  # type: ignore[index]
     assert payload["signals"]["active_task_count"] == 0  # type: ignore[index]
-    assert payload["recommendations"] == [
-        {
-            "rank": 1,
-            "kind": "inspect",
-            "command": "agentx inspect --json",
-            "reason": "workspace is clean and no active runner handoff was detected",
-            "risk": "GREEN",
-        }
-    ]
+    assert payload["recommendations"][0]["rank"] == 1  # type: ignore[index]
+    assert payload["recommendations"][0]["kind"] == "inspect"  # type: ignore[index]
+    assert payload["recommendations"][0]["command"] == "agentx inspect --json"  # type: ignore[index]
+    assert payload["recommendations"][0]["reason"] == "workspace is clean and no active runner handoff was detected"  # type: ignore[index]
+    assert payload["recommendations"][0]["risk"] == "GREEN"  # type: ignore[index]
+    assert payload["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"  # type: ignore[index]
 
 
 def test_next_json_outputs_payload(tmp_path: Path) -> None:

@@ -339,6 +339,7 @@ Each recommendation object includes:
 | `command` | string |
 | `reason` | string |
 | `risk` | string |
+| `command_plan` | object, embedded `agentx.command_plan.v1` |
 
 ## Infrastructure Context Payload
 

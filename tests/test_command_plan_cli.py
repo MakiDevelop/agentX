@@ -62,6 +62,26 @@ def test_command_plan_payload_blocks_unknown_command(tmp_path) -> None:  # noqa:
     assert payload["tool"] is None
 
 
+def test_command_plan_payload_allows_agentx_capability(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx gate --json --fail-on-blocker")
+
+    assert payload["ok"] is True
+    assert payload["allowed"] is True
+    assert payload["risk"] == "GREEN"
+    assert payload["matched_policy"] == "agentx_cli_capability"
+    assert payload["resolved_argv"] == ["agentx", "gate", "--json", "--fail-on-blocker"]
+
+
+def test_command_plan_payload_marks_agentx_agent_run_yellow(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx -p 'continue' --agent --json")
+
+    assert payload["ok"] is True
+    assert payload["allowed"] is True
+    assert payload["risk"] == "YELLOW"
+    assert payload["approval_required"] is True
+    assert payload["matched_policy"] == "agentx_headless"
+
+
 def test_command_plan_json_outputs_payload() -> None:
     result = CliRunner().invoke(app, ["command-plan", "uv run pytest -q", "--json"])
 
