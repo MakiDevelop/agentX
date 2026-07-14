@@ -60,6 +60,7 @@
 - [x] `cat briefing.md | agentx --stdin --agent ...` 可從 stdin 讀取 prompt；與 `-p` / `--prompt-file` 互斥。
 - [x] `--backend BACKEND` 可在單次 headless run 覆蓋 LLM backend（例如 `llama_cpp`），不用改 `AGENTX_BACKEND`。
 - [x] `agentx --list-backends` / `agentx backends` 可離線列出已註冊 LLM backend，支援 JSON 輸出。
+- [x] `agentx --list-models` / `agentx models` 可列出所選 backend 目前可用模型，支援 `--backend` / `--base-url` / JSON。
 - [x] `agentx --version` / `agentx version` 可輸出 agentX 與 Python runtime 版本，支援 JSON 輸出。
 - [x] `--base-url URL` 可在單次 headless run 覆蓋 LLM backend base URL，不用改 `AGENTX_OLLAMA_URL`。
 - [x] `--model MODEL` 可在單次 headless run 覆蓋模型，不必改環境變數或進 shell 後 `/model`。

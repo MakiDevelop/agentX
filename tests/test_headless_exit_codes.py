@@ -187,6 +187,80 @@ def test_backends_command_json(monkeypatch) -> None:  # noqa: ANN001
     assert data == {"backends": ["llama_cpp", "ollama"]}
 
 
+def test_model_list_payload_uses_selected_backend_and_closes(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    seen: dict[str, object] = {}
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def list_models(self) -> list[str]:
+            return ["a", "b"]
+
+        def close(self) -> None:
+            self.closed = True
+            seen["closed"] = True
+
+    fake_client = FakeClient()
+
+    def fake_get_llm_client(name: str, base_url: str, model: str, timeout: float):  # noqa: ANN001
+        seen.update({"name": name, "base_url": base_url, "model": model, "timeout": timeout})
+        return fake_client
+
+    monkeypatch.setattr(cli, "register_builtin_backends", lambda: None)
+    monkeypatch.setattr(cli, "get_llm_client", fake_get_llm_client)
+
+    payload = cli.model_list_payload(
+        workspace_override=tmp_path,
+        backend_override="llama_cpp",
+        base_url_override="http://127.0.0.1:8081",
+        model_override="local-model",
+        timeout_override=12.0,
+    )
+
+    assert payload == {
+        "backend": "llama_cpp",
+        "base_url": "http://127.0.0.1:8081",
+        "models": ["a", "b"],
+    }
+    assert seen == {
+        "name": "llama_cpp",
+        "base_url": "http://127.0.0.1:8081",
+        "model": "local-model",
+        "timeout": 12.0,
+        "closed": True,
+    }
+
+
+def test_list_models_option_json(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(
+        cli,
+        "model_list_payload",
+        lambda **kwargs: {"backend": "ollama", "base_url": "http://x", "models": ["a", "b"]},
+    )
+
+    result = runner.invoke(cli.app, ["--list-models", "--output-format", "json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert data == {"backend": "ollama", "base_url": "http://x", "models": ["a", "b"]}
+
+
+def test_models_command_plain(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(
+        cli,
+        "model_list_payload",
+        lambda **kwargs: {"backend": "ollama", "base_url": "http://x", "models": ["a", "b"]},
+    )
+
+    result = runner.invoke(cli.app, ["models"])
+
+    assert result.exit_code == 0
+    assert result.output == "a\nb\n"
+
+
 def test_version_payload_reads_package_version(monkeypatch) -> None:  # noqa: ANN001
     monkeypatch.setattr(cli, "package_version", lambda name: "9.8.7")
 

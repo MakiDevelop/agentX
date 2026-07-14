@@ -1129,6 +1129,49 @@ def print_headless_dry_run(
         print_raw(format_headless_dry_run(payload))
 
 
+def model_list_payload(
+    *,
+    workspace_override: Path | None = None,
+    backend_override: str | None = None,
+    base_url_override: str | None = None,
+    model_override: str | None = None,
+    timeout_override: float | None = None,
+) -> dict[str, object]:
+    settings = Settings(workspace=workspace_override)
+    if base_url_override:
+        settings = settings.with_updates(ollama_url=base_url_override)
+    if model_override:
+        settings = settings.with_updates(model=model_override)
+    if timeout_override is not None:
+        settings = settings.with_updates(ollama_timeout=timeout_override)
+
+    register_builtin_backends()
+    backend = (backend_override or os.getenv("AGENTX_BACKEND", "ollama")).lower()
+    client = get_llm_client(
+        backend,
+        base_url=settings.ollama_url,
+        model=settings.model,
+        timeout=settings.ollama_timeout,
+    )
+    try:
+        models = client.list_models()
+    finally:
+        client.close()
+
+    return {
+        "backend": backend,
+        "base_url": settings.ollama_url,
+        "models": models,
+    }
+
+
+def print_model_list(payload: dict[str, object], *, json_output: bool = False) -> None:
+    if json_output:
+        print_json_output(json.dumps(payload, ensure_ascii=False))
+        return
+    print_raw("\n".join(str(model) for model in payload["models"]))
+
+
 def resolve_headless_workspace(workspace: str | None) -> Path | None:
     if workspace is None:
         return None
@@ -1275,6 +1318,7 @@ def main(
     orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
     list_backends: bool = typer.Option(False, "--list-backends", help="List registered LLM backend keys and exit."),
+    list_models: bool = typer.Option(False, "--list-models", help="List models for the selected LLM backend and exit."),
     show_version: bool = typer.Option(False, "--version", help="Show agentX and Python versions and exit."),
     workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Run this headless task against a specific workspace directory."),
     approval: str | None = typer.Option(None, "--approval", help="Override approval policy for this headless run: ask, auto, off, strict, auto-approve, or deny."),
@@ -1300,6 +1344,16 @@ def main(
         print_version(json_output=wants_json_output(json_output, output_format))
         raise typer.Exit(code=0)
     workspace_override = resolve_headless_workspace(workspace)
+    if list_models:
+        payload = model_list_payload(
+            workspace_override=workspace_override,
+            backend_override=backend,
+            base_url_override=base_url,
+            model_override=model,
+            timeout_override=timeout,
+        )
+        print_model_list(payload, json_output=wants_json_output(json_output, output_format))
+        raise typer.Exit(code=0)
     settings_for_prompt = Settings(workspace=workspace_override)
     prompt = load_headless_prompt(
         print_prompt,
@@ -1819,6 +1873,27 @@ def backends(
 ) -> None:
     """List registered LLM backend keys."""
     print_backend_list(json_output=wants_json_output(json_output, output_format))
+
+
+@app.command("models")
+def models(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for config resolution."),
+    backend: str | None = typer.Option(None, "--backend", help="Override LLM backend."),
+    base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL."),
+    model: str | None = typer.Option(None, "--model", help="Override model used to initialize the backend client."),
+    timeout: float | None = typer.Option(None, "--timeout", help="Override request timeout seconds."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain or json."),
+) -> None:
+    """List models for the selected LLM backend."""
+    payload = model_list_payload(
+        workspace_override=resolve_headless_workspace(workspace),
+        backend_override=backend,
+        base_url_override=base_url,
+        model_override=model,
+        timeout_override=timeout,
+    )
+    print_model_list(payload, json_output=wants_json_output(json_output, output_format))
 
 
 @app.command("version")

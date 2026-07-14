@@ -100,7 +100,9 @@ agentx -p "幫我看 repo" --agent --approval auto-approve
 agentx -p "幫我看 repo" --agent --quiet
 agentx -p "幫我看 repo" --agent --dry-run --json
 agentx --list-backends
+agentx --list-models --json
 agentx backends --json
+agentx models --backend llama_cpp --base-url http://127.0.0.1:8081
 agentx --version
 agentx version --json
 ```
