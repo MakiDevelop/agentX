@@ -188,6 +188,22 @@ def test_command_plan_payload_blocks_agentx_session_result_path_conflict(tmp_pat
     assert "headless_output_paths_conflict" in payload["blockers"]
 
 
+def test_command_plan_payload_blocks_agentx_output_path_escape(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx -p x --agent --result-output ../outside.json --json")
+
+    assert payload["ok"] is False
+    assert payload["allowed"] is False
+    assert "headless_output_path_escapes_workspace" in payload["blockers"]
+
+
+def test_command_plan_payload_blocks_agentx_artifact_dir_escape(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx -p x --agent --artifact-dir ../runs/latest --json")
+
+    assert payload["ok"] is False
+    assert payload["allowed"] is False
+    assert "headless_output_path_escapes_workspace" in payload["blockers"]
+
+
 def test_command_plan_payload_blocks_agentx_prompt_source_conflict(tmp_path) -> None:  # noqa: ANN001
     payload = command_plan_payload(Settings(workspace=tmp_path), "agentx -p x --prompt-file briefing.md --agent --json")
 

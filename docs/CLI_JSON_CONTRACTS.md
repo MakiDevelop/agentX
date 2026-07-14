@@ -236,7 +236,8 @@ Headless blockers include `headless_prompt_sources_conflict`,
 `headless_artifact_dir_conflicts_with_output_options`,
 `headless_output_paths_conflict`, `headless_artifact_dir_requires_agent`,
 `headless_handoff_briefing_output_requires_agent`, and
-`headless_session_output_conflicts_with_resume_session`.
+`headless_session_output_conflicts_with_resume_session`. Output path blockers
+also include `headless_output_path_escapes_workspace`.
 
 ## Review Payload
 

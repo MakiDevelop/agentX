@@ -703,12 +703,14 @@ def _agentx_headless_tool_args(argv: list[str]) -> dict[str, object]:
     }
 
 
-def _agentx_headless_blockers(tool_args: dict[str, object]) -> list[str]:
+def _agentx_headless_blockers(settings: Settings, tool_args: dict[str, object]) -> list[str]:
     blockers: list[str] = []
     if int(tool_args.get("prompt_source_count", 0) or 0) > 1:
         blockers.append("headless_prompt_sources_conflict")
     if _headless_output_paths_conflict(tool_args):
         blockers.append("headless_output_paths_conflict")
+    if _headless_paths_escape_workspace(settings.workspace, tool_args):
+        blockers.append("headless_output_path_escapes_workspace")
     if tool_args.get("artifact_dir"):
         conflicting_outputs = [
             name
@@ -728,6 +730,18 @@ def _agentx_headless_blockers(tool_args: dict[str, object]) -> list[str]:
     if tool_args.get("session_output") and tool_args.get("resume_session"):
         blockers.append("headless_session_output_conflicts_with_resume_session")
     return blockers
+
+
+def _headless_paths_escape_workspace(workspace: Path, tool_args: dict[str, object]) -> bool:
+    for key in ("artifact_dir", "session_output", "result_output", "handoff_briefing_output"):
+        value = tool_args.get(key)
+        if not value:
+            continue
+        try:
+            resolve_inside_workspace(workspace, str(value))
+        except ValueError:
+            return True
+    return False
 
 
 def _headless_output_paths_conflict(tool_args: dict[str, object]) -> bool:
@@ -771,7 +785,7 @@ def _option_value(argv: list[str], option: str) -> str | None:
     return argv[index + 1]
 
 
-def _agentx_command_plan(argv: list[str]) -> dict[str, object] | None:
+def _agentx_command_plan(settings: Settings, argv: list[str]) -> dict[str, object] | None:
     if not argv or Path(argv[0]).name not in {"agentx", "ax"}:
         return None
     if len(argv) >= 2 and (
@@ -779,7 +793,7 @@ def _agentx_command_plan(argv: list[str]) -> dict[str, object] | None:
         or argv[1].startswith(("--prompt=", "--prompt-file="))
     ):
         tool_args = _agentx_headless_tool_args(argv)
-        blockers = _agentx_headless_blockers(tool_args)
+        blockers = _agentx_headless_blockers(settings, tool_args)
         return {
             "matched": True,
             "risk": "YELLOW" if "--agent" in argv else "GREEN",
@@ -933,7 +947,7 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
             )
         return payload
 
-    agentx_plan = _agentx_command_plan(argv)
+    agentx_plan = _agentx_command_plan(settings, argv)
     if agentx_plan is not None:
         blockers.extend(str(item) for item in agentx_plan.get("blockers", []))
         warnings.extend(str(item) for item in agentx_plan.get("warnings", []))
