@@ -140,7 +140,7 @@ SLASH_COMMANDS = [
     ("/attach PATH...", "把指定檔案內容加入本輪 context；支援拖曳路徑"),
     ("/find KEYWORD", "依 keyword 搜尋檔名/路徑與內容，並建議 /read 目標"),
     ("/where TOPIC", "依 topic 定位最可能的檔案位置，輸出 ranked /read 建議"),
-    ("/infra [all|quick|project|resource|home|vps]", "讀取專案地圖、家庭 AI 設施與 VPS 資源地圖（read-only）"),
+    ("/infra [all|quick|project|resource|home|vps]", "讀取專案/資源地圖；home/vps 會抽取專用章節（read-only）"),
     ("/intent TEXT", "把需求整理成目標、風險、建議讀檔與驗證計畫"),
     ("/plan-task [--apply] TEXT", "把需求拆成 checklist；--apply 會寫入 /task 清單"),
     ("/grep PATTERN [PATH]", "在指定 path 內做 rg 內容搜尋；預設整個 workspace"),

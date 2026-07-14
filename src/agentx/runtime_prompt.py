@@ -87,7 +87,7 @@ def _base_tools_section() -> str:
 - read_file: {"path":"file.py"} — read file content
 - find_files: {"keyword":"topic","path":"."} — find relevant files by path/name and content, with /read suggestions
 - locate_topic: {"topic":"approval policy","path":"."} — rank likely files for a topic, with /read suggestions
-- infrastructure_context: {"map":"all|quick|project|resource|home|vps"} — read Maki's project map, resource map, home AI facilities and VPS references as read-only context before infra planning; this does not enable SSH/deploy
+- infrastructure_context: {"map":"all|quick|project|resource|home|vps"} — read Maki's project/resource maps; home and vps extract the dedicated resource-map sections as read-only context before infra planning; this does not enable SSH/deploy
 - analyze_intent: {"text":"user request"} — convert a vague request into a deterministic goal/risk/inspection/verification brief before execution
 - plan_task: {"text":"user request"} — produce a read-only checklist and suggested /task add commands for a request; does not mutate tasks. Use slash /plan-task --apply TEXT only when the user wants to write the checklist into the task list.
 - search_text: {"pattern":"keyword","path":"."} — search in files

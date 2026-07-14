@@ -340,7 +340,7 @@ class FindFilesTool(_WorkspaceTool):
 
 class InfrastructureContextTool:
     name = "infrastructure_context"
-    description = "讀取 Maki 的專案地圖與家庭 AI 設施地圖（read-only；SSH/deploy 前用於確認目標）"
+    description = "讀取 Maki 的專案/資源地圖，或抽取家庭 AI 設施/VPS 地圖（read-only；SSH/deploy 前用於確認目標）"
     risk = Risk.GREEN
     signature = 'map="all|quick|project|resource|home|vps", max_chars=14000'
 
