@@ -1040,14 +1040,18 @@ def headless_handoff_summary(
     exhausts steps, or needs another agent to resume.
     """
     next_steps: list[str] = []
+    recovery_actions = [
+        action
+        for action in (str(item.get("action", "")) for item in recovery_suggestions)
+        if action
+    ]
+    primary_recovery = recovery_suggestions[0] if recovery_suggestions else None
     if pending_verifies:
         next_steps.append("Verify pending edited paths before making more changes.")
     if failing_tools:
         next_steps.append(f"Inspect or rerun failing tool(s): {', '.join(failing_tools)}.")
-    if recovery_suggestions:
-        action = str(recovery_suggestions[0].get("action", ""))
-        if action:
-            next_steps.append(f"Apply recovery action: {action}.")
+    if recovery_actions:
+        next_steps.append(f"Apply recovery action: {recovery_actions[0]}.")
     if termination == "max_steps_exceeded":
         next_steps.append("Resume from the saved session if session_path is present, or rerun with higher --max-steps.")
     elif termination == "final_failed":
@@ -1065,6 +1069,8 @@ def headless_handoff_summary(
         "pending_verifies": pending_verifies,
         "task_counts": task_counts,
         "last_error": recent_errors[-1] if recent_errors else None,
+        "recovery_actions": recovery_actions,
+        "primary_recovery": primary_recovery,
         "next_steps": next_steps,
     }
 

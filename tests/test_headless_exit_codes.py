@@ -800,6 +800,13 @@ def test_headless_handoff_summary_recommends_takeover_steps() -> None:
     assert summary["pending_verifies"] == ["src/a.py"]
     assert summary["task_counts"] == {"in_progress": 1}
     assert summary["last_error"]["message"] == "pytest failed"
+    assert summary["recovery_actions"] == ["verify_assumption"]
+    assert summary["primary_recovery"] == {
+        "action": "verify_assumption",
+        "confidence": 0.75,
+        "description": "read files",
+        "rationale": "state stale",
+    }
     assert summary["next_steps"] == [
         "Verify pending edited paths before making more changes.",
         "Inspect or rerun failing tool(s): run_tests.",
@@ -872,6 +879,13 @@ def test_headless_log_summary_summarizes_tool_outcomes_and_errors() -> None:
     assert summary["handoff_summary"]["needs_handoff"] is True
     assert summary["handoff_summary"]["failing_tools"] == ["run_tests"]
     assert summary["handoff_summary"]["pending_verifies"] == ["src/a.py"]
+    assert summary["handoff_summary"]["recovery_actions"] == ["verify_assumption"]
+    assert summary["handoff_summary"]["primary_recovery"] == {
+        "action": "verify_assumption",
+        "confidence": 0.75,
+        "description": "read the file before editing",
+        "rationale": "state may be stale",
+    }
 
 
 def test_headless_log_summary_falls_back_to_recovery_actions() -> None:
