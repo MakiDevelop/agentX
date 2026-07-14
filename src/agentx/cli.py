@@ -20,6 +20,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from agentx import cli_runtime_handlers as _runtime_handlers
 from agentx import cli_slash_shims as _slash_shims
 from agentx.approval import ApprovalMode, ApprovalPolicy, normalize_approval_mode
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
@@ -165,8 +166,9 @@ SLASH_COMMANDS = [
 
 NON_BLOCKING_COMMANDS = {"/jobs", "/cancel"}
 
-# Module-level slash test shims live in agentx.cli_slash_shims. Runtime shell handlers
-# remain nested in run_shell() and register into a local SLASH_HANDLERS dict.
+# Module-level slash test shims live in agentx.cli_slash_shims.
+# Runtime /plan, /execute, /mode logic lives in agentx.cli_runtime_handlers;
+# nested run_shell() handlers delegate there and register into a local dict.
 SLASH_HANDLERS = _slash_shims.SLASH_HANDLERS
 dispatch_slash = _slash_shims.dispatch_slash
 cmd_clear = _slash_shims.cmd_clear
@@ -1843,53 +1845,38 @@ def shell(
     register_handler("/approval", handle_approval)
 
     def handle_plan(state: ShellState, prompt: str):
-        """切換 plan mode"""
-        new_plan = not state.plan_mode
-        state.set_plan_mode(new_plan)
-        transcript.write("slash_command", {"command": prompt, "plan": new_plan})
-        status = format_plan_status(state.plan_mode)
-        console.print(f"plan mode: {status}")
+        """切換 plan mode — delegates to importable runtime handler."""
+        _runtime_handlers.handle_plan(
+            state,
+            prompt,
+            transcript=transcript,
+            emit=console.print,
+            format_status=format_plan_status,
+        )
 
     register_handler("/plan", handle_plan)
 
     def handle_execute(state: ShellState, prompt: str):
-        """從 plan 模式切換至執行模式"""
-        if not state.plan_mode and not (state.agent_session and state.agent_session.plan_only):
-            console.print("目前不在 plan 模式中")
-            return
-
-        state.set_plan_mode(False)
-
-        # 從 plan 模式執行時，預設切到 agent 模式
-        if state.mode == "chat":
-            state.set_chat_mode("agent")
-
-        transcript.write("slash_command", {"command": prompt, "plan": False, "mode": state.mode, "action": "execute"})
-
-        # 注入 system message 告知模型可以開始執行
-        execute_message = (
-            "規劃階段已結束，使用者已同意上述方案。\n"
-            "你現在已切換至執行模式。請使用工具實際執行方案中的每個步驟。\n"
-            "如果需要，可以先列出下一步要做的動作，再逐步呼叫工具完成。"
+        """從 plan 模式切換至執行模式 — delegates to importable runtime handler."""
+        _runtime_handlers.handle_execute(
+            state,
+            prompt,
+            transcript=transcript,
+            chat_messages=chat_messages,
+            emit=console.print,
         )
-        if state.agent_session:
-            state.agent_session.messages.append({"role": "system", "content": execute_message})
-        chat_messages.append({"role": "system", "content": execute_message})
-
-        console.print(f"已切換至執行模式（mode={state.mode}）。後續提示將可使用工具實際執行方案。")
 
     register_handler("/execute", handle_execute)
 
     def handle_mode(state: ShellState, prompt: str):
-        """切換 chat / agent 模式"""
-        next_mode = prompt.removeprefix("/mode ").strip()
-        try:
-            state.set_chat_mode(next_mode)
-        except ValueError:
-            print_raw("mode must be chat, ask, or agent")
-            return
-        transcript.write("slash_command", {"command": prompt, "mode": state.mode})
-        console.print(f"mode={state.mode}")
+        """切換 chat / agent 模式 — delegates to importable runtime handler."""
+        _runtime_handlers.handle_mode(
+            state,
+            prompt,
+            transcript=transcript,
+            emit=console.print,
+            emit_error=print_raw,
+        )
 
     register_handler("/mode", handle_mode)
 
