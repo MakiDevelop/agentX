@@ -2,9 +2,10 @@
 
 These tests exercise ``agentx.cli_runtime_handlers`` — the real interactive
 logic for /plan, /execute, /mode, /files, /read, /search, /git, /diff,
-low-risk inspection handlers /status, /sessions, /jobs, /task readonly,
-and pure info/display handlers /help, /guide, /workflows, /tools,
-/context, /history, /transcript — not the simplified ``cli_slash_shims``.
+low-risk tool-backed /memory, /fetch, /run, /test, low-risk inspection
+handlers /status, /sessions, /jobs, /task readonly, and pure info/display
+handlers /help, /guide, /workflows, /tools, /context, /history,
+/transcript — not the simplified ``cli_slash_shims``.
 """
 
 from __future__ import annotations
@@ -19,19 +20,23 @@ from agentx.cli_runtime_handlers import (
     handle_context,
     handle_diff,
     handle_execute,
+    handle_fetch,
     handle_files,
     handle_git,
     handle_guide,
     handle_help,
     handle_history,
     handle_jobs,
+    handle_memory,
     handle_mode,
     handle_plan,
     handle_read,
+    handle_run,
     handle_search,
     handle_sessions,
     handle_status,
     handle_task_readonly,
+    handle_test,
     handle_tools,
     handle_transcript,
     handle_workflows,
@@ -473,6 +478,221 @@ def test_handle_diff_failure_prefix() -> None:
     handle_diff("/diff", tools=tools, transcript=transcript, emit=emit)
 
     assert lines == ["工具執行失敗：diff failed"]
+
+
+# --- /memory /fetch /run /test (low-risk tool-backed) ----------------------
+
+
+def test_handle_memory_success_writes_slash_and_tool(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    tools = FakeTools(ToolResult(tool="memory_search", ok=True, content="hit: note"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+    usage: list[str] = []
+
+    handle_memory(
+        state,
+        "/memory prior handoff",
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        emit_usage=usage.append,
+    )
+
+    assert tools.calls == [
+        ("memory_search", {"query": "prior handoff", "namespace": "project:test"})
+    ]
+    assert usage == []
+    assert lines == ["hit: note"]
+    assert transcript.events == [
+        ("slash_command", {"command": "/memory prior handoff"}),
+        (
+            "tool",
+            {
+                "command": "/memory",
+                "query": "prior handoff",
+                "ok": True,
+                "content": "hit: note",
+            },
+        ),
+    ]
+
+
+def test_handle_memory_empty_query_usage_no_tool(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    tools = FakeTools(ToolResult(tool="memory_search", ok=True, content="should not run"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+    usage: list[str] = []
+
+    handle_memory(
+        state,
+        "/memory ",
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        emit_usage=usage.append,
+    )
+
+    assert tools.calls == []
+    assert lines == []
+    assert usage == ["usage: /memory QUERY"]
+    # slash_command is still written before the empty-query guard
+    assert transcript.events == [("slash_command", {"command": "/memory "})]
+
+
+def test_handle_memory_bare_command_usage_no_tool(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    tools = FakeTools(ToolResult(tool="memory_search", ok=True, content="should not run"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+    usage: list[str] = []
+
+    handle_memory(
+        state,
+        "/memory",
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        emit_usage=usage.append,
+    )
+
+    assert tools.calls == []
+    assert lines == []
+    assert usage == ["usage: /memory QUERY"]
+    assert transcript.events == [("slash_command", {"command": "/memory"})]
+
+
+def test_handle_memory_failure_prefix_and_truncation(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    long_content = "e" * 2500
+    tools = FakeTools(ToolResult(tool="memory_search", ok=False, content=long_content))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_memory(
+        state,
+        "/memory boom",
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+    )
+
+    assert lines == [f"memory search failed: {long_content}"]
+    tool_event = transcript.events[1][1]
+    assert tool_event["ok"] is False
+    assert tool_event["query"] == "boom"
+    assert len(tool_event["content"]) == 2000
+    assert tool_event["content"] == long_content[:2000]
+
+
+def test_handle_fetch_success_and_url_in_transcript() -> None:
+    tools = FakeTools(ToolResult(tool="web_fetch", ok=True, content="<html>ok</html>"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_fetch(
+        "/fetch https://example.com/page",
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+    )
+
+    assert tools.calls == [("web_fetch", {"url": "https://example.com/page"})]
+    assert lines == ["<html>ok</html>"]
+    assert transcript.events == [
+        (
+            "tool",
+            {
+                "command": "/fetch",
+                "url": "https://example.com/page",
+                "ok": True,
+                "content": "<html>ok</html>",
+            },
+        )
+    ]
+
+
+def test_handle_fetch_failure_prefix_and_truncation_4000() -> None:
+    long_content = "f" * 4500
+    tools = FakeTools(ToolResult(tool="web_fetch", ok=False, content=long_content))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_fetch("/fetch http://bad", tools=tools, transcript=transcript, emit=emit)
+
+    assert lines == [f"fetch failed: {long_content}"]
+    event = transcript.events[0][1]
+    assert event["ok"] is False
+    assert event["url"] == "http://bad"
+    assert len(event["content"]) == 4000
+    assert event["content"] == long_content[:4000]
+
+
+def test_handle_run_success_input_in_transcript() -> None:
+    tools = FakeTools(ToolResult(tool="run_command", ok=True, content="ok\n"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_run("/run uv run pytest -q", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("run_command", {"command": "uv run pytest -q"})]
+    assert lines == ["ok\n"]
+    assert transcript.events == [
+        (
+            "tool",
+            {
+                "command": "/run",
+                "input": "uv run pytest -q",
+                "ok": True,
+                "content": "ok\n",
+            },
+        )
+    ]
+
+
+def test_handle_run_failure_prefix_and_truncation_4000() -> None:
+    long_content = "r" * 4500
+    tools = FakeTools(ToolResult(tool="run_command", ok=False, content=long_content))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_run("/run echo hi", tools=tools, transcript=transcript, emit=emit)
+
+    assert lines == [f"run failed: {long_content}"]
+    event = transcript.events[0][1]
+    assert event["input"] == "echo hi"
+    assert event["ok"] is False
+    assert len(event["content"]) == 4000
+
+
+def test_handle_test_success() -> None:
+    tools = FakeTools(ToolResult(tool="run_tests", ok=True, content="all passed"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_test("/test", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("run_tests", {})]
+    assert lines == ["all passed"]
+    assert transcript.events == [
+        ("tool", {"command": "/test", "ok": True, "content": "all passed"})
+    ]
+
+
+def test_handle_test_failure_prefix_and_truncation_4000() -> None:
+    long_content = "t" * 4500
+    tools = FakeTools(ToolResult(tool="run_tests", ok=False, content=long_content))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_test("/test", tools=tools, transcript=transcript, emit=emit)
+
+    assert lines == [f"驗證失敗：{long_content}"]
+    event = transcript.events[0][1]
+    assert event["ok"] is False
+    assert len(event["content"]) == 4000
+    assert event["content"] == long_content[:4000]
 
 
 # --- /status /sessions /jobs /task readonly (inspection) -------------------

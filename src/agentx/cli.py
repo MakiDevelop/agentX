@@ -1502,18 +1502,15 @@ def shell(
     register_handler("/workflows", handle_workflows)
 
     def handle_memory(state: ShellState, prompt: str):
-        """查詢目前 namespace 的 Memory Hall 記憶（支援 /memory QUERY）"""
-        transcript.write("slash_command", {"command": prompt})
-        query = prompt.removeprefix("/memory ").strip()
-        if not query:
-            console.print("usage: /memory QUERY")
-            return
-        result = tools.run("memory_search", {"query": query, "namespace": state.namespace})
-        transcript.write(
-            "tool",
-            {"command": "/memory", "query": query, "ok": result.ok, "content": result.content[:2000]},
+        """查詢目前 namespace 的 Memory Hall 記憶（支援 /memory QUERY）— delegates."""
+        _runtime_handlers.handle_memory(
+            state,
+            prompt,
+            tools=tools,
+            transcript=transcript,
+            emit=print_tool_result,
+            emit_usage=console.print,
         )
-        print_tool_result(result.content if result.ok else f"memory search failed: {result.content}")
 
     register_handler("/memory", handle_memory)
 
@@ -1734,14 +1731,13 @@ def shell(
     register_handler("/search", handle_search)
 
     def handle_fetch(state: ShellState, prompt: str):
-        """讀取指定外部網頁文字"""
-        url = prompt.removeprefix("/fetch ").strip()
-        result = tools.run("web_fetch", {"url": url})
-        transcript.write(
-            "tool",
-            {"command": "/fetch", "url": url, "ok": result.ok, "content": result.content[:4000]},
+        """讀取指定外部網頁文字 — delegates to runtime handler."""
+        _runtime_handlers.handle_fetch(
+            prompt,
+            tools=tools,
+            transcript=transcript,
+            emit=print_tool_result,
         )
-        print_tool_result(result.content if result.ok else f"fetch failed: {result.content}")
 
     register_handler("/fetch", handle_fetch)
 
@@ -1983,22 +1979,24 @@ def shell(
     register_handler("/remember", handle_remember)
 
     def handle_run(state: ShellState, prompt: str):
-        """執行 allowlist 指令"""
-        command = prompt.removeprefix("/run ").strip()
-        result = tools.run("run_command", {"command": command})
-        transcript.write(
-            "tool",
-            {"command": "/run", "input": command, "ok": result.ok, "content": result.content[:4000]},
+        """執行 allowlist 指令 — delegates to runtime handler."""
+        _runtime_handlers.handle_run(
+            prompt,
+            tools=tools,
+            transcript=transcript,
+            emit=print_tool_result,
         )
-        print_tool_result(result.content if result.ok else f"run failed: {result.content}")
 
     register_handler("/run", handle_run)
 
     def handle_test(state: ShellState, prompt: str):
-        """執行固定 allowlist 驗證"""
-        result = tools.run("run_tests", {})
-        transcript.write("tool", {"command": "/test", "ok": result.ok, "content": result.content[:4000]})
-        print_tool_result(result.content if result.ok else f"驗證失敗：{result.content}")
+        """執行固定 allowlist 驗證 — delegates to runtime handler."""
+        _runtime_handlers.handle_test(
+            prompt,
+            tools=tools,
+            transcript=transcript,
+            emit=print_tool_result,
+        )
 
     register_handler("/test", handle_test)
 

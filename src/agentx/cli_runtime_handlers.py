@@ -3,6 +3,7 @@
 These implement the real interactive-shell logic for a small set of
 commands (``/plan``, ``/execute``, ``/mode``, plus read-only tool-backed
 ``/files``, ``/read``, ``/search``, ``/git``, ``/diff``, low-risk
+tool-backed ``/memory``, ``/fetch``, ``/run``, ``/test``, low-risk
 inspection handlers ``/status``, ``/sessions``, ``/jobs``, the read-only
 ``/task`` empty/status/list branch, and pure info/display handlers
 ``/help``, ``/guide``, ``/workflows``, ``/tools``, ``/context``,
@@ -14,9 +15,8 @@ Do not confuse with ``cli_slash_shims`` — those are simplified test-only
 dispatch stubs and are *not* the runtime shell path.
 
 Side-effect branches (``/cancel``, ``/task add|update|done|clear``,
-``/apply``, ``/commit``, ``/run``, ``/docker``, ``/clear``, ``/compact``,
-``/resume``, ``/handoff``, ``/memory``, ``/fetch``, ``/attach``) stay
-in ``cli.py``.
+``/apply``, ``/commit``, ``/docker``, ``/clear``, ``/compact``,
+``/resume``, ``/handoff``, ``/attach``) stay in ``cli.py``.
 """
 
 from __future__ import annotations
@@ -36,6 +36,8 @@ EXECUTE_SYSTEM_MESSAGE = (
 
 # Transcript content truncation used by historical run_shell tool handlers.
 _TOOL_TRANSCRIPT_LIMIT = 2000
+# Longer limit used by /fetch, /run, /test (historical run_shell values).
+_TOOL_TRANSCRIPT_LIMIT_LONG = 4000
 
 
 def _run_tool_slash(
@@ -48,6 +50,7 @@ def _run_tool_slash(
     emit: Callable[[str], None],
     fail_prefix: str,
     transcript_extra: dict[str, Any] | None = None,
+    transcript_limit: int = _TOOL_TRANSCRIPT_LIMIT,
 ) -> None:
     """Shared path: tools.run → transcript tool event → emit success/failure text.
 
@@ -61,7 +64,7 @@ def _run_tool_slash(
     payload.update(
         {
             "ok": result.ok,
-            "content": result.content[:_TOOL_TRANSCRIPT_LIMIT],
+            "content": result.content[:transcript_limit],
         }
     )
     transcript.write("tool", payload)
@@ -242,6 +245,108 @@ def handle_diff(
         emit=emit,
         fail_prefix="工具執行失敗：",
         transcript_extra={"path": path},
+    )
+
+
+# --- low-risk tool-backed handlers (/memory /fetch /run /test) ------------
+
+
+def handle_memory(
+    state: Any,
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+    emit_usage: Callable[[str], None] | None = None,
+) -> None:
+    """Search Memory Hall for the current namespace (``/memory QUERY``).
+
+    Writes a ``slash_command`` event first (historical). Empty query after
+    ``/memory`` or ``/memory `` emits usage and returns without calling the tool.
+    Transcript tool content is truncated to 2000 chars.
+    """
+    usage_emit = emit_usage if emit_usage is not None else emit
+    transcript.write("slash_command", {"command": prompt})
+    query = prompt.removeprefix("/memory").strip()
+    if not query:
+        usage_emit("usage: /memory QUERY")
+        return
+    _run_tool_slash(
+        command="/memory",
+        tool_name="memory_search",
+        tool_args={"query": query, "namespace": state.namespace},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="memory search failed: ",
+        transcript_extra={"query": query},
+        transcript_limit=_TOOL_TRANSCRIPT_LIMIT,
+    )
+
+
+def handle_fetch(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Fetch external URL text via ``web_fetch`` (transcript limit 4000)."""
+    url = prompt.removeprefix("/fetch ").strip()
+    _run_tool_slash(
+        command="/fetch",
+        tool_name="web_fetch",
+        tool_args={"url": url},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="fetch failed: ",
+        transcript_extra={"url": url},
+        transcript_limit=_TOOL_TRANSCRIPT_LIMIT_LONG,
+    )
+
+
+def handle_run(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Run an allowlisted command via ``run_command`` (transcript limit 4000)."""
+    command = prompt.removeprefix("/run ").strip()
+    _run_tool_slash(
+        command="/run",
+        tool_name="run_command",
+        tool_args={"command": command},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="run failed: ",
+        transcript_extra={"input": command},
+        transcript_limit=_TOOL_TRANSCRIPT_LIMIT_LONG,
+    )
+
+
+def handle_test(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Run fixed allowlist verification via ``run_tests`` (transcript limit 4000)."""
+    _ = prompt
+    _run_tool_slash(
+        command="/test",
+        tool_name="run_tests",
+        tool_args={},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="驗證失敗：",
+        transcript_limit=_TOOL_TRANSCRIPT_LIMIT_LONG,
     )
 
 
