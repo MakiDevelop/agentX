@@ -237,8 +237,12 @@ For `matched_policy="agentx_headless"`, `tool_args` includes runner posture
 metadata such as `agent_mode`, `prompt_source`, `workspace_override`,
 `prompt_source_count`, `prompt_file`, `artifact_dir`, `result_output`, `session_output`,
 `handoff_briefing_output`, `save_session`, `resume_session`, `quiet`, and
-`output_format`. Both `--option value` and `--option=value` forms are
-recognized for these metadata fields.
+`output_format`. It also exposes execution posture fields for wrappers:
+`dry_run`, `plan_mode`, `plan_then_execute`, `orchestrate`, `no_memory`,
+`approval_override`, `backend_override`, `base_url_override`, `model_override`,
+`request_timeout`, `run_timeout`, `max_steps`, and `result_output_format`.
+Both `--option value` and `--option=value` forms are recognized for these
+metadata fields.
 Headless blockers include `headless_prompt_sources_conflict`,
 `headless_prompt_file_escapes_workspace`,
 `headless_artifact_dir_conflicts_with_output_options`,

@@ -111,8 +111,45 @@ def test_command_plan_payload_marks_agentx_agent_run_yellow(tmp_path) -> None:  
         "resume_session": None,
         "quiet": True,
         "output_format": "json",
+        "dry_run": False,
+        "plan_mode": False,
+        "plan_then_execute": False,
+        "orchestrate": False,
+        "no_memory": False,
+        "approval_override": None,
+        "backend_override": None,
+        "base_url_override": None,
+        "model_override": None,
+        "request_timeout": None,
+        "run_timeout": None,
+        "max_steps": None,
+        "result_output_format": None,
     }
     assert payload["next_commands"] == ["agentx inspect --json", "agentx artifacts --json"]
+
+
+def test_command_plan_payload_marks_agentx_runtime_posture_metadata(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path),
+        "agentx -p 'continue' --agent --plan-then-execute --no-memory --approval=auto "
+        "--backend llama_cpp --base-url http://127.0.0.1:8081 --model qwen "
+        "--timeout 45 --run-timeout=120 --max-steps 8 --result-output-format jsonl --dry-run",
+    )
+
+    assert payload["ok"] is True
+    assert payload["matched_policy"] == "agentx_headless"
+    tool_args = payload["tool_args"]
+    assert tool_args["plan_then_execute"] is True  # type: ignore[index]
+    assert tool_args["no_memory"] is True  # type: ignore[index]
+    assert tool_args["approval_override"] == "auto"  # type: ignore[index]
+    assert tool_args["backend_override"] == "llama_cpp"  # type: ignore[index]
+    assert tool_args["base_url_override"] == "http://127.0.0.1:8081"  # type: ignore[index]
+    assert tool_args["model_override"] == "qwen"  # type: ignore[index]
+    assert tool_args["request_timeout"] == "45"  # type: ignore[index]
+    assert tool_args["run_timeout"] == "120"  # type: ignore[index]
+    assert tool_args["max_steps"] == "8"  # type: ignore[index]
+    assert tool_args["result_output_format"] == "jsonl"  # type: ignore[index]
+    assert tool_args["dry_run"] is True  # type: ignore[index]
 
 
 def test_command_plan_payload_marks_agentx_prompt_file_metadata(tmp_path) -> None:  # noqa: ANN001

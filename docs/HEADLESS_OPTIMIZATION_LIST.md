@@ -81,6 +81,7 @@
 - [x] `agentx command-plan COMMAND --json` 可輸出 read-only command policy preflight（allowlist / build approval / docker compose / destructive blockers），讓外部 runner 不執行命令也能知道風險、tool args、approval posture 與 blocker。
 - [x] `agentx command-plan` 對 top-level `agentx` capability 會在 `tool_args` 內回傳 usage、schemas、jsonl_event 與 description，讓 runner 不必二次查 `capabilities`。
 - [x] `agentx command-plan` 對 headless `agentx -p` / `--prompt-file` 會回報 agent mode、prompt source、artifact/session/output-format/quiet/resume 等 runner posture metadata。
+- [x] `agentx command-plan` 對 headless run 會回報 runtime posture metadata：`--timeout`、`--run-timeout`、`--max-steps`、`--no-memory`、`--approval`、`--backend`、`--base-url`、`--model`、`--plan` / `--plan-then-execute`、`--dry-run` 與 `--result-output-format`，方便 wrapper 預先判斷資源、記憶污染與執行限制。
 - [x] `agentx command-plan` 會提前擋 headless prompt source 衝突（`-p` / `--prompt-file` / `--stdin` 多選）。
 - [x] `agentx command-plan` 會提前擋 headless `--prompt-file` 逃出 workspace。
 - [x] `agentx command-plan` 會提前擋 headless artifact option 衝突（`--artifact-dir` vs 個別 output、artifact/handoff briefing 缺 `--agent`、session-output vs resume-session）。

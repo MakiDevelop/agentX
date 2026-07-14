@@ -719,6 +719,19 @@ def _agentx_headless_tool_args(argv: list[str]) -> dict[str, object]:
         "resume_session": _option_value(argv, "--resume-session"),
         "quiet": "--quiet" in argv,
         "output_format": output_format,
+        "dry_run": "--dry-run" in argv,
+        "plan_mode": "--plan" in argv,
+        "plan_then_execute": "--plan-then-execute" in argv,
+        "orchestrate": "--orchestrate" in argv,
+        "no_memory": "--no-memory" in argv,
+        "approval_override": _option_value(argv, "--approval"),
+        "backend_override": _option_value(argv, "--backend"),
+        "base_url_override": _option_value(argv, "--base-url"),
+        "model_override": _option_value(argv, "--model"),
+        "request_timeout": _option_value(argv, "--timeout"),
+        "run_timeout": _option_value(argv, "--run-timeout"),
+        "max_steps": _option_value(argv, "--max-steps"),
+        "result_output_format": _option_value(argv, "--result-output-format"),
     }
 
 
