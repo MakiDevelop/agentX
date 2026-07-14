@@ -25,7 +25,7 @@ from __future__ import annotations
 import shlex
 from typing import TYPE_CHECKING, Any
 
-from agentx.transcript import format_approval_receipts
+from agentx.transcript import find_transcript, format_approval_receipts
 
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableSequence
@@ -842,9 +842,18 @@ def handle_transcript(
     emit: Callable[[str], None],
 ) -> None:
     """Emit current transcript details or approval receipt drill-down."""
-    _ = state
     transcript.write("slash_command", {"command": prompt})
-    if prompt.strip() == "/transcript approvals":
-        emit(format_approval_receipts(transcript.path))
+    parts = prompt.strip().split(maxsplit=2)
+    if len(parts) >= 2 and parts[1] == "approvals":
+        if len(parts) == 2:
+            emit(format_approval_receipts(transcript.path))
+            return
+        target = parts[2].strip()
+        exclude = transcript.path if target == "latest" else None
+        path = find_transcript(state.settings.workspace, target, exclude=exclude)
+        if path is None:
+            emit(f"transcript not found: {target}")
+            return
+        emit(f"source: {path}\n{format_approval_receipts(path)}")
         return
     emit(str(transcript.path))

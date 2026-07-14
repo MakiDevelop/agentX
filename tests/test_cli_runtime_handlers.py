@@ -1418,3 +1418,71 @@ def test_handle_transcript_approvals_emits_receipts(tmp_path: Path) -> None:
     assert transcript.events == [("slash_command", {"command": "/transcript approvals"})]
     assert "Approval receipts: 1 most recent" in lines[0]
     assert "memory_write allowed source=auto_approved mode=auto" in lines[0]
+
+
+def test_handle_transcript_approvals_latest_uses_previous_session(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    sessions = tmp_path / ".agentx" / "sessions"
+    sessions.mkdir(parents=True)
+    previous = sessions / "20260101-000000.jsonl"
+    previous.write_text(
+        '{"ts":"2026-01-01T00:00:00","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}\n',
+        encoding="utf-8",
+    )
+    current = sessions / "20260102-000000.jsonl"
+    current.write_text(
+        '{"ts":"2026-01-02T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}\n',
+        encoding="utf-8",
+    )
+    transcript = FakeTranscript(path=current)
+    lines, emit = _capture()
+
+    handle_transcript(
+        state,
+        "/transcript approvals latest",
+        transcript=transcript,
+        emit=emit,
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/transcript approvals latest"})]
+    assert f"source: {previous}" in lines[0]
+    assert "apply_patch denied source=manual_denied mode=ask" in lines[0]
+    assert "memory_write" not in lines[0]
+
+
+def test_handle_transcript_approvals_named_session(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    sessions = tmp_path / ".agentx" / "sessions"
+    sessions.mkdir(parents=True)
+    named = sessions / "20260103-000000.jsonl"
+    named.write_text(
+        '{"ts":"2026-01-03T00:00:00","event":"approval","tool":"git_push","risk":"YELLOW","approval_mode":"off","source":"policy_denied","allowed":false}\n',
+        encoding="utf-8",
+    )
+    transcript = FakeTranscript(path=sessions / "current.jsonl")
+    lines, emit = _capture()
+
+    handle_transcript(
+        state,
+        "/transcript approvals 20260103-000000",
+        transcript=transcript,
+        emit=emit,
+    )
+
+    assert f"source: {named}" in lines[0]
+    assert "git_push denied source=policy_denied mode=off" in lines[0]
+
+
+def test_handle_transcript_approvals_missing_session(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript(path=tmp_path / "current.jsonl")
+    lines, emit = _capture()
+
+    handle_transcript(
+        state,
+        "/transcript approvals missing",
+        transcript=transcript,
+        emit=emit,
+    )
+
+    assert lines == ["transcript not found: missing"]
