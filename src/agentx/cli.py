@@ -1521,12 +1521,18 @@ def artifacts_payload(settings: Settings, *, root: str = ".agentx/runs", limit: 
             "ok": True,
             "limit": limit,
             "count": 0,
+            "latest_artifact": None,
+            "recommended_command": "agentx -p '任務' --agent --artifact-dir .agentx/runs/latest --quiet",
+            "recommended_kind": "headless_bundle",
+            "recommended_risk": "YELLOW",
             "artifacts": [],
             "detail": f"artifacts root not found: {root}",
         }
 
     bundles = sorted(list_artifact_bundles(artifact_root), key=artifact_mtime, reverse=True)[:limit]
     artifacts = [artifact_bundle_overview(settings.workspace, bundle) for bundle in bundles]
+    latest_artifact = dict(artifacts[0]) if artifacts else None
+    recommended_command, recommended_kind, recommended_risk = _artifacts_recommendation(latest_artifact)
     return {
         "schema": "agentx.artifacts.v1",
         "workspace": str(settings.workspace),
@@ -1535,9 +1541,26 @@ def artifacts_payload(settings: Settings, *, root: str = ".agentx/runs", limit: 
         "ok": True,
         "limit": limit,
         "count": len(artifacts),
+        "latest_artifact": latest_artifact,
+        "recommended_command": recommended_command,
+        "recommended_kind": recommended_kind,
+        "recommended_risk": recommended_risk,
         "artifacts": artifacts,
         "detail": "",
     }
+
+
+def _artifacts_recommendation(artifact: dict[str, object] | None) -> tuple[str, str, str]:
+    if artifact is None:
+        return (
+            "agentx -p '任務' --agent --artifact-dir .agentx/runs/latest --quiet",
+            "headless_bundle",
+            "YELLOW",
+        )
+    artifact_path = str(artifact.get("relative_path") or artifact.get("path") or ".agentx/runs/latest")
+    if artifact.get("needs_handoff") is True and artifact.get("resume_command"):
+        return f"agentx handoff-resume {shlex.quote(artifact_path)} --dry-run", "handoff_resume", "GREEN"
+    return f"agentx artifacts {shlex.quote(artifact_path)} --json", "inspect_artifact", "GREEN"
 
 
 def approvals_payload(

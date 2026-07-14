@@ -438,6 +438,10 @@ Required stable keys:
 | `ok` | boolean | Whether discovery completed. Missing roots are still `ok=true` with count 0. |
 | `limit` | integer | Maximum number of bundles requested. |
 | `count` | integer | Number of returned bundles. |
+| `latest_artifact` | object or null | First artifact after sorting by latest artifact mtime. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | `handoff_resume`, `inspect_artifact`, or `headless_bundle`. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
 | `artifacts` | array of object | Bundle summaries sorted by latest artifact mtime descending. |
 | `detail` | string | Empty string or a human-readable note. |
 

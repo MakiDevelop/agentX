@@ -60,6 +60,10 @@ def test_artifacts_payload_lists_bundles_sorted_by_mtime(tmp_path: Path) -> None
     assert artifacts[0]["needs_handoff"] is True  # type: ignore[index]
     assert artifacts[0]["has_session"] is True  # type: ignore[index]
     assert artifacts[0]["has_handoff"] is True  # type: ignore[index]
+    assert payload["latest_artifact"]["name"] == "new"  # type: ignore[index]
+    assert payload["recommended_command"] == "agentx handoff-resume .agentx/runs/new --dry-run"
+    assert payload["recommended_kind"] == "handoff_resume"
+    assert payload["recommended_risk"] == "GREEN"
 
 
 def test_artifacts_payload_accepts_single_bundle_dir(tmp_path: Path) -> None:
@@ -71,6 +75,9 @@ def test_artifacts_payload_accepts_single_bundle_dir(tmp_path: Path) -> None:
     assert payload["artifacts"][0]["relative_path"] == ".agentx/runs/latest"  # type: ignore[index]
     assert payload["artifacts"][0]["result_relative_path"] == ".agentx/runs/latest/result.json"  # type: ignore[index]
     assert str(bundle) == payload["artifacts"][0]["path"]  # type: ignore[index]
+    assert payload["latest_artifact"]["relative_path"] == ".agentx/runs/latest"  # type: ignore[index]
+    assert payload["recommended_command"] == "agentx artifacts .agentx/runs/latest --json"
+    assert payload["recommended_kind"] == "inspect_artifact"
 
 
 def test_artifacts_payload_missing_root_is_ok_with_empty_count(tmp_path: Path) -> None:
@@ -78,6 +85,10 @@ def test_artifacts_payload_missing_root_is_ok_with_empty_count(tmp_path: Path) -
 
     assert payload["ok"] is True
     assert payload["count"] == 0
+    assert payload["latest_artifact"] is None
+    assert payload["recommended_command"] == "agentx -p '任務' --agent --artifact-dir .agentx/runs/latest --quiet"
+    assert payload["recommended_kind"] == "headless_bundle"
+    assert payload["recommended_risk"] == "YELLOW"
     assert payload["artifacts"] == []
     assert "not found" in payload["detail"]
 

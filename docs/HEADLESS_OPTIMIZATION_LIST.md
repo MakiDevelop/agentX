@@ -74,6 +74,7 @@
 - [x] `--handoff-briefing-output PATH` 可在原 headless run 結束時直接寫出 deterministic Markdown 接手檔，拒絕 workspace escape、覆寫既有檔案，以及與 session/result artifact 共用同一路徑。
 - [x] `--artifact-dir DIR` 可用一個 workspace 內目錄輸出標準 runner bundle：`session.session.jsonl`、`result.json/jsonl`、`handoff.md`；與個別 artifact output option 互斥，並拒絕覆寫既有 bundle 檔。
 - [x] `agentx artifacts [DIR] --json` 可列出 `.agentx/runs` 或單一 bundle 的 result/session/handoff 路徑、exit code、termination 與 resume command，方便外部 runner 先 discovery 再 `handoff-resume`。
+- [x] `agentx artifacts --json` 會提供 top-level `latest_artifact` 與 `recommended_command` / `recommended_kind` / `recommended_risk`，讓 runner 不必解析 artifacts[0] 就能接手或建立 bundle。
 - [x] `agentx traces [SESSION] --json` 可讀取 transcript，輸出 event/tool counts、approval denials、tool failures、error-like records 與 recent events，方便外部 runner 不解析整份 JSONL 就能做觀測與決策。
 - [x] `agentx diff [PATH] --json` 可輸出 read-only git diff 摘要（file status、insertions/deletions、stat；`--staged` 看 index，`--patch` 才附 patch），方便 Codex/Grok runner 在 review/commit 前不用解析自然語言 diff。
 - [x] `agentx patch-check PATCH --json` 可輸出 read-only patch preflight（`git apply --check -`、touched files、safe path blockers、JSONL event `patch_check`），讓外部 runner 在 `/apply` 前先擋 workspace escape / protected path / malformed patch。
