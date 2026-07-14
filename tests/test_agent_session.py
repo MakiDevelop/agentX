@@ -149,6 +149,9 @@ def test_ask_reports_final_termination_on_clean_finish(tmp_path: Path) -> None:
     session.ask("hi")
     assert session.last_termination == "final_success"
     assert session.last_failing_tools == set()
+    assert session.model_turn_count == 1
+    assert session.tool_call_count == 0
+    assert session.reflection_count == 0
 
 
 def test_ask_reports_max_steps_termination(tmp_path: Path) -> None:
@@ -169,6 +172,9 @@ def test_direct_tool_records_success_termination(tmp_path: Path) -> None:
 
     assert session.last_termination == "direct_tool_success"
     assert session.last_failing_tools == set()
+    assert session.model_turn_count == 0
+    assert session.tool_call_count == 1
+    assert session.reflection_count == 0
 
 
 def test_direct_tool_records_failure_termination(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -184,6 +190,25 @@ def test_direct_tool_records_failure_termination(tmp_path: Path, monkeypatch: py
     assert answer.startswith("工具執行失敗")
     assert session.last_termination == "direct_tool_failure"
     assert session.last_failing_tools == {"list_files"}
+    assert session.model_turn_count == 0
+    assert session.tool_call_count == 1
+
+
+def test_observability_counters_track_reflect_and_tool(tmp_path: Path) -> None:
+    session, _ = _session(
+        tmp_path,
+        [
+            '{"type":"reflect","focus":"think"}',
+            "reflection text",
+            '{"type":"tool_call","tool":"memory_search","args":{"query":"x"}}',
+            '{"type":"final","content":"done"}',
+        ],
+    )
+
+    assert session.ask("hi") == "done"
+    assert session.model_turn_count == 3
+    assert session.reflection_count == 1
+    assert session.tool_call_count == 1
 
 
 class _StubTool:

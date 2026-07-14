@@ -963,6 +963,9 @@ def headless_run_stats(session: AgentSession) -> dict[str, object]:
         "context_tokens_estimate": session.context_tokens_estimate,
         "error_count": len(getattr(session, "error_history", [])),
         "compaction_count": session.compaction_count,
+        "model_turn_count": getattr(session, "model_turn_count", 0),
+        "tool_call_count": getattr(session, "tool_call_count", 0),
+        "reflection_count": getattr(session, "reflection_count", 0),
         "pending_verifies": sorted(getattr(session, "pending_verifies", set())),
         "task_counts": task_counts,
     }

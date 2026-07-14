@@ -49,7 +49,7 @@
 **Progress Update (Headless JSON Observability, 2026-07)**：
 - [x] `agentx -p ... --json` 與 `agentx ask ... --json` 可輸出機器可讀 payload。
 - Payload 包含 `output`、`exit_code`、`termination`、`failing_tools`、`stats`。
-- `stats` 目前提供 message count、粗估 context tokens、error count、compaction count、pending verifies、task counts。
+- `stats` 目前提供 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies、task counts。
 - 一般文字輸出保持相容；JSON 模式會抑制 trace，避免污染 stdout。
 
 **Progress Update (Headless Session Resume, 2026-07)**：

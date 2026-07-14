@@ -128,6 +128,9 @@ def test_headless_run_stats_summarizes_session_state() -> None:
         context_tokens_estimate=1234,
         error_history=[object(), object()],
         compaction_count=1,
+        model_turn_count=4,
+        tool_call_count=2,
+        reflection_count=1,
         pending_verifies={"src/a.py"},
         tasks=[
             {"status": "pending"},
@@ -144,6 +147,9 @@ def test_headless_run_stats_summarizes_session_state() -> None:
     assert stats["context_tokens_estimate"] == 1234
     assert stats["error_count"] == 2
     assert stats["compaction_count"] == 1
+    assert stats["model_turn_count"] == 4
+    assert stats["tool_call_count"] == 2
+    assert stats["reflection_count"] == 1
     assert stats["pending_verifies"] == ["src/a.py"]
     assert stats["task_counts"] == {
         "pending": 1,

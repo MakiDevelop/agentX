@@ -114,7 +114,7 @@ agentx ask "幫我列出這個 repo 的檔案" --json
 ```
 
 JSON payload 會包含 `output`、`exit_code`、`termination`、`failing_tools` 與 `stats`。
-`stats` 目前包含 message count、粗估 context tokens、error count、compaction count、pending verifies 與 task counts。
+`stats` 目前包含 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies 與 task counts。
 
 長任務需要跨 headless run 接續時，可保存並恢復 agent session：
 

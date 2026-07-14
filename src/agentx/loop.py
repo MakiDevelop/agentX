@@ -153,6 +153,9 @@ class AgentSession:
         self.last_termination: str = "unknown"
         self.last_failing_tools: set[str] = set()
         self.pending_verifies: set[str] = set()  # hook-driven edit-verify state (next slice)
+        self.model_turn_count: int = 0
+        self.tool_call_count: int = 0
+        self.reflection_count: int = 0
         # Hysteresis state for auto-compact (review N8: don't re-compact every
         # turn when bootstrap alone is over threshold).
         self._last_compact_tokens: int | None = None
@@ -387,6 +390,7 @@ class AgentSession:
 
         direct = self._direct_tool_call(prompt)
         if direct is not None:
+            self.tool_call_count += 1
             result = self._run_tool(direct)
             self.messages.append(
                 {
@@ -432,6 +436,7 @@ class AgentSession:
                     tokens_estimate=self.context_tokens_estimate,
                 ))
 
+            self.model_turn_count += 1
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
             action = self._parse_action(raw)
             if isinstance(action, InvalidAction):
@@ -473,6 +478,7 @@ class AgentSession:
                 return self._handle_final_answer(action.content, effective_plan_only)
 
             if isinstance(action, Reflect):
+                self.reflection_count += 1
                 self.consecutive_reflections += 1
                 reflection = self._reflect(action.focus)
                 reflect_content = action.model_dump_json()
@@ -541,6 +547,7 @@ class AgentSession:
                 continue
 
             # Special handling for internal task management tools
+            self.tool_call_count += 1
             if action.tool.startswith("task_"):
                 result = self._handle_task_tool(action)
             else:
@@ -695,6 +702,7 @@ class AgentSession:
             ),
         })
         try:
+            self.model_turn_count += 1
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
             action = self._parse_action(raw)
             if isinstance(action, FinalAnswer):
@@ -727,6 +735,9 @@ class AgentSession:
         self.last_termination = "unknown"
         self.last_failing_tools = set()
         self.pending_verifies = set()
+        self.model_turn_count = 0
+        self.tool_call_count = 0
+        self.reflection_count = 0
         # Persist the cleared state
         self._persist_state_event("tool_outcomes", {})
         self._persist_state_event("file_ops", {})
