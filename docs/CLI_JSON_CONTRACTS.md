@@ -30,6 +30,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx sessions --json` | `agentx.sessions.v1` | `sessions` |
 | `agentx approvals --json` | `agentx.approvals.v1` | `approvals` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
+| `agentx verify --json` | `agentx.verify.v1` | `verify` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
 | `agentx doctor --json` | `agentx.doctor.v1` | `doctor` |
 | `agentx commands --json` | `agentx.command_catalog.v1` | `commands` |
@@ -243,6 +244,39 @@ Each task object includes:
 | `description` | string |
 | `status` | string |
 | `notes` | string |
+
+## Verify Payload
+
+`agentx verify --json` emits `agentx.verify.v1`.
+
+The command runs default project verification commands detected from the
+workspace. Python projects run `uv run ruff check .` and `uv run pytest -q`.
+Node projects run `npm test`. Commands execute sequentially and stop at the
+first failure. Use `--fail-on-error` to print the payload first and exit `1`
+when `ok=false`.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.verify.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `generated_at` | string | Local ISO timestamp. |
+| `ok` | boolean | True only when every detected verification command passed. |
+| `count` | integer | Number of emitted check records. |
+| `checks` | array of object | Per-command verification results. |
+
+Each check object includes:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `command` | string | Shell-escaped display command. |
+| `argv` | array of string | Executed argv list; no shell expansion. |
+| `ok` | boolean | Whether the command passed. |
+| `exit_code` | integer or null | Process exit code; `124` for timeout. |
+| `stdout` | string | Captured stdout, truncated. |
+| `stderr` | string | Captured stderr, truncated. |
+| `output` | string | Preferred compact output for humans and logs. |
 
 ## Doctor Payload
 

@@ -1274,6 +1274,138 @@ def print_tasks_payload(
     )
 
 
+def default_verify_commands(workspace: Path) -> list[list[str]]:
+    files = {path.name for path in workspace.iterdir()}
+    commands: list[list[str]] = []
+    if "pyproject.toml" in files:
+        commands.extend(
+            [
+                ["uv", "run", "ruff", "check", "."],
+                ["uv", "run", "pytest", "-q"],
+            ]
+        )
+    if "package.json" in files:
+        commands.append(["npm", "test"])
+    return commands
+
+
+def verify_payload_from_checks(
+    checks: list[dict[str, object]],
+    *,
+    settings: Settings,
+) -> dict[str, object]:
+    ok = bool(checks) and all(bool(check.get("ok")) for check in checks)
+    return {
+        "schema": "agentx.verify.v1",
+        "workspace": str(settings.workspace),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "ok": ok,
+        "count": len(checks),
+        "checks": checks,
+    }
+
+
+def verify_payload(
+    settings: Settings,
+    *,
+    timeout: int = 120,
+    output_limit: int = 12000,
+) -> dict[str, object]:
+    checks: list[dict[str, object]] = []
+    commands = default_verify_commands(settings.workspace)
+    if not commands:
+        return verify_payload_from_checks(
+            [
+                {
+                    "command": "",
+                    "argv": [],
+                    "ok": False,
+                    "exit_code": None,
+                    "stdout": "",
+                    "stderr": "",
+                    "output": "no default verification commands detected",
+                }
+            ],
+            settings=settings,
+        )
+
+    for command in commands:
+        command_text = shlex.join(command)
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=settings.workspace,
+                text=True,
+                capture_output=True,
+                timeout=timeout,
+                check=False,
+            )
+            stdout = (completed.stdout or "")[:output_limit]
+            stderr = (completed.stderr or "")[:output_limit]
+            output = (completed.stdout or completed.stderr or "")[:output_limit]
+            check = {
+                "command": command_text,
+                "argv": command,
+                "ok": completed.returncode == 0,
+                "exit_code": completed.returncode,
+                "stdout": stdout,
+                "stderr": stderr,
+                "output": output,
+            }
+        except subprocess.TimeoutExpired as exc:
+            stdout = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
+            stderr = (exc.stderr or "") if isinstance(exc.stderr, str) else ""
+            check = {
+                "command": command_text,
+                "argv": command,
+                "ok": False,
+                "exit_code": 124,
+                "stdout": stdout[:output_limit],
+                "stderr": stderr[:output_limit],
+                "output": f"timeout after {timeout}s",
+            }
+        checks.append(check)
+        if not check["ok"]:
+            break
+
+    return verify_payload_from_checks(checks, settings=settings)
+
+
+def verify_exit_code(payload: dict[str, object], *, fail_on_error: bool = False) -> int:
+    if not fail_on_error:
+        return 0
+    return 0 if payload.get("ok") is True else 1
+
+
+def print_verify_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="verify",
+        )
+        return
+
+    table = Table(title="agentX verify", show_header=True, header_style="bold")
+    table.add_column("Command", style="cyan")
+    table.add_column("Exit", justify="right")
+    table.add_column("OK")
+    for check in payload["checks"]:  # type: ignore[index]
+        row = dict(check)
+        table.add_row(
+            str(row.get("command", "")) or "-",
+            str(row.get("exit_code", "-")),
+            "yes" if row.get("ok") is True else "no",
+        )
+    console.print(table)
+    console.print(f"[dim]ok={payload['ok']} count={payload['count']}[/dim]")
+
+
 def status_payload(
     settings: Settings,
     *,
@@ -3802,6 +3934,22 @@ def tasks_command(
     payload = tasks_payload(settings, status_filter=status)
     structured_format = structured_output_format(json_output, output_format)
     print_tasks_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("verify")
+def verify_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for verification."),
+    timeout: int = typer.Option(120, "--timeout", min=1, help="Per-command timeout in seconds."),
+    fail_on_error: bool = typer.Option(False, "--fail-on-error", help="Exit 1 when any verification command fails."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Run default project verification commands and print an audit payload."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = verify_payload(settings, timeout=timeout)
+    structured_format = structured_output_format(json_output, output_format)
+    print_verify_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=verify_exit_code(payload, fail_on_error=fail_on_error))
 
 
 @app.command("status")

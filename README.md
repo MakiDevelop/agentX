@@ -113,6 +113,8 @@ agentx approvals latest --json
 agentx approvals latest --denied --json --fail-on-denied
 agentx tasks --json
 agentx tasks active --json
+agentx verify --json
+agentx verify --json --fail-on-error
 agentx config --json
 agentx status --json
 agentx doctor --static --json
@@ -175,10 +177,11 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `agentx sessions --json` 會輸出 `agentx.sessions.v1` transcript overview，方便外部 runner 找最近 session、approval denials 與 resume 目標。
 `agentx approvals latest --json` 會輸出 `agentx.approvals.v1` approval receipts；加 `--denied --fail-on-denied` 時，會在輸出 payload 後用 exit 1 擋下含拒絕項的 audit。
 `agentx tasks --json` 會輸出 `agentx.tasks.v1` 完整 task list；`agentx tasks active --json` 可只看 pending / in_progress / blocked，方便外部 runner 接續長任務。
+`agentx verify --json` 會輸出 `agentx.verify.v1`，依 workspace 偵測並執行預設驗證命令；加 `--fail-on-error` 時，任何驗證失敗會在輸出 payload 後以 exit 1 結束。
 `agentx status --json` 會輸出 `agentx.status.v1`，整合 version、resolved runtime、git dirty/ahead/behind 與 task counts；它只做本機 read-only 檢查，不探測網路服務。
 `agentx doctor --json` 會輸出 `agentx.doctor.v1` health checks；CI 或 wrapper 可用 `agentx doctor --static --json` 只檢查本機 `uv`、git、task migration，避開 Ollama / memory live probes。加上 `--fail-on-error` 時，任一 check 失敗會在輸出 payload 後以 exit 1 結束。
 `agentx workflows --json` 會輸出 `agentx.workflow_catalog.v1`，讓 wrapper 能讀取 headless、audit、commit 等可執行 recipe；也可用 `agentx workflows headless --json` 查單一路徑。
-`--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、config、sessions、approvals、tasks、status、doctor、commands、workflows、tools、models 會分別使用 `dry_run`、`version`、`backends`、`config`、`sessions`、`approvals`、`tasks`、`status`、`doctor`、`commands`、`workflows`、`tools`、`models` event。
+`--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、config、sessions、approvals、tasks、verify、status、doctor、commands、workflows、tools、models 會分別使用 `dry_run`、`version`、`backends`、`config`、`sessions`、`approvals`、`tasks`、`verify`、`status`、`doctor`、`commands`、`workflows`、`tools`、`models` event。
 `--result-output PATH` 可把同一份 result payload 寫成 workspace 內 artifact，plain stdout 時預設寫 JSON，`--output-format jsonl` 時寫 JSONL event；路徑拒絕 workspace escape 與覆蓋既有檔案。需要 artifact 格式和 stdout 格式分開時，可用 `--result-output-format auto|json|jsonl`。
 `--handoff-briefing-output PATH` 可在同一輪 headless run 結束時直接寫出 Markdown 接手檔；路徑同樣限制在 workspace 內、拒絕覆寫，且不可與 `--session-output` / `--result-output` 指到同一檔案。
 `--artifact-dir DIR` 是 runner-friendly preset，會在 workspace 內一次產生 `session.session.jsonl`、`result.json`（或 `result.jsonl`）與 `handoff.md`；它和個別 artifact output option 互斥，且會拒絕覆寫標準檔名。

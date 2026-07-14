@@ -47,6 +47,7 @@ uv run agentx shell
 需要接續工作時可用 `agentx sessions --json` 取得 `agentx.sessions.v1` transcript overview，外部 runner 可依最新 session、approval denied counts 或 transcript path 決定下一步。
 需要審計 YELLOW 操作時，用 `agentx approvals latest --json` 取得 `agentx.approvals.v1`；CI 或上游 agent 可加 `--denied --fail-on-denied`，在輸出 payload 後用 exit code 擋下被拒絕的 approval receipts。
 需要讀取長任務狀態時，用 `agentx tasks --json` 取得 `agentx.tasks.v1`；`agentx tasks active --json` 只回 pending / in_progress / blocked，適合接手 agent 決定下一步。
+需要跑 repo 驗證時，用 `agentx verify --json` 取得 `agentx.verify.v1`；CI 或上游 agent 可加 `--fail-on-error`，在輸出完整 checks payload 後用 exit code 擋流程。
 需要判斷當前 workspace 姿態時，用 `agentx status --json` 取得 version、runtime、git dirty/ahead/behind 與 task counts；這是本機 read-only 狀態檢查，不探測網路服務。
 需要健康檢查時，用 `agentx doctor --json` 取得 `agentx.doctor.v1`；CI 或上游 agent 可用 `agentx doctor --static --json --fail-on-error` 只跑本機 `uv`、git、task migration 檢查，失敗時用 exit code 擋下流程。
 這些 inspect/catalog/status 類 payload 的欄位契約整理在 `docs/CLI_JSON_CONTRACTS.md`。
