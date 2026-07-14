@@ -22,6 +22,9 @@ from pathlib import Path
 from typing import Any
 
 import json
+import os
+import subprocess
+import sys
 
 from agentx.tasks import (
     find_task,
@@ -373,6 +376,44 @@ def test_ci_no_legacy_clean_workspace_migration_status(tmp_path: Path):
     assert status["has_multi_task_file"] is False
     assert status["legacy_system_active"] is False
     assert status["multi_task_count"] == 0
+
+
+def test_ci_no_legacy_subprocess_has_no_task_module(tmp_path: Path):
+    """模擬完全無 legacy 環境：fresh Python process 不應再看到 agentx.task。"""
+    repo_root = Path(__file__).resolve().parents[1]
+    src_path = repo_root / "src"
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        str(src_path)
+        if not existing_pythonpath
+        else f"{src_path}{os.pathsep}{existing_pythonpath}"
+    )
+    code = """
+from importlib.util import find_spec
+from pathlib import Path
+
+import agentx
+
+workspace = Path.cwd()
+assert not (workspace / ".agentx").exists()
+package = Path(agentx.__file__).parent
+assert not (package / "task.py").exists(), package
+assert find_spec("agentx.task") is None
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert "Traceback" not in result.stderr
 
 
 def test_ci_no_legacy_after_migrate_old_file_is_gone_and_new_is_clean(tmp_path: Path):

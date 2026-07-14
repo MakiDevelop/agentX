@@ -131,7 +131,7 @@ if has_legacy_single_task(settings.workspace):
 - [x] `tests/test_tasks.py` 已最終清理剩餘 legacy 引用（死測移除、mangled 修正、docstring 強化）。
 - [x] `tests/test_cli_dispatch.py` 已加 guarded import，不再破壞 no-legacy collection。
 - [x] 已存在獨立的 `docs/MT22-Migration-Guide.md`，清楚說明舊系統的退場時間點與清理方式。
-- [ ] 至少一次完整的「模擬完全無 legacy 環境」的 pytest CI 風格測試通過（涵蓋 subprocess + 乾淨 tmp workspace 斷言；見下一步）。
+- [x] 至少一次完整的「模擬完全無 legacy 環境」的 pytest CI 風格測試通過（涵蓋 subprocess + 乾淨 tmp workspace 斷言；`tests/test_tasks.py::test_ci_no_legacy_subprocess_has_no_task_module`）。
 
 ---
 
@@ -142,7 +142,7 @@ if has_legacy_single_task(settings.workspace):
 3. [x] 撰寫/更新 `docs/MT22-Migration-Guide.md` 與本 checklist，記錄 Phase A 狀態。
 4. [x] 針對 cli 三處 legacy if 逐一移除 + 同步更新文件 + 測試（含 test_cli_dispatch guard）。
 5. [x] 最終刪除 `task.py` 整個模組（條件滿足後 git rm，已完成；歷史相容測試仍可驗證遷移）。
-6. [ ] 實作「模擬完全無 legacy 環境」的正式 CI 風格 pytest（subprocess + 乾淨 workspace 斷言，防止回歸）。
+6. [x] 實作「模擬完全無 legacy 環境」的正式 CI 風格 pytest（subprocess + 乾淨 workspace 斷言，防止回歸）。
 
 ---
 
@@ -157,15 +157,16 @@ if has_legacy_single_task(settings.workspace):
 - test_tasks.py **最終清理完成**：移除所有 legacy reader 死測（normalize_* 系列）、修正 mangled 片段、重複 comment 清除、_write_legacy_task docstring 更新、空白標題測試正式化、模組 docstring 強化說明「僅用於遷移驗證」。目前 20 個 migrate 相關測試全部保留且 pass。
 - test_cli_dispatch.py 加入 TaskState import guard（避免純 no-legacy 環境 collection 硬失敗）。
 - has_legacy / _get 已正式標記 internal deprecated + runtime warning。
-- 測試收集在無 task.py 環境下可通過（除 pre-existing runtime fails）。
+- 測試收集在無 task.py 環境下可通過；新增 fresh subprocess + clean cwd gate，驗證 `agentx.task` 不可被發現、package root 無 `task.py`、乾淨 workspace 無 `.agentx` 污染。
 **驗證**（全部 PASS）：
 - test_tasks.py: 20 passed, ruff clean。
 - test_task.py: 收集時 0 tests collected（importorskip 正常觸發）。
 - test_cli_dispatch.py: 收集成功（13 tests）。
 - doctor 遷移測試仍正確區分 legacy_only/mixed/multi_only（保留診斷能力）。
+- no-legacy subprocess gate: `tests/test_tasks.py::test_ci_no_legacy_subprocess_has_no_task_module` pass。
 - ruff clean on touched files。
 - 符合 checklist 所有整體移除前置條件（deprecated 標記、test 歷史化、get_migration 為主診斷、cli 生產路徑已清、task.py 已刪）。
-**下一步**：跑「模擬完全無 legacy 環境」的 CI 風格測試 + 更新 Migration Guide / OPTIMIZATION_ROADMAP 標記 MT22 Phase A 完成。
+**下一步**：MT22 Phase A checklist 已完成；後續僅在有實際採用/遷移資料支持時評估 Phase B（移除 doctor 遷移診斷 helper）。
 
 **參考**：
 - `docs/MT22-v0.3.0-Handover.md`（主 handoff）
