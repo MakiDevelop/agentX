@@ -10,6 +10,8 @@ from agentx.coordinator import Coordinator, CoordinatorError
 from agentx.protocol import Risk
 from agentx.tools import ToolRegistry
 
+from helpers import make_settings
+
 
 class FakeOllama:
     model = "fake"
@@ -53,17 +55,13 @@ class _ProbeTool:
 
 
 def _settings(workspace: Path, max_steps: int = 5) -> Settings:
-    return Settings.from_values(
-        model="fake",
-        ollama_url="http://localhost:11434",
-        ollama_timeout=60,
-        memory_hall_url="http://localhost:9100",
-        memory_hall_token=None,
+    # Tsumu change: learning hooks fire on FINAL_ANSWER (extra ollama.chat).
+    # Disable so fixed response lists for plan + step asks + merge stay stable.
+    return make_settings(
+        workspace,
         max_steps=max_steps,
         context_limit_tokens=32768,
-        auto_handoff=False,
-        persona="default",
-        workspace=workspace,
+        learning_enabled=False,
     )
 
 
@@ -72,11 +70,6 @@ def _coordinator(tmp_path: Path, responses: Sequence[str], tools: list[Any] | No
     memory = FakeMemory()
     registry = ToolRegistry(tools or [])
     settings = _settings(tmp_path)
-    # Tsumu change: learning hooks now fire on FINAL_ANSWER inside AgentSession.ask(),
-    # which calls reflect_and_learn (extra ollama.chat). Disable for coordinator tests
-    # that mock a fixed response list for plan + step asks + merge.
-    # Settings is frozen; use the official with_updates() instead of setattr.
-    settings = settings.with_updates(learning_enabled=False)
     coordinator = Coordinator(
         settings=settings,
         ollama=ollama,

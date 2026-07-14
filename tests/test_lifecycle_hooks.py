@@ -18,6 +18,8 @@ from agentx.hooks import (
 from agentx.loop import AgentSession
 from agentx.tools import ToolRegistry, builtin_tools
 
+from helpers import make_settings
+
 
 class FakeOllama:
     model = "fake"
@@ -47,19 +49,7 @@ class FakeMemory:
 
 
 def _make_settings(workspace: Path, max_steps: int = 5) -> Settings:
-    return Settings.from_values(
-        model="fake",
-        ollama_url="http://localhost:11434",
-        ollama_timeout=60,
-        memory_hall_url="http://localhost:9100",
-        memory_hall_token=None,
-        max_steps=max_steps,
-        context_limit_tokens=8192,
-        auto_handoff=False,
-        persona="default",
-        workspace=workspace,
-        learning_enabled=False,
-    )
+    return make_settings(workspace, max_steps=max_steps, learning_enabled=False)
 
 
 def _session(

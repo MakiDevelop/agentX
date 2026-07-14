@@ -17,6 +17,8 @@ from agentx.config import Settings
 from agentx.jobs import PromptJobQueue
 from agentx.protocol import ToolResult
 
+from helpers import make_settings
+
 # MT22: TaskState is legacy (task.py removed). Guarded import so this test module
 # does not break collection in a completely no-legacy environment.
 # The one test that constructs ShellState with a task= will be skipped if unavailable.
@@ -72,18 +74,7 @@ class FakeTranscript:
 
 
 def _settings(tmp_path: Path) -> Settings:
-    return Settings.from_values(
-        model="fake",
-        ollama_url="http://localhost:11434",
-        ollama_timeout=60,
-        memory_hall_url="http://localhost:9100",
-        memory_hall_token=None,
-        max_steps=8,
-        context_limit_tokens=8192,
-        auto_handoff=False,
-        persona="default",
-        workspace=tmp_path,
-    )
+    return make_settings(tmp_path, max_steps=8)
 
 
 def _state(tmp_path: Path) -> ShellState:

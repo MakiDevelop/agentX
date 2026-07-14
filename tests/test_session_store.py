@@ -127,9 +127,10 @@ def test_session_store_handles_corrupt_lines(tmp_path: Path) -> None:
 
 
 def test_persistence_in_agent_session(tmp_path: Path) -> None:
-    from agentx.config import Settings
     from agentx.loop import AgentSession
     from agentx.tools import ToolRegistry, builtin_tools
+
+    from helpers import make_settings
 
     class FakeOllama:
         model = "fake"
@@ -142,12 +143,7 @@ def test_persistence_in_agent_session(tmp_path: Path) -> None:
         def write(self, content, namespace="agent:agentx"):
             return "ok"
 
-    settings = Settings.from_values(
-        model="fake", ollama_url="http://localhost:11434", ollama_timeout=60,
-        memory_hall_url="http://localhost:9100", memory_hall_token=None,
-        max_steps=5, context_limit_tokens=8192, auto_handoff=False,
-        persona="default", workspace=tmp_path, learning_enabled=False,
-    )
+    settings = make_settings(tmp_path, learning_enabled=False)
     ollama = FakeOllama()
     memory = FakeMemory()
     registry = ToolRegistry(builtin_tools(tmp_path, memory))  # type: ignore[arg-type]

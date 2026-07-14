@@ -10,6 +10,8 @@ from agentx.loop import AgentSession
 from agentx.protocol import Risk
 from agentx.tools import ToolRegistry, builtin_tools
 
+from helpers import make_settings
+
 
 class FakeOllama:
     model = "fake"
@@ -39,18 +41,7 @@ class FakeMemory:
 
 
 def _make_settings(workspace: Path, max_steps: int = 5) -> Settings:
-    return Settings.from_values(
-        model="fake",
-        ollama_url="http://localhost:11434",
-        ollama_timeout=60,
-        memory_hall_url="http://localhost:9100",
-        memory_hall_token=None,
-        max_steps=max_steps,
-        context_limit_tokens=8192,
-        auto_handoff=False,
-        persona="default",
-        workspace=workspace,
-    )
+    return make_settings(workspace, max_steps=max_steps)
 
 
 def _session(tmp_path: Path, responses: Sequence[str], max_steps: int = 5) -> tuple[AgentSession, FakeOllama]:
@@ -784,4 +775,3 @@ def test_explicit_run_tests_call_in_flow(tmp_path: Path) -> None:
     tool_msgs = [m for m in session.messages if m.get("role") == "tool"]
     assert any("run_tests" in m.get("content", "").lower() and "exit=" in m.get("content", "") for m in tool_msgs)  # explicit full run_tests tool was called mid-flow
     assert "done" in result or "explicit" in result  # the final content from the padded responses (flow may surface a generic final)
-
