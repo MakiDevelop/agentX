@@ -19,6 +19,14 @@ Canonical sources stay outside this repo:
 for orientation, but targeted maps are preferred before remote operations because
 they reduce irrelevant context.
 
+Snapshot status:
+
+- Last synced in this repo: 2026-07-15.
+- Source files checked: `~/infrastructure/infrastructure-quick-ref.md`,
+  `~/infrastructure/project-map.md`, `~/infrastructure/resource-map.md`.
+- This document is a routing snapshot and agentX usage contract, not the SSOT.
+  When acting on infrastructure, read `/infra ...` or the source files again.
+
 ## Operating Route
 
 Use this route before any SSH, deploy, service restart, cron / launchd change,
@@ -62,11 +70,26 @@ Post-check plan before remote actions:
 The home AI center is a heterogeneous compute pool, not one host. Current routing
 intent from the resource map:
 
+### Facility Inventory
+
+| Node | Access / address | Role | First-choice workloads | Do not use for |
+|------|------------------|------|------------------------|----------------|
+| Mac mini M4 | `ssh mini-ts`; `192.168.11.122`; `100.122.171.74` | Control plane, always-on services, memhall backup | OpenClaw, Nginx, BFF, Redis, Memory Gateway, DL-Pilot, MOMO Home AI, ERIKA personal | Long GPU inference, memhall main path |
+| Mac mini M4-2 | `ssh mini2-ts`; `100.89.41.50` | memhall main, backup control plane, light jobs, embed server main | Memory Hall `:9100`, Hermes Gateway, Telegram channel, mk-brain embed_server `:8790` | Silent second primary gateway, heavy batch inference |
+| DGX Spark | `ssh dgx-ts`; `192.168.11.123`; `100.110.14.65` | Main text inference and scoring node | Ollama `:11434`, Open WebUI, vLLM, LLM chat, RAG answer, rerank, batch scoring, embedding fallback | Web-facing app primary, database state source |
+| RTX 3090 PC | `ssh rtx3090`; `192.168.11.168` | Image generation and x86 CUDA fallback | ComfyUI, Stable Diffusion / Flux, LoRA, CUDA-only PoC, image batch work | Control plane, core database, reliable state service |
+| NAS DS2415+ | `ssh nas-ts`; `192.168.11.112`; `100.82.57.32` | Shared storage and backup | Models, LoRA, ControlNet, datasets, generated outputs, archive | Inference, API service, app deployment |
+| S20 Ultra | `100.68.254.82` | Mobile capture and edge inbox | Capture inbox, mobile upload, temporary webhook, sensor input | Heavy inference, reliable always-on core service |
+| PDSNET-Z13 | `ssh pdsnet-z13-ts`; `100.90.226.15` | Windows 11 / external 5G / mobile GPU fallback | Windows-only PoC, CUDA compatibility checks, external 5G scenario tests | Production, database, core state, always-on service |
+
+### Workload Routing
+
 | Workload | First target | Backup / note |
 |----------|--------------|---------------|
+| LINE / Telegram / webhook ingress | Mac mini M4 | Mac mini M4-2 only when explicitly scoped |
 | Control plane, OpenClaw, BFF, Redis, light routing | Mac mini M4 | Mac mini M4-2 for backup or low-risk jobs |
 | Memory Hall main path | Mac mini M4-2 `100.89.41.50:9100` | Mac mini M4 `100.122.171.74:9100` is backup |
-| Embedding main path | Mac mini M4-2 `100.89.41.50:8790` | DGX Spark `8790` is fallback |
+| Embedding main path | Mac mini M4-2 `100.89.41.50:8790` | DGX Spark `100.110.14.65:8790` is fallback |
 | LLM chat, RAG answer, rerank, batch scoring | DGX Spark | External model or small Mac mini model only when appropriate |
 | Image generation, CUDA x86 fallback | RTX 3090 PC | External image API if local GPU is unavailable |
 | Shared storage, models, datasets, generated assets | NAS DS2415+ | Do not treat NAS as an app deployment node |
@@ -87,15 +110,16 @@ Home AI stop conditions:
 The VPS map is for public-facing personal, client, and non-company services. It
 exists to prevent domain-to-repo confusion:
 
-| Host / domain | Primary meaning | Common repo association |
-|---------------|-----------------|-------------------------|
-| `n1k.tw` | General web-facing VPS and automation host | `n8n-workflows`, `agent-control-plane` |
-| `2ch.tw` | Anonymous forum service | `2ch-core` |
-| `ranran.tw` | Personal service node; may host project-specific subdomains | `geo-checker`, project-specific repos |
-| `chiba.tw` | Multi-service host: short URL, business card, DX entrances, chatbot backend | `chiba.tw`, `dx-chiba`, `dx-chatbot` |
-| `blog.chibakuma.com` | Ghost blog | `blog.chibakuma.com` |
-| `paul.applekuma.com` | Customer-facing consumption management | `paul.applekuma.com` |
-| `kerker.tw` | Ghost / static display services | Check `/infra vps` before acting |
+| Host / domain | Access / IP | Primary services | Common repo association | Caution |
+|---------------|-------------|------------------|-------------------------|---------|
+| `n1k.tw` | `ssh n1k`; `167.179.69.8` | n8n, control-plane-bff experiment, popup-ad-manager, SearXNG | `n8n-workflows`, `agent-control-plane` | Multi-service host; confirm process manager before acting |
+| `2ch.tw` | `ssh 2ch`; `139.180.199.219` | Anonymous forum, all Docker | `2ch-core` | Domain and repo names differ |
+| `ranran.tw` | `ssh ranran`; `139.180.201.136` | Personal service node, GEO Checker, AI education, PopDaily delivery subdomain | `geo-checker`, `abd-ids-class`, `popdaily-private` | `ranran.tw` is not only `geo-checker`; `pd.ranran.tw` is PopDaily context |
+| `chiba.tw` | `ssh chiba`; `139.180.197.137` | Short URL, business card, DX entrances, shared chatbot backend | `chiba.tw`, `dx-chiba`, `dx-chatbot` | Most likely to be confused; path, subdomain, and port decide the repo |
+| `blog.chibakuma.com` | `ssh blog`; `202.182.115.151` | Ghost technical blog | `blog.chibakuma.com` | Blog host, not a generic app box |
+| `paul.applekuma.com` | `ssh paul`; `45.76.207.168` | Customer-facing consumption management | `paul.applekuma.com` | Existing `_legacy` flow may still matter |
+| `kerker.tw` | `ssh kerker`; `202.182.112.147` | Ghost / static display services | Check `/infra vps` before acting | Repo ownership must be confirmed |
+| `greenleaves.dig.tw` | cPanel | River tracing activity platform with payment | `greenleaves` | Payment-related; treat changes as higher risk |
 
 Important distinctions:
 
@@ -105,6 +129,16 @@ Important distinctions:
 - `pd.ranran.tw` is PopDaily project delivery context even though it sits on a
   personal VPS.
 - Company 91APP services should not be routed to personal VPS by default.
+
+### VPS Disambiguation Questions
+
+Before answering or acting on a VPS request, resolve these fields:
+
+1. Is the user naming a domain, a host, a service, or a repo?
+2. Which subdomain/path/port identifies the service?
+3. Is the context personal, PopDaily, 91APP, or another client?
+4. Which canonical repo owns the change?
+5. Is the requested action read-only, reversible, or production-affecting?
 
 ## Boundary Rules
 
