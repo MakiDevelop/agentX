@@ -49,6 +49,30 @@ def test_transcript_overview_returns_session_metadata(tmp_path: Path) -> None:
     assert overview["model"] == "gemma4:31b"
     assert overview["namespace"] == "project:agentX"
     assert overview["turns"] == 2
+    assert overview["approval_count"] == 0
+    assert overview["approval_denied_count"] == 0
+    assert overview["approval"] == "-"
+    assert "assistant" in str(overview["last"])
+
+
+def test_transcript_overview_counts_approval_receipts(tmp_path: Path) -> None:
+    session = tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl"
+    session.parent.mkdir(parents=True)
+    session.write_text(
+        "\n".join([
+            '{"ts":"2026-01-02T00:00:00","event":"session_start","model":"gemma4:31b","namespace":"project:agentX"}',
+            '{"ts":"2026-01-02T00:00:01","event":"approval","tool":"memory_write","risk":"YELLOW","source":"auto_approved","allowed":true}',
+            '{"ts":"2026-01-02T00:00:02","event":"approval","tool":"apply_patch","risk":"YELLOW","source":"manual_denied","allowed":false}',
+            '{"ts":"2026-01-02T00:00:03","event":"assistant","content":"done"}',
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    overview = transcript_overview(session)
+
+    assert overview["approval_count"] == 2
+    assert overview["approval_denied_count"] == 1
+    assert overview["approval"] == "2/1 denied"
     assert "assistant" in str(overview["last"])
 
 

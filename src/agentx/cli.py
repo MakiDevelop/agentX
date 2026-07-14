@@ -562,6 +562,7 @@ def print_sessions(settings: Settings) -> None:
     table.add_column("Model")
     table.add_column("Namespace")
     table.add_column("Turns", justify="right")
+    table.add_column("Approval", justify="right")
     table.add_column("Last")
     for path in list_transcripts(settings.workspace):
         overview = transcript_overview(path)
@@ -571,6 +572,7 @@ def print_sessions(settings: Settings) -> None:
             str(overview["model"]),
             str(overview["namespace"]),
             str(overview["turns"]),
+            str(overview["approval"]),
             str(overview["last"]),
         )
     console.print(table)

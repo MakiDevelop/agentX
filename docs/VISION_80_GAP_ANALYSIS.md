@@ -142,13 +142,14 @@ Recommended next:
 
 ### Image 5: Safety Priority + Approval Gate
 
-**Current estimate**: 85%
+**Current estimate**: 89%
 
 Done:
 
 - GREEN / YELLOW / RED risk classification exists and is visible in `/tools`, `/help`, `/doctor`, `/status`, welcome UI.
 - Approval policy supports `ask`, `auto`, `off`, plus aliases `strict`, `auto-approve`, and `deny`.
 - Transcript and headless `log_summary.approval_receipts` distinguish YELLOW `auto_approved`, `manual_approved`, `manual_denied`, and `policy_denied` decisions.
+- `/sessions` overview surfaces approval receipt counts and denied counts.
 - RED tools are blocked.
 - Dangerous command patterns and sensitive paths are guarded.
 - Cross-absolute-path `mv` is conservatively RED.
@@ -157,11 +158,11 @@ Done:
 
 Remaining gap:
 
-- Approval receipts are captured at the runtime gate, but `/sessions` overview does not yet surface receipt counts.
+- Approval receipt details are still only in JSONL/payload; `/sessions` intentionally shows counts only.
 
 Recommended next:
 
-- Consider showing approval receipt counts in `/sessions` or `/transcript` summaries.
+- Consider adding a dedicated `/transcript approvals` drill-down only if the count view proves insufficient.
 - Keep RED behavior unchanged.
 
 ## Current Gap Summary
@@ -172,7 +173,7 @@ Recommended next:
 | Mode clarity | 85% | `/mode ask` alias |
 | Tool discoverability | 80-85% | `/workflows` or `/guide --full` |
 | Memory continuity | 78-82% | Handoff section formatting |
-| Safety / approval UX | 88% | Approval receipt counts in session overview |
+| Safety / approval UX | 89% | Optional approval receipt drill-down |
 | Visual polish | 55-65% | Optional TUI/web demo, not required for guarded MVP |
 
 ## Recommended Implementation Queue

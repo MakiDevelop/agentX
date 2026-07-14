@@ -97,6 +97,8 @@ def transcript_overview(path: Path) -> dict[str, str | int]:
     model = ""
     namespace = ""
     turns = 0
+    approval_count = 0
+    approval_denied_count = 0
     last_event = ""
     last_text = ""
     with path.open(encoding="utf-8") as handle:
@@ -117,15 +119,30 @@ def transcript_overview(path: Path) -> dict[str, str | int]:
             elif event in {"handoff", "resume", "compact"}:
                 last_event = event
                 last_text = str(record.get("result") or record.get("summary") or "").replace("\n", " ")[:120]
+            elif event == "approval":
+                approval_count += 1
+                if record.get("allowed") is False:
+                    approval_denied_count += 1
     return {
         "name": path.stem,
         "started": started,
         "model": model or "-",
         "namespace": namespace or "-",
         "turns": turns,
+        "approval_count": approval_count,
+        "approval_denied_count": approval_denied_count,
+        "approval": _format_approval_overview(approval_count, approval_denied_count),
         "last": f"{last_event}: {last_text}" if last_event else "-",
         "path": str(path),
     }
+
+
+def _format_approval_overview(total: int, denied: int) -> str:
+    if total <= 0:
+        return "-"
+    if denied <= 0:
+        return f"{total}/0 denied"
+    return f"{total}/{denied} denied"
 
 
 def list_transcripts(workspace: Path, limit: int = 10) -> list[Path]:

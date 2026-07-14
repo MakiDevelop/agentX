@@ -78,6 +78,7 @@ Memory Hall 是跨 session 延續工作的入口：
 ```
 
 自動 handoff 會包含固定區塊：完成、待辦、阻塞、下一輪建議，方便下一個 agent 或下一輪自己接手。
+`/sessions` 會顯示每輪 transcript 的 approval receipt counts，方便快速看出是否有 YELLOW tool 被拒絕。
 
 ## 5. Safety And Approval
 
