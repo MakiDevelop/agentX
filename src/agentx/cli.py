@@ -682,14 +682,13 @@ def _risk_label_from_capability(capability: dict[str, object]) -> str:
 
 def _agentx_headless_tool_args(argv: list[str]) -> dict[str, object]:
     output_format = "json" if "--json" in argv else "plain"
-    if "--output-format" in argv:
-        index = argv.index("--output-format")
-        if index + 1 < len(argv):
-            output_format = argv[index + 1]
+    output_format_option = _option_value(argv, "--output-format")
+    if output_format_option:
+        output_format = output_format_option
     return {
         "agent_mode": "--agent" in argv,
-        "prompt_source": "prompt_file" if "--prompt-file" in argv else "inline_prompt",
-        "workspace_override": "--workspace" in argv or "--cwd" in argv,
+        "prompt_source": "prompt_file" if _has_option(argv, "--prompt-file") else "inline_prompt",
+        "workspace_override": _has_option(argv, "--workspace") or _has_option(argv, "--cwd"),
         "artifact_dir": _option_value(argv, "--artifact-dir"),
         "result_output": _option_value(argv, "--result-output"),
         "session_output": _option_value(argv, "--session-output"),
@@ -701,7 +700,15 @@ def _agentx_headless_tool_args(argv: list[str]) -> dict[str, object]:
     }
 
 
+def _has_option(argv: list[str], option: str) -> bool:
+    return option in argv or any(token.startswith(f"{option}=") for token in argv)
+
+
 def _option_value(argv: list[str], option: str) -> str | None:
+    prefix = f"{option}="
+    for token in argv:
+        if token.startswith(prefix):
+            return token.removeprefix(prefix)
     if option not in argv:
         return None
     index = argv.index(option)
@@ -713,7 +720,9 @@ def _option_value(argv: list[str], option: str) -> str | None:
 def _agentx_command_plan(argv: list[str]) -> dict[str, object] | None:
     if not argv or Path(argv[0]).name not in {"agentx", "ax"}:
         return None
-    if len(argv) >= 2 and argv[1] in {"-p", "--prompt", "--prompt-file"}:
+    if len(argv) >= 2 and (
+        argv[1] in {"-p", "--prompt", "--prompt-file"} or argv[1].startswith(("--prompt=", "--prompt-file="))
+    ):
         tool_args = _agentx_headless_tool_args(argv)
         return {
             "matched": True,

@@ -229,7 +229,9 @@ Required stable keys:
 For `matched_policy="agentx_headless"`, `tool_args` includes runner posture
 metadata such as `agent_mode`, `prompt_source`, `workspace_override`,
 `artifact_dir`, `result_output`, `session_output`, `handoff_briefing_output`,
-`save_session`, `resume_session`, `quiet`, and `output_format`.
+`save_session`, `resume_session`, `quiet`, and `output_format`. Both
+`--option value` and `--option=value` forms are recognized for these metadata
+fields.
 
 ## Review Payload
 

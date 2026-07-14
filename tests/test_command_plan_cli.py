@@ -115,6 +115,23 @@ def test_command_plan_payload_marks_agentx_prompt_file_metadata(tmp_path) -> Non
     assert payload["next_commands"] == ["agentx inspect --json", "agentx next --json"]
 
 
+def test_command_plan_payload_marks_agentx_equals_options(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path),
+        "agentx --prompt-file=briefing.md --output-format=jsonl --resume-session=latest "
+        "--artifact-dir=.agentx/runs/latest --workspace=.",
+    )
+
+    assert payload["ok"] is True
+    assert payload["matched_policy"] == "agentx_headless"
+    assert payload["tool_args"]["prompt_source"] == "prompt_file"  # type: ignore[index]
+    assert payload["tool_args"]["artifact_dir"] == ".agentx/runs/latest"  # type: ignore[index]
+    assert payload["tool_args"]["resume_session"] == "latest"  # type: ignore[index]
+    assert payload["tool_args"]["workspace_override"] is True  # type: ignore[index]
+    assert payload["tool_args"]["output_format"] == "jsonl"  # type: ignore[index]
+    assert payload["next_commands"] == ["agentx inspect --json", "agentx artifacts --json"]
+
+
 def test_command_plan_json_outputs_payload() -> None:
     result = CliRunner().invoke(app, ["command-plan", "uv run pytest -q", "--json"])
 
