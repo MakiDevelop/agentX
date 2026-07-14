@@ -34,6 +34,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx approvals --json` | `agentx.approvals.v1` | `approvals` |
 | `agentx traces --json` | `agentx.traces.v1` | `traces` |
 | `agentx diff --json` | `agentx.diff.v1` | `diff` |
+| `agentx review --json` | `agentx.review.v1` | `review` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
@@ -143,6 +144,31 @@ Each file object includes:
 | `added` | integer or null | Inserted lines; null for binary files. |
 | `deleted` | integer or null | Deleted lines; null for binary files. |
 | `binary` | boolean | Whether the diff entry is binary. |
+
+## Review Payload
+
+`agentx review --json` emits `agentx.review.v1`.
+
+This is a deterministic review gate for commit/review runners. It does not call
+an LLM. It combines `agentx.diff.v1` with `agentx.verify.v1` by default and
+returns whether the workspace is ready to enter the commit flow. Use
+`--skip-verify` only when the caller wants posture without running checks. Use
+`--fail-on-blocker` to print the payload and exit `1` when blockers are present.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.review.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `generated_at` | string | Local ISO timestamp. |
+| `ok` | boolean | True when no blockers are present. |
+| `commit_ready` | boolean | True when there are changes, verification ran, and no blockers are present. |
+| `blockers` | array of string | Machine-readable blockers such as `no_changes`, `verify_failed`, or `diff_unavailable`. |
+| `warnings` | array of string | Non-blocking warnings such as `verify_skipped` or `has_untracked_files`. |
+| `diff` | object | Embedded `agentx.diff.v1`. |
+| `verify` | object or null | Embedded `agentx.verify.v1`, or null when `--skip-verify` was used. |
+| `next_commands` | array of string | Suggested follow-up commands for humans or runners. |
 
 ## Artifacts Payload
 

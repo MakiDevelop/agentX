@@ -146,6 +146,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local git inspection",
     },
     {
+        "command": "agentx review",
+        "usage": "agentx review --json",
+        "description": "Run a deterministic review gate: diff summary plus verification posture.",
+        "examples": ["agentx review --json", "agentx review --json --fail-on-blocker", "agentx review --skip-verify --output-format jsonl"],
+        "schemas": ["agentx.review.v1"],
+        "jsonl_event": "review",
+        "risk": "GREEN - read-only local git inspection and existing verification commands",
+    },
+    {
         "command": "agentx tasks",
         "usage": "agentx tasks [STATUS] --json",
         "description": "List project task state from .agentx/tasks.json.",

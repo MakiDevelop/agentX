@@ -1977,6 +1977,96 @@ def verify_exit_code(payload: dict[str, object], *, fail_on_error: bool = False)
     return 0 if payload.get("ok") is True else 1
 
 
+def review_payload(
+    settings: Settings,
+    *,
+    timeout: int = 120,
+    run_verify: bool = True,
+) -> dict[str, object]:
+    diff = diff_payload(settings)
+    verify = verify_payload(settings, timeout=timeout) if run_verify else None
+    blockers: list[str] = []
+    warnings: list[str] = []
+
+    if diff.get("ok") is not True:
+        blockers.append("diff_unavailable")
+    elif diff.get("dirty") is not True:
+        blockers.append("no_changes")
+
+    if verify is None:
+        warnings.append("verify_skipped")
+    elif verify.get("ok") is not True:
+        blockers.append("verify_failed")
+
+    if diff.get("untracked_count", 0):
+        warnings.append("has_untracked_files")
+
+    commit_ready = not blockers and verify is not None
+    next_commands = ["agentx diff --json"]
+    if verify is None:
+        next_commands.append("agentx verify --json --fail-on-error")
+    if commit_ready:
+        next_commands.append("/commit 中文訊息")
+    elif blockers:
+        next_commands.append("fix blockers, then rerun agentx review --json")
+    else:
+        next_commands.append("agentx review --json")
+
+    return {
+        "schema": "agentx.review.v1",
+        "workspace": str(settings.workspace),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "ok": not blockers,
+        "commit_ready": commit_ready,
+        "blockers": blockers,
+        "warnings": warnings,
+        "diff": diff,
+        "verify": verify,
+        "next_commands": next_commands,
+    }
+
+
+def print_review_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="review",
+        )
+        return
+
+    diff = dict(payload["diff"])  # type: ignore[arg-type]
+    verify = payload.get("verify")
+    verify_ok = None if verify is None else dict(verify).get("ok")  # type: ignore[arg-type]
+    table = Table(title="agentX review gate", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    table.add_row("workspace", str(payload["workspace"]))
+    table.add_row("ok", str(payload["ok"]))
+    table.add_row("commit_ready", str(payload["commit_ready"]))
+    table.add_row(
+        "diff",
+        f"dirty={diff.get('dirty')} files={diff.get('file_count')} "
+        f"insertions={diff.get('insertions')} deletions={diff.get('deletions')} "
+        f"untracked={diff.get('untracked_count')}",
+    )
+    table.add_row("verify", "skipped" if verify is None else f"ok={verify_ok}")
+    table.add_row("blockers", ", ".join(str(item) for item in payload["blockers"]) or "-")
+    table.add_row("warnings", ", ".join(str(item) for item in payload["warnings"]) or "-")
+    console.print(table)
+
+
+def review_exit_code(payload: dict[str, object], *, fail_on_blocker: bool = False) -> int:
+    if not fail_on_blocker:
+        return 0
+    return 0 if payload.get("ok") is True else 1
+
+
 def print_verify_payload(
     payload: dict[str, object],
     *,
@@ -2039,6 +2129,7 @@ def inspect_payload(
         "verify_commands": verify_commands,
         "next_commands": [
             "agentx diff --json",
+            "agentx review --json --fail-on-blocker",
             "agentx verify --json --fail-on-error",
             "agentx tasks active --json",
             "agentx approvals latest --denied --json --fail-on-denied",
@@ -4745,6 +4836,23 @@ def verify_command(
     structured_format = structured_output_format(json_output, output_format)
     print_verify_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=verify_exit_code(payload, fail_on_error=fail_on_error))
+
+
+@app.command("review")
+def review_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for review inspection."),
+    timeout: int = typer.Option(120, "--timeout", min=1, help="Per-verification-command timeout in seconds."),
+    skip_verify: bool = typer.Option(False, "--skip-verify", help="Skip verification commands and only summarize review posture."),
+    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when blockers prevent commit readiness."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Run deterministic read-only review gate: diff summary plus verification posture."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = review_payload(settings, timeout=timeout, run_verify=not skip_verify)
+    structured_format = structured_output_format(json_output, output_format)
+    print_review_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=review_exit_code(payload, fail_on_blocker=fail_on_blocker))
 
 
 @app.command("inspect")

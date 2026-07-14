@@ -76,6 +76,7 @@
 - [x] `agentx artifacts [DIR] --json` 可列出 `.agentx/runs` 或單一 bundle 的 result/session/handoff 路徑、exit code、termination 與 resume command，方便外部 runner 先 discovery 再 `handoff-resume`。
 - [x] `agentx traces [SESSION] --json` 可讀取 transcript，輸出 event/tool counts、approval denials、tool failures、error-like records 與 recent events，方便外部 runner 不解析整份 JSONL 就能做觀測與決策。
 - [x] `agentx diff [PATH] --json` 可輸出 read-only git diff 摘要（file status、insertions/deletions、stat；`--staged` 看 index，`--patch` 才附 patch），方便 Codex/Grok runner 在 review/commit 前不用解析自然語言 diff。
+- [x] `agentx review --json` 可輸出 deterministic review gate（diff + verify + commit_ready + blockers/warnings + next commands），`--fail-on-blocker` 可讓 CI/wrapper 在未達 commit 條件時 exit 1。
 - [x] `agentx handoff-inspect --require-handoff` 可把 result artifact 當成接手 gate：需要 `needs_handoff=true` 與 `resume_command`，否則 exit 1；可搭配 `--field`、`--output-format jsonl` 與 `--use-payload-exit-code`。
 - [x] `agentx handoff-inspect --require-schema-version` 可拒絕舊版或未知 headless result payload contract；inspection output 也會顯示 `schema_version`。
 - [x] `agentx handoff-inspect --next-prompt-file PATH` 可把 `resume_command` 的 `-p '<next prompt>'` 改成 `--prompt-file PATH`，方便 Codex/Grok runner 用長 briefing 接手。
