@@ -73,13 +73,46 @@ def test_command_plan_payload_allows_agentx_capability(tmp_path) -> None:  # noq
 
 
 def test_command_plan_payload_marks_agentx_agent_run_yellow(tmp_path) -> None:  # noqa: ANN001
-    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx -p 'continue' --agent --json")
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path),
+        "agentx -p 'continue' --agent --json --artifact-dir .agentx/runs/latest --quiet",
+    )
 
     assert payload["ok"] is True
     assert payload["allowed"] is True
     assert payload["risk"] == "YELLOW"
     assert payload["approval_required"] is True
     assert payload["matched_policy"] == "agentx_headless"
+    assert payload["tool_args"] == {
+        "agent_mode": True,
+        "prompt_source": "inline_prompt",
+        "workspace_override": False,
+        "artifact_dir": ".agentx/runs/latest",
+        "result_output": None,
+        "session_output": None,
+        "handoff_briefing_output": None,
+        "save_session": False,
+        "resume_session": None,
+        "quiet": True,
+        "output_format": "json",
+    }
+    assert payload["next_commands"] == ["agentx inspect --json", "agentx artifacts --json"]
+
+
+def test_command_plan_payload_marks_agentx_prompt_file_metadata(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path),
+        "agentx --prompt-file briefing.md --output-format jsonl --resume-session latest --save-session",
+    )
+
+    assert payload["ok"] is True
+    assert payload["risk"] == "GREEN"
+    assert payload["approval_required"] is False
+    assert payload["tool_args"]["prompt_source"] == "prompt_file"  # type: ignore[index]
+    assert payload["tool_args"]["resume_session"] == "latest"  # type: ignore[index]
+    assert payload["tool_args"]["save_session"] is True  # type: ignore[index]
+    assert payload["tool_args"]["output_format"] == "jsonl"  # type: ignore[index]
+    assert payload["next_commands"] == ["agentx inspect --json", "agentx next --json"]
 
 
 def test_command_plan_json_outputs_payload() -> None:

@@ -197,8 +197,9 @@ Required stable keys:
 
 This is a read-only command policy preflight for runners. It parses a shell
 command string, checks it against `ALLOWED_COMMANDS`, `BUILD_COMMANDS`, docker
-compose policy, and destructive blockers, then returns the matching tool and
-approval posture. It never executes the command.
+compose policy, top-level `agentx` CLI capabilities, headless `agentx -p`
+posture, and destructive blockers, then returns the matching tool and approval
+posture. It never executes the command.
 
 Required stable keys:
 
@@ -212,8 +213,8 @@ Required stable keys:
 | `ok` | boolean | True when the command matched an allowed policy and has no blockers. |
 | `allowed` | boolean | Whether agentX policy allows the command through a known tool. |
 | `risk` | string | `GREEN`, `YELLOW`, `RED`, or `UNKNOWN`. |
-| `approval_required` | boolean | True for YELLOW build/docker actions. |
-| `matched_policy` | string or null | `allowed_command`, `build_command`, `docker_compose`, or null. |
+| `approval_required` | boolean | True for YELLOW build/docker/headless agent actions. |
+| `matched_policy` | string or null | `allowed_command`, `build_command`, `docker_compose`, `agentx_headless`, `agentx_cli_capability`, or null. |
 | `tool` | string or null | Tool name that would run the command, such as `run_command`. |
 | `tool_args` | object | Tool arguments for the matched tool. |
 | `resolved_argv` | array of string or null | Exact argv agentX would use for matched policies. |
@@ -224,6 +225,11 @@ Required stable keys:
 
 `--fail-on-blocker` still prints the payload first. It exits `1` when
 `blockers` is non-empty; otherwise it exits `0`.
+
+For `matched_policy="agentx_headless"`, `tool_args` includes runner posture
+metadata such as `agent_mode`, `prompt_source`, `workspace_override`,
+`artifact_dir`, `result_output`, `session_output`, `handoff_briefing_output`,
+`save_session`, `resume_session`, `quiet`, and `output_format`.
 
 ## Review Payload
 

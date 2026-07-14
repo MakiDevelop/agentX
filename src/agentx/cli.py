@@ -680,20 +680,55 @@ def _risk_label_from_capability(capability: dict[str, object]) -> str:
     return "UNKNOWN"
 
 
+def _agentx_headless_tool_args(argv: list[str]) -> dict[str, object]:
+    output_format = "json" if "--json" in argv else "plain"
+    if "--output-format" in argv:
+        index = argv.index("--output-format")
+        if index + 1 < len(argv):
+            output_format = argv[index + 1]
+    return {
+        "agent_mode": "--agent" in argv,
+        "prompt_source": "prompt_file" if "--prompt-file" in argv else "inline_prompt",
+        "workspace_override": "--workspace" in argv or "--cwd" in argv,
+        "artifact_dir": _option_value(argv, "--artifact-dir"),
+        "result_output": _option_value(argv, "--result-output"),
+        "session_output": _option_value(argv, "--session-output"),
+        "handoff_briefing_output": _option_value(argv, "--handoff-briefing-output"),
+        "save_session": "--save-session" in argv,
+        "resume_session": _option_value(argv, "--resume-session"),
+        "quiet": "--quiet" in argv,
+        "output_format": output_format,
+    }
+
+
+def _option_value(argv: list[str], option: str) -> str | None:
+    if option not in argv:
+        return None
+    index = argv.index(option)
+    if index + 1 >= len(argv):
+        return None
+    return argv[index + 1]
+
+
 def _agentx_command_plan(argv: list[str]) -> dict[str, object] | None:
     if not argv or Path(argv[0]).name not in {"agentx", "ax"}:
         return None
     if len(argv) >= 2 and argv[1] in {"-p", "--prompt", "--prompt-file"}:
+        tool_args = _agentx_headless_tool_args(argv)
         return {
             "matched": True,
             "risk": "YELLOW" if "--agent" in argv else "GREEN",
             "approval_required": "--agent" in argv,
             "matched_policy": "agentx_headless",
             "tool": None,
-            "tool_args": {},
+            "tool_args": tool_args,
             "resolved_argv": argv,
             "blockers": [],
             "warnings": [],
+            "next_commands": [
+                "agentx inspect --json",
+                "agentx artifacts --json" if tool_args.get("artifact_dir") else "agentx next --json",
+            ],
         }
     subcommand = argv[1] if len(argv) >= 2 else ""
     for capability in capabilities_payload().get("capabilities", []):  # type: ignore[union-attr]
@@ -848,7 +883,10 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
                     "tool": agentx_plan["tool"],
                     "tool_args": agentx_plan["tool_args"],
                     "resolved_argv": agentx_plan["resolved_argv"],
-                    "next_commands": ["Run through agentX CLI policy; do not bypass approval gates"],
+                    "next_commands": agentx_plan.get(
+                        "next_commands",
+                        ["Run through agentX CLI policy; do not bypass approval gates"],
+                    ),
                 }
             )
         else:
