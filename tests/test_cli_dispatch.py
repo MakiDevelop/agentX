@@ -3,9 +3,8 @@ from pathlib import Path
 from typing import Any
 
 from agentx.approval import ApprovalMode, ApprovalPolicy
-from agentx.cli import (
-    NON_BLOCKING_COMMANDS,
-    ShellState,
+from agentx.cli import NON_BLOCKING_COMMANDS, ShellState
+from agentx.cli_slash_shims import (
     cmd_clear,
     cmd_exit,
     cmd_files,
