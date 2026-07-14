@@ -94,6 +94,29 @@ def test_headless_json_payload_includes_stats() -> None:
     assert data["failing_tools"] == []
     assert data["stats"]["message_count"] == 3
     assert data["session_path"] is None
+    assert "phases" not in data
+
+
+def test_headless_json_payload_includes_optional_phases() -> None:
+    payload = cli.headless_json_payload(
+        cli.HeadlessRunResult(
+            output="combined",
+            termination="final_success",
+            phases=(
+                {"name": "plan", "output": "PLAN"},
+                {"name": "execution", "output": "EXEC"},
+            ),
+        ),
+        exit_code=0,
+    )
+
+    data = json.loads(payload)
+
+    assert data["output"] == "combined"
+    assert data["phases"] == [
+        {"name": "plan", "output": "PLAN"},
+        {"name": "execution", "output": "EXEC"},
+    ]
 
 
 def test_resolve_session_store_path_latest_and_name(tmp_path: Path) -> None:
@@ -263,6 +286,10 @@ def test_run_print_prompt_plan_then_execute_runs_two_phases(monkeypatch) -> None
 
     assert isinstance(result, cli.HeadlessRunResult)
     assert result.output == "## Plan\nPLAN_RESULT\n\n## Execution\nEXECUTION_RESULT"
+    assert result.phases == (
+        {"name": "plan", "output": "PLAN_RESULT"},
+        {"name": "execution", "output": "EXECUTION_RESULT"},
+    )
     assert result.termination == "final_success"
     assert calls[0][1] is True
     assert "純 PLAN MODE" in calls[0][0]

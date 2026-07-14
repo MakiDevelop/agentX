@@ -50,6 +50,7 @@
 - [x] `agentx -p ... --agent --plan-then-execute` 會在同一個 `AgentSession` 內先跑 plan-only，再切換為 execution mode。
 - [x] `agentx ask ... --plan-then-execute` 走同一套 two-phase headless runner。
 - [x] 輸出會分成 `## Plan` 與 `## Execution`，方便人或上游 agent 判讀。
+- [x] JSON mode 會額外提供 `phases=[{name:"plan"},{name:"execution"}]`，讓 script 不必自行切割 `output`。
 - [x] 修正舊行為：不再把 `plan_then_execute` 當成整輪 `plan_only`，避免永遠不能執行工具。
 
 **Progress Update (Headless JSON Observability, 2026-07)**：

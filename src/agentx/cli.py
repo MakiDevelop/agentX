@@ -948,6 +948,7 @@ class HeadlessRunResult:
     failing_tools: tuple[str, ...] = ()
     stats: dict[str, object] = field(default_factory=dict)
     session_path: str | None = None
+    phases: tuple[dict[str, str], ...] = ()
 
 
 def headless_run_stats(session: AgentSession) -> dict[str, object]:
@@ -980,6 +981,8 @@ def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
         "stats": result.stats,
         "session_path": result.session_path,
     }
+    if result.phases:
+        payload["phases"] = list(result.phases)
     return json.dumps(payload, ensure_ascii=False)
 
 
@@ -1302,8 +1305,13 @@ def run_print_prompt(
             )
             execute_output = agent_loop.run(execute_prompt, namespace=namespace, plan_only=False)
             output = f"## Plan\n{plan_output}\n\n## Execution\n{execute_output}"
+            phases = (
+                {"name": "plan", "output": plan_output},
+                {"name": "execution", "output": execute_output},
+            )
         else:
             output = agent_loop.run(agent_prompt, namespace=namespace, plan_only=plan_mode)
+            phases = ()
         active_store = getattr(agent_loop.session, "_session_store", None)
         if active_store is not None:
             session_path = active_store.path
@@ -1314,6 +1322,7 @@ def run_print_prompt(
                 failing_tools=tuple(sorted(agent_loop.session.last_failing_tools)),
                 stats=headless_run_stats(agent_loop.session),
                 session_path=str(session_path) if session_path else None,
+                phases=phases,
             )
         return output
     output = ollama.chat(
