@@ -106,6 +106,8 @@ Required stable keys:
 | `traces` | object | Embedded `agentx.traces.v1` for `latest`. |
 | `diff` | object | Embedded `agentx.diff.v1` for current worktree diff, without patch text. |
 | `capabilities` | object | Embedded `agentx.capabilities.v1`. |
+| `artifacts` | object | Embedded `agentx.artifacts.v1` catalog for recent headless runner bundles. |
+| `next` | object | Embedded `agentx.next.v1` recommendation payload, including command-plan preflights. |
 | `verify_commands` | array of object | Detected verification argv lists without executing them. |
 | `verify_command_plans` | array of object | Embedded `agentx.command_plan.v1` preflights for each detected verification command. |
 | `next_commands` | array of string | Suggested follow-up commands for runners. |

@@ -3152,6 +3152,13 @@ def inspect_payload(
         command_plan_payload(settings, str(item["command"]))
         for item in verify_commands
     ]
+    artifacts = artifacts_payload(settings, root=".agentx/runs", limit=5)
+    next_steps = next_payload(
+        settings,
+        artifacts_root=".agentx/runs",
+        artifacts_limit=5,
+        approvals_limit=approvals_limit,
+    )
     return {
         "schema": "agentx.inspect.v1",
         "workspace": str(settings.workspace),
@@ -3169,6 +3176,8 @@ def inspect_payload(
         "traces": traces_payload(settings, session="latest", limit=20),
         "diff": diff_payload(settings),
         "capabilities": capabilities_payload(),
+        "artifacts": artifacts,
+        "next": next_steps,
         "verify_commands": verify_commands,
         "verify_command_plans": verify_command_plans,
         "next_commands": [
@@ -3204,6 +3213,8 @@ def print_inspect_payload(
     tasks = dict(payload["tasks"])  # type: ignore[arg-type]
     sessions = dict(payload["sessions"])  # type: ignore[arg-type]
     approvals = dict(payload["approvals"])  # type: ignore[arg-type]
+    artifacts = dict(payload["artifacts"])  # type: ignore[arg-type]
+    next_steps = dict(payload["next"])  # type: ignore[arg-type]
     table = Table(title="agentX inspect", show_header=False)
     table.add_column("Key", style="cyan")
     table.add_column("Value")
@@ -3234,6 +3245,8 @@ def print_inspect_payload(
         f"ok={diff.get('ok')} dirty={diff.get('dirty')} files={diff.get('file_count')} "
         f"insertions={diff.get('insertions')} deletions={diff.get('deletions')}",
     )
+    table.add_row("artifacts", f"ok={artifacts.get('ok')} count={artifacts.get('count')}")
+    table.add_row("next", str(next_steps.get("recommended_command") or "-"))
     table.add_row(
         "verify_commands",
         ", ".join(str(item["command"]) for item in payload["verify_commands"]) or "-",

@@ -63,6 +63,10 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     diff_paths = {item["path"] for item in payload["diff"]["files"]}  # type: ignore[index]
     assert "tracked.py" in diff_paths
     assert payload["capabilities"]["schema"] == "agentx.capabilities.v1"  # type: ignore[index]
+    assert payload["artifacts"]["schema"] == "agentx.artifacts.v1"  # type: ignore[index]
+    assert payload["next"]["schema"] == "agentx.next.v1"  # type: ignore[index]
+    assert payload["next"]["recommended_command"] == "agentx approvals latest --denied --json --fail-on-denied"  # type: ignore[index]
+    assert payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"  # type: ignore[index]
     assert payload["verify_commands"] == [
         {"command": "uv run ruff check .", "argv": ["uv", "run", "ruff", "check", "."]},
         {"command": "uv run pytest -q", "argv": ["uv", "run", "pytest", "-q"]},
@@ -91,6 +95,9 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["schema"] == "agentx.inspect.v1"
     assert payload["status"]["git"]["ok"] is True
     assert payload["diff"]["schema"] == "agentx.diff.v1"
+    assert payload["artifacts"]["schema"] == "agentx.artifacts.v1"
+    assert payload["next"]["schema"] == "agentx.next.v1"
+    assert payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
     assert payload["verify_commands"][0]["command"] == "uv run ruff check ."
     assert payload["verify_command_plans"][0]["schema"] == "agentx.command_plan.v1"
     assert payload["verify_command_plans"][0]["command"] == "uv run ruff check ."
@@ -119,5 +126,7 @@ def test_inspect_plain_outputs_summary(tmp_path) -> None:  # noqa: ANN001
     assert "agentX inspect" in result.output
     assert "workspace" in result.output
     assert "diff" in result.output
+    assert "artifacts" in result.output
+    assert "next" in result.output
     assert "verify_commands" in result.output
     assert "verify_command_plans" in result.output
