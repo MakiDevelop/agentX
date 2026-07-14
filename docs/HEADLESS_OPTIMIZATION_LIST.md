@@ -86,6 +86,7 @@
 - [x] `agentx next --json` 可輸出 deterministic next-step planner（denied approvals → dirty diff gate → artifact handoff → active tasks → inspect），讓外部 runner 不必自行拼狀態分支；不跑測試、不呼叫 LLM、不 mutate。
 - [x] `agentx next --json` 的每個 recommendation 會內嵌 `command_plan`（`agentx.command_plan.v1`），讓 runner 一次取得下一步排序與 command policy posture。
 - [x] `agentx inspect --json` 會內嵌 `artifacts`（`agentx.artifacts.v1`）與 `next`（`agentx.next.v1`），讓 runner 一次拿到 recent artifact catalog、下一步建議與 command-plan posture。
+- [x] `agentx inspect --json` 會提供 top-level `recommended_command` / `signals`，讓簡單 runner 不必深入解析 nested `next` payload 就能決定下一步。
 - [x] `agentx infra --json` 可輸出 read-only `agentx.infrastructure_context.v1`，讓 headless runner 在 SSH/deploy/cross-machine 前載入資源地圖、家庭 AI 設施與 VPS 地圖；只提供 evidence，不授權遠端操作。
 - [x] `agentx handoff-inspect --require-handoff` 可把 result artifact 當成接手 gate：需要 `needs_handoff=true` 與 `resume_command`，否則 exit 1；可搭配 `--field`、`--output-format jsonl` 與 `--use-payload-exit-code`。
 - [x] `agentx handoff-inspect --require-schema-version` 可拒絕舊版或未知 headless result payload contract；inspection output 也會顯示 `schema_version`。

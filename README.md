@@ -198,7 +198,7 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `stats` 目前包含 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies 與 task counts。
 `log_summary` 會提供精簡可機讀執行摘要：termination、tool outcomes、successful/failing tools、recent errors、recovery suggestions、pending verifies 與 deterministic `handoff_summary`。
 `agentx capabilities --json` 會輸出 `agentx.capabilities.v1`，列出 top-level automation commands、schemas、JSONL events 與風險，讓外部 runner 不必解析 README。
-`agentx inspect --json` 會輸出 `agentx.inspect.v1` read-only preflight bundle，彙整 status、active tasks、sessions、latest approvals、latest traces、diff、capabilities、artifacts、next recommendations、可跑的 verify commands 與對應 `command-plan`，但不執行測試或 live probes。
+`agentx inspect --json` 會輸出 `agentx.inspect.v1` read-only preflight bundle，彙整 status、active tasks、sessions、latest approvals、latest traces、diff、capabilities、artifacts、next recommendations、可跑的 verify commands 與對應 `command-plan`，並提供 top-level `recommended_command` / `signals` 讓 runner 不必深入解析 nested payload；它不執行測試或 live probes。
 `agentx diff --json` 會輸出 `agentx.diff.v1` git diff 摘要，包含檔案狀態、insertions/deletions、untracked files、stat；加 `--staged` 可看 index，加 `--patch` 才會附 patch text。
 `agentx patch-check PATCH --json` 會輸出 `agentx.patch_check.v1` patch preflight，讀取 workspace 內 patch 檔、列出 touched files、跑 `git apply --check -`，並檢查 patch 目標不會逃出 workspace 或落在 `.git` / `.agentx` 等受保護位置；它不會套用 patch。
 `agentx command-plan COMMAND --json` 會輸出 `agentx.command_plan.v1` command policy preflight，判斷命令是否符合 GREEN allowlist、YELLOW build approval、docker compose policy 或 destructive blocker；它不會執行命令。

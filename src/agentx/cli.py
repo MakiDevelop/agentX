@@ -3159,11 +3159,22 @@ def inspect_payload(
         artifacts_limit=5,
         approvals_limit=approvals_limit,
     )
+    next_signals = next_steps.get("signals", {})
+    signals = dict(next_signals) if isinstance(next_signals, dict) else {}
+    signals.update(
+        {
+            "verify_command_count": len(verify_commands),
+            "verify_command_plan_count": len(verify_command_plans),
+        }
+    )
     return {
         "schema": "agentx.inspect.v1",
         "workspace": str(settings.workspace),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "ok": True,
         "live_probes": False,
+        "recommended_command": next_steps.get("recommended_command"),
+        "signals": signals,
         "status": status_payload(
             settings,
             namespace=namespace,
@@ -3219,6 +3230,7 @@ def print_inspect_payload(
     table.add_column("Key", style="cyan")
     table.add_column("Value")
     table.add_row("workspace", str(payload["workspace"]))
+    table.add_row("ok", str(payload.get("ok")))
     table.add_row(
         "runtime",
         f"model={runtime.get('model')} mode={runtime.get('mode')} approval={runtime.get('approval')} "

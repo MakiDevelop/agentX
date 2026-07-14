@@ -98,7 +98,10 @@ Required stable keys:
 | `schema` | string | `agentx.inspect.v1`. |
 | `workspace` | string | Resolved workspace path. |
 | `generated_at` | string | Local ISO timestamp. |
+| `ok` | boolean | True when the read-only aggregate payload was built successfully. |
 | `live_probes` | boolean | Always false; inspect is read-only and local. |
+| `recommended_command` | string or null | Top-level copy of `next.recommended_command` for simple runners. |
+| `signals` | object | Top-level summary signals copied from `next.signals`, plus inspect-specific counts. |
 | `status` | object | Embedded `agentx.status.v1`. |
 | `tasks` | object | Embedded `agentx.tasks.v1` filtered to active tasks. |
 | `sessions` | object | Embedded `agentx.sessions.v1`. |

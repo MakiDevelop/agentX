@@ -49,7 +49,13 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
 
     assert payload["schema"] == "agentx.inspect.v1"
     assert payload["workspace"] == str(tmp_path.resolve())
+    assert payload["ok"] is True
     assert payload["live_probes"] is False
+    assert payload["recommended_command"] == "agentx approvals latest --denied --json --fail-on-denied"
+    assert payload["signals"]["dirty"] is True  # type: ignore[index]
+    assert payload["signals"]["denied_approval_count"] == 1  # type: ignore[index]
+    assert payload["signals"]["verify_command_count"] == 2  # type: ignore[index]
+    assert payload["signals"]["verify_command_plan_count"] == 2  # type: ignore[index]
     assert payload["status"]["schema"] == "agentx.status.v1"  # type: ignore[index]
     assert payload["tasks"]["schema"] == "agentx.tasks.v1"  # type: ignore[index]
     assert payload["tasks"]["count"] == 1  # type: ignore[index]
@@ -93,6 +99,9 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["schema"] == "agentx.inspect.v1"
+    assert payload["ok"] is True
+    assert payload["recommended_command"] == payload["next"]["recommended_command"]
+    assert payload["signals"]["verify_command_count"] == len(payload["verify_commands"])
     assert payload["status"]["git"]["ok"] is True
     assert payload["diff"]["schema"] == "agentx.diff.v1"
     assert payload["artifacts"]["schema"] == "agentx.artifacts.v1"
@@ -125,6 +134,7 @@ def test_inspect_plain_outputs_summary(tmp_path) -> None:  # noqa: ANN001
     assert result.exit_code == 0, result.output
     assert "agentX inspect" in result.output
     assert "workspace" in result.output
+    assert "ok" in result.output
     assert "diff" in result.output
     assert "artifacts" in result.output
     assert "next" in result.output
