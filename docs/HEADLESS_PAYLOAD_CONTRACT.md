@@ -50,8 +50,9 @@ Optional keys:
 {"event":"result","data":{"termination":"final_success"}}
 ```
 
-Other events currently include `dry_run`, `version`, `backends`, and `models`.
-Consumers should branch on `event` and read the payload from `data`.
+Other CLI JSONL inspection/catalog events are documented in
+`docs/CLI_JSON_CONTRACTS.md`. Consumers should branch on `event` and read the
+payload from `data`.
 
 A failure takeover fixture is kept at
 `tests/fixtures/headless_result_failure.json`. Runner integrations can use it as

@@ -172,7 +172,7 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `--result-output PATH` 可把同一份 result payload 寫成 workspace 內 artifact，plain stdout 時預設寫 JSON，`--output-format jsonl` 時寫 JSONL event；路徑拒絕 workspace escape 與覆蓋既有檔案。需要 artifact 格式和 stdout 格式分開時，可用 `--result-output-format auto|json|jsonl`。
 `--handoff-briefing-output PATH` 可在同一輪 headless run 結束時直接寫出 Markdown 接手檔；路徑同樣限制在 workspace 內、拒絕覆寫，且不可與 `--session-output` / `--result-output` 指到同一檔案。
 `--artifact-dir DIR` 是 runner-friendly preset，會在 workspace 內一次產生 `session.session.jsonl`、`result.json`（或 `result.jsonl`）與 `handoff.md`；它和個別 artifact output option 互斥，且會拒絕覆寫標準檔名。
-穩定欄位契約見 [`docs/HEADLESS_PAYLOAD_CONTRACT.md`](docs/HEADLESS_PAYLOAD_CONTRACT.md)。
+headless run 穩定欄位契約見 [`docs/HEADLESS_PAYLOAD_CONTRACT.md`](docs/HEADLESS_PAYLOAD_CONTRACT.md)；inspect/catalog/status 類 CLI JSON 契約見 [`docs/CLI_JSON_CONTRACTS.md`](docs/CLI_JSON_CONTRACTS.md)。
 使用 `--plan-then-execute --json` 時，payload 會額外包含 `phases`，分別提供 `plan` 與 `execution` 的輸出，方便上游 agent 或 script 解析。
 
 長任務需要跨 headless run 接續時，可保存並恢復 agent session：
