@@ -56,6 +56,8 @@ uv run agentx shell
 
 它會列出理解 repo、小步修改、工程驗證、headless bundle/resume、approval audit 與提交收尾路徑。
 
+用 `/workflow headless` 或 `/workflow audit` 可直接輸出單一可複製路徑。
+
 常見工程閉環：
 
 ```text

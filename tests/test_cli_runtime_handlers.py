@@ -5,7 +5,7 @@ logic for /plan, /execute, /mode, /files, /read, /find, /where, /infra, /intent,
 low-risk git handlers /stage, /unstage, /push, tool-backed /memory, /fetch, /run, /test,
 low-risk inspection
 handlers /status, /sessions, /jobs, /task readonly, and pure info/display
-handlers /help, /guide, /workflows, /tools, /context, /history,
+handlers /help, /guide, /workflows, /workflow, /tools, /context, /history,
 /transcript — not the simplified ``cli_slash_shims``.
 """
 
@@ -49,6 +49,7 @@ from agentx.cli_runtime_handlers import (
     handle_transcript,
     handle_unstage,
     handle_where,
+    handle_workflow,
     handle_workflows,
 )
 from agentx.protocol import ToolResult
@@ -1323,6 +1324,40 @@ def test_handle_workflows_writes_transcript_and_calls_print(tmp_path: Path) -> N
 
     assert transcript.events == [("slash_command", {"command": "/workflows"})]
     assert calls == ["workflows"]
+
+
+def test_handle_workflow_emits_named_recipe(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    lines: list[str] = []
+
+    handle_workflow(
+        state,
+        "/workflow headless",
+        transcript=transcript,
+        format_workflow_recipe=lambda name: f"recipe:{name}",
+        emit=lines.append,
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/workflow headless"})]
+    assert lines == ["recipe:headless"]
+
+
+def test_handle_workflow_requires_name(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    lines: list[str] = []
+
+    handle_workflow(
+        state,
+        "/workflow",
+        transcript=transcript,
+        format_workflow_recipe=lambda name: f"recipe:{name}",
+        emit=lines.append,
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/workflow"})]
+    assert lines == ["usage: /workflow NAME\nexample: /workflow headless"]
 
 
 def test_handle_tools_passes_tools_registry(tmp_path: Path) -> None:

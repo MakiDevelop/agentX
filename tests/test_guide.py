@@ -6,7 +6,9 @@ from agentx.cli import (
     SLASH_COMMANDS,
     WORKFLOW_ROWS,
     ShellState,
+    format_workflow_recipe,
     print_guide,
+    workflow_recipe,
 )
 
 
@@ -15,6 +17,7 @@ def test_guide_command_is_registered() -> None:
 
     assert "/guide" in commands
     assert "/workflows" in commands
+    assert "/workflow NAME" in commands
     assert "快速導覽" in commands["/guide"]
 
 
@@ -31,6 +34,24 @@ def test_guide_covers_three_modes_and_core_workflows() -> None:
     assert "--artifact-dir" in workflow_rows
     assert "handoff-resume" in workflow_rows
     assert "/transcript approvals latest --denied" in workflow_rows
+
+
+def test_workflow_recipe_resolves_aliases() -> None:
+    assert workflow_recipe("headless") == (
+        "Headless bundle",
+        'agentx -p "任務" --agent --artifact-dir .agentx/runs/latest --quiet  →  agentx handoff-resume .agentx/runs/latest --dry-run',
+    )
+    assert workflow_recipe("audit") == (
+        "Approval audit",
+        "/sessions  →  /transcript approvals latest --denied  →  /transcript approvals SESSION",
+    )
+
+
+def test_format_workflow_recipe_reports_missing_name() -> None:
+    output = format_workflow_recipe("missing")
+
+    assert "workflow not found: missing" in output
+    assert "headless" in output
 
 
 def test_mode_ask_alias_uses_agent_mode(tmp_path) -> None:

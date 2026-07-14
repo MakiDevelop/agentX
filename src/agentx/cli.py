@@ -133,6 +133,7 @@ SLASH_COMMANDS = [
     ("/help", "列出所有 slash command 與中文說明"),
     ("/guide", "60 秒快速導覽：模式選擇、常用工作流、安全與記憶"),
     ("/workflows", "列出實務工作流：理解、修改、測試、review、handoff"),
+    ("/workflow NAME", "輸出單一 workflow recipe，例如 headless、audit、commit"),
     ("/init", "掃描 repo 並寫入 project profile 到 Memory Hall"),
     ("/task [TEXT|status|list|add ...|update <id> ...|done <id>|clear]", "多任務清單管理（已統一為真相來源）"),
     ("/doctor", "檢查 Ollama、模型、Memory Hall、git、uv 狀態"),
@@ -227,6 +228,48 @@ WORKFLOW_ROWS = [
     ("Approval audit", "/sessions  →  /transcript approvals latest --denied  →  /transcript approvals SESSION"),
     ("提交收尾", "/review  →  /commit 中文訊息"),
 ]
+
+
+WORKFLOW_ALIASES = {
+    "repo": "理解 repo",
+    "understand": "理解 repo",
+    "edit": "小步修改",
+    "modify": "小步修改",
+    "safe": "安全執行",
+    "verify": "工程驗證",
+    "test": "工程驗證",
+    "docker": "Docker 檢查",
+    "handoff": "記憶交接",
+    "memory": "記憶交接",
+    "headless": "Headless bundle",
+    "bundle": "Headless bundle",
+    "resume": "Headless bundle",
+    "audit": "Approval audit",
+    "approval": "Approval audit",
+    "commit": "提交收尾",
+}
+
+
+def workflow_recipe(name: str) -> tuple[str, str] | None:
+    query = name.strip()
+    if not query:
+        return None
+    normalized = query.lower()
+    wanted = WORKFLOW_ALIASES.get(normalized, query)
+    for goal, path in WORKFLOW_ROWS:
+        if goal == wanted or goal.lower() == normalized:
+            return goal, path
+    return None
+
+
+def format_workflow_recipe(name: str) -> str:
+    recipe = workflow_recipe(name)
+    if recipe is None:
+        available = ", ".join(goal for goal, _ in WORKFLOW_ROWS)
+        aliases = ", ".join(sorted(WORKFLOW_ALIASES))
+        return f"workflow not found: {name}\navailable: {available}\naliases: {aliases}"
+    goal, path = recipe
+    return f"{goal}\n{path}"
 
 
 def print_trace(message: str) -> None:
@@ -3416,6 +3459,18 @@ def shell(
         )
 
     register_handler("/workflows", handle_workflows)
+
+    def handle_workflow(state: ShellState, prompt: str):
+        """顯示單一 workflow recipe — delegates to runtime handler."""
+        _runtime_handlers.handle_workflow(
+            state,
+            prompt,
+            transcript=transcript,
+            format_workflow_recipe=format_workflow_recipe,
+            emit=print_tool_result,
+        )
+
+    register_handler("/workflow", handle_workflow)
 
     def handle_memory(state: ShellState, prompt: str):
         """查詢目前 namespace 的 Memory Hall 記憶（支援 /memory QUERY）— delegates."""

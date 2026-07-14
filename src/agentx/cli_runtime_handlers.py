@@ -791,6 +791,24 @@ def handle_workflows(
     print_workflows()
 
 
+def handle_workflow(
+    state: Any,
+    prompt: str,
+    *,
+    transcript: Any,
+    format_workflow_recipe: Callable[[str], str],
+    emit: Callable[[str], None],
+) -> None:
+    """Show one practical workflow recipe by name or alias."""
+    _ = state
+    transcript.write("slash_command", {"command": prompt})
+    name = prompt.removeprefix("/workflow").strip()
+    if not name:
+        emit("usage: /workflow NAME\nexample: /workflow headless")
+        return
+    emit(format_workflow_recipe(name))
+
+
 def handle_tools(
     state: Any,
     prompt: str,
