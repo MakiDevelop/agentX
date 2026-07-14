@@ -98,6 +98,7 @@ agentx -p "幫我看 repo" --agent --timeout 180
 agentx -p "幫我看 repo" --agent --workspace /path/to/repo
 agentx -p "幫我看 repo" --agent --approval auto-approve
 agentx -p "幫我看 repo" --agent --quiet
+agentx -p "幫我看 repo" --agent --dry-run --json
 agentx --list-backends
 agentx backends --json
 agentx --version

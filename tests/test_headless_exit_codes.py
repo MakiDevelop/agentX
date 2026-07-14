@@ -272,6 +272,91 @@ def test_load_headless_prompt_blocks_workspace_escape(tmp_path: Path) -> None:
         raise AssertionError("prompt file outside workspace should fail")
 
 
+def test_build_headless_dry_run_payload_applies_overrides(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    from agentx.project_config import set_project_config
+
+    set_project_config(tmp_path, "namespace", "project:target")
+    set_project_config(tmp_path, "approval", "deny")
+    monkeypatch.setenv("AGENTX_BACKEND", "ollama")
+
+    payload = cli.build_headless_dry_run_payload(
+        "hello",
+        workspace_override=tmp_path,
+        agent_mode=True,
+        approval_override="auto-approve",
+        backend_override="llama_cpp",
+        base_url_override="http://127.0.0.1:8081",
+        model_override="gpt-oss:20b",
+        timeout_override=123.0,
+        max_steps=2,
+        save_session=True,
+        resume_session="latest",
+    )
+
+    assert payload["dry_run"] is True
+    assert payload["workspace"] == str(tmp_path.resolve())
+    assert payload["namespace"] == "project:target"
+    assert payload["approval"] == "auto"
+    assert payload["backend"] == "llama_cpp"
+    assert payload["base_url"] == "http://127.0.0.1:8081"
+    assert payload["model"] == "gpt-oss:20b"
+    assert payload["timeout"] == 123.0
+    assert payload["max_steps"] == 2
+    assert payload["save_session"] is True
+    assert payload["resume_session"] == "latest"
+    assert payload["prompt_chars"] == 5
+
+
+def test_print_prompt_dry_run_json_does_not_call_runner(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    prompt = tmp_path / "briefing.md"
+    prompt.write_text("PROMPT", encoding="utf-8")
+
+    def fail_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        raise AssertionError("dry-run should not call model runner")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fail_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "--prompt-file",
+            "briefing.md",
+            "--agent",
+            "--backend",
+            "llama_cpp",
+            "--model",
+            "local-model",
+            "--dry-run",
+            "--json",
+        ],
+    )
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert data["dry_run"] is True
+    assert data["workspace"] == str(tmp_path.resolve())
+    assert data["backend"] == "llama_cpp"
+    assert data["model"] == "local-model"
+    assert data["prompt_chars"] == 6
+
+
+def test_print_prompt_dry_run_quiet_suppresses_plain_output(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(
+        cli,
+        "run_print_prompt",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not run")),
+    )
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--dry-run", "--quiet"])
+
+    assert result.exit_code == 0
+    assert result.output == ""
+
+
 def test_resolve_headless_workspace_accepts_existing_directory(tmp_path: Path) -> None:
     assert cli.resolve_headless_workspace(str(tmp_path)) == tmp_path.resolve()
 
@@ -1211,3 +1296,19 @@ def test_ask_quiet_suppresses_plain_output(monkeypatch) -> None:  # noqa: ANN001
 
     assert result.exit_code == 0
     assert result.output == ""
+
+
+def test_ask_dry_run_plain(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(
+        cli,
+        "run_print_prompt",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not run")),
+    )
+
+    result = runner.invoke(cli.app, ["ask", "demo", "--dry-run", "--max-steps", "3"])
+
+    assert result.exit_code == 0
+    assert "headless dry run" in result.output
+    assert "agent_mode: True" in result.output
+    assert "max_steps: 3" in result.output

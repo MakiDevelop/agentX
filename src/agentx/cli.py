@@ -1034,6 +1034,101 @@ def print_version(*, json_output: bool = False) -> None:
     print_raw(f"agentx {payload['agentx']}\npython {payload['python']}")
 
 
+def build_headless_dry_run_payload(
+    prompt: str,
+    *,
+    workspace_override: Path | None = None,
+    namespace: str | None = None,
+    agent_mode: bool = False,
+    plan_mode: bool = False,
+    plan_then_execute: bool = False,
+    orchestrate: bool = False,
+    approval_override: str | None = None,
+    backend_override: str | None = None,
+    base_url_override: str | None = None,
+    model_override: str | None = None,
+    timeout_override: float | None = None,
+    max_steps: int | None = None,
+    save_session: bool = False,
+    resume_session: str | None = None,
+) -> dict[str, object]:
+    settings = Settings(workspace=workspace_override)
+    if base_url_override:
+        settings = settings.with_updates(ollama_url=base_url_override)
+    if model_override:
+        settings = settings.with_updates(model=model_override)
+    if timeout_override is not None:
+        settings = settings.with_updates(ollama_timeout=timeout_override)
+    if max_steps is not None:
+        settings = settings.with_updates(max_steps=max_steps)
+
+    project_config = load_project_config(settings.workspace)
+    approval_value = approval_override or project_config.approval
+    approval_mode: str | None = None
+    if approval_value:
+        try:
+            approval_mode = normalize_approval_mode(approval_value).value
+        except ValueError as exc:
+            raise typer.BadParameter(
+                "approval must be one of: ask, auto, off, strict, auto-approve, deny"
+            ) from exc
+
+    return {
+        "dry_run": True,
+        "workspace": str(settings.workspace),
+        "namespace": namespace or project_config.namespace or "project:agentX",
+        "agent_mode": agent_mode,
+        "plan_mode": plan_mode,
+        "plan_then_execute": plan_then_execute,
+        "orchestrate": orchestrate,
+        "backend": (backend_override or os.getenv("AGENTX_BACKEND", "ollama")).lower(),
+        "base_url": settings.ollama_url,
+        "model": settings.model,
+        "timeout": settings.ollama_timeout,
+        "max_steps": settings.max_steps,
+        "approval": approval_mode,
+        "save_session": save_session,
+        "resume_session": resume_session,
+        "prompt_chars": len(prompt),
+    }
+
+
+def format_headless_dry_run(payload: dict[str, object]) -> str:
+    return "\n".join(
+        [
+            "headless dry run",
+            f"workspace: {payload['workspace']}",
+            f"namespace: {payload['namespace']}",
+            f"backend: {payload['backend']}",
+            f"base_url: {payload['base_url']}",
+            f"model: {payload['model']}",
+            f"timeout: {payload['timeout']}",
+            f"max_steps: {payload['max_steps']}",
+            f"approval: {payload['approval']}",
+            f"agent_mode: {payload['agent_mode']}",
+            f"plan_mode: {payload['plan_mode']}",
+            f"plan_then_execute: {payload['plan_then_execute']}",
+            f"orchestrate: {payload['orchestrate']}",
+            f"save_session: {payload['save_session']}",
+            f"resume_session: {payload['resume_session']}",
+            f"prompt_chars: {payload['prompt_chars']}",
+        ]
+    )
+
+
+def print_headless_dry_run(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    quiet: bool = False,
+) -> None:
+    if json_output:
+        print_json_output(json.dumps(payload, ensure_ascii=False))
+        return
+    if not quiet:
+        print_raw(format_headless_dry_run(payload))
+
+
 def resolve_headless_workspace(workspace: str | None) -> Path | None:
     if workspace is None:
         return None
@@ -1191,6 +1286,7 @@ def main(
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for headless automation."),
     output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain or json."),
     quiet: bool = typer.Option(False, "--quiet", help="Suppress plain stdout for headless automation; JSON output is still printed."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate headless options and print the normalized run configuration without calling the model."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
 ) -> None:
@@ -1214,6 +1310,26 @@ def main(
     if prompt is None:
         return
     structured_output = wants_json_output(json_output, output_format)
+    if dry_run:
+        payload = build_headless_dry_run_payload(
+            prompt,
+            workspace_override=workspace_override,
+            namespace=namespace,
+            agent_mode=agent,
+            plan_mode=plan,
+            plan_then_execute=plan_then_execute,
+            orchestrate=orchestrate,
+            approval_override=approval,
+            backend_override=backend,
+            base_url_override=base_url,
+            model_override=model,
+            timeout_override=timeout,
+            max_steps=max_steps,
+            save_session=save_session,
+            resume_session=resume_session,
+        )
+        print_headless_dry_run(payload, json_output=structured_output, quiet=quiet)
+        raise typer.Exit(code=0)
     output = run_print_prompt(
         prompt,
         namespace=namespace,
@@ -1629,11 +1745,30 @@ def ask(
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for automation."),
     output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain or json."),
     quiet: bool = typer.Option(False, "--quiet", help="Suppress plain stdout for automation; JSON output is still printed."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate options and print the normalized run configuration without calling the model."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
 ) -> None:
     structured_output = wants_json_output(json_output, output_format)
     workspace_override = resolve_headless_workspace(workspace)
+    if dry_run:
+        payload = build_headless_dry_run_payload(
+            prompt,
+            workspace_override=workspace_override,
+            namespace=namespace,
+            agent_mode=True,
+            plan_then_execute=plan_then_execute,
+            approval_override=approval,
+            backend_override=backend,
+            base_url_override=base_url,
+            model_override=model,
+            timeout_override=timeout,
+            max_steps=max_steps,
+            save_session=save_session,
+            resume_session=resume_session,
+        )
+        print_headless_dry_run(payload, json_output=structured_output, quiet=quiet)
+        raise typer.Exit(code=0)
     output = run_print_prompt(
         prompt,
         namespace=namespace,
