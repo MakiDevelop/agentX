@@ -313,6 +313,96 @@ class MemoryHallClient:
             return []
 
 
+class NullMemoryClient:
+    """No-op Memory Hall client for isolated headless runs."""
+
+    base_url = "memory-disabled"
+    token = None
+    timeout = 0.0
+    disabled = True
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {}
+
+    def search(self, query: str, namespace: str = "shared", limit: int = 5) -> str:
+        return "[]"
+
+    def write(self, content: str, namespace: str = "agent:agentx") -> str:
+        return "memory disabled (--no-memory); write skipped"
+
+    def write_aca(
+        self,
+        *,
+        content: str,
+        namespace: str,
+        memory_type: str = "note",
+        source_tier: str = "llm_derived",
+        agent_id: str = "agentx",
+        summary: str | None = None,
+        tags: list[str] | None = None,
+        references: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        created_by: str | None = None,
+        valid_until: str | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "status": "disabled",
+            "memory_id": "memory-disabled",
+            "output": "memory disabled (--no-memory); ACA write skipped",
+            "governance_applied": [{"rule": "memory_disabled"}],
+        }
+
+    def write_structured(
+        self,
+        *,
+        content: str,
+        namespace: str,
+        entry_type: str,
+        summary: str,
+        tags: list[str],
+        references: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        agent_id: str = "agentx",
+        valid_until: str | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "status": "disabled",
+            "memory_id": "memory-disabled",
+            "output": "memory disabled (--no-memory); structured write skipped",
+        }
+
+    def get(self, entry_id: str) -> dict[str, Any]:
+        return {"memory_id": entry_id, "status": "disabled"}
+
+    def link(self, entry_id: str, target_entry_id: str, relation: str = "related") -> dict[str, Any]:
+        return {"status": "disabled", "entry_id": entry_id, "target_entry_id": target_entry_id}
+
+    def list_entries(
+        self,
+        namespace: str,
+        entry_type: str | None = None,
+        tags: list[str] | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def tier_upgrade(
+        self,
+        memory_id: str,
+        *,
+        new_tier: str = "human_confirmed",
+        confirmed_by: str,
+        method: str = "human_review",
+        evidence_ids: list[str] | None = None,
+        namespace: str | None = None,
+    ) -> dict[str, Any]:
+        return {"status": "disabled", "memory_id": memory_id, "new_tier": new_tier}
+
+    def audit(self, memory_id: str) -> list[dict[str, Any]]:
+        return []
+
+
 class AmhClient:
     """
     ACA-conformant client using the official AMH reference implementation

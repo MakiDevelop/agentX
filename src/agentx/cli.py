@@ -33,7 +33,7 @@ from agentx.git_workflow import build_commit_plan, commit_and_push
 from agentx.intent import plan_task_items
 from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
-from agentx.memory_hall import MemoryHallClient
+from agentx.memory_hall import MemoryHallClient, NullMemoryClient
 from agentx.ollama import OllamaCancelledError, OllamaClient
 from agentx.provider_registry import get_llm_client, list_registered_backends, LLMClient, register_builtin_backends
 from agentx.persona import list_personas, normalize_persona
@@ -1051,6 +1051,7 @@ def build_headless_dry_run_payload(
     max_steps: int | None = None,
     save_session: bool = False,
     resume_session: str | None = None,
+    no_memory: bool = False,
 ) -> dict[str, object]:
     settings = Settings(workspace=workspace_override)
     if base_url_override:
@@ -1086,6 +1087,7 @@ def build_headless_dry_run_payload(
         "model": settings.model,
         "timeout": settings.ollama_timeout,
         "max_steps": settings.max_steps,
+        "no_memory": no_memory,
         "approval": approval_mode,
         "save_session": save_session,
         "resume_session": resume_session,
@@ -1104,6 +1106,7 @@ def format_headless_dry_run(payload: dict[str, object]) -> str:
             f"model: {payload['model']}",
             f"timeout: {payload['timeout']}",
             f"max_steps: {payload['max_steps']}",
+            f"no_memory: {payload['no_memory']}",
             f"approval: {payload['approval']}",
             f"agent_mode: {payload['agent_mode']}",
             f"plan_mode: {payload['plan_mode']}",
@@ -1333,6 +1336,7 @@ def main(
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate headless options and print the normalized run configuration without calling the model."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
+    no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
 ) -> None:
     """Run local Ollama agent workflows."""
     if ctx.invoked_subcommand is not None:
@@ -1381,6 +1385,7 @@ def main(
             max_steps=max_steps,
             save_session=save_session,
             resume_session=resume_session,
+            no_memory=no_memory,
         )
         print_headless_dry_run(payload, json_output=structured_output, quiet=quiet)
         raise typer.Exit(code=0)
@@ -1402,6 +1407,7 @@ def main(
         save_session=save_session,
         resume_session=resume_session,
         max_steps=max_steps,
+        no_memory=no_memory,
     )
     if isinstance(output, HeadlessRunResult):
         exit_code = headless_exit_code(
@@ -1431,7 +1437,8 @@ def build_runtime(
     *,
     approval_policy: ApprovalPolicy | None = None,
     backend_override: str | None = None,
-) -> tuple[LLMClient, MemoryHallClient, ToolRegistry]:
+    no_memory: bool = False,
+) -> tuple[LLMClient, MemoryHallClient | NullMemoryClient, ToolRegistry]:
     """建立執行時需要的核心物件（LLM client、Memory Hall、Tool Registry）。
 
     注意（MT22）：此函式已完全與舊的單一任務系統（TaskState）解耦，
@@ -1452,7 +1459,9 @@ def build_runtime(
         model=settings.model,
         timeout=settings.ollama_timeout,
     )
-    if (settings.memory_backend or "memhall").lower() == "amh":
+    if no_memory:
+        memory = NullMemoryClient()
+    elif (settings.memory_backend or "memhall").lower() == "amh":
         from agentx.memory_hall import AmhClient
         # Prefer config.toml values (memory_amh_store / memory_amh_path), env as fallback
         memory = AmhClient(
@@ -1494,6 +1503,7 @@ def run_print_prompt(
     save_session: bool = False,
     resume_session: str | None = None,
     max_steps: int | None = None,
+    no_memory: bool = False,
 ) -> str | HeadlessRunResult:
     settings = Settings(workspace=workspace_override)
     if base_url_override:
@@ -1525,6 +1535,7 @@ def run_print_prompt(
         settings,
         approval_policy=approval_policy,
         backend_override=backend_override,
+        no_memory=no_memory,
     )
     attachment_context, _ = build_attachment_context(prompt, settings.workspace)
     if attachment_context:
@@ -1802,6 +1813,7 @@ def ask(
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate options and print the normalized run configuration without calling the model."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
+    no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
 ) -> None:
     structured_output = wants_json_output(json_output, output_format)
     workspace_override = resolve_headless_workspace(workspace)
@@ -1820,6 +1832,7 @@ def ask(
             max_steps=max_steps,
             save_session=save_session,
             resume_session=resume_session,
+            no_memory=no_memory,
         )
         print_headless_dry_run(payload, json_output=structured_output, quiet=quiet)
         raise typer.Exit(code=0)
@@ -1839,6 +1852,7 @@ def ask(
         save_session=save_session,
         resume_session=resume_session,
         max_steps=max_steps,
+        no_memory=no_memory,
     )
     if isinstance(output, HeadlessRunResult):
         exit_code = headless_exit_code(

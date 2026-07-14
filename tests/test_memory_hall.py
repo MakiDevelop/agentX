@@ -5,8 +5,43 @@ import pytest
 from agentx.memory_hall import (
     AmhClient,
     MemoryHallClient,
+    NullMemoryClient,
 )
 from agentx.tools.builtin import MemoryWriteTool
+
+
+class TestNullMemoryClient:
+    def test_null_memory_client_is_read_write_noop(self):
+        client = NullMemoryClient()
+
+        assert client.disabled is True
+        assert client.search("anything", namespace="project:test") == "[]"
+        assert "write skipped" in client.write("content", namespace="project:test")
+        assert client.list_entries("project:test") == []
+        assert client.audit("mem-1") == []
+
+    def test_null_memory_client_supports_aca_and_structured_interfaces(self):
+        client = NullMemoryClient()
+
+        aca = client.write_aca(
+            content="content",
+            namespace="project:test",
+            memory_type="fact",
+            source_tier="human_confirmed",
+        )
+        structured = client.write_structured(
+            content="content",
+            namespace="project:test",
+            entry_type="fact",
+            summary="summary",
+            tags=["test"],
+        )
+        upgrade = client.tier_upgrade("mem-1", confirmed_by="human:maki")
+
+        assert aca["status"] == "disabled"
+        assert aca["memory_id"] == "memory-disabled"
+        assert structured["status"] == "disabled"
+        assert upgrade["status"] == "disabled"
 
 
 class TestWriteAca:

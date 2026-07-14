@@ -365,6 +365,7 @@ def test_build_headless_dry_run_payload_applies_overrides(tmp_path: Path, monkey
         max_steps=2,
         save_session=True,
         resume_session="latest",
+        no_memory=True,
     )
 
     assert payload["dry_run"] is True
@@ -376,6 +377,7 @@ def test_build_headless_dry_run_payload_applies_overrides(tmp_path: Path, monkey
     assert payload["model"] == "gpt-oss:20b"
     assert payload["timeout"] == 123.0
     assert payload["max_steps"] == 2
+    assert payload["no_memory"] is True
     assert payload["save_session"] is True
     assert payload["resume_session"] == "latest"
     assert payload["prompt_chars"] == 5
@@ -677,13 +679,14 @@ def test_print_prompt_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN0
 
     result = runner.invoke(
         cli.app,
-        ["-p", "demo", "--agent", "--save-session", "--resume-session", "latest", "--json"],
+        ["-p", "demo", "--agent", "--save-session", "--resume-session", "latest", "--no-memory", "--json"],
     )
     data = json.loads(result.output)
 
     assert result.exit_code == 0
     assert captured["save_session"] is True
     assert captured["resume_session"] == "latest"
+    assert captured["no_memory"] is True
     assert captured["suppress_trace"] is True
     assert captured["max_steps"] is None
     assert captured["workspace_override"] is None
@@ -1141,6 +1144,48 @@ def test_run_print_prompt_forwards_backend_override_to_runtime(monkeypatch) -> N
     assert seen_backends == ["llama_cpp"]
 
 
+def test_run_print_prompt_forwards_no_memory_to_runtime(monkeypatch) -> None:  # noqa: ANN001
+    seen_no_memory: list[bool | None] = []
+
+    class FakeAgentLoop:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            self.session = SimpleNamespace(
+                message_count=1,
+                context_tokens_estimate=10,
+                error_history=[],
+                compaction_count=0,
+                model_turn_count=0,
+                tool_call_count=0,
+                reflection_count=0,
+                pending_verifies=set(),
+                tasks=[],
+                last_termination="final_success",
+                last_failing_tools=set(),
+            )
+
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+            return "ok"
+
+    def fake_build_runtime(settings, *args, no_memory=False, **kwargs):  # noqa: ANN001
+        seen_no_memory.append(no_memory)
+        return object(), object(), object()
+
+    monkeypatch.setattr(cli, "build_runtime", fake_build_runtime)
+    monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
+
+    result = cli.run_print_prompt(
+        "demo",
+        namespace="project:test",
+        agent_mode=True,
+        no_memory=True,
+        return_metadata=True,
+        suppress_trace=True,
+    )
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert seen_no_memory == [True]
+
+
 def test_build_runtime_backend_override_wins_over_env(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
     from helpers import make_settings
 
@@ -1193,6 +1238,19 @@ def test_build_runtime_uses_base_url_from_settings(tmp_path: Path, monkeypatch) 
     assert seen["base_url"] == "http://127.0.0.1:8081"
 
 
+def test_build_runtime_no_memory_uses_null_memory_client(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    from helpers import make_settings
+    from agentx.memory_hall import NullMemoryClient
+
+    monkeypatch.setattr(cli, "register_builtin_backends", lambda: None)
+    monkeypatch.setattr(cli, "get_llm_client", lambda *args, **kwargs: object())
+
+    _, memory, tools = cli.build_runtime(make_settings(tmp_path), no_memory=True)
+
+    assert isinstance(memory, NullMemoryClient)
+    assert tools.run("memory_search", {"query": "anything", "namespace": "project:test"}).content == "[]"
+
+
 def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN001
     runner = CliRunner()
     captured: dict[str, object] = {}
@@ -1206,7 +1264,7 @@ def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch)
 
     result = runner.invoke(
         cli.app,
-        ["ask", "demo", "--save-session", "--resume-session", "latest", "--max-steps", "3", "--json"],
+        ["ask", "demo", "--save-session", "--resume-session", "latest", "--max-steps", "3", "--no-memory", "--json"],
     )
     data = json.loads(result.output)
 
@@ -1217,6 +1275,7 @@ def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch)
     assert captured["suppress_trace"] is True
     assert captured["save_session"] is True
     assert captured["resume_session"] == "latest"
+    assert captured["no_memory"] is True
     assert captured["max_steps"] == 3
     assert captured["plan_then_execute"] is False
     assert captured["workspace_override"] is None

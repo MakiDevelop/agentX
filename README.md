@@ -154,6 +154,13 @@ agentx ask "照上一輪下一步繼續" --resume-session latest --save-session 
 `--resume-session` 只會讀取目前 workspace 的 `.agentx/sessions/*.session.jsonl`；JSON payload 的 `session_path` 會回報實際保存或恢復的 session 檔。Resume 會還原關鍵 runtime state，包括 tool outcomes、file ops、pending verifies、termination 與 observability counters。
 `-p --agent` 與 `ask` 都支援 `--max-steps` 來限制 agent loop 步數。
 
+需要隔離長期記憶時，可用 `--no-memory` 關閉本輪 Memory Hall / AMH 讀寫；記憶工具仍會存在，但只回報 disabled/no-op 結果：
+
+```bash
+agentx -p "只看目前 repo，不讀寫長期記憶" --agent --no-memory
+agentx ask "只看目前 repo，不讀寫長期記憶" --no-memory
+```
+
 Headless exit code：
 
 - `0`：成功或一般回答
