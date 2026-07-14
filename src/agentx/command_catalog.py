@@ -233,6 +233,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local inspection",
     },
     {
+        "command": "agentx task-update",
+        "usage": "agentx task-update ID STATUS [NOTES] --json",
+        "description": "Update one project task in .agentx/tasks.json for headless runners.",
+        "examples": [
+            "agentx task-update 1 done --json",
+            "agentx task-update 2 blocked 'needs Maki input' --output-format jsonl",
+        ],
+        "schemas": ["agentx.task_update.v1"],
+        "jsonl_event": "task_update",
+        "risk": "YELLOW - writes local .agentx/tasks.json state",
+    },
+    {
         "command": "agentx verify",
         "usage": "agentx verify --json",
         "description": "Run detected project verification commands and emit check results.",

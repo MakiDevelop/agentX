@@ -59,6 +59,7 @@ from agentx.prompting import SlashCommandCompleter
 from agentx.runtime_prompt import build_chat_system_prompt, build_headless_agent_system_prompt
 from agentx.safety import Risk
 from agentx.tasks import (
+    find_task,
     format_task_list_summary,
     get_next_task_id,
     load_tasks,
@@ -2803,6 +2804,7 @@ def task_status_payload(workspace: Path) -> dict[str, object]:
 
 
 TASK_STATUS_FILTERS = {"all", "active", "pending", "in_progress", "done", "blocked"}
+TASK_UPDATE_STATUSES = {"pending", "in_progress", "done", "blocked"}
 
 
 def tasks_payload(settings: Settings, *, status_filter: str = "all") -> dict[str, object]:
@@ -2834,6 +2836,93 @@ def tasks_payload(settings: Settings, *, status_filter: str = "all") -> dict[str
         "tasks": filtered_tasks,
         "summary": format_task_list_summary(all_tasks),
     }
+
+
+def task_update_payload(
+    settings: Settings,
+    *,
+    task_id: int,
+    status: str,
+    notes: str | None = None,
+) -> dict[str, object]:
+    """Update one task in .agentx/tasks.json for headless automation."""
+    normalized_status = status.strip().lower()
+    blockers: list[str] = []
+    warnings: list[str] = []
+    before: dict[str, object] | None = None
+    after: dict[str, object] | None = None
+
+    tasks = load_tasks(settings.workspace)
+    if normalized_status not in TASK_UPDATE_STATUSES:
+        blockers.append("invalid_status")
+    task = find_task(tasks, task_id)
+    if task is None:
+        blockers.append("task_not_found")
+
+    if not blockers and task is not None:
+        before = dict(task)
+        task["status"] = normalized_status
+        if notes is not None:
+            task["notes"] = notes[:500]
+            if len(notes) > 500:
+                warnings.append("notes_truncated")
+        save_tasks(settings.workspace, tasks)
+        after = dict(task)
+
+    ok = not blockers
+    return {
+        "schema": "agentx.task_update.v1",
+        "workspace": str(settings.workspace),
+        "ok": ok,
+        "task_id": task_id,
+        "requested_status": status,
+        "status": normalized_status,
+        "notes_updated": notes is not None and ok,
+        "blockers": blockers,
+        "warnings": warnings,
+        "before": before,
+        "after": after,
+        "by_status": _headless_task_counts(tasks),
+        "recommended_command": "agentx next --json" if ok else "fix task-update blockers, then rerun agentx task-update ID STATUS --json",
+        "recommended_kind": "next" if ok else "fix_task_update_blockers",
+        "recommended_risk": "GREEN" if ok else "UNKNOWN",
+        "next_commands": [
+            "agentx next --json" if ok else "fix task-update blockers, then rerun agentx task-update ID STATUS --json"
+        ],
+    }
+
+
+def task_update_exit_code(payload: dict[str, object]) -> int:
+    return 0 if payload.get("ok") else 1
+
+
+def print_task_update_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="task_update",
+        )
+        return
+
+    if payload.get("ok"):
+        after = payload.get("after") if isinstance(payload.get("after"), dict) else {}
+        console.print(
+            f"[green]updated task #{payload['task_id']} -> {after.get('status', payload['status'])}[/green]"
+        )
+    else:
+        console.print(
+            "[red]task update blocked: "
+            f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
+        )
+    console.print(
+        f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]"
+    )
 
 
 def print_tasks_payload(
@@ -6347,6 +6436,23 @@ def tasks_command(
     payload = tasks_payload(settings, status_filter=status)
     structured_format = structured_output_format(json_output, output_format)
     print_tasks_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("task-update")
+def task_update_command(
+    task_id: int = typer.Argument(..., help="Task id to update."),
+    status: str = typer.Argument(..., help="New status: pending, in_progress, done, or blocked."),
+    notes: str | None = typer.Argument(None, help="Optional notes to store on the task."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for task discovery."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Update one project task in .agentx/tasks.json."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = task_update_payload(settings, task_id=task_id, status=status, notes=notes)
+    structured_format = structured_output_format(json_output, output_format)
+    print_task_update_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=task_update_exit_code(payload))
 
 
 @app.command("verify")

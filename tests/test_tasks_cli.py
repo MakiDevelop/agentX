@@ -2,9 +2,9 @@ import json
 
 from typer.testing import CliRunner
 
-from agentx.cli import app, tasks_payload
+from agentx.cli import app, task_update_payload, tasks_payload
 from agentx.config import Settings
-from agentx.tasks import save_tasks
+from agentx.tasks import load_tasks, save_tasks
 
 
 def _write_tasks(workspace) -> None:  # noqa: ANN001
@@ -98,3 +98,80 @@ def test_tasks_rejects_unknown_status(tmp_path) -> None:  # noqa: ANN001
 
     assert result.exit_code != 0
     assert "status must be one of" in result.output
+
+
+def test_task_update_payload_updates_one_task(tmp_path) -> None:  # noqa: ANN001
+    _write_tasks(tmp_path)
+
+    payload = task_update_payload(
+        Settings(workspace=tmp_path),
+        task_id=2,
+        status="done",
+        notes="verified",
+    )
+
+    assert payload["schema"] == "agentx.task_update.v1"
+    assert payload["ok"] is True
+    assert payload["task_id"] == 2
+    assert payload["before"]["status"] == "pending"  # type: ignore[index]
+    assert payload["after"]["status"] == "done"  # type: ignore[index]
+    assert payload["after"]["notes"] == "verified"  # type: ignore[index]
+    assert payload["recommended_command"] == "agentx next --json"
+    tasks = load_tasks(tmp_path)
+    assert tasks[1]["status"] == "done"
+    assert tasks[1]["notes"] == "verified"
+
+
+def test_task_update_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
+    _write_tasks(tmp_path)
+
+    result = CliRunner().invoke(
+        app,
+        ["task-update", "1", "done", "wrapped up", "--workspace", str(tmp_path), "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema"] == "agentx.task_update.v1"
+    assert payload["ok"] is True
+    assert payload["task_id"] == 1
+    assert payload["after"]["status"] == "done"
+    assert payload["after"]["notes"] == "wrapped up"
+
+
+def test_task_update_jsonl_outputs_event(tmp_path) -> None:  # noqa: ANN001
+    _write_tasks(tmp_path)
+
+    result = CliRunner().invoke(
+        app,
+        ["task-update", "4", "pending", "--workspace", str(tmp_path), "--output-format", "jsonl"],
+    )
+
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    assert envelope["event"] == "task_update"
+    assert envelope["data"]["schema"] == "agentx.task_update.v1"
+    assert envelope["data"]["after"]["status"] == "pending"
+
+
+def test_task_update_blocks_missing_task(tmp_path) -> None:  # noqa: ANN001
+    _write_tasks(tmp_path)
+
+    result = CliRunner().invoke(app, ["task-update", "99", "done", "--workspace", str(tmp_path), "--json"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["blockers"] == ["task_not_found"]
+    assert payload["recommended_kind"] == "fix_task_update_blockers"
+
+
+def test_task_update_blocks_invalid_status(tmp_path) -> None:  # noqa: ANN001
+    _write_tasks(tmp_path)
+
+    result = CliRunner().invoke(app, ["task-update", "1", "weird", "--workspace", str(tmp_path), "--json"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["blockers"] == ["invalid_status"]

@@ -44,6 +44,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx next --json` | `agentx.next.v1` | `next` |
 | `agentx infra --json` | `agentx.infrastructure_context.v1` | `infra` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
+| `agentx task-update --json` | `agentx.task_update.v1` | `task_update` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
 | `agentx doctor --json` | `agentx.doctor.v1` | `doctor` |
@@ -715,6 +716,40 @@ Each task object includes:
 | `description` | string |
 | `status` | string |
 | `notes` | string |
+
+## Task Update Payload
+
+`agentx task-update ID STATUS [NOTES] --json` emits
+`agentx.task_update.v1`.
+
+The command updates exactly one task in `.agentx/tasks.json`. It is intended for
+headless runners that need to close stale tasks or mark a task blocked without
+entering the interactive `/task update` flow.
+
+Supported `STATUS` values are `pending`, `in_progress`, `done`, and `blocked`.
+Missing tasks and invalid statuses are reported as blockers. The command prints
+the payload before exiting `1` when blockers are present.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.task_update.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `ok` | boolean | True when the task was updated. |
+| `task_id` | integer | Requested task id. |
+| `requested_status` | string | Raw status argument. |
+| `status` | string | Normalized status. |
+| `notes_updated` | boolean | True when notes were provided and the update succeeded. |
+| `blockers` | array of string | `task_not_found` or `invalid_status`. |
+| `warnings` | array of string | Non-blocking diagnostics such as `notes_truncated`. |
+| `before` | object or null | Task object before mutation, or null when blocked. |
+| `after` | object or null | Task object after mutation, or null when blocked. |
+| `by_status` | object | Counts after the attempted update. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | `next` when ok, otherwise `fix_task_update_blockers`. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `next_commands` | array of string | Suggested follow-up commands. |
 
 ## Verify Payload
 

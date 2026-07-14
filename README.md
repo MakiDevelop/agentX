@@ -131,6 +131,7 @@ agentx approvals latest --json
 agentx approvals latest --denied --json --fail-on-denied
 agentx tasks --json
 agentx tasks active --json
+agentx task-update 1 done --json
 agentx verify --json
 agentx verify --json --fail-on-error
 agentx config --json
@@ -212,6 +213,7 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `agentx approvals latest --json` 會輸出 `agentx.approvals.v1` approval receipts；加 `--denied --fail-on-denied` 時，會在輸出 payload 後用 exit 1 擋下含拒絕項的 audit。
 `agentx traces latest --json` 會輸出 `agentx.traces.v1` transcript observability summary，彙整 event/tool counts、approval denials、tool failures、error-like records 與 recent events。
 `agentx tasks --json` 會輸出 `agentx.tasks.v1` 完整 task list；`agentx tasks active --json` 可只看 pending / in_progress / blocked，方便外部 runner 接續長任務。
+`agentx task-update ID STATUS [NOTES] --json` 會輸出 `agentx.task_update.v1`，讓外部 runner 可更新單一 `.agentx/tasks.json` 任務狀態；支援 `pending` / `in_progress` / `done` / `blocked`，找不到 task 或 status 不合法時會回傳 blockers 並 exit 1。
 `agentx verify --json` 會輸出 `agentx.verify.v1`，依 workspace 偵測並執行預設驗證命令；加 `--fail-on-error` 時，任何驗證失敗會在輸出 payload 後以 exit 1 結束。
 `agentx status --json` 會輸出 `agentx.status.v1`，整合 version、resolved runtime、git dirty/ahead/behind 與 task counts；它只做本機 read-only 檢查，不探測網路服務。
 `agentx doctor --json` 會輸出 `agentx.doctor.v1` health checks；CI 或 wrapper 可用 `agentx doctor --static --json` 只檢查本機 `uv`、git、task migration，避開 Ollama / memory live probes。加上 `--fail-on-error` 時，任一 check 失敗會在輸出 payload 後以 exit 1 結束。
