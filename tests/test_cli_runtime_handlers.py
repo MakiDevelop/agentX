@@ -27,6 +27,7 @@ from agentx.cli_runtime_handlers import (
     handle_git,
     handle_grep,
     handle_guide,
+    handle_commands,
     handle_help,
     handle_history,
     handle_infra,
@@ -1264,7 +1265,7 @@ def test_handle_task_readonly_does_not_claim_write_branches() -> None:
     assert calls == []
 
 
-# --- /help /guide /workflows /tools /context /history /transcript ---------
+# --- /help /commands /guide /workflows /tools /context /history /transcript ---
 
 
 def test_handle_help_writes_transcript_and_calls_print(tmp_path: Path) -> None:
@@ -1297,6 +1298,38 @@ def test_handle_help_passes_command_topic(tmp_path: Path) -> None:
 
     assert transcript.events == [("slash_command", {"command": "/help workflow"})]
     assert calls == ["workflow"]
+
+
+def test_handle_commands_writes_transcript_and_calls_print(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    calls: list[str | None] = []
+
+    handle_commands(
+        state,
+        "/commands",
+        transcript=transcript,
+        print_command_catalog=lambda query: calls.append(query),
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/commands"})]
+    assert calls == [None]
+
+
+def test_handle_commands_passes_query(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    calls: list[str | None] = []
+
+    handle_commands(
+        state,
+        "/commands memory",
+        transcript=transcript,
+        print_command_catalog=lambda query: calls.append(query),
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/commands memory"})]
+    assert calls == ["memory"]
 
 
 def test_handle_guide_marks_seen_then_prints(tmp_path: Path) -> None:

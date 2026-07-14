@@ -6,6 +6,7 @@ CommandCatalogItem = dict[str, object]
 
 COMMAND_CATALOG: list[CommandCatalogItem] = [
     {"usage": "/help [COMMAND]", "description": "列出所有 slash command；提供 COMMAND 時顯示單一命令說明", "examples": ["/help", "/help workflow", "/help /infra"], "related": ["/guide", "/workflows", "/workflow"]},
+    {"usage": "/commands [QUERY]", "description": "列出或搜尋 slash command catalog；QUERY 支援命令 prefix 或 keyword", "examples": ["/commands", "/commands /workflow", "/commands memory"], "related": ["/help", "/guide", "/workflows"]},
     {"usage": "/guide", "description": "60 秒快速導覽：模式選擇、常用工作流、安全與記憶", "examples": ["/guide"], "related": ["/help", "/workflows", "/tools"]},
     {"usage": "/workflows", "description": "列出實務工作流：理解、修改、測試、review、handoff", "examples": ["/workflows"], "related": ["/workflow", "/guide", "/help"]},
     {"usage": "/workflow NAME", "description": "輸出單一 workflow recipe，例如 headless、audit、commit", "examples": ["/workflow headless", "/workflow audit", "/workflow commit"], "related": ["/workflows", "/guide", "/help"]},

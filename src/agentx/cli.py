@@ -251,7 +251,7 @@ def print_slash_help(topic: str = "") -> None:
     # Category definitions (vision-aligned grouping)
     categories = [
         ("核心與模式", [
-            "/help", "/guide", "/workflows", "/status", "/mode", "/plan", "/execute", "/clear", "/exit",
+            "/help", "/commands", "/guide", "/workflows", "/status", "/mode", "/plan", "/execute", "/clear", "/exit",
         ]),
         ("檔案與內容", [
             "/files", "/read", "/find", "/where", "/infra", "/intent", "/plan-task", "/grep", "/search", "/attach", "/fetch",
@@ -3439,6 +3439,17 @@ def shell(
         )
 
     register_handler("/help", handle_help)
+
+    def handle_commands(state: ShellState, prompt: str):
+        """列出或搜尋 slash command catalog — delegates to runtime handler."""
+        _runtime_handlers.handle_commands(
+            state,
+            prompt,
+            transcript=transcript,
+            print_command_catalog=print_command_catalog,
+        )
+
+    register_handler("/commands", handle_commands)
 
     def handle_guide(state: ShellState, prompt: str):
         """顯示 60 秒快速導覽 — delegates to runtime handler."""

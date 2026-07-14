@@ -7,7 +7,7 @@ YELLOW git handlers ``/stage``, ``/unstage`` and ``/push``, low-risk
 tool-backed ``/memory``, ``/fetch``, ``/run``, ``/test``, low-risk
 inspection handlers ``/status``, ``/sessions``, ``/jobs``, the read-only
 ``/task`` empty/status/list branch, and pure info/display handlers
-``/help``, ``/guide``, ``/workflows``, ``/tools``, ``/context``,
+``/help``, ``/commands``, ``/guide``, ``/workflows``, ``/tools``, ``/context``,
 ``/history``, ``/transcript``). Nested handlers inside ``cli.run_shell()``
 should delegate here so unit tests can exercise the same path without
 driving the full interactive loop.
@@ -758,6 +758,20 @@ def handle_help(
     transcript.write("slash_command", {"command": prompt})
     topic = prompt.removeprefix("/help").strip()
     print_slash_help(topic)
+
+
+def handle_commands(
+    state: Any,
+    prompt: str,
+    *,
+    transcript: Any,
+    print_command_catalog: Callable[[str | None], None],
+) -> None:
+    """Show or search the slash-command catalog inside the shell."""
+    _ = state
+    transcript.write("slash_command", {"command": prompt})
+    query = prompt.removeprefix("/commands").strip() or None
+    print_command_catalog(query)
 
 
 def handle_guide(

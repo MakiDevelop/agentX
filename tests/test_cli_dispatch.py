@@ -261,6 +261,7 @@ def test_core_slash_commands_remain_declared() -> None:
     declared = {entry[0].split()[0] for entry in SLASH_COMMANDS}
     required = {
         "/help",
+        "/commands",
         "/config",
         "/task",
         "/compact",
