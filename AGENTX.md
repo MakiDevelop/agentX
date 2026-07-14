@@ -322,6 +322,7 @@ AgentX Shell 三大原則：
   - Headless / 優化 → `docs/OPTIMIZATION_ROADMAP.md` + `HEADLESS_OPTIMIZATION_LIST.md`
   - 工具開發 → `src/agentx/tools/builtin.py` + registry.py
   - 記憶 / bootstrap → `src/agentx/bootstrap.py` + .agentx/
+  - 資源地圖 / 家庭 AI 設施 / VPS → `docs/RESOURCE_MAPS.md` + `/infra home` / `/infra vps`
   - 自我改進 → 本檔 AGENTX.md § Self-Improvement Protocol
 
 ---
