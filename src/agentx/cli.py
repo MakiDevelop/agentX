@@ -1481,6 +1481,22 @@ def apply_handoff_next_prompt(payload: dict[str, object], next_prompt: str | Non
     return enriched
 
 
+def apply_handoff_next_prompt_file(payload: dict[str, object], next_prompt_file: str | None) -> dict[str, object]:
+    if not next_prompt_file:
+        return payload
+    enriched = dict(payload)
+    command = enriched.get("resume_command")
+    if isinstance(command, str):
+        quoted_path = shlex.quote(next_prompt_file)
+        if " -p '<next prompt>' " in command:
+            enriched["resume_command"] = command.replace(" -p '<next prompt>' ", f" --prompt-file {quoted_path} ")
+        elif ' -p "<next prompt>" ' in command:
+            enriched["resume_command"] = command.replace(' -p "<next prompt>" ', f" --prompt-file {quoted_path} ")
+        elif " -p <next prompt> " in command:
+            enriched["resume_command"] = command.replace(" -p <next prompt> ", f" --prompt-file {quoted_path} ")
+    return enriched
+
+
 def format_handoff_inspect_plain(payload: dict[str, object]) -> str:
     lines = [
         f"schema_version: {payload.get('schema_version')}",
@@ -2637,6 +2653,7 @@ def handoff_inspect(
     source: str = typer.Argument(..., help="Headless JSON/JSONL payload file to inspect, or '-' for stdin."),
     field: str | None = typer.Option(None, "--field", help="Print one takeover field, e.g. resume_command or recovery_checklist."),
     next_prompt: str | None = typer.Option(None, "--next-prompt", help="Replace the resume command placeholder with this prompt."),
+    next_prompt_file: str | None = typer.Option(None, "--next-prompt-file", help="Replace the resume command placeholder with --prompt-file PATH."),
     use_payload_exit_code: bool = typer.Option(
         False,
         "--use-payload-exit-code",
@@ -2657,10 +2674,11 @@ def handoff_inspect(
 ) -> None:
     """Inspect a headless payload and print takeover fields."""
     structured_format = structured_output_format(json_output, output_format)
-    payload = apply_handoff_next_prompt(
-        inspect_headless_handoff_payload(load_headless_payload_source(source)),
-        next_prompt,
-    )
+    if next_prompt and next_prompt_file:
+        raise typer.BadParameter("use only one continuation source: --next-prompt or --next-prompt-file")
+    payload = inspect_headless_handoff_payload(load_headless_payload_source(source))
+    payload = apply_handoff_next_prompt(payload, next_prompt)
+    payload = apply_handoff_next_prompt_file(payload, next_prompt_file)
     exit_code = handoff_inspect_exit_code(payload, use_payload_exit_code=use_payload_exit_code)
     if require_handoff and not handoff_takeover_ready(payload):
         exit_code = 1

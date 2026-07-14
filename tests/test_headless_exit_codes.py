@@ -556,6 +556,95 @@ def test_handoff_inspect_next_prompt_quotes_shell_sensitive_text() -> None:
     )
 
 
+def test_handoff_inspect_next_prompt_file_updates_resume_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--next-prompt-file",
+            ".agentx/handoff/next.md",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == (
+        "agentx --prompt-file .agentx/handoff/next.md --agent --resume-session contract.session.jsonl --json\n"
+    )
+
+
+def test_handoff_inspect_next_prompt_file_quotes_shell_sensitive_path() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--next-prompt-file",
+            "briefings/Bob's next.md",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == (
+        'agentx --prompt-file \'briefings/Bob\'"\'"\'s next.md\' --agent --resume-session contract.session.jsonl --json\n'
+    )
+
+
+def test_handoff_inspect_next_prompt_file_jsonl_output() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--next-prompt-file",
+            ".agentx/handoff/next.md",
+            "--output-format",
+            "jsonl",
+        ],
+    )
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event["data"]["value"] == (
+        "agentx --prompt-file .agentx/handoff/next.md --agent --resume-session contract.session.jsonl --json"
+    )
+
+
+def test_handoff_inspect_next_prompt_and_file_are_mutually_exclusive() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--next-prompt",
+            "continue",
+            "--next-prompt-file",
+            "next.md",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "use only one continuation source" in result.output
+
+
+def test_apply_handoff_next_prompt_file_leaves_non_placeholder_commands_unchanged() -> None:
+    payload = {"resume_command": "agentx --prompt-file next.md --agent --resume-session s.jsonl --json"}
+
+    assert cli.apply_handoff_next_prompt_file(payload, "other.md") == payload
+
+
 def test_handoff_inspect_field_recovery_checklist_plain() -> None:
     runner = CliRunner()
     result = runner.invoke(
