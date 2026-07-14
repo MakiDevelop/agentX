@@ -294,6 +294,9 @@ Required stable keys:
 | `ok` | boolean | True when no blockers are present. |
 | `ready_to_commit` | boolean | True when review passes, a commit message is present, and files exist. |
 | `commit_message` | string or null | Proposed commit message. |
+| `recommended_command` | string | First suggested follow-up command or instruction for simple runners. |
+| `recommended_kind` | string | Machine-readable kind for `recommended_command`, such as `commit`, `review`, or `fix_blockers`. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
 | `blockers` | array of string | Machine-readable blockers such as `missing_commit_message`, `verify_failed`, or `no_changes`. |
 | `warnings` | array of string | Non-blocking warnings inherited from review. |
 | `status` | string | `git status --short --branch` output. |

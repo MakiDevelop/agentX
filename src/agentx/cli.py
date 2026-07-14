@@ -3019,10 +3019,23 @@ def commit_plan_payload(
         next_commands.append("agentx commit-plan --message '中文 commit 訊息' --json")
     if ready_to_commit:
         next_commands.append(f"/commit {commit_message}")
+        recommended_command = f"/commit {commit_message}"
+        recommended_kind = "commit"
+        recommended_risk = "YELLOW"
     elif blockers:
         next_commands.append("fix blockers, then rerun agentx commit-plan --message '中文 commit 訊息' --json")
+        recommended_command = "fix blockers, then rerun agentx commit-plan --message '中文 commit 訊息' --json"
+        recommended_kind = "fix_blockers"
+        recommended_risk = "UNKNOWN"
     elif not review_commit_ready:
         next_commands.append("agentx review --json --fail-on-blocker")
+        recommended_command = "agentx review --json --fail-on-blocker"
+        recommended_kind = "review"
+        recommended_risk = "GREEN"
+    else:
+        recommended_command = "agentx commit-plan --message '中文 commit 訊息' --json"
+        recommended_kind = "commit_plan"
+        recommended_risk = "GREEN"
 
     return {
         "schema": "agentx.commit_plan.v1",
@@ -3031,6 +3044,9 @@ def commit_plan_payload(
         "ok": not blockers,
         "ready_to_commit": ready_to_commit,
         "commit_message": commit_message or None,
+        "recommended_command": recommended_command,
+        "recommended_kind": recommended_kind,
+        "recommended_risk": recommended_risk,
         "blockers": blockers,
         "warnings": warnings,
         "status": plan.status,

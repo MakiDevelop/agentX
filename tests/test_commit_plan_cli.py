@@ -56,6 +56,9 @@ def test_commit_plan_payload_reports_ready_with_message(tmp_path: Path, monkeypa
     assert payload["ok"] is True
     assert payload["ready_to_commit"] is True
     assert payload["commit_message"] == "新增功能"
+    assert payload["recommended_command"] == "/commit 新增功能"
+    assert payload["recommended_kind"] == "commit"
+    assert payload["recommended_risk"] == "YELLOW"
     assert payload["files_to_stage"] == ["note.txt"]
     assert payload["file_count"] == 1
     assert payload["blockers"] == []
@@ -71,6 +74,9 @@ def test_commit_plan_payload_blocks_without_message(tmp_path: Path, monkeypatch)
     assert payload["ok"] is False
     assert payload["ready_to_commit"] is False
     assert payload["commit_message"] is None
+    assert payload["recommended_command"] == "fix blockers, then rerun agentx commit-plan --message '中文 commit 訊息' --json"
+    assert payload["recommended_kind"] == "fix_blockers"
+    assert payload["recommended_risk"] == "UNKNOWN"
     assert payload["blockers"] == ["missing_commit_message"]
     assert commit_plan_exit_code(payload, fail_on_blocker=True) == 1
 
@@ -83,6 +89,7 @@ def test_commit_plan_payload_carries_review_blockers(tmp_path: Path, monkeypatch
 
     assert payload["ok"] is False
     assert payload["ready_to_commit"] is False
+    assert payload["recommended_kind"] == "fix_blockers"
     assert payload["blockers"] == ["verify_failed"]
 
 
@@ -116,6 +123,9 @@ def test_commit_plan_jsonl_outputs_event_envelope(tmp_path: Path) -> None:
     assert envelope["data"]["schema"] == "agentx.commit_plan.v1"
     assert envelope["data"]["commit_message"] == "新增功能"
     assert envelope["data"]["ready_to_commit"] is False
+    assert envelope["data"]["recommended_command"] == "agentx review --json --fail-on-blocker"
+    assert envelope["data"]["recommended_kind"] == "review"
+    assert envelope["data"]["recommended_risk"] == "GREEN"
     assert "agentx review --json --fail-on-blocker" in envelope["data"]["next_commands"]
 
 
