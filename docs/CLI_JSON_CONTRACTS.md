@@ -382,8 +382,14 @@ Required stable keys:
 |-----|------|---------|
 | `schema` | string | `agentx.infrastructure_context.v1`. |
 | `map` | string | Requested map key or alias. |
+| `resolved_map` | string | Canonical map key after alias resolution, such as `home`, `vps`, or `resource-bundle`. |
+| `alias_applied` | boolean | True when `map` was a natural-language alias. |
 | `ok` | boolean | True when the map context was loaded. |
 | `read_only` | boolean | Always true; this payload is evidence only. |
+| `source_status` | string | `complete` when all selected source files exist, otherwise `missing`. |
+| `selected_maps` | array of string | Canonical selected map slices, such as `["resource", "home", "vps"]` for `resource-bundle`. |
+| `sources` | array of object | Selected source metadata with `key`, `title`, `path`, `exists`, and `section_headings`. |
+| `limits` | object | Applied `per_file_chars` and `max_chars` caps. |
 | `content` | string | Bounded markdown context from the selected map source(s). |
 | `next_commands` | array of string | Human-facing reminders for runtime state and approval gates. |
 

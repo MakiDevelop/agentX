@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agentx.infrastructure_context import build_infrastructure_context, infrastructure_maps
+from agentx.infrastructure_context import build_infrastructure_context, infrastructure_context_metadata, infrastructure_maps
 
 
 def test_infrastructure_maps_point_to_expected_files(tmp_path: Path) -> None:
@@ -28,6 +28,25 @@ def test_build_infrastructure_context_reads_selected_map(tmp_path: Path) -> None
     assert "For SSH/deploy/production actions" in context
     assert "--- project-map" in context
     assert "PROJECT_MAP_MARKER" in context
+
+
+def test_infrastructure_context_metadata_describes_resource_bundle_sources(tmp_path: Path) -> None:
+    infra = tmp_path / "infrastructure"
+    infra.mkdir()
+    (infra / "resource-map.md").write_text("RESOURCE_MARKER", encoding="utf-8")
+
+    metadata = infrastructure_context_metadata("資源地圖+家庭AI設施／VPS地圖", home=tmp_path)
+
+    assert metadata["resolved_map"] == "resource-bundle"
+    assert metadata["alias_applied"] is True
+    assert metadata["selected_maps"] == ["resource", "home", "vps"]
+    assert metadata["source_status"] == "complete"
+    sources = metadata["sources"]
+    assert isinstance(sources, list)
+    assert [source["key"] for source in sources] == ["resource", "home", "vps"]
+    assert all(source["exists"] is True for source in sources)
+    assert sources[1]["section_headings"] == ["家庭 AI 中心"]
+    assert sources[2]["section_headings"] == ["外網主機 / VPS", "VPS 對照"]
 
 
 def test_build_infrastructure_context_all_includes_missing_markers(tmp_path: Path) -> None:

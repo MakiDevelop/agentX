@@ -61,6 +61,8 @@ When Maki asks agentX to "make the resource map", "家庭 AI 設施地圖", or
 Acceptance criteria for this map package:
 
 - Home AI facilities and VPS hosts are separately searchable.
+- Headless JSON exposes `resolved_map`, `selected_maps`, `sources`,
+  `source_status`, and context caps so runners do not parse markdown for routing.
 - Domain-to-repo and machine-to-service ambiguity is called out before action.
 - The maps never grant permission to SSH, deploy, delete, restart, write memory,
   or touch production by themselves.

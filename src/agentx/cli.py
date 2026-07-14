@@ -44,7 +44,7 @@ from agentx.command_catalog import (
 from agentx.context_compactor import LLMContextCompactor
 from agentx.doctor import run_doctor, run_static_doctor
 from agentx.git_workflow import build_commit_plan, commit_and_push
-from agentx.infrastructure_context import build_infrastructure_context
+from agentx.infrastructure_context import build_infrastructure_context, infrastructure_context_metadata
 from agentx.intent import plan_task_items
 from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
@@ -573,6 +573,7 @@ def infra_payload(
     per_file_chars: int = 5000,
     max_chars: int = 14000,
 ) -> dict[str, object]:
+    metadata = infrastructure_context_metadata(map_key)
     content = build_infrastructure_context(
         map_key,
         per_file_chars=per_file_chars,
@@ -581,8 +582,17 @@ def infra_payload(
     return {
         "schema": "agentx.infrastructure_context.v1",
         "map": map_key,
+        "resolved_map": metadata["resolved_map"],
+        "alias_applied": metadata["alias_applied"],
         "ok": True,
         "read_only": True,
+        "source_status": metadata["source_status"],
+        "selected_maps": metadata["selected_maps"],
+        "sources": metadata["sources"],
+        "limits": {
+            "per_file_chars": per_file_chars,
+            "max_chars": max_chars,
+        },
         "content": content,
         "next_commands": [
             "Fill runtime state before SSH/deploy/cross-machine actions",

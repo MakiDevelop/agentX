@@ -38,8 +38,32 @@ def test_infra_cli_outputs_json_for_resource_bundle(tmp_path: Path, monkeypatch)
     payload = json.loads(result.output)
     assert payload["schema"] == "agentx.infrastructure_context.v1"
     assert payload["map"] == "resource-bundle"
+    assert payload["resolved_map"] == "resource-bundle"
+    assert payload["alias_applied"] is False
     assert payload["ok"] is True
     assert payload["read_only"] is True
+    assert payload["source_status"] == "complete"
+    assert payload["selected_maps"] == ["resource", "home", "vps"]
+    assert payload["limits"] == {"per_file_chars": 5000, "max_chars": 14000}
+    assert [source["key"] for source in payload["sources"]] == ["resource", "home", "vps"]
+    assert all(source["exists"] is True for source in payload["sources"])
+    assert "RESOURCE_MARKER" in payload["content"]
+    assert "HOME_MARKER" in payload["content"]
+    assert "VPS_MARKER" in payload["content"]
+
+
+def test_infra_cli_outputs_json_for_resource_bundle_alias(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    write_maps(tmp_path)
+    monkeypatch.setattr(infrastructure_context.Path, "home", staticmethod(lambda: tmp_path))
+
+    result = CliRunner().invoke(app, ["infra", "資源地圖+家庭AI設施／VPS地圖", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["map"] == "資源地圖+家庭AI設施／VPS地圖"
+    assert payload["resolved_map"] == "resource-bundle"
+    assert payload["alias_applied"] is True
+    assert [source["key"] for source in payload["sources"]] == ["resource", "home", "vps"]
     assert "RESOURCE_MARKER" in payload["content"]
     assert "HOME_MARKER" in payload["content"]
     assert "VPS_MARKER" in payload["content"]

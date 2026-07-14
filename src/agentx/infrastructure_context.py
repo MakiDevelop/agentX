@@ -120,6 +120,52 @@ SENSITIVE_LINE_RE = re.compile(
 )
 
 
+def resolve_infrastructure_map_key(map_key: str = "all") -> tuple[str, str]:
+    raw_key = (map_key or "all").strip().lower()
+    key = MAP_ALIASES.get(raw_key, raw_key)
+    maps = infrastructure_maps()
+    if key not in maps:
+        allowed = ", ".join(sorted([*maps, *MAP_ALIASES]))
+        raise ValueError(f"unknown infrastructure map: {map_key}. Use one of: {allowed}")
+    return raw_key, key
+
+
+def _selected_map_keys(key: str) -> tuple[str, ...]:
+    if key == "all":
+        return PRIMARY_MAP_KEYS
+    if key == "resource-bundle":
+        return RESOURCE_BUNDLE_MAP_KEYS
+    return (key,)
+
+
+def infrastructure_context_metadata(map_key: str = "all", *, home: Path | None = None) -> dict[str, object]:
+    raw_key, key = resolve_infrastructure_map_key(map_key)
+    maps = infrastructure_maps(home)
+    selected_keys = _selected_map_keys(key)
+    sources: list[dict[str, object]] = []
+    for selected_key in selected_keys:
+        item = maps[selected_key]
+        sources.append(
+            {
+                "key": item.key,
+                "title": item.title,
+                "path": str(item.path),
+                "exists": item.path.is_file(),
+                "section_headings": list(item.section_headings),
+            }
+        )
+    return {
+        "requested_map": map_key,
+        "raw_map": raw_key,
+        "resolved_map": key,
+        "alias_applied": raw_key != key,
+        "available_maps": sorted(maps),
+        "selected_maps": list(selected_keys),
+        "sources": sources,
+        "source_status": "complete" if all(bool(source["exists"]) for source in sources) else "missing",
+    }
+
+
 def _heading_level(line: str) -> int | None:
     stripped = line.lstrip()
     if not stripped.startswith("#"):
@@ -184,18 +230,9 @@ def build_infrastructure_context(
     max_chars: int = 14000,
 ) -> str:
     maps = infrastructure_maps(home)
-    raw_key = (map_key or "all").strip().lower()
-    key = MAP_ALIASES.get(raw_key, raw_key)
-    if key not in maps:
-        allowed = ", ".join(sorted([*maps, *MAP_ALIASES]))
-        raise ValueError(f"unknown infrastructure map: {map_key}. Use one of: {allowed}")
+    raw_key, key = resolve_infrastructure_map_key(map_key)
 
-    if key == "all":
-        selected = [maps[item_key] for item_key in PRIMARY_MAP_KEYS]
-    elif key == "resource-bundle":
-        selected = [maps[item_key] for item_key in RESOURCE_BUNDLE_MAP_KEYS]
-    else:
-        selected = [maps[key]]
+    selected = [maps[item_key] for item_key in _selected_map_keys(key)]
     sections = [
         "Infrastructure maps are read-only references. For SSH/deploy/production actions, confirm runtime state and get explicit approval before acting.",
     ]
