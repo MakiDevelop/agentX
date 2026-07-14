@@ -2,7 +2,7 @@
 
 These implement the real interactive-shell logic for a small set of
 commands (``/plan``, ``/execute``, ``/mode``, plus read-only tool-backed
-``/files``, ``/read``, ``/find``, ``/where``, ``/infra``, ``/intent``, ``/grep``, ``/search``, ``/git``, ``/diff``,
+``/files``, ``/read``, ``/find``, ``/where``, ``/infra``, ``/intent``, ``/plan-task``, ``/grep``, ``/search``, ``/git``, ``/diff``,
 YELLOW git handlers ``/stage``, ``/unstage`` and ``/push``, low-risk
 tool-backed ``/memory``, ``/fetch``, ``/run``, ``/test``, low-risk
 inspection handlers ``/status``, ``/sessions``, ``/jobs``, the read-only
@@ -289,6 +289,28 @@ def handle_intent(
         transcript=transcript,
         emit=emit,
         fail_prefix="需求分析失敗：",
+        transcript_extra={"text": text},
+        transcript_limit=_TOOL_TRANSCRIPT_LIMIT_LONG,
+    )
+
+
+def handle_plan_task(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Turn a request into read-only task checklist suggestions."""
+    text = prompt.removeprefix("/plan-task").strip()
+    _run_tool_slash(
+        command="/plan-task",
+        tool_name="plan_task",
+        tool_args={"text": text},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="任務拆解失敗：",
         transcript_extra={"text": text},
         transcript_limit=_TOOL_TRANSCRIPT_LIMIT_LONG,
     )

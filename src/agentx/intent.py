@@ -104,6 +104,55 @@ def analyze_intent(request: str, *, max_terms: int = 6) -> str:
     return "\n".join(lines)
 
 
+def plan_task_checklist(request: str, *, max_terms: int = 4) -> str:
+    text = request.strip()
+    if not text:
+        raise ValueError("plan-task text is required")
+
+    risk = _classify_risk(text)
+    action = _classify_action(text)
+    terms = _extract_terms(text, max_terms=max_terms)
+    inspection_target = terms[0] if terms else text[:40]
+
+    tasks = [
+        f"釐清目標與風險：{text}",
+        f"定位相關檔案：/where {inspection_target}",
+        f"讀取並確認實作位置：/find {inspection_target}",
+        "實作最小可逆改動",
+        "執行 targeted 驗證與 ruff",
+        "執行 repo-level pytest 後 review diff",
+    ]
+    if risk.level in {"HIGH", "RED"}:
+        tasks.insert(1, "取得 Maki 明確確認後才處理高風險操作")
+        if risk.reason in {"production", "remote"}:
+            tasks.insert(2, "讀取 /infra 並確認 runtime state")
+
+    lines = [
+        "## Task Plan",
+        f"- Source request: {text}",
+        f"- Likely action: {action}",
+        f"- Risk: {risk.level} — {risk.reason}",
+        "",
+        "## Checklist",
+    ]
+    for index, task in enumerate(tasks, start=1):
+        lines.append(f"{index}. {task}")
+
+    lines.extend(["", "## Suggested /task Commands"])
+    for task in tasks:
+        lines.append(f"/task add {task}")
+
+    if risk.level in {"HIGH", "RED"}:
+        lines.extend(
+            [
+                "",
+                "## Guardrail",
+                "This plan is read-only. Do not execute remote, production, destructive, secret, DB, or volume actions without explicit approval.",
+            ]
+        )
+    return "\n".join(lines)
+
+
 def _classify_risk(text: str) -> IntentRisk:
     lowered = text.lower()
     for reason, patterns in _HIGH_RISK_PATTERNS.items():

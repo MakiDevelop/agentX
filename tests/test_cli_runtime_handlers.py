@@ -1,7 +1,7 @@
 """Coverage for runtime slash handlers used by run_shell() nested handlers.
 
 These tests exercise ``agentx.cli_runtime_handlers`` — the real interactive
-logic for /plan, /execute, /mode, /files, /read, /find, /where, /infra, /intent, /grep, /search, /git, /diff,
+logic for /plan, /execute, /mode, /files, /read, /find, /where, /infra, /intent, /plan-task, /grep, /search, /git, /diff,
 low-risk git handlers /stage, /unstage, /push, tool-backed /memory, /fetch, /run, /test,
 low-risk inspection
 handlers /status, /sessions, /jobs, /task readonly, and pure info/display
@@ -35,6 +35,7 @@ from agentx.cli_runtime_handlers import (
     handle_memory,
     handle_mode,
     handle_plan,
+    handle_plan_task,
     handle_push,
     handle_read,
     handle_run,
@@ -550,6 +551,36 @@ def test_handle_intent_dispatches_text_and_failure_prefix() -> None:
     handle_intent("/intent", tools=fail_tools, transcript=fail_transcript, emit=fail_emit)
 
     assert fail_lines == ["需求分析失敗：intent text is required"]
+    assert fail_transcript.events[0][1]["text"] == ""
+
+
+def test_handle_plan_task_dispatches_text_and_failure_prefix() -> None:
+    tools = FakeTools(ToolResult(tool="plan_task", ok=True, content="## Task Plan"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_plan_task("/plan-task add workflow", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("plan_task", {"text": "add workflow"})]
+    assert lines == ["## Task Plan"]
+    assert transcript.events == [
+        (
+            "tool",
+            {
+                "command": "/plan-task",
+                "text": "add workflow",
+                "ok": True,
+                "content": "## Task Plan",
+            },
+        )
+    ]
+
+    fail_tools = FakeTools(ToolResult(tool="plan_task", ok=False, content="plan-task text is required"))
+    fail_transcript = FakeTranscript()
+    fail_lines, fail_emit = _capture()
+    handle_plan_task("/plan-task", tools=fail_tools, transcript=fail_transcript, emit=fail_emit)
+
+    assert fail_lines == ["任務拆解失敗：plan-task text is required"]
     assert fail_transcript.events[0][1]["text"] == ""
 
 

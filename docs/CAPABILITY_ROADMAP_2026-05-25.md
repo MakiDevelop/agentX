@@ -95,7 +95,7 @@ Proposed commands:
 
 - [x] `/intent TEXT`
   - Output: interpreted goal, constraints, risk, files to inspect, verification plan.
-- [ ] `/plan-task TEXT`
+- [x] `/plan-task TEXT`
   - Convert a user request into `/task` checklist entries.
 
 Runtime behavior:
@@ -112,7 +112,8 @@ Acceptance:
 - `/intent` tests cover simple request, remote/production risk, destructive risk, missing text, runtime dispatch, registry wiring, and GREEN safety classification.
 - The feature improves execution by producing deterministic goal/risk/inspection/verification briefs before tool work.
 - No automatic production, destructive, remote, or task mutation action is triggered by intent classification.
-- Remaining P2 follow-up: `/plan-task TEXT` can convert an approved brief into `/task` checklist entries.
+- `/plan-task` tests cover low-risk checklist output, high-risk guardrails, missing text, runtime dispatch, registry wiring, and GREEN safety classification.
+- Remaining P2 follow-up: optional YELLOW apply mode can write selected checklist entries into `.agentx/tasks.json` after explicit confirmation.
 
 ## Recommended Commit Order
 

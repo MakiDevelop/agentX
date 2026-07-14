@@ -15,6 +15,7 @@ READ_ONLY_TOOLS = {
     "search_text",
     "infrastructure_context",
     "analyze_intent",
+    "plan_task",
     "locate_topic",
     "git_status",
     "git_branch",

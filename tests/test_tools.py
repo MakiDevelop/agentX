@@ -54,6 +54,17 @@ def test_analyze_intent_tool_returns_execution_brief(tmp_path: Path) -> None:
     assert "/where approval" in result.content
 
 
+def test_plan_task_tool_returns_read_only_checklist(tmp_path: Path) -> None:
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    result = registry.run("plan_task", {"text": "新增 workflow 測試"})
+
+    assert result.ok
+    assert "## Task Plan" in result.content
+    assert "/task add" in result.content
+    assert "新增 workflow 測試" in result.content
+
+
 def test_find_files_path_match_without_content_match(tmp_path: Path) -> None:
     (tmp_path / "approval_policy.md").write_text("unrelated", encoding="utf-8")
     registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]

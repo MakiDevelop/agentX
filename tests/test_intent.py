@@ -1,6 +1,6 @@
 import pytest
 
-from agentx.intent import analyze_intent
+from agentx.intent import analyze_intent, plan_task_checklist
 
 
 def test_analyze_intent_builds_low_risk_execution_brief() -> None:
@@ -38,3 +38,29 @@ def test_analyze_intent_flags_destructive_work_as_red() -> None:
 def test_analyze_intent_requires_text() -> None:
     with pytest.raises(ValueError, match="intent text is required"):
         analyze_intent(" ")
+
+
+def test_plan_task_checklist_builds_task_commands() -> None:
+    plan = plan_task_checklist("新增 /plan-task 指令並補測試")
+
+    assert "## Task Plan" in plan
+    assert "- Likely action: add" in plan
+    assert "- Risk: GREEN" in plan
+    assert "## Checklist" in plan
+    assert "## Suggested /task Commands" in plan
+    assert "/task add 釐清目標與風險：新增 /plan-task 指令並補測試" in plan
+    assert "/task add 實作最小可逆改動" in plan
+
+
+def test_plan_task_checklist_includes_high_risk_guardrail() -> None:
+    plan = plan_task_checklist("部署到 VPS production 並重啟服務")
+
+    assert "- Risk: HIGH" in plan
+    assert "取得 Maki 明確確認後才處理高風險操作" in plan
+    assert "讀取 /infra 並確認 runtime state" in plan
+    assert "This plan is read-only" in plan
+
+
+def test_plan_task_checklist_requires_text() -> None:
+    with pytest.raises(ValueError, match="plan-task text is required"):
+        plan_task_checklist("")
