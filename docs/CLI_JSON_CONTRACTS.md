@@ -834,6 +834,11 @@ Required stable keys:
 | `count` | integer | Number of returned workflows. |
 | `workflows` | array of object | Workflow recipes. |
 
+The catalog includes an `Infra preflight` recipe with aliases such as `infra`,
+`vps`, `ssh`, and `deploy`. Its first step is `agentx infra resource-bundle
+--json` and includes `command_plan`, so external runners can discover the
+resource/home-AI/VPS preflight route before SSH, deploy, or cross-machine work.
+
 Each workflow object includes:
 
 | Key | Type |

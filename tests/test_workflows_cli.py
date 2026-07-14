@@ -23,6 +23,21 @@ def test_workflow_catalog_payload_lists_aliases() -> None:
     assert workflows["Headless bundle"]["steps"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
     assert workflows["Headless bundle"]["steps"][0]["command_plan"]["risk"] == "YELLOW"
     assert workflows["Headless bundle"]["steps"][1]["command_plan"]["allowed"] is True
+    assert "Infra preflight" in workflows
+    assert "infra" in workflows["Infra preflight"]["aliases"]
+    assert "vps" in workflows["Infra preflight"]["aliases"]
+    assert workflows["Infra preflight"]["commands"] == [
+        "agentx infra resource-bundle --json",
+        "/intent SSH/deploy/cross-machine",
+    ]
+    assert workflows["Infra preflight"]["steps"][0]["kind"] == "agentx_cli"
+    assert workflows["Infra preflight"]["steps"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
+    assert workflows["Infra preflight"]["steps"][0]["command_plan"]["risk"] == "GREEN"
+    assert workflows["Infra preflight"]["steps"][2] == {
+        "command": "填寫 runtime state block",
+        "kind": "instruction",
+        "runnable": False,
+    }
     assert "Approval audit" in workflows
     assert "audit" in workflows["Approval audit"]["aliases"]
     assert workflows["理解 repo"]["steps"][0]["kind"] == "slash_command"
@@ -40,6 +55,16 @@ def test_workflow_catalog_payload_filters_by_alias() -> None:
     assert "--artifact-dir" in payload["workflows"][0]["path"]
     assert payload["workflows"][0]["commands"][0].startswith("agentx -p")
     assert payload["workflows"][0]["steps"][0]["command_plan"]["command"].startswith("agentx -p")
+
+
+def test_workflow_catalog_payload_filters_infra_alias() -> None:
+    payload = workflow_catalog_payload("vps")
+
+    assert payload["query"] == "vps"
+    assert payload["count"] == 1
+    assert payload["workflows"][0]["goal"] == "Infra preflight"
+    assert payload["workflows"][0]["commands"][0] == "agentx infra resource-bundle --json"
+    assert payload["workflows"][0]["steps"][0]["command_plan"]["matched_policy"] == "agentx_cli_capability"
 
 
 def test_workflows_json_outputs_catalog() -> None:
