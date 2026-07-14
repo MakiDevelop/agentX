@@ -56,6 +56,7 @@
 - [x] `agentx -p ... --agent --save-session` 可保存 `.session.jsonl`。
 - [x] `agentx -p ... --agent --resume-session latest|NAME` 可從目前 workspace 的 `.agentx/sessions/*.session.jsonl` 恢復後繼續執行。
 - [x] JSON payload 回報 `session_path`，方便 script 串接下一輪。
+- [x] `agentx ask` 走同一套 headless runner，支援 `--save-session` / `--resume-session` / `--json` / `--max-steps`；`agentx -p --agent` 也支援 `--max-steps`。
 
 **記錄位置**：
 - Git：`docs/HEADLESS_OPTIMIZATION_LIST.md`（戰術清單）

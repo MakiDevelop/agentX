@@ -1091,6 +1091,7 @@ def main(
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan thoroughly first, then seamlessly continue into execution in the same run (recommended for complex tasks)."),
     orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
+    max_steps: int | None = typer.Option(None, "--max-steps", help="Override max agent loop steps for -p."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for headless automation."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
@@ -1111,6 +1112,7 @@ def main(
         suppress_trace=json_output,
         save_session=save_session,
         resume_session=resume_session,
+        max_steps=max_steps,
     )
     if isinstance(output, HeadlessRunResult):
         exit_code = headless_exit_code(
@@ -1193,8 +1195,11 @@ def run_print_prompt(
     suppress_trace: bool = False,
     save_session: bool = False,
     resume_session: str | None = None,
+    max_steps: int | None = None,
 ) -> str | HeadlessRunResult:
     settings = Settings()
+    if max_steps is not None:
+        settings = settings.with_updates(max_steps=max_steps)
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
 
@@ -1470,49 +1475,41 @@ def ask(
     namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for automation."),
+    save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
+    resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
 ) -> None:
-    settings = Settings()
-    if max_steps is not None:
-        settings = settings.with_updates(max_steps=max_steps)
-    project_config = load_project_config(settings.workspace)
-    namespace = namespace or project_config.namespace or "project:agentX"
-    approval_policy = None
-    if project_config.approval:
-        mode = normalize_approval_mode(project_config.approval)
-        approval_policy = ApprovalPolicy(mode)
-    ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
-    compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None
-    agent = AgentLoop(
-        settings=settings,
-        ollama=ollama,
-        tools=tools,
-        trace=None if json_output else print_trace,
-        compactor=compactor,
-        memory=memory,
+    output = run_print_prompt(
+        prompt,
+        namespace=namespace,
+        agent_mode=True,
+        return_metadata=True,
+        suppress_trace=json_output,
+        save_session=save_session,
+        resume_session=resume_session,
+        max_steps=max_steps,
     )
-    output = agent.run(prompt, namespace=namespace)
-    exit_code = headless_exit_code(
-        output,
-        termination=agent.session.last_termination,
-        failing_tools=agent.session.last_failing_tools,
-    )
+    if isinstance(output, HeadlessRunResult):
+        exit_code = headless_exit_code(
+            output.output,
+            termination=output.termination,
+            failing_tools=output.failing_tools,
+        )
+        if json_output:
+            print_json_output(headless_json_payload(output, exit_code))
+            raise typer.Exit(code=exit_code)
+        print_raw(output.output)
+        raise typer.Exit(code=exit_code)
     if json_output:
+        fallback_result = HeadlessRunResult(output=output)
         print_json_output(
             headless_json_payload(
-                HeadlessRunResult(
-                    output=output,
-                    termination=agent.session.last_termination,
-                    failing_tools=tuple(sorted(agent.session.last_failing_tools)),
-                    stats=headless_run_stats(agent.session),
-                ),
-                exit_code,
+                fallback_result,
+                headless_exit_code(output),
             )
         )
-        raise typer.Exit(code=exit_code)
+        raise typer.Exit(code=headless_exit_code(output))
     print_raw(output)
-    raise typer.Exit(
-        code=exit_code
-    )
+    raise typer.Exit(code=headless_exit_code(output))
 
 
 @app.command()

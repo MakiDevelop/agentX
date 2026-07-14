@@ -197,4 +197,50 @@ def test_print_prompt_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN0
     assert captured["save_session"] is True
     assert captured["resume_session"] == "latest"
     assert captured["suppress_trace"] is True
+    assert captured["max_steps"] is None
+    assert data["session_path"] == "/tmp/s.session.jsonl"
+
+
+def test_print_prompt_forwards_max_steps(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--max-steps", "2"])
+
+    assert result.exit_code == 0
+    assert captured["max_steps"] == 2
+    assert "ok" in result.output
+
+
+def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured["args"] = args
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success", session_path="/tmp/s.session.jsonl")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        ["ask", "demo", "--save-session", "--resume-session", "latest", "--max-steps", "3", "--json"],
+    )
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert captured["args"][0] == "demo"
+    assert captured["agent_mode"] is True
+    assert captured["return_metadata"] is True
+    assert captured["suppress_trace"] is True
+    assert captured["save_session"] is True
+    assert captured["resume_session"] == "latest"
+    assert captured["max_steps"] == 3
     assert data["session_path"] == "/tmp/s.session.jsonl"

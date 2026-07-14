@@ -121,9 +121,11 @@ JSON payload 會包含 `output`、`exit_code`、`termination`、`failing_tools` 
 ```bash
 agentx -p "先讀 repo 並整理下一步" --agent --save-session --json
 agentx -p "照上一輪下一步繼續" --agent --resume-session latest --save-session --json
+agentx ask "照上一輪下一步繼續" --resume-session latest --save-session --json
 ```
 
 `--resume-session` 只會讀取目前 workspace 的 `.agentx/sessions/*.session.jsonl`；JSON payload 的 `session_path` 會回報實際保存或恢復的 session 檔。
+`-p --agent` 與 `ask` 都支援 `--max-steps` 來限制 agent loop 步數。
 
 Headless exit code：
 
