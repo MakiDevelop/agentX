@@ -136,13 +136,16 @@ agentx ask "重構 headless session resume" --plan-then-execute
 ```bash
 agentx -p "幫我列出這個 repo 的檔案" --agent --json
 agentx -p "幫我列出這個 repo 的檔案" --agent --output-format json
+agentx -p "幫我列出這個 repo 的檔案" --agent --output-format jsonl
 agentx ask "幫我列出這個 repo 的檔案" --json
 agentx ask "幫我列出這個 repo 的檔案" --output-format json
+agentx ask "幫我列出這個 repo 的檔案" --output-format jsonl
 ```
 
 JSON payload 會包含 `output`、`exit_code`、`termination`、`failing_tools` 與 `stats`。
 `stats` 目前包含 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies 與 task counts。
 `log_summary` 會提供精簡可機讀執行摘要：termination、tool outcomes、successful/failing tools、recent errors、recovery suggestions、pending verifies 與 deterministic `handoff_summary`。
+`--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、models 會分別使用 `dry_run`、`version`、`backends`、`models` event。
 使用 `--plan-then-execute --json` 時，payload 會額外包含 `phases`，分別提供 `plan` 與 `execution` 的輸出，方便上游 agent 或 script 解析。
 
 長任務需要跨 headless run 接續時，可保存並恢復 agent session：

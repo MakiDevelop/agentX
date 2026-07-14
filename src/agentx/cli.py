@@ -1089,7 +1089,7 @@ def _headless_recovery_suggestions(session: AgentSession) -> list[dict[str, obje
     return []
 
 
-def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
+def headless_payload(result: HeadlessRunResult, exit_code: int) -> dict[str, object]:
     payload = {
         "output": result.output,
         "exit_code": exit_code,
@@ -1101,7 +1101,20 @@ def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
     }
     if result.phases:
         payload["phases"] = list(result.phases)
-    return json.dumps(payload, ensure_ascii=False)
+    return payload
+
+
+def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
+    return json.dumps(headless_payload(result, exit_code), ensure_ascii=False)
+
+
+def print_headless_payload(
+    result: HeadlessRunResult,
+    exit_code: int,
+    *,
+    output_format: str = "json",
+) -> None:
+    print_structured_payload(headless_payload(result, exit_code), output_format=output_format, event="result")
 
 
 def headless_exception_result(exc: Exception, *, session_path: str | None = None) -> HeadlessRunResult:
@@ -1208,11 +1221,38 @@ def run_with_headless_timeout(
     return result
 
 
-def wants_json_output(json_output: bool, output_format: str | None) -> bool:
+def normalize_output_format(output_format: str | None) -> str:
     normalized = (output_format or "plain").strip().lower()
-    if normalized not in {"plain", "json"}:
-        raise typer.BadParameter("output format must be one of: plain, json")
-    return json_output or normalized == "json"
+    if normalized not in {"plain", "json", "jsonl"}:
+        raise typer.BadParameter("output format must be one of: plain, json, jsonl")
+    return normalized
+
+
+def structured_output_format(json_output: bool, output_format: str | None) -> str:
+    normalized = normalize_output_format(output_format)
+    if normalized == "jsonl":
+        return "jsonl"
+    if json_output or normalized == "json":
+        return "json"
+    return "plain"
+
+
+def wants_json_output(json_output: bool, output_format: str | None) -> bool:
+    return structured_output_format(json_output, output_format) != "plain"
+
+
+def wants_jsonl_output(json_output: bool, output_format: str | None) -> bool:
+    return structured_output_format(json_output, output_format) == "jsonl"
+
+
+def structured_payload_text(payload: object, *, output_format: str = "json", event: str = "result") -> str:
+    if output_format == "jsonl":
+        return json.dumps({"event": event, "data": payload}, ensure_ascii=False)
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def print_structured_payload(payload: object, *, output_format: str = "json", event: str = "result") -> None:
+    print_json_output(structured_payload_text(payload, output_format=output_format, event=event))
 
 
 def backend_list_payload() -> list[str]:
@@ -1220,10 +1260,14 @@ def backend_list_payload() -> list[str]:
     return list_registered_backends()
 
 
-def print_backend_list(*, json_output: bool = False) -> None:
+def print_backend_list(*, json_output: bool = False, jsonl_output: bool = False) -> None:
     backends = backend_list_payload()
     if json_output:
-        print_json_output(json.dumps({"backends": backends}, ensure_ascii=False))
+        print_structured_payload(
+            {"backends": backends},
+            output_format="jsonl" if jsonl_output else "json",
+            event="backends",
+        )
         return
     print_raw("\n".join(backends))
 
@@ -1241,10 +1285,14 @@ def version_payload() -> dict[str, str]:
     }
 
 
-def print_version(*, json_output: bool = False) -> None:
+def print_version(*, json_output: bool = False, jsonl_output: bool = False) -> None:
     payload = version_payload()
     if json_output:
-        print_json_output(json.dumps(payload, ensure_ascii=False))
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="version",
+        )
         return
     print_raw(f"agentx {payload['agentx']}\npython {payload['python']}")
 
@@ -1346,10 +1394,15 @@ def print_headless_dry_run(
     payload: dict[str, object],
     *,
     json_output: bool = False,
+    jsonl_output: bool = False,
     quiet: bool = False,
 ) -> None:
     if json_output:
-        print_json_output(json.dumps(payload, ensure_ascii=False))
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="dry_run",
+        )
         return
     if not quiet:
         print_raw(format_headless_dry_run(payload))
@@ -1391,9 +1444,13 @@ def model_list_payload(
     }
 
 
-def print_model_list(payload: dict[str, object], *, json_output: bool = False) -> None:
+def print_model_list(payload: dict[str, object], *, json_output: bool = False, jsonl_output: bool = False) -> None:
     if json_output:
-        print_json_output(json.dumps(payload, ensure_ascii=False))
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="models",
+        )
         return
     print_raw("\n".join(str(model) for model in payload["models"]))
 
@@ -1568,7 +1625,7 @@ def main(
     run_timeout: float | None = typer.Option(None, "--run-timeout", help="Limit total headless run time in seconds; returns exit 124 on timeout."),
     max_steps: int | None = typer.Option(None, "--max-steps", help="Override max agent loop steps for -p."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for headless automation."),
-    output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain or json."),
+    output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain, json, or jsonl."),
     quiet: bool = typer.Option(False, "--quiet", help="Suppress plain stdout for headless automation; JSON output is still printed."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate headless options and print the normalized run configuration without calling the model."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
@@ -1579,11 +1636,14 @@ def main(
     """Run local Ollama agent workflows."""
     if ctx.invoked_subcommand is not None:
         return
+    structured_format = structured_output_format(json_output, output_format)
+    structured_output = structured_format != "plain"
+    jsonl_output = structured_format == "jsonl"
     if list_backends:
-        print_backend_list(json_output=wants_json_output(json_output, output_format))
+        print_backend_list(json_output=structured_output, jsonl_output=jsonl_output)
         raise typer.Exit(code=0)
     if show_version:
-        print_version(json_output=wants_json_output(json_output, output_format))
+        print_version(json_output=structured_output, jsonl_output=jsonl_output)
         raise typer.Exit(code=0)
     workspace_override = resolve_headless_workspace(workspace)
     settings_for_prompt = Settings(workspace=workspace_override)
@@ -1596,7 +1656,7 @@ def main(
             model_override=model,
             timeout_override=timeout,
         )
-        print_model_list(payload, json_output=wants_json_output(json_output, output_format))
+        print_model_list(payload, json_output=structured_output, jsonl_output=jsonl_output)
         raise typer.Exit(code=0)
     prompt = load_headless_prompt(
         print_prompt,
@@ -1606,7 +1666,6 @@ def main(
     )
     if prompt is None:
         return
-    structured_output = wants_json_output(json_output, output_format)
     if dry_run:
         payload = build_headless_dry_run_payload(
             prompt,
@@ -1628,7 +1687,7 @@ def main(
             session_output=session_output_path,
             no_memory=no_memory,
         )
-        print_headless_dry_run(payload, json_output=structured_output, quiet=quiet)
+        print_headless_dry_run(payload, json_output=structured_output, jsonl_output=jsonl_output, quiet=quiet)
         raise typer.Exit(code=0)
     try:
         output = run_with_headless_timeout(
@@ -1666,7 +1725,7 @@ def main(
             failing_tools=output.failing_tools,
         )
         if structured_output:
-            print_json_output(headless_json_payload(output, exit_code))
+            print_headless_payload(output, exit_code, output_format=structured_format)
             raise typer.Exit(code=exit_code)
         if not quiet:
             print_raw(output.output)
@@ -1675,7 +1734,11 @@ def main(
         )
     if structured_output:
         fallback_result = HeadlessRunResult(output=output)
-        print_json_output(headless_json_payload(fallback_result, headless_exit_code(output)))
+        print_headless_payload(
+            fallback_result,
+            headless_exit_code(output),
+            output_format=structured_format,
+        )
         raise typer.Exit(code=headless_exit_code(output))
     if not quiet:
         print_raw(output)
@@ -2083,7 +2146,7 @@ def ask(
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan first, then execute in the same headless run."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for automation."),
-    output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain or json."),
+    output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain, json, or jsonl."),
     quiet: bool = typer.Option(False, "--quiet", help="Suppress plain stdout for automation; JSON output is still printed."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate options and print the normalized run configuration without calling the model."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
@@ -2091,7 +2154,9 @@ def ask(
     session_output: str | None = typer.Option(None, "--session-output", help="Write the headless session JSONL artifact to a specific workspace path."),
     no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
 ) -> None:
-    structured_output = wants_json_output(json_output, output_format)
+    structured_format = structured_output_format(json_output, output_format)
+    structured_output = structured_format != "plain"
+    jsonl_output = structured_format == "jsonl"
     workspace_override = resolve_headless_workspace(workspace)
     session_output_path = resolve_headless_session_output(Settings(workspace=workspace_override).workspace, session_output)
     if dry_run:
@@ -2113,7 +2178,7 @@ def ask(
             session_output=session_output_path,
             no_memory=no_memory,
         )
-        print_headless_dry_run(payload, json_output=structured_output, quiet=quiet)
+        print_headless_dry_run(payload, json_output=structured_output, jsonl_output=jsonl_output, quiet=quiet)
         raise typer.Exit(code=0)
     try:
         output = run_with_headless_timeout(
@@ -2149,18 +2214,17 @@ def ask(
             failing_tools=output.failing_tools,
         )
         if structured_output:
-            print_json_output(headless_json_payload(output, exit_code))
+            print_headless_payload(output, exit_code, output_format=structured_format)
             raise typer.Exit(code=exit_code)
         if not quiet:
             print_raw(output.output)
         raise typer.Exit(code=exit_code)
     if structured_output:
         fallback_result = HeadlessRunResult(output=output)
-        print_json_output(
-            headless_json_payload(
-                fallback_result,
-                headless_exit_code(output),
-            )
+        print_headless_payload(
+            fallback_result,
+            headless_exit_code(output),
+            output_format=structured_format,
         )
         raise typer.Exit(code=headless_exit_code(output))
     if not quiet:
@@ -2171,10 +2235,11 @@ def ask(
 @app.command("backends")
 def backends(
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain or json."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
     """List registered LLM backend keys."""
-    print_backend_list(json_output=wants_json_output(json_output, output_format))
+    structured_format = structured_output_format(json_output, output_format)
+    print_backend_list(json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("models")
@@ -2185,7 +2250,7 @@ def models(
     model: str | None = typer.Option(None, "--model", help="Override model used to initialize the backend client."),
     timeout: float | None = typer.Option(None, "--timeout", help="Override request timeout seconds."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain or json."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
     """List models for the selected LLM backend."""
     payload = model_list_payload(
@@ -2195,16 +2260,18 @@ def models(
         model_override=model,
         timeout_override=timeout,
     )
-    print_model_list(payload, json_output=wants_json_output(json_output, output_format))
+    structured_format = structured_output_format(json_output, output_format)
+    print_model_list(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("version")
 def version_command(
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain or json."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
     """Show agentX and Python versions."""
-    print_version(json_output=wants_json_output(json_output, output_format))
+    structured_format = structured_output_format(json_output, output_format)
+    print_version(json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command()

@@ -194,6 +194,10 @@ def test_run_with_headless_timeout_passes_cancel_event() -> None:
 
 def test_wants_json_output_accepts_json_alias() -> None:
     assert cli.wants_json_output(False, "json") is True
+    assert cli.wants_json_output(False, "jsonl") is True
+    assert cli.wants_jsonl_output(False, "jsonl") is True
+    assert cli.structured_output_format(True, "plain") == "json"
+    assert cli.structured_output_format(True, "jsonl") == "jsonl"
     assert cli.wants_json_output(True, "plain") is True
     assert cli.wants_json_output(False, "plain") is False
 
@@ -202,9 +206,15 @@ def test_wants_json_output_rejects_unknown_format() -> None:
     try:
         cli.wants_json_output(False, "yaml")
     except Exception as exc:
-        assert "plain, json" in str(exc)
+        assert "plain, json, jsonl" in str(exc)
     else:
         raise AssertionError("unknown output format should fail")
+
+
+def test_structured_payload_text_wraps_jsonl_event() -> None:
+    data = json.loads(cli.structured_payload_text({"ok": True}, output_format="jsonl", event="result"))
+
+    assert data == {"event": "result", "data": {"ok": True}}
 
 
 def test_backend_list_payload_registers_and_lists_backends(monkeypatch) -> None:  # noqa: ANN001
@@ -238,6 +248,17 @@ def test_list_backends_option_json(monkeypatch) -> None:  # noqa: ANN001
     assert data == {"backends": ["llama_cpp", "ollama"]}
 
 
+def test_list_backends_option_jsonl(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "backend_list_payload", lambda: ["llama_cpp", "ollama"])
+
+    result = runner.invoke(cli.app, ["--list-backends", "--output-format", "jsonl"])
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event == {"event": "backends", "data": {"backends": ["llama_cpp", "ollama"]}}
+
+
 def test_backends_command_plain(monkeypatch) -> None:  # noqa: ANN001
     runner = CliRunner()
     monkeypatch.setattr(cli, "backend_list_payload", lambda: ["llama_cpp", "ollama"])
@@ -257,6 +278,17 @@ def test_backends_command_json(monkeypatch) -> None:  # noqa: ANN001
 
     assert result.exit_code == 0
     assert data == {"backends": ["llama_cpp", "ollama"]}
+
+
+def test_backends_command_jsonl(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "backend_list_payload", lambda: ["llama_cpp", "ollama"])
+
+    result = runner.invoke(cli.app, ["backends", "--output-format", "jsonl"])
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event == {"event": "backends", "data": {"backends": ["llama_cpp", "ollama"]}}
 
 
 def test_model_list_payload_uses_selected_backend_and_closes(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
@@ -319,6 +351,24 @@ def test_list_models_option_json(monkeypatch) -> None:  # noqa: ANN001
     assert data == {"backend": "ollama", "base_url": "http://x", "models": ["a", "b"]}
 
 
+def test_list_models_option_jsonl(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(
+        cli,
+        "model_list_payload",
+        lambda **kwargs: {"backend": "ollama", "base_url": "http://x", "models": ["a", "b"]},
+    )
+
+    result = runner.invoke(cli.app, ["--list-models", "--output-format", "jsonl"])
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event == {
+        "event": "models",
+        "data": {"backend": "ollama", "base_url": "http://x", "models": ["a", "b"]},
+    }
+
+
 def test_models_command_plain(monkeypatch) -> None:  # noqa: ANN001
     runner = CliRunner()
     monkeypatch.setattr(
@@ -363,6 +413,17 @@ def test_version_option_json(monkeypatch) -> None:  # noqa: ANN001
     assert data == {"agentx": "9.8.7", "python": "3.13.0"}
 
 
+def test_version_option_jsonl(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "version_payload", lambda: {"agentx": "9.8.7", "python": "3.13.0"})
+
+    result = runner.invoke(cli.app, ["--version", "--output-format", "jsonl"])
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event == {"event": "version", "data": {"agentx": "9.8.7", "python": "3.13.0"}}
+
+
 def test_version_command_json(monkeypatch) -> None:  # noqa: ANN001
     runner = CliRunner()
     monkeypatch.setattr(cli, "version_payload", lambda: {"agentx": "9.8.7", "python": "3.13.0"})
@@ -372,6 +433,17 @@ def test_version_command_json(monkeypatch) -> None:  # noqa: ANN001
 
     assert result.exit_code == 0
     assert data == {"agentx": "9.8.7", "python": "3.13.0"}
+
+
+def test_version_command_jsonl(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "version_payload", lambda: {"agentx": "9.8.7", "python": "3.13.0"})
+
+    result = runner.invoke(cli.app, ["version", "--output-format", "jsonl"])
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event == {"event": "version", "data": {"agentx": "9.8.7", "python": "3.13.0"}}
 
 
 def test_load_headless_prompt_reads_workspace_file(tmp_path: Path) -> None:
@@ -521,6 +593,19 @@ def test_print_prompt_dry_run_json_does_not_call_runner(tmp_path: Path, monkeypa
     assert data["backend"] == "llama_cpp"
     assert data["model"] == "local-model"
     assert data["prompt_chars"] == 6
+
+
+def test_print_prompt_dry_run_jsonl_wraps_dry_run_event(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "run_print_prompt", lambda *args, **kwargs: "should not run")
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--dry-run", "--output-format", "jsonl"])
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event["event"] == "dry_run"
+    assert event["data"]["prompt_chars"] == 4
+    assert event["data"]["agent_mode"] is True
 
 
 def test_print_prompt_dry_run_quiet_suppresses_plain_output(monkeypatch) -> None:  # noqa: ANN001
@@ -851,6 +936,23 @@ def test_print_prompt_output_format_json_uses_structured_metadata(monkeypatch) -
     assert data["output"] == "ok"
     assert data["termination"] == "final_success"
     assert captured["suppress_trace"] is True
+
+
+def test_print_prompt_output_format_jsonl_wraps_result_event(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--output-format", "jsonl"])
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event["event"] == "result"
+    assert event["data"]["output"] == "ok"
+    assert event["data"]["termination"] == "final_success"
 
 
 def test_print_prompt_quiet_suppresses_plain_output(monkeypatch) -> None:  # noqa: ANN001
@@ -1880,6 +1982,22 @@ def test_ask_output_format_json(monkeypatch) -> None:  # noqa: ANN001
     assert result.exit_code == 0
     assert data["output"] == "ok"
     assert captured["suppress_trace"] is True
+
+
+def test_ask_output_format_jsonl(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["ask", "demo", "--output-format", "jsonl"])
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event["event"] == "result"
+    assert event["data"]["output"] == "ok"
 
 
 def test_ask_quiet_suppresses_plain_output(monkeypatch) -> None:  # noqa: ANN001

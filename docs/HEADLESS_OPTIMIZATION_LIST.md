@@ -68,6 +68,7 @@
 - [x] `--run-timeout SECONDS` 可限制整輪 headless run deadline；逾時回 `termination=timeout`、exit code 124，並透過 cancel_event 嘗試中止模型串流。
 - [x] `agentx -p ... --json` 與 `agentx ask ... --json` 可輸出機器可讀 payload。
 - [x] `--output-format json` 可作為 `--json` 的 script-friendly 等價入口；非法格式會直接失敗。
+- [x] `--output-format jsonl` 可輸出單行 event envelope（`result` / `dry_run` / `version` / `backends` / `models`），方便 pipeline 用同一套 event parser 消費。
 - [x] `--quiet` 可壓掉 plain stdout、保留 exit code；搭配 `--json` 時仍輸出 JSON payload。
 - [x] `--dry-run` 可驗證 headless prompt/workspace/config/override 解析結果，不呼叫模型、不跑工具、不寫 session；支援 JSON 輸出。
 - [x] `--no-memory` 可在單次 headless run 關閉 Memory Hall / AMH 讀寫；工具介面保留但使用 no-op NullMemoryClient，適合 CI、多代理隔離與不可污染記憶的任務。
