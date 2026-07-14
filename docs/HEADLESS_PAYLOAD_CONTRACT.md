@@ -152,7 +152,18 @@ Required keys:
 | `recent_errors` | array of object | Last errors, newest last. |
 | `recovery_suggestions` | array of object | Structured playbook suggestions. |
 | `pending_verifies` | array of string | Edited paths still requiring verification. |
+| `approval_receipts` | array of object | Optional YELLOW approval decisions emitted during the run. |
 | `handoff_summary` | object | Self-contained takeover summary. |
+
+`approval_receipts` entries are deterministic audit records with these fields:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `tool` | string | Tool that crossed the YELLOW approval gate. |
+| `risk` | string | Risk level, currently `YELLOW` for approval receipts. |
+| `approval_mode` | string | Canonical approval mode: `ask`, `auto`, or `off`. |
+| `source` | string | Decision origin: `auto_approved`, `manual_approved`, `manual_denied`, or `policy_denied`. |
+| `allowed` | boolean | Whether the tool call was allowed to continue. |
 
 ## `handoff_summary`
 

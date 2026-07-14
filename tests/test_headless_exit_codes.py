@@ -112,7 +112,18 @@ def test_headless_json_payload_includes_stats() -> None:
             output="完成",
             termination="final_success",
             stats={"message_count": 3, "error_count": 0},
-            log_summary={"tool_outcomes": {"run_tests": True}},
+            log_summary={
+                "tool_outcomes": {"run_tests": True},
+                "approval_receipts": [
+                    {
+                        "tool": "memory_write",
+                        "risk": "YELLOW",
+                        "approval_mode": "auto",
+                        "source": "auto_approved",
+                        "allowed": True,
+                    }
+                ],
+            },
         ),
         exit_code=0,
     )
@@ -126,6 +137,15 @@ def test_headless_json_payload_includes_stats() -> None:
     assert data["failing_tools"] == []
     assert data["stats"]["message_count"] == 3
     assert data["log_summary"]["tool_outcomes"] == {"run_tests": True}
+    assert data["log_summary"]["approval_receipts"] == [
+        {
+            "tool": "memory_write",
+            "risk": "YELLOW",
+            "approval_mode": "auto",
+            "source": "auto_approved",
+            "allowed": True,
+        }
+    ]
     assert data["session_path"] is None
     assert "phases" not in data
 
@@ -3040,6 +3060,60 @@ def test_run_print_prompt_approval_override_wins_over_project_config(
 
     assert isinstance(result, cli.HeadlessRunResult)
     assert seen_modes == ["auto"]
+
+
+def test_run_print_prompt_includes_approval_receipts_in_log_summary(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    receipt = {
+        "tool": "memory_write",
+        "risk": "YELLOW",
+        "approval_mode": "auto",
+        "source": "auto_approved",
+        "allowed": True,
+    }
+
+    class FakeAgentLoop:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            self.session = SimpleNamespace(
+                message_count=1,
+                context_tokens_estimate=10,
+                error_history=[],
+                compaction_count=0,
+                model_turn_count=0,
+                tool_call_count=0,
+                reflection_count=0,
+                pending_verifies=set(),
+                tasks=[],
+                last_termination="final_success",
+                last_failing_tools=set(),
+                _tool_outcomes={"memory_write": True},
+            )
+
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
+            return "ok"
+
+    def fake_build_runtime(settings, *args, approval_audit=None, **kwargs):  # noqa: ANN001
+        assert approval_audit is not None
+        approval_audit(receipt)
+        return object(), object(), object()
+
+    monkeypatch.setattr(cli, "build_runtime", fake_build_runtime)
+    monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
+
+    result = cli.run_print_prompt(
+        "demo",
+        namespace="project:test",
+        agent_mode=True,
+        workspace_override=tmp_path,
+        approval_override="auto-approve",
+        return_metadata=True,
+        suppress_trace=True,
+    )
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert result.log_summary["approval_receipts"] == [receipt]
 
 
 def test_run_print_prompt_rejects_invalid_approval_override() -> None:

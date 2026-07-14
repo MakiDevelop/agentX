@@ -83,7 +83,7 @@
 - [x] `--no-memory` 可在單次 headless run 關閉 Memory Hall / AMH 讀寫；工具介面保留但使用 no-op NullMemoryClient，適合 CI、多代理隔離與不可污染記憶的任務。
 - Payload 包含 `schema_version`、`output`、`exit_code`、`termination`、`failing_tools`、`stats`。
 - `stats` 目前提供 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies、task counts。
-- `log_summary` 目前提供 termination、tool outcomes、successful/failing tools、recent errors、recovery suggestions、pending verifies、handoff summary，讓 script/其他 agent 不必解析自然語言輸出即可判斷執行狀態與下一個恢復動作。
+- `log_summary` 目前提供 termination、tool outcomes、successful/failing tools、recent errors、recovery suggestions、pending verifies、approval receipts、handoff summary，讓 script/其他 agent 不必解析自然語言輸出即可判斷執行狀態、安全決策與下一個恢復動作。
 - `handoff_summary` 會用 deterministic runtime state 輸出 status、needs_handoff、failing_tools、pending_verifies、last_error、task_counts、recovery_actions、primary_recovery、recovery_checklist、next_steps；若有 session_path 也會附 `resume_session` 與 `resume_command`，不額外呼叫模型。
 - 穩定 payload 契約記錄於 `docs/HEADLESS_PAYLOAD_CONTRACT.md`；外部 runner 應以此文件與測試為準。
 - 一般文字輸出保持相容；JSON 模式會抑制 trace，避免污染 stdout。

@@ -8,7 +8,7 @@ import subprocess
 import sys
 import threading
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
@@ -1026,6 +1026,17 @@ def headless_log_summary(session: AgentSession) -> dict[str, object]:
             stats=stats,
         ),
     }
+
+
+def with_headless_approval_receipts(
+    log_summary: dict[str, object],
+    approval_receipts: list[dict[str, object]],
+) -> dict[str, object]:
+    if not approval_receipts:
+        return log_summary
+    enriched = dict(log_summary)
+    enriched["approval_receipts"] = [dict(receipt) for receipt in approval_receipts]
+    return enriched
 
 
 def headless_handoff_summary(
@@ -2491,9 +2502,11 @@ def run_print_prompt(
                 return HeadlessRunResult(output=output, termination="invalid_action")
             return output
         approval_policy = ApprovalPolicy(mode)
+    approval_receipts: list[dict[str, object]] = []
     ollama, memory, tools = build_runtime(
         settings,
         approval_policy=approval_policy,
+        approval_audit=approval_receipts.append,
         backend_override=backend_override,
         no_memory=no_memory,
     )
@@ -2608,9 +2621,16 @@ def run_print_prompt(
             if active_store is not None:
                 session_path = active_store.path
             if return_metadata:
-                return headless_exception_result(
+                result = headless_exception_result(
                     exc,
                     session_path=str(session_path) if session_path else None,
+                )
+                return replace(
+                    result,
+                    log_summary=with_headless_approval_receipts(
+                        result.log_summary,
+                        approval_receipts,
+                    ),
                 )
             return f"runtime error: {type(exc).__name__}: {exc}"
         active_store = getattr(agent_loop.session, "_session_store", None)
@@ -2622,7 +2642,10 @@ def run_print_prompt(
                 termination=agent_loop.session.last_termination,
                 failing_tools=tuple(sorted(agent_loop.session.last_failing_tools)),
                 stats=headless_run_stats(agent_loop.session),
-                log_summary=headless_log_summary(agent_loop.session),
+                log_summary=with_headless_approval_receipts(
+                    headless_log_summary(agent_loop.session),
+                    approval_receipts,
+                ),
                 session_path=str(session_path) if session_path else None,
                 phases=phases,
             )
