@@ -93,6 +93,22 @@ class ToolRegistry:
     def describe_tools(self) -> dict[str, str]:
         return {name: tool.description for name, tool in self._tools.items() if tool_is_enabled(tool)}
 
+    def describe_tool_infos(self) -> list[dict[str, object]]:
+        infos: list[dict[str, object]] = []
+        for name, tool in self._tools.items():
+            if not tool_is_enabled(tool):
+                continue
+            infos.append(
+                {
+                    "name": name,
+                    "description": tool.description,
+                    "risk": tool.risk.value,
+                    "signature": tool_signature(tool),
+                    "aliases": tool_aliases(tool),
+                }
+            )
+        return infos
+
     def run(
         self, name: str, args: dict[str, Any], *, _return_effective: bool = False
     ) -> ToolResult | tuple[ToolResult, dict[str, Any]]:

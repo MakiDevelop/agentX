@@ -374,7 +374,7 @@ def print_tools(tools: ToolRegistry) -> None:
     """Print tools with risk level (GREEN / YELLOW / RED) for better discoverability.
     This moves us closer to the vision in Image 03.
     """
-    tool_infos = tools.describe_tools()
+    tool_infos = tools.describe_tool_infos()
 
     # Group by risk for clearer presentation (vision alignment)
     by_risk: dict[str, list] = {"GREEN": [], "YELLOW": [], "RED": [], "UNKNOWN": []}
@@ -412,6 +412,36 @@ def print_tools(tools: ToolRegistry) -> None:
         console.print()  # breathing room
 
     console.print("[dim]風險由內建機制自動判斷。想調整 YELLOW 行為請用 /approval。[/dim]")
+
+
+def tool_catalog_payload(tools: ToolRegistry) -> dict[str, object]:
+    infos = tools.describe_tool_infos()
+    by_risk = {
+        risk: sum(1 for item in infos if item["risk"] == risk)
+        for risk in ("GREEN", "YELLOW", "RED")
+    }
+    return {
+        "schema": "agentx.tool_catalog.v1",
+        "count": len(infos),
+        "by_risk": by_risk,
+        "tools": infos,
+    }
+
+
+def print_tool_catalog(
+    tools: ToolRegistry,
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            tool_catalog_payload(tools),
+            output_format="jsonl" if jsonl_output else "json",
+            event="tools",
+        )
+        return
+    print_tools(tools)
 
 
 def print_raw(text: object) -> None:
@@ -3001,6 +3031,19 @@ def commands_command(
     """List or search slash command catalog entries."""
     structured_format = structured_output_format(json_output, output_format)
     print_command_catalog(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("tools")
+def tools_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for tool discovery."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """List available agent tools and risk metadata."""
+    workspace_path = resolve_headless_workspace(workspace) or Settings().workspace
+    registry = ToolRegistry(builtin_tools(workspace_path, NullMemoryClient()))
+    structured_format = structured_output_format(json_output, output_format)
+    print_tool_catalog(registry, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("models")

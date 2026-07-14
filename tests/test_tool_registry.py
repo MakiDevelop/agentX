@@ -126,6 +126,21 @@ def test_describe_tools_only_shows_primary_names() -> None:
     assert set(described) == {"primary"}
 
 
+def test_describe_tool_infos_include_risk_signature_and_aliases() -> None:
+    registry = ToolRegistry([EchoTool(), AliasTool()])
+    described = registry.describe_tool_infos()
+
+    assert {
+        "name": "echo",
+        "description": "echoes the args back",
+        "risk": "GREEN",
+        "signature": "",
+        "aliases": [],
+    } in described
+    alias_info = next(item for item in described if item["name"] == "primary")
+    assert alias_info["aliases"] == ["alt", "p"]
+
+
 def test_unregister_by_alias_removes_tool() -> None:
     registry = ToolRegistry([AliasTool()])
     registry.unregister("alt")
