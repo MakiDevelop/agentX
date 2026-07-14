@@ -1046,6 +1046,13 @@ def headless_handoff_summary(
         if action
     ]
     primary_recovery = recovery_suggestions[0] if recovery_suggestions else None
+    last_error = recent_errors[-1] if recent_errors else None
+    recovery_checklist = headless_recovery_checklist(
+        recovery_actions[0] if recovery_actions else "",
+        failing_tools=failing_tools,
+        pending_verifies=pending_verifies,
+        last_error=last_error,
+    )
     if pending_verifies:
         next_steps.append("Verify pending edited paths before making more changes.")
     if failing_tools:
@@ -1068,11 +1075,96 @@ def headless_handoff_summary(
         "failing_tools": failing_tools,
         "pending_verifies": pending_verifies,
         "task_counts": task_counts,
-        "last_error": recent_errors[-1] if recent_errors else None,
+        "last_error": last_error,
         "recovery_actions": recovery_actions,
         "primary_recovery": primary_recovery,
+        "recovery_checklist": recovery_checklist,
         "next_steps": next_steps,
     }
+
+
+def headless_recovery_checklist(
+    action: str,
+    *,
+    failing_tools: list[str],
+    pending_verifies: list[str],
+    last_error: dict[str, object] | None,
+) -> list[str]:
+    """Deterministic next checks for the primary recovery action.
+
+    The checklist is intentionally command-agnostic and non-destructive. It gives
+    scripts or takeover agents a stable bridge from a recovery action to the
+    next inspection steps without requiring another model call.
+    """
+    checklist: list[str] = []
+    if pending_verifies:
+        checklist.append("Inspect and verify pending edited paths before new edits.")
+    if failing_tools:
+        checklist.append(f"Review failing tool output for: {', '.join(failing_tools)}.")
+    if last_error:
+        tool = str(last_error.get("tool", "") or "unknown")
+        err_type = str(last_error.get("type", "") or "unknown")
+        checklist.append(f"Start from last_error tool={tool} type={err_type}.")
+
+    if action == "verify_assumption":
+        checklist.extend([
+            "Read the relevant source and test files before editing.",
+            "Run the smallest targeted verification that can prove or disprove the assumption.",
+        ])
+    elif action == "backtrack":
+        checklist.extend([
+            "Inspect the current diff and identify the last risky change.",
+            "Propose the minimal revert or corrective edit; do not run destructive reset commands automatically.",
+        ])
+    elif action == "change_strategy":
+        checklist.extend([
+            "Stop repeating the same tool sequence.",
+            "Write a one-step alternative plan before the next tool call.",
+        ])
+    elif action == "simplify_scope":
+        checklist.extend([
+            "Reduce the task to one failing file, command, or behavior.",
+            "Defer unrelated cleanup until the focused failure is resolved.",
+        ])
+    elif action == "retry_with_fix":
+        checklist.extend([
+            "Correct the path, argument, or missing input first.",
+            "Retry only the corrected minimal tool call.",
+        ])
+    elif action == "retry":
+        checklist.extend([
+            "Retry once after confirming the failure is transient.",
+            "Escalate or change strategy if the same transient failure repeats.",
+        ])
+    elif action == "reprioritize":
+        checklist.extend([
+            "Mark or summarize the blocked task before switching focus.",
+            "Choose the next smallest unblocked task.",
+        ])
+    elif action == "escalate_to_user":
+        checklist.extend([
+            "Stop new code changes for this failure.",
+            "Report goal, observed behavior, logs, attempts, and the specific decision needed.",
+        ])
+    elif action == "request_clarification":
+        checklist.extend([
+            "Stop assumptions that would change behavior or scope.",
+            "Ask the shortest concrete question needed to proceed.",
+        ])
+    elif action == "reflect_and_adjust":
+        checklist.extend([
+            "Write the suspected root cause and the next different action.",
+            "Proceed only after the new action differs from the failed loop.",
+        ])
+    elif action == "abandon_and_restart":
+        checklist.extend([
+            "Preserve current findings and constraints.",
+            "Draft a new approach before touching code again.",
+        ])
+
+    if not checklist:
+        checklist.append("No deterministic recovery checklist available; inspect recent errors before continuing.")
+    return checklist
 
 
 def _headless_recovery_suggestions(session: AgentSession) -> list[dict[str, object]]:

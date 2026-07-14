@@ -807,6 +807,13 @@ def test_headless_handoff_summary_recommends_takeover_steps() -> None:
         "description": "read files",
         "rationale": "state stale",
     }
+    assert summary["recovery_checklist"] == [
+        "Inspect and verify pending edited paths before new edits.",
+        "Review failing tool output for: run_tests.",
+        "Start from last_error tool=run_tests type=execution_error.",
+        "Read the relevant source and test files before editing.",
+        "Run the smallest targeted verification that can prove or disprove the assumption.",
+    ]
     assert summary["next_steps"] == [
         "Verify pending edited paths before making more changes.",
         "Inspect or rerun failing tool(s): run_tests.",
@@ -886,6 +893,13 @@ def test_headless_log_summary_summarizes_tool_outcomes_and_errors() -> None:
         "description": "read the file before editing",
         "rationale": "state may be stale",
     }
+    assert summary["handoff_summary"]["recovery_checklist"] == [
+        "Inspect and verify pending edited paths before new edits.",
+        "Review failing tool output for: run_tests.",
+        "Start from last_error tool=run_tests type=execution_error.",
+        "Read the relevant source and test files before editing.",
+        "Run the smallest targeted verification that can prove or disprove the assumption.",
+    ]
 
 
 def test_headless_log_summary_falls_back_to_recovery_actions() -> None:
