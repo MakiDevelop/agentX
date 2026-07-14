@@ -922,6 +922,172 @@ def print_config_payload(
     console.print(table)
 
 
+def _parse_git_branch_status(branch_line: str) -> dict[str, object]:
+    if not branch_line.startswith("## "):
+        return {
+            "branch": None,
+            "upstream": None,
+            "ahead": 0,
+            "behind": 0,
+            "detached": False,
+            "initial": False,
+        }
+
+    head = branch_line.removeprefix("## ").strip()
+    meta = ""
+    if " [" in head and head.endswith("]"):
+        head, meta = head.rsplit(" [", 1)
+        meta = meta.rstrip("]")
+
+    initial_prefix = "No commits yet on "
+    initial = head.startswith(initial_prefix)
+    detached = head.startswith("HEAD ") or head == "HEAD"
+    branch = head.removeprefix(initial_prefix) if initial else head
+    upstream = None
+    if "..." in branch:
+        branch, upstream = branch.split("...", 1)
+
+    ahead = 0
+    behind = 0
+    if meta:
+        for item in [part.strip() for part in meta.split(",")]:
+            if item.startswith("ahead "):
+                ahead = int(item.removeprefix("ahead ").strip() or "0")
+            elif item.startswith("behind "):
+                behind = int(item.removeprefix("behind ").strip() or "0")
+
+    return {
+        "branch": branch or None,
+        "upstream": upstream or None,
+        "ahead": ahead,
+        "behind": behind,
+        "detached": detached,
+        "initial": initial,
+    }
+
+
+def git_status_payload(workspace: Path) -> dict[str, object]:
+    try:
+        result = subprocess.run(
+            ["git", "status", "--short", "--branch"],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except Exception as exc:
+        return {
+            "ok": False,
+            "branch": None,
+            "upstream": None,
+            "ahead": 0,
+            "behind": 0,
+            "detached": False,
+            "initial": False,
+            "dirty": None,
+            "changes_count": None,
+            "changes": [],
+            "detail": f"{type(exc).__name__}: {exc}",
+        }
+
+    output = (result.stdout or result.stderr or "").strip()
+    lines = output.splitlines()
+    branch_line = lines[0] if lines and lines[0].startswith("## ") else ""
+    changes = lines[1:] if branch_line else lines
+    parsed = _parse_git_branch_status(branch_line)
+    return {
+        "ok": result.returncode == 0,
+        **parsed,
+        "dirty": bool(changes) if result.returncode == 0 else None,
+        "changes_count": len(changes) if result.returncode == 0 else None,
+        "changes": changes[:50],
+        "detail": "" if result.returncode == 0 else output,
+    }
+
+
+def task_status_payload(workspace: Path) -> dict[str, object]:
+    tasks = load_tasks(workspace)
+    active = [task for task in tasks if task.get("status") in {"in_progress", "pending", "blocked"}]
+    return {
+        "count": len(tasks),
+        "by_status": _headless_task_counts(tasks),
+        "active": [
+            {
+                "id": task.get("id"),
+                "description": task.get("description"),
+                "status": task.get("status"),
+            }
+            for task in active[:5]
+        ],
+    }
+
+
+def status_payload(
+    settings: Settings,
+    *,
+    namespace: str,
+    mode: str,
+    approval: str,
+) -> dict[str, object]:
+    config = config_payload(settings, namespace=namespace, mode=mode, approval=approval)
+    return {
+        "schema": "agentx.status.v1",
+        "version": version_payload(),
+        "workspace": str(settings.workspace),
+        "runtime": {
+            "model": config["model"],
+            "namespace": namespace,
+            "mode": mode,
+            "approval": approval,
+            "persona": config["persona"],
+            "memory_backend": config["memory_backend"],
+            "auto_handoff": config["auto_handoff"],
+        },
+        "git": git_status_payload(settings.workspace),
+        "tasks": task_status_payload(settings.workspace),
+        "config": config,
+    }
+
+
+def print_status_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="status",
+        )
+        return
+
+    runtime = dict(payload["runtime"])  # type: ignore[arg-type]
+    git = dict(payload["git"])  # type: ignore[arg-type]
+    tasks = dict(payload["tasks"])  # type: ignore[arg-type]
+    task_counts = tasks.get("by_status", {})
+    table = Table(title="agentX status", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    table.add_row("workspace", str(payload["workspace"]))
+    table.add_row("version", json.dumps(payload["version"], ensure_ascii=False))
+    table.add_row(
+        "runtime",
+        f"model={runtime.get('model')} mode={runtime.get('mode')} approval={runtime.get('approval')} "
+        f"namespace={runtime.get('namespace')}",
+    )
+    table.add_row(
+        "git",
+        f"ok={git.get('ok')} branch={git.get('branch')} upstream={git.get('upstream')} "
+        f"dirty={git.get('dirty')} ahead={git.get('ahead')} behind={git.get('behind')} "
+        f"changes={git.get('changes_count')}",
+    )
+    table.add_row("tasks", f"count={tasks.get('count')} by_status={json.dumps(task_counts, ensure_ascii=False)}")
+    console.print(table)
+
+
 def _collect_aca_probe_info(
     settings: Settings, memory: "MemoryHallClient | None"
 ) -> dict:
@@ -3164,6 +3330,33 @@ def config_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_config_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("status")
+def status_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for status resolution."),
+    namespace: str | None = typer.Option(None, "--namespace", help="Override namespace shown in the payload."),
+    mode: str | None = typer.Option(None, "--mode", help="Override mode shown in the payload."),
+    approval: str | None = typer.Option(None, "--approval", help="Override approval mode shown in the payload."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Show machine-readable workspace posture without network probes."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    project_config = load_project_config(settings.workspace)
+    resolved_namespace = namespace or project_config.namespace or "project:agentX"
+    resolved_mode = mode or project_config.mode or "chat"
+    if resolved_mode == "ask":
+        resolved_mode = "agent"
+    approval_mode = normalize_approval_mode(approval or project_config.approval or ApprovalMode.ASK.value).value
+    payload = status_payload(
+        settings,
+        namespace=resolved_namespace,
+        mode=resolved_mode,
+        approval=approval_mode,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_status_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("models")

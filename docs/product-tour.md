@@ -43,6 +43,7 @@ uv run agentx shell
 ## 3. Tools And Workflows
 
 外部 wrapper 可用 `agentx config --json` 取得目前 workspace、model、memory backend、approval、persona 等解析後設定；token 只會顯示 set/missing。
+需要判斷當前 workspace 姿態時，用 `agentx status --json` 取得 version、runtime、git dirty/ahead/behind 與 task counts；這是本機 read-only 狀態檢查，不探測網路服務。
 
 用 `/tools` 看工具與風險分級：
 
