@@ -266,17 +266,64 @@ def handle_git(
     transcript: Any,
     emit: Callable[[str], None],
 ) -> None:
-    """Show git status. Extra args on the slash line are ignored (historical)."""
-    _ = prompt
+    """Show allowlisted git inspection views. Bare /git remains status."""
+    raw = prompt.removeprefix("/git").strip()
+    try:
+        parts = shlex.split(raw)
+    except ValueError as exc:
+        transcript.write("tool", {"command": "/git", "ok": False, "content": str(exc)})
+        emit(f"工具執行失敗：{exc}")
+        return
+    subcommand = parts[0] if parts else "status"
+    if subcommand == "status":
+        if len(parts) > 1:
+            _emit_git_usage(transcript, emit, f"unsupported /git status args: {' '.join(parts[1:])}")
+            return
+        tool_name = "git_status"
+        tool_args: dict[str, Any] = {}
+    elif subcommand == "branch":
+        if len(parts) > 1:
+            _emit_git_usage(transcript, emit, f"unsupported /git branch args: {' '.join(parts[1:])}")
+            return
+        tool_name = "git_branch"
+        tool_args = {}
+    elif subcommand == "log":
+        if len(parts) > 2:
+            _emit_git_usage(transcript, emit, "usage: /git log [N]")
+            return
+        try:
+            limit = int(parts[1]) if len(parts) == 2 else 10
+        except ValueError:
+            _emit_git_usage(transcript, emit, "usage: /git log [N]")
+            return
+        tool_name = "git_log"
+        tool_args = {"limit": limit}
+    elif subcommand == "show":
+        if len(parts) > 2:
+            _emit_git_usage(transcript, emit, "usage: /git show [REV]")
+            return
+        rev = parts[1] if len(parts) == 2 else "HEAD"
+        tool_name = "git_show"
+        tool_args = {"rev": rev}
+    else:
+        _emit_git_usage(transcript, emit, f"unsupported git subcommand: {subcommand}")
+        return
     _run_tool_slash(
         command="/git",
-        tool_name="git_status",
-        tool_args={},
+        tool_name=tool_name,
+        tool_args=tool_args,
         tools=tools,
         transcript=transcript,
         emit=emit,
         fail_prefix="工具執行失敗：",
+        transcript_extra={"subcommand": subcommand},
     )
+
+
+def _emit_git_usage(transcript: Any, emit: Callable[[str], None], message: str) -> None:
+    content = f"{message}\nusage: /git [status|branch|log [N]|show [REV]]"
+    transcript.write("tool", {"command": "/git", "ok": False, "content": content})
+    emit(f"工具執行失敗：{content}")
 
 
 def handle_diff(

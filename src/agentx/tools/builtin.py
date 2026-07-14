@@ -345,6 +345,49 @@ class GitStatusTool(_WorkspaceTool):
         return output
 
 
+class GitBranchTool(_WorkspaceTool):
+    name = "git_branch"
+    description = "查看本地 git branch（唯讀）"
+    risk = Risk.GREEN
+
+    def run(self, args: dict[str, Any]) -> str:
+        _ = args
+        _, output = run_subprocess(["git", "branch", "--no-color"], cwd=self.workspace)
+        return output
+
+
+class GitLogTool(_WorkspaceTool):
+    name = "git_log"
+    description = "查看最近 git log（唯讀，限制筆數）"
+    risk = Risk.GREEN
+    signature = "limit=10"
+
+    def run(self, args: dict[str, Any]) -> str:
+        limit = max(1, min(int(args.get("limit", 10)), 50))
+        _, output = run_subprocess(
+            ["git", "log", "--oneline", "--decorate", f"-n{limit}"],
+            cwd=self.workspace,
+        )
+        return output
+
+
+class GitShowTool(_WorkspaceTool):
+    name = "git_show"
+    description = "查看單一 git revision（唯讀，拒絕 flags/options）"
+    risk = Risk.GREEN
+    signature = 'rev="HEAD", max_chars=30000'
+
+    def run(self, args: dict[str, Any]) -> str:
+        rev = str(args.get("rev", "HEAD") or "HEAD").strip()
+        if not rev:
+            rev = "HEAD"
+        if rev.startswith("-") or any(token in rev for token in (" ", "\t", "\n", "\r")):
+            raise ValueError(f"unsupported git revision: {rev!r}")
+        max_chars = int(args.get("max_chars", 30000))
+        _, output = run_subprocess(["git", "show", "--stat", "--oneline", "--no-color", rev], cwd=self.workspace)
+        return output[:max_chars]
+
+
 class GitDiffTool(_WorkspaceTool):
     name = "git_diff"
     description = "查看 git diff，可指定單一 path"
@@ -825,6 +868,9 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
         SearchTextTool(workspace),
         FindFilesTool(workspace),
         GitStatusTool(workspace),
+        GitBranchTool(workspace),
+        GitLogTool(workspace),
+        GitShowTool(workspace),
         GitDiffTool(workspace),
         GitStageTool(workspace),
         GitUnstageTool(workspace),

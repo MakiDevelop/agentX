@@ -58,10 +58,10 @@ Goal: let agentX complete a safe Git unit without relying on raw shell commands.
 
 Proposed commands:
 
-- `/git status`
-- `/git branch`
-- `/git log`
-- `/git show [REV]`
+- [x] `/git status`
+- [x] `/git branch`
+- [x] `/git log [N]`
+- [x] `/git show [REV]`
 - [x] `/stage PATH...` (explicit files only; rejects broad paths, glob, directories, workspace escape)
 - [x] `/unstage PATH...` (explicit files only; preserves worktree changes)
 - `/push`

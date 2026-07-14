@@ -498,13 +498,55 @@ def test_handle_git_ignores_prompt_args() -> None:
     transcript = FakeTranscript()
     lines, emit = _capture()
 
-    handle_git("/git anything", tools=tools, transcript=transcript, emit=emit)
+    handle_git("/git", tools=tools, transcript=transcript, emit=emit)
 
     assert tools.calls == [("git_status", {})]
     assert lines == ["## main"]
     assert transcript.events == [
-        ("tool", {"command": "/git", "ok": True, "content": "## main"})
+        ("tool", {"command": "/git", "subcommand": "status", "ok": True, "content": "## main"})
     ]
+
+
+def test_handle_git_readonly_subcommands() -> None:
+    tools = FakeTools(ToolResult(tool="git_log", ok=True, content="abc123 msg"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_git("/git log 3", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("git_log", {"limit": 3})]
+    assert lines == ["abc123 msg"]
+    assert transcript.events == [
+        ("tool", {"command": "/git", "subcommand": "log", "ok": True, "content": "abc123 msg"})
+    ]
+
+    tools_show = FakeTools(ToolResult(tool="git_show", ok=True, content="HEAD msg"))
+    transcript_show = FakeTranscript()
+    show_lines, show_emit = _capture()
+
+    handle_git("/git show HEAD", tools=tools_show, transcript=transcript_show, emit=show_emit)
+
+    assert tools_show.calls == [("git_show", {"rev": "HEAD"})]
+    assert show_lines == ["HEAD msg"]
+
+
+def test_handle_git_rejects_unknown_or_flag_args() -> None:
+    tools = FakeTools(ToolResult(tool="git_branch", ok=True, content="should not run"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_git("/git branch -D main", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == []
+    assert "unsupported /git branch args" in lines[0]
+    assert transcript.events[0][1]["ok"] is False
+
+    bad_transcript = FakeTranscript()
+    bad_lines, bad_emit = _capture()
+    handle_git("/git reset --hard", tools=tools, transcript=bad_transcript, emit=bad_emit)
+
+    assert tools.calls == []
+    assert "unsupported git subcommand: reset" in bad_lines[0]
 
 
 def test_handle_git_failure_prefix() -> None:

@@ -5,6 +5,14 @@ import pytest
 from agentx.git_workflow import GitPathError, parse_status_files, stage_paths, unstage_paths
 
 
+class FakeMemory:
+    def search(self, query: str, namespace: str = "shared", limit: int = 5) -> str:
+        return f"search:{namespace}:{limit}:{query}"
+
+    def write(self, content: str, namespace: str = "agent:agentx") -> str:
+        return f"write:{namespace}:{content}"
+
+
 def _git(repo: Path, *args: str) -> str:
     import subprocess
 
@@ -90,3 +98,32 @@ def test_stage_validates_all_paths_before_staging(tmp_path: Path) -> None:
         stage_paths(tmp_path, ["safe.py", "."])
 
     assert _git(tmp_path, "status", "--short") == "?? safe.py\n"
+
+
+def test_git_readonly_tools_show_branch_log_and_revision(tmp_path: Path) -> None:
+    from agentx.tools import ToolRegistry, builtin_tools
+
+    _init_repo(tmp_path)
+    (tmp_path / "feature.py").write_text("print('feature')\n", encoding="utf-8")
+    _git(tmp_path, "add", "--", "feature.py")
+    _git(tmp_path, "commit", "-m", "add feature")
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    branch = registry.run("git_branch", {})
+    assert branch.ok
+    assert "*" in branch.content
+
+    log = registry.run("git_log", {"limit": 1})
+    assert log.ok
+    assert "add feature" in log.content
+    assert "init" not in log.content
+
+    shown = registry.run("git_show", {"rev": "HEAD"})
+    assert shown.ok
+    assert "add feature" in shown.content
+    assert "feature.py" in shown.content
+
+    rejected = registry.run("git_show", {"rev": "--hard"})
+    assert not rejected.ok
+    assert "unsupported git revision" in rejected.content

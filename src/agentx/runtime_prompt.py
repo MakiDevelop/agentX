@@ -88,6 +88,9 @@ def _base_tools_section() -> str:
 - find_files: {"keyword":"topic","path":"."} — find relevant files by path/name and content, with /read suggestions
 - search_text: {"pattern":"keyword","path":"."} — search in files
 - git_status: {} — show git status
+- git_branch: {} — show local branches
+- git_log: {"limit":10} — show recent commits
+- git_show: {"rev":"HEAD"} — show one revision summary/stat
 - git_diff: {} — show git diff
 - git_stage: {"paths":["file.py"]} — stage explicit files only; rejects broad paths
 - git_unstage: {"paths":["file.py"]} — unstage explicit files while keeping worktree changes

@@ -141,7 +141,7 @@ SLASH_COMMANDS = [
     ("/grep PATTERN [PATH]", "在指定 path 內做 rg 內容搜尋；預設整個 workspace"),
     ("/search PATTERN", "在 repo 內搜尋文字"),
     ("/fetch URL", "讀取指定外部網頁文字，會阻擋 localhost 與私有網段"),
-    ("/git", "顯示 git status"),
+    ("/git [status|branch|log [N]|show [REV]]", "顯示 allowlisted git 唯讀資訊"),
     ("/diff [PATH]", "顯示 git diff，可指定單一檔案"),
     ("/stage PATH...", "逐檔 stage 指定檔案；拒絕 .、glob、目錄與 workspace 外路徑"),
     ("/unstage PATH...", "逐檔 unstage 指定檔案，保留 worktree 修改"),
