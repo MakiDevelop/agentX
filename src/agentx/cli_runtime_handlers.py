@@ -2,7 +2,7 @@
 
 These implement the real interactive-shell logic for a small set of
 commands (``/plan``, ``/execute``, ``/mode``, plus read-only tool-backed
-``/files``, ``/read``, ``/find``, ``/search``, ``/git``, ``/diff``, low-risk
+``/files``, ``/read``, ``/find``, ``/grep``, ``/search``, ``/git``, ``/diff``, low-risk
 tool-backed ``/memory``, ``/fetch``, ``/run``, ``/test``, low-risk
 inspection handlers ``/status``, ``/sessions``, ``/jobs``, the read-only
 ``/task`` empty/status/list branch, and pure info/display handlers
@@ -21,6 +21,7 @@ Side-effect branches (``/cancel``, ``/task add|update|done|clear``,
 
 from __future__ import annotations
 
+import shlex
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -224,6 +225,36 @@ def handle_find(
         emit=emit,
         fail_prefix="檢索失敗：",
         transcript_extra={"keyword": keyword},
+    )
+
+
+def handle_grep(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Path-aware content search. Syntax: /grep PATTERN [PATH]."""
+    raw = prompt.removeprefix("/grep").strip()
+    try:
+        parts = shlex.split(raw)
+    except ValueError as exc:
+        transcript.write("tool", {"command": "/grep", "ok": False, "content": str(exc)})
+        emit(f"搜尋失敗：{exc}")
+        return
+
+    pattern = parts[0] if parts else ""
+    path = parts[1] if len(parts) > 1 else "."
+    _run_tool_slash(
+        command="/grep",
+        tool_name="search_text",
+        tool_args={"pattern": pattern, "path": path},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="搜尋失敗：",
+        transcript_extra={"pattern": pattern, "path": path},
     )
 
 
