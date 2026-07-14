@@ -788,6 +788,62 @@ def test_pending_verifies_restored_on_resume(tmp_path: Path) -> None:
     assert "src/resume.py" in resumed.pending_verifies
 
 
+def test_runtime_state_restored_on_resume(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
+
+    resumed = AgentSession(
+        settings=session.settings,
+        ollama=session.ollama,
+        tools=session.tools,
+        memory=session.memory,
+    )
+    resumed._restore_state_event("last_termination", "final_success")
+    resumed._restore_state_event("last_failing_tools", ["run_tests"])
+    resumed._restore_state_event(
+        "observability_counters",
+        {
+            "model_turn_count": 4,
+            "tool_call_count": 2,
+            "reflection_count": 1,
+        },
+    )
+
+    assert resumed.last_termination == "final_success"
+    assert resumed.last_failing_tools == {"run_tests"}
+    assert resumed.model_turn_count == 4
+    assert resumed.tool_call_count == 2
+    assert resumed.reflection_count == 1
+
+
+def test_persisted_runtime_state_survives_from_session_store(tmp_path: Path) -> None:
+    session, _ = _session(
+        tmp_path,
+        [
+            '{"type":"reflect","focus":"think"}',
+            "reflection text",
+            '{"type":"tool_call","tool":"memory_search","args":{"query":"x"}}',
+            '{"type":"final","content":"done"}',
+        ],
+    )
+    session.enable_persistence()
+
+    assert session.ask("hi") == "done"
+
+    assert session._session_store is not None
+    resumed = AgentSession.from_session_store(
+        session._session_store.path,
+        settings=session.settings,
+        ollama=session.ollama,
+        tools=session.tools,
+        memory=session.memory,
+    )
+
+    assert resumed.last_termination == "final_success"
+    assert resumed.model_turn_count == 3
+    assert resumed.tool_call_count == 1
+    assert resumed.reflection_count == 1
+
+
 def test_explicit_run_tests_call_in_flow(tmp_path: Path) -> None:
     """Test for explicit model call to run_tests mid-flow: after edit, model calls run_tests, assert full test result is in messages (for complex batch)."""
     import json as _json

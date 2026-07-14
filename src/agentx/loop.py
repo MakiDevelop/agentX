@@ -285,31 +285,51 @@ class AgentSession:
         self._persist_state_event("last_failing_tools", list(self.last_failing_tools))
         self._persist_state_event("compaction_count", self.compaction_count)
         self._persist_state_event("pending_verifies", list(self.pending_verifies))
+        self._persist_runtime_state()
 
     def _persist_message(self, role: str, content: str, **metadata: Any) -> None:
         if self._session_store is not None:
             self._session_store.append(role, content, metadata=metadata or None)
 
-    def _persist_state_event(self, name: str, data: dict[str, Any]) -> None:
+    def _persist_state_event(self, name: str, data: Any) -> None:
         """Persist a snapshot of important session state so resume can reconstruct
         more than messages (e.g. tool outcomes for final guard, file ops for the pillar).
         """
         if self._session_store is not None:
             self._session_store.append_state(name, data)
 
-    def _restore_state_event(self, name: str, data: dict[str, Any]) -> None:
+    def _persist_runtime_state(self) -> None:
+        self._persist_state_event("last_termination", self.last_termination)
+        self._persist_state_event("last_failing_tools", list(self.last_failing_tools))
+        self._persist_state_event(
+            "observability_counters",
+            {
+                "model_turn_count": self.model_turn_count,
+                "tool_call_count": self.tool_call_count,
+                "reflection_count": self.reflection_count,
+            },
+        )
+
+    def _restore_state_event(self, name: str, data: Any) -> None:
         if name == "tool_outcomes":
             self._tool_outcomes = {k: bool(v) for k, v in (data or {}).items()}
         elif name == "file_ops":
             self._file_ops = {k: set(v) if isinstance(v, (list, tuple)) else set() for k, v in (data or {}).items()}
         elif name == "last_failing_tools":
             self.last_failing_tools = set(data or [])
+        elif name == "last_termination":
+            self.last_termination = str(data or "unknown")
+        elif name == "observability_counters":
+            counters = data or {}
+            if isinstance(counters, dict):
+                self.model_turn_count = int(counters.get("model_turn_count") or 0)
+                self.tool_call_count = int(counters.get("tool_call_count") or 0)
+                self.reflection_count = int(counters.get("reflection_count") or 0)
         elif name == "compaction_count":
             try:
                 self.compaction_count = int(data)
             except (TypeError, ValueError):
                 pass
-        # last_termination etc. can be added later if needed; start minimal for Codex item
         elif name == "pending_verifies":
             self.pending_verifies = set(data or [])
 
@@ -403,6 +423,7 @@ class AgentSession:
             self.last_failing_tools = self._unresolved_failing_tools()
             if not result.ok:
                 self.last_failing_tools.add(direct.tool)
+            self._persist_runtime_state()
             if self.hooks:
                 self.hooks.fire(HookEvent.SESSION_END, SessionEndContext(
                     namespace=self.namespace,
@@ -710,6 +731,7 @@ class AgentSession:
         except Exception:
             pass
         self.last_termination = "max_steps_exceeded"
+        self._persist_runtime_state()
         if self.hooks:
             self.hooks.fire(HookEvent.SESSION_END, SessionEndContext(
                 namespace=namespace, termination="max_steps_exceeded",
@@ -743,6 +765,7 @@ class AgentSession:
         self._persist_state_event("file_ops", {})
         self._persist_state_event("last_failing_tools", [])
         self._persist_state_event("pending_verifies", [])
+        self._persist_runtime_state()
 
     # === Task Management (for complex long-horizon tasks) ===
 
@@ -966,6 +989,7 @@ class AgentSession:
         self._persist_message("assistant", content)
         self.last_failing_tools = self._unresolved_failing_tools()
         self.last_termination = "final_failed" if self.last_failing_tools else "final_success"
+        self._persist_runtime_state()
         if self.hooks:
             self.hooks.fire(HookEvent.FINAL_ANSWER, FinalAnswerContext(
                 content=content, plan_only=plan_only,

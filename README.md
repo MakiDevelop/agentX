@@ -132,7 +132,7 @@ agentx -p "照上一輪下一步繼續" --agent --resume-session latest --save-s
 agentx ask "照上一輪下一步繼續" --resume-session latest --save-session --json
 ```
 
-`--resume-session` 只會讀取目前 workspace 的 `.agentx/sessions/*.session.jsonl`；JSON payload 的 `session_path` 會回報實際保存或恢復的 session 檔。
+`--resume-session` 只會讀取目前 workspace 的 `.agentx/sessions/*.session.jsonl`；JSON payload 的 `session_path` 會回報實際保存或恢復的 session 檔。Resume 會還原關鍵 runtime state，包括 tool outcomes、file ops、pending verifies、termination 與 observability counters。
 `-p --agent` 與 `ask` 都支援 `--max-steps` 來限制 agent loop 步數。
 
 Headless exit code：
