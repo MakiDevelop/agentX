@@ -222,6 +222,9 @@ Required stable keys:
 | `resolved_argv` | array of string or null | Exact argv agentX would use for matched policies. |
 | `blockers` | array of string | Machine-readable blockers such as `command_not_allowlisted`, `destructive_git_clean`, or `invalid_command_syntax`. |
 | `warnings` | array of string | Non-blocking diagnostics. |
+| `recommended_command` | string or null | First suggested follow-up command for simple runners, copied from `next_commands[0]` when present. |
+| `recommended_kind` | string or null | Machine-readable kind such as `run_command`, `run_build_command`, `agentx_headless`, `agentx_cli`, `fix_blockers`, or `do_not_execute`. |
+| `recommended_risk` | string or null | Risk label for the recommended follow-up. |
 | `next_commands` | array of string | Suggested follow-up commands for humans or runners. |
 | `detail` | string | Empty string or a human-readable diagnostic. |
 

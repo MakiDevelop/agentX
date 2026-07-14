@@ -79,6 +79,7 @@
 - [x] `agentx diff [PATH] --json` 可輸出 read-only git diff 摘要（file status、insertions/deletions、stat；`--staged` 看 index，`--patch` 才附 patch），方便 Codex/Grok runner 在 review/commit 前不用解析自然語言 diff。
 - [x] `agentx patch-check PATCH --json` 可輸出 read-only patch preflight（`git apply --check -`、touched files、safe path blockers、JSONL event `patch_check`），讓外部 runner 在 `/apply` 前先擋 workspace escape / protected path / malformed patch。
 - [x] `agentx command-plan COMMAND --json` 可輸出 read-only command policy preflight（allowlist / build approval / docker compose / destructive blockers），讓外部 runner 不執行命令也能知道風險、tool args、approval posture 與 blocker。
+- [x] `agentx command-plan --json` 會提供 top-level `recommended_command` / `recommended_kind` / `recommended_risk`，讓簡單 runner 不必解析 `next_commands[0]` 或 matched policy 才能決定下一步。
 - [x] `agentx command-plan` 對 top-level `agentx` capability 會在 `tool_args` 內回傳 usage、schemas、jsonl_event 與 description，讓 runner 不必二次查 `capabilities`。
 - [x] `agentx command-plan` 對 headless `agentx -p` / `--prompt-file` 會回報 agent mode、prompt source、artifact/session/output-format/quiet/resume 等 runner posture metadata。
 - [x] `agentx command-plan` 對 headless run 會回報 runtime posture metadata：`--timeout`、`--run-timeout`、`--max-steps`、`--no-memory`、`--approval`、`--backend`、`--base-url`、`--model`、`--plan` / `--plan-then-execute`、`--dry-run` 與 `--result-output-format`，方便 wrapper 預先判斷資源、記憶污染與執行限制。

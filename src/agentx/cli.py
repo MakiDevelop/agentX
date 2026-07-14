@@ -926,6 +926,9 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
         "resolved_argv": None,
         "blockers": blockers,
         "warnings": warnings,
+        "recommended_command": None,
+        "recommended_kind": None,
+        "recommended_risk": None,
         "next_commands": [],
         "detail": detail,
     }
@@ -933,11 +936,11 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
     if not command_text and "invalid_command_syntax" not in blockers:
         blockers.append("empty_command")
         payload["detail"] = "command is required"
-        return payload
+        return _with_command_plan_recommendation(payload)
 
     if destructive_blockers or "invalid_command_syntax" in blockers:
         payload["next_commands"] = ["Do not execute this command; ask Maki for a safer plan or human-run deletion path"]
-        return payload
+        return _with_command_plan_recommendation(payload)
 
     if command_text in ALLOWED_COMMANDS:
         payload.update(
@@ -953,7 +956,7 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
                 "next_commands": [f"/run {command_text}"],
             }
         )
-        return payload
+        return _with_command_plan_recommendation(payload)
 
     if command_text in BUILD_COMMANDS:
         payload.update(
@@ -969,7 +972,7 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
                 "next_commands": [f"/run {command_text}", "Confirm YELLOW approval before execution"],
             }
         )
-        return payload
+        return _with_command_plan_recommendation(payload)
 
     docker_plan = _docker_plan(settings, argv)
     if docker_plan is not None:
@@ -1000,7 +1003,7 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
                     "next_commands": ["Check compose file and use /docker ps|build|up|logs|down"],
                 }
             )
-        return payload
+        return _with_command_plan_recommendation(payload)
 
     agentx_plan = _agentx_command_plan(settings, argv)
     if agentx_plan is not None:
@@ -1034,11 +1037,45 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
                     "next_commands": ["agentx capabilities --json"],
                 }
             )
-        return payload
+        return _with_command_plan_recommendation(payload)
 
     blockers.append("command_not_allowlisted")
     payload["detail"] = "Command is not in ALLOWED_COMMANDS, BUILD_COMMANDS, docker compose policy, or agentx CLI capabilities"
     payload["next_commands"] = ["Use agentx tools --json to inspect runnable tools", "Ask Maki before expanding command policy"]
+    return _with_command_plan_recommendation(payload)
+
+
+def _with_command_plan_recommendation(payload: dict[str, object]) -> dict[str, object]:
+    next_commands = payload.get("next_commands")
+    recommended_command = str(next_commands[0]) if isinstance(next_commands, list) and next_commands else None
+    if recommended_command is None:
+        payload["recommended_command"] = None
+        payload["recommended_kind"] = None
+        payload["recommended_risk"] = None
+        return payload
+
+    blockers = payload.get("blockers")
+    risk = str(payload.get("risk") or "UNKNOWN")
+    matched_policy = str(payload.get("matched_policy") or "")
+    tool = str(payload.get("tool") or "")
+    if isinstance(blockers, list) and blockers:
+        kind = "do_not_execute" if risk == "RED" else "fix_blockers"
+    elif matched_policy == "allowed_command":
+        kind = "run_command"
+    elif matched_policy == "build_command":
+        kind = "run_build_command"
+    elif matched_policy == "docker_compose":
+        kind = tool or "docker_compose"
+    elif matched_policy == "agentx_headless":
+        kind = "agentx_headless"
+    elif matched_policy == "agentx_cli_capability":
+        kind = "agentx_cli"
+    else:
+        kind = "inspect_tools"
+
+    payload["recommended_command"] = recommended_command
+    payload["recommended_kind"] = kind
+    payload["recommended_risk"] = risk
     return payload
 
 

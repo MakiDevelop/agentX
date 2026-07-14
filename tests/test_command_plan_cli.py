@@ -18,6 +18,9 @@ def test_command_plan_payload_allows_green_command(tmp_path) -> None:  # noqa: A
     assert payload["tool"] == "run_command"
     assert payload["tool_args"] == {"command": "uv run pytest -q"}
     assert payload["blockers"] == []
+    assert payload["recommended_command"] == "/run uv run pytest -q"
+    assert payload["recommended_kind"] == "run_command"
+    assert payload["recommended_risk"] == "GREEN"
 
 
 def test_command_plan_payload_marks_build_command_yellow(tmp_path) -> None:  # noqa: ANN001
@@ -30,6 +33,9 @@ def test_command_plan_payload_marks_build_command_yellow(tmp_path) -> None:  # n
     assert payload["matched_policy"] == "build_command"
     assert payload["tool"] == "run_build_command"
     assert "Confirm YELLOW approval before execution" in payload["next_commands"]
+    assert payload["recommended_command"] == "/run npm test"
+    assert payload["recommended_kind"] == "run_build_command"
+    assert payload["recommended_risk"] == "YELLOW"
 
 
 def test_command_plan_payload_blocks_destructive_command(tmp_path) -> None:  # noqa: ANN001
@@ -40,6 +46,9 @@ def test_command_plan_payload_blocks_destructive_command(tmp_path) -> None:  # n
     assert payload["risk"] == "RED"
     assert "destructive_git_clean" in payload["blockers"]
     assert "command_not_allowlisted" not in payload["blockers"]
+    assert payload["recommended_command"] == "Do not execute this command; ask Maki for a safer plan or human-run deletion path"
+    assert payload["recommended_kind"] == "do_not_execute"
+    assert payload["recommended_risk"] == "RED"
 
 
 def test_command_plan_payload_blocks_destructive_flags(tmp_path) -> None:  # noqa: ANN001
@@ -60,6 +69,9 @@ def test_command_plan_payload_blocks_unknown_command(tmp_path) -> None:  # noqa:
     assert payload["risk"] == "UNKNOWN"
     assert payload["blockers"] == ["command_not_allowlisted"]
     assert payload["tool"] is None
+    assert payload["recommended_command"] == "Use agentx tools --json to inspect runnable tools"
+    assert payload["recommended_kind"] == "fix_blockers"
+    assert payload["recommended_risk"] == "UNKNOWN"
 
 
 def test_command_plan_payload_allows_agentx_capability(tmp_path) -> None:  # noqa: ANN001
@@ -73,6 +85,9 @@ def test_command_plan_payload_allows_agentx_capability(tmp_path) -> None:  # noq
     assert payload["tool_args"]["capability_command"] == "agentx gate"  # type: ignore[index]
     assert payload["tool_args"]["schemas"] == ["agentx.gate.v1"]  # type: ignore[index]
     assert payload["tool_args"]["jsonl_event"] == "gate"  # type: ignore[index]
+    assert payload["recommended_command"] == "Run through agentX CLI policy; do not bypass approval gates"
+    assert payload["recommended_kind"] == "agentx_cli"
+    assert payload["recommended_risk"] == "GREEN"
 
 
 def test_command_plan_payload_includes_agentx_infra_capability_metadata(tmp_path) -> None:  # noqa: ANN001
@@ -126,6 +141,9 @@ def test_command_plan_payload_marks_agentx_agent_run_yellow(tmp_path) -> None:  
         "result_output_format": None,
     }
     assert payload["next_commands"] == ["agentx inspect --json", "agentx artifacts --json"]
+    assert payload["recommended_command"] == "agentx inspect --json"
+    assert payload["recommended_kind"] == "agentx_headless"
+    assert payload["recommended_risk"] == "YELLOW"
 
 
 def test_command_plan_payload_marks_agentx_runtime_posture_metadata(tmp_path) -> None:  # noqa: ANN001
