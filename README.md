@@ -113,6 +113,10 @@ Headless exit code：
 - `2`：模型沒有輸出有效工具 JSON、空輸出或 agent 控制流程失敗
 - `130`：請求被取消
 
+`agentx -p --agent` 與 `agentx ask` 會優先使用 `AgentSession` 的結構化結束狀態
+（例如 `final_success`、`final_failed`、`max_steps_exceeded`、`direct_tool_failure`）
+判斷 exit code；舊的文字分類只作為 fallback。
+
 如果目前 terminal 還沒有 `ax`：
 
 ```bash

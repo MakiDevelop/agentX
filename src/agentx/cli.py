@@ -934,7 +934,41 @@ def run_commit_flow(settings: Settings, tools: ToolRegistry, message: str | None
     return commit_and_push(settings.workspace, plan.files, commit_message)
 
 
-def headless_exit_code(output: str) -> int:
+@dataclass(frozen=True)
+class HeadlessRunResult:
+    output: str
+    termination: str = "unknown"
+    failing_tools: tuple[str, ...] = ()
+
+
+def structured_headless_exit_code(
+    termination: str | None,
+    failing_tools: list[str] | set[str] | tuple[str, ...] | None = None,
+) -> int | None:
+    normalized = (termination or "").strip().lower()
+    failing = tuple(failing_tools or ())
+    if not normalized or normalized == "unknown":
+        return None
+    if normalized in {"cancelled", "canceled", "request_cancelled"}:
+        return 130
+    if normalized in {"max_steps_exceeded", "invalid_action", "bad_schema", "non_json"}:
+        return 2
+    if normalized in {"direct_tool_failure", "tool_failure", "final_failed"}:
+        return 1
+    if normalized in {"final", "final_success", "direct_tool", "direct_tool_success", "chat"}:
+        return 1 if failing else 0
+    return None
+
+
+def headless_exit_code(
+    output: str,
+    *,
+    termination: str | None = None,
+    failing_tools: list[str] | set[str] | tuple[str, ...] | None = None,
+) -> int:
+    structured = structured_headless_exit_code(termination, failing_tools)
+    if structured is not None:
+        return structured
     normalized = " ".join((output or "").strip().split()).lower()
     if not normalized:
         return 2
@@ -1005,7 +1039,17 @@ def main(
         plan_mode=plan,
         plan_then_execute=plan_then_execute,
         orchestrate=orchestrate,
+        return_metadata=True,
     )
+    if isinstance(output, HeadlessRunResult):
+        print_raw(output.output)
+        raise typer.Exit(
+            code=headless_exit_code(
+                output.output,
+                termination=output.termination,
+                failing_tools=output.failing_tools,
+            )
+        )
     print_raw(output)
     raise typer.Exit(code=headless_exit_code(output))
 
@@ -1066,7 +1110,8 @@ def run_print_prompt(
     plan_mode: bool = False,
     plan_then_execute: bool = False,
     orchestrate: bool = False,
-) -> str:
+    return_metadata: bool = False,
+) -> str | HeadlessRunResult:
     settings = Settings()
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
@@ -1087,6 +1132,8 @@ def run_print_prompt(
         from agentx.orchestrator import Orchestrator
         orch = Orchestrator(settings=settings, llm=ollama, memory=memory, tools=tools, trace=print_trace)
         result = orch.run(prompt, namespace=namespace)
+        if return_metadata:
+            return HeadlessRunResult(output=result.summary, termination="final")
         return result.summary
     if agent_mode:
         # Use headless-optimized prompt when running via -p --agent
@@ -1133,14 +1180,24 @@ def run_print_prompt(
             compactor=compactor,
         )
         effective_plan_only = plan_mode or plan_then_execute
-        return agent_loop.run(agent_prompt, namespace=namespace, plan_only=effective_plan_only)
-    return ollama.chat(
+        output = agent_loop.run(agent_prompt, namespace=namespace, plan_only=effective_plan_only)
+        if return_metadata:
+            return HeadlessRunResult(
+                output=output,
+                termination=agent_loop.session.last_termination,
+                failing_tools=tuple(sorted(agent_loop.session.last_failing_tools)),
+            )
+        return output
+    output = ollama.chat(
         [
             {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona, model=settings.model)},
             {"role": "user", "content": prompt},
         ],
         json_mode=False,
     )
+    if return_metadata:
+        return HeadlessRunResult(output=output, termination="chat")
+    return output
 
 
 def build_handoff(
@@ -1301,7 +1358,13 @@ def ask(
     agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace, compactor=compactor, memory=memory)
     output = agent.run(prompt, namespace=namespace)
     print_raw(output)
-    raise typer.Exit(code=headless_exit_code(output))
+    raise typer.Exit(
+        code=headless_exit_code(
+            output,
+            termination=agent.session.last_termination,
+            failing_tools=agent.session.last_failing_tools,
+        )
+    )
 
 
 @app.command()

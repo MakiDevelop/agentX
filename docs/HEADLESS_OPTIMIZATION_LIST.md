@@ -10,7 +10,7 @@
 ### 1.1 基本執行穩定性
 - [x] 避免長時間無效 reflection 迴圈（reflection 迴圈保護機制） — Micro-task 20 已實作（AgentSession consecutive_reflections + guard 警告 + 重置邏輯 + 單元測試 + prompt 提及）
 - 更好的錯誤恢復策略
-- [x] 清晰的 exit code 設計（第一版：0 success / 1 task-tool-test failure / 2 agent control failure / 130 cancelled；`-p` 與 `ask` 共用）
+- [x] 清晰的 exit code 設計（0 success / 1 task-tool-test failure / 2 agent control failure / 130 cancelled；`-p` 與 `ask` 共用；2026-07 起優先使用 `AgentSession.last_termination` / `last_failing_tools`，文字分類僅作 fallback）
 
 ### 1.2 Plan Mode 完整支援（--plan）
 - Headless 下的規劃品質提升（更結構化、更 actionable）

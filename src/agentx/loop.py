@@ -395,10 +395,14 @@ class AgentSession:
                 }
             )
             self.messages.append({"role": "tool", "content": self._format_tool_result(result)})
+            self.last_termination = "direct_tool_success" if result.ok else "direct_tool_failure"
+            self.last_failing_tools = self._unresolved_failing_tools()
+            if not result.ok:
+                self.last_failing_tools.add(direct.tool)
             if self.hooks:
                 self.hooks.fire(HookEvent.SESSION_END, SessionEndContext(
                     namespace=self.namespace,
-                    termination="direct_tool",
+                    termination=self.last_termination,
                     message_count=len(self.messages),
                     error_count=len(self.error_history),
                 ))
@@ -949,8 +953,8 @@ class AgentSession:
     def _handle_final_answer(self, content: str, plan_only: bool) -> str:
         self.messages.append({"role": "assistant", "content": content})
         self._persist_message("assistant", content)
-        self.last_termination = "final"
         self.last_failing_tools = self._unresolved_failing_tools()
+        self.last_termination = "final_failed" if self.last_failing_tools else "final_success"
         if self.hooks:
             self.hooks.fire(HookEvent.FINAL_ANSWER, FinalAnswerContext(
                 content=content, plan_only=plan_only,
@@ -960,7 +964,7 @@ class AgentSession:
             # (currently only fired on max_steps_exceeded in the outer loop).
             self.hooks.fire(HookEvent.SESSION_END, SessionEndContext(
                 namespace=self.namespace,
-                termination="final",
+                termination=self.last_termination,
                 message_count=len(self.messages),
                 error_count=len(self.error_history),
             ))

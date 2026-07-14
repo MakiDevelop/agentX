@@ -174,7 +174,7 @@ class Coordinator:
         # tool result was left in a failed state. String prefixes on the
         # summary are unreliable (review N5).
         success = (
-            session.last_termination == "final"
+            session.last_termination in {"final", "final_success"}
             and not session.last_failing_tools
         )
         return StepResult(step=step, summary=summary, success=success)

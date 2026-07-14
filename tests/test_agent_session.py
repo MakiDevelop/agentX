@@ -7,7 +7,7 @@ from typing import Any
 from agentx.config import Settings
 from agentx.hooks import HookEvent, HookManager, ToolCallContext
 from agentx.loop import AgentSession
-from agentx.protocol import Risk
+from agentx.protocol import Risk, ToolResult
 from agentx.tools import ToolRegistry, builtin_tools
 
 from helpers import make_settings
@@ -147,7 +147,7 @@ def test_ask_reports_final_termination_on_clean_finish(tmp_path: Path) -> None:
     session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
     assert session.last_termination == "unknown"
     session.ask("hi")
-    assert session.last_termination == "final"
+    assert session.last_termination == "final_success"
     assert session.last_failing_tools == set()
 
 
@@ -160,6 +160,30 @@ def test_ask_reports_max_steps_termination(tmp_path: Path) -> None:
     answer = session.ask("hi")
     assert "停止" in answer
     assert session.last_termination == "max_steps_exceeded"
+
+
+def test_direct_tool_records_success_termination(tmp_path: Path) -> None:
+    session, _ = _session(tmp_path, [])
+
+    session.ask("list files in repo directory")
+
+    assert session.last_termination == "direct_tool_success"
+    assert session.last_failing_tools == set()
+
+
+def test_direct_tool_records_failure_termination(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    session, _ = _session(tmp_path, [])
+    monkeypatch.setattr(
+        session,
+        "_run_tool",
+        lambda _action: ToolResult(tool="list_files", ok=False, content="boom"),
+    )
+
+    answer = session.ask("list files in repo directory")
+
+    assert answer.startswith("工具執行失敗")
+    assert session.last_termination == "direct_tool_failure"
+    assert session.last_failing_tools == {"list_files"}
 
 
 class _StubTool:
@@ -227,7 +251,7 @@ def test_final_blocked_when_tool_content_has_nonzero_exit(tmp_path: Path) -> Non
     assert answer.startswith("任務失敗")
     assert "fail_cmd" in answer
     assert "final attempt" in answer  # original model claim preserved as reference
-    assert session.last_termination == "final"
+    assert session.last_termination == "final_failed"
     assert session.last_failing_tools == {"fail_cmd"}
 
 
@@ -382,7 +406,7 @@ def test_auto_compact_failure_does_not_break_loop(tmp_path: Path, monkeypatch) -
     # Should not raise — exception swallowed.
     answer = session.ask("hi")
     assert answer == "done"
-    assert session.last_termination == "final"
+    assert session.last_termination == "final_success"
 
 
 def _record_tool_call(tool: str, args: dict) -> dict:
