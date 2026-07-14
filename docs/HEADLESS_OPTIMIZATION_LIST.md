@@ -57,6 +57,7 @@
 - [x] `agentx --prompt-file briefing.md --agent ...` 可從 workspace 檔案讀取長 prompt，適合多代理 briefing / script automation；與 `-p` 互斥並阻擋 workspace escape。
 - [x] `cat briefing.md | agentx --stdin --agent ...` 可從 stdin 讀取 prompt；與 `-p` / `--prompt-file` 互斥。
 - [x] `--backend BACKEND` 可在單次 headless run 覆蓋 LLM backend（例如 `llama_cpp`），不用改 `AGENTX_BACKEND`。
+- [x] `--base-url URL` 可在單次 headless run 覆蓋 LLM backend base URL，不用改 `AGENTX_OLLAMA_URL`。
 - [x] `--model MODEL` 可在單次 headless run 覆蓋模型，不必改環境變數或進 shell 後 `/model`。
 - [x] `--timeout SECONDS` 可在單次 headless run 覆蓋 LLM request timeout，適合慢本地模型或長 context。
 - [x] `agentx -p ... --json` 與 `agentx ask ... --json` 可輸出機器可讀 payload。

@@ -1136,6 +1136,7 @@ def main(
     orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
     backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
+    base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL for this headless run."),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
     timeout: float | None = typer.Option(None, "--timeout", help="Override LLM request timeout seconds for this headless run."),
     max_steps: int | None = typer.Option(None, "--max-steps", help="Override max agent loop steps for -p."),
@@ -1165,6 +1166,7 @@ def main(
         plan_then_execute=plan_then_execute,
         orchestrate=orchestrate,
         backend_override=backend,
+        base_url_override=base_url,
         model_override=model,
         timeout_override=timeout,
         return_metadata=True,
@@ -1252,6 +1254,7 @@ def run_print_prompt(
     plan_then_execute: bool = False,
     orchestrate: bool = False,
     backend_override: str | None = None,
+    base_url_override: str | None = None,
     model_override: str | None = None,
     timeout_override: float | None = None,
     return_metadata: bool = False,
@@ -1261,6 +1264,8 @@ def run_print_prompt(
     max_steps: int | None = None,
 ) -> str | HeadlessRunResult:
     settings = Settings()
+    if base_url_override:
+        settings = settings.with_updates(ollama_url=base_url_override)
     if model_override:
         settings = settings.with_updates(model=model_override)
     if timeout_override is not None:
@@ -1545,6 +1550,7 @@ def ask(
     prompt: str = typer.Argument(..., help="Task or question for agentX."),
     namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
     backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
+    base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL for this headless run."),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
     timeout: float | None = typer.Option(None, "--timeout", help="Override LLM request timeout seconds."),
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
@@ -1561,6 +1567,7 @@ def ask(
         agent_mode=True,
         plan_then_execute=plan_then_execute,
         backend_override=backend,
+        base_url_override=base_url,
         model_override=model,
         timeout_override=timeout,
         return_metadata=True,

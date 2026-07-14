@@ -367,6 +367,7 @@ def test_print_prompt_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN0
     assert captured["suppress_trace"] is True
     assert captured["max_steps"] is None
     assert captured["backend_override"] is None
+    assert captured["base_url_override"] is None
     assert captured["model_override"] is None
     assert captured["timeout_override"] is None
     assert data["session_path"] == "/tmp/s.session.jsonl"
@@ -386,6 +387,22 @@ def test_print_prompt_forwards_backend_override(monkeypatch) -> None:  # noqa: A
 
     assert result.exit_code == 0
     assert captured["backend_override"] == "llama_cpp"
+
+
+def test_print_prompt_forwards_base_url_override(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--base-url", "http://127.0.0.1:8081"])
+
+    assert result.exit_code == 0
+    assert captured["base_url_override"] == "http://127.0.0.1:8081"
 
 
 def test_print_prompt_forwards_model_override(monkeypatch) -> None:  # noqa: ANN001
@@ -530,6 +547,48 @@ def test_run_print_prompt_uses_model_override(monkeypatch) -> None:  # noqa: ANN
     assert seen_models == ["gpt-oss:20b"]
 
 
+def test_run_print_prompt_uses_base_url_override(monkeypatch) -> None:  # noqa: ANN001
+    seen_urls: list[str] = []
+
+    class FakeAgentLoop:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            self.session = SimpleNamespace(
+                message_count=1,
+                context_tokens_estimate=10,
+                error_history=[],
+                compaction_count=0,
+                model_turn_count=0,
+                tool_call_count=0,
+                reflection_count=0,
+                pending_verifies=set(),
+                tasks=[],
+                last_termination="final_success",
+                last_failing_tools=set(),
+            )
+
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+            return "ok"
+
+    def fake_build_runtime(settings, *args, **kwargs):  # noqa: ANN001
+        seen_urls.append(settings.ollama_url)
+        return object(), object(), object()
+
+    monkeypatch.setattr(cli, "build_runtime", fake_build_runtime)
+    monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
+
+    result = cli.run_print_prompt(
+        "demo",
+        namespace="project:test",
+        agent_mode=True,
+        base_url_override="http://127.0.0.1:8081",
+        return_metadata=True,
+        suppress_trace=True,
+    )
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert seen_urls == ["http://127.0.0.1:8081"]
+
+
 def test_run_print_prompt_uses_timeout_override(monkeypatch) -> None:  # noqa: ANN001
     seen_timeouts: list[float] = []
 
@@ -649,6 +708,23 @@ def test_build_runtime_uses_timeout_from_settings(tmp_path: Path, monkeypatch) -
     assert seen["timeout"] == 222.0
 
 
+def test_build_runtime_uses_base_url_from_settings(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    from helpers import make_settings
+
+    seen: dict[str, object] = {}
+
+    def fake_get_llm_client(name: str, base_url: str, model: str, timeout: float):  # noqa: ANN001
+        seen.update({"name": name, "base_url": base_url})
+        return object()
+
+    monkeypatch.setattr(cli, "register_builtin_backends", lambda: None)
+    monkeypatch.setattr(cli, "get_llm_client", fake_get_llm_client)
+
+    cli.build_runtime(make_settings(tmp_path).with_updates(ollama_url="http://127.0.0.1:8081"))
+
+    assert seen["base_url"] == "http://127.0.0.1:8081"
+
+
 def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN001
     runner = CliRunner()
     captured: dict[str, object] = {}
@@ -676,6 +752,7 @@ def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch)
     assert captured["max_steps"] == 3
     assert captured["plan_then_execute"] is False
     assert captured["backend_override"] is None
+    assert captured["base_url_override"] is None
     assert captured["model_override"] is None
     assert captured["timeout_override"] is None
     assert data["session_path"] == "/tmp/s.session.jsonl"
@@ -711,6 +788,22 @@ def test_ask_forwards_backend_override(monkeypatch) -> None:  # noqa: ANN001
 
     assert result.exit_code == 0
     assert captured["backend_override"] == "llama_cpp"
+
+
+def test_ask_forwards_base_url_override(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["ask", "demo", "--base-url", "http://127.0.0.1:8081"])
+
+    assert result.exit_code == 0
+    assert captured["base_url_override"] == "http://127.0.0.1:8081"
 
 
 def test_ask_forwards_model_override(monkeypatch) -> None:  # noqa: ANN001
