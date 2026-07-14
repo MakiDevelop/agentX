@@ -130,7 +130,7 @@ console = Console()
 ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 SLASH_COMMANDS = [
-    ("/help", "列出所有 slash command 與中文說明"),
+    ("/help [COMMAND]", "列出所有 slash command；提供 COMMAND 時顯示單一命令說明"),
     ("/guide", "60 秒快速導覽：模式選擇、常用工作流、安全與記憶"),
     ("/workflows", "列出實務工作流：理解、修改、測試、review、handoff"),
     ("/workflow NAME", "輸出單一 workflow recipe，例如 headless、audit、commit"),
@@ -250,6 +250,87 @@ WORKFLOW_ALIASES = {
 }
 
 
+COMMAND_RISK_HINTS = {
+    "/apply": "YELLOW - 套用 patch，會要求 approval",
+    "/commit": "YELLOW - 會跑測試、stage、commit 並 push",
+    "/config": "YELLOW - set 會寫入 .agentx/config.toml",
+    "/docker": "YELLOW - Docker build/up/down 需注意 runtime side effects",
+    "/handoff": "YELLOW - 會寫入 Memory Hall",
+    "/plan-task": "YELLOW - --apply 會寫入 task list",
+    "/push": "YELLOW - 外部 git write",
+    "/remember": "YELLOW - 會寫入 Memory Hall",
+    "/run": "YELLOW - 執行 allowlisted shell command",
+    "/stage": "YELLOW - 會修改 git index",
+    "/test": "GREEN - 執行既有驗證命令",
+    "/unstage": "YELLOW - 會修改 git index",
+}
+
+COMMAND_EXAMPLES = {
+    "/help": ["/help", "/help workflow", "/help /infra"],
+    "/workflow": ["/workflow headless", "/workflow audit", "/workflow commit"],
+    "/workflows": ["/workflows"],
+    "/infra": ["/infra home", "/infra vps", "/infra resource-bundle"],
+    "/intent": ["/intent 部署到 VPS production 並重啟服務"],
+    "/plan-task": ["/plan-task 補測試", "/plan-task --apply 補 tests"],
+    "/transcript": ["/transcript approvals latest --denied"],
+    "/git": ["/git status", "/git log 5", "/git show HEAD"],
+    "/diff": ["/diff", "/diff src/agentx/cli.py"],
+    "/run": ["/run uv run pytest -q"],
+    "/commit": ["/commit 新增 workflow 單一路徑查詢"],
+}
+
+COMMAND_RELATED = {
+    "/help": ["/guide", "/workflows", "/workflow"],
+    "/workflow": ["/workflows", "/guide", "/help"],
+    "/workflows": ["/workflow", "/guide", "/help"],
+    "/infra": ["/intent", "/where", "/read"],
+    "/intent": ["/infra", "/plan-task", "/task"],
+    "/plan-task": ["/task", "/intent", "/guide"],
+    "/transcript": ["/sessions", "/resume", "/handoff"],
+    "/git": ["/diff", "/review", "/commit"],
+    "/diff": ["/git", "/review", "/commit"],
+    "/test": ["/review", "/commit"],
+    "/commit": ["/review", "/test", "/push"],
+}
+
+
+def _slash_command_entries() -> dict[str, tuple[str, str]]:
+    return {command.split()[0]: (command, desc) for command, desc in SLASH_COMMANDS}
+
+
+def _normalize_slash_command_topic(topic: str) -> str:
+    normalized = topic.strip().split()[0] if topic.strip() else ""
+    if normalized and not normalized.startswith("/"):
+        normalized = f"/{normalized}"
+    return normalized
+
+
+def slash_command_help(topic: str) -> str:
+    key = _normalize_slash_command_topic(topic)
+    entries = _slash_command_entries()
+    if not key or key not in entries:
+        available = ", ".join(sorted(entries))
+        label = topic.strip() or "(empty)"
+        return f"command not found: {label}\navailable: {available}\nexample: /help workflow"
+
+    usage, description = entries[key]
+    risk = COMMAND_RISK_HINTS.get(key, "GREEN - read-only, local display, or low-risk routing")
+    examples = COMMAND_EXAMPLES.get(key, [usage])
+    related = COMMAND_RELATED.get(key, [])
+
+    lines = [
+        f"Command: {key}",
+        f"Usage: {usage}",
+        f"Description: {description}",
+        f"Risk: {risk}",
+        "Examples:",
+        *[f"- {example}" for example in examples],
+    ]
+    if related:
+        lines.extend(["Related:", *[f"- {command}" for command in related]])
+    return "\n".join(lines)
+
+
 def workflow_recipe(name: str) -> tuple[str, str] | None:
     query = name.strip()
     if not query:
@@ -285,13 +366,18 @@ def slash_command_hint() -> Columns:
     return Columns(texts, equal=True, expand=True, column_first=True)
 
 
-def print_slash_help() -> None:
+def print_slash_help(topic: str = "") -> None:
     """Print slash commands grouped by category with risk/safety hints.
 
     This is a direct step toward the vision in Image 02 & 03:
     - Clear mental models and discoverability
     - Risk awareness baked into the help experience
     """
+    if topic.strip():
+        command = _normalize_slash_command_topic(topic)
+        console.print(Panel(slash_command_help(topic), title=f"Slash Help {command}", border_style="cyan", padding=(0, 1)))
+        return
+
     # Category definitions (vision-aligned grouping)
     categories = [
         ("核心與模式", [
@@ -318,12 +404,13 @@ def print_slash_help() -> None:
     ]
 
     # Build a quick lookup
-    cmd_to_desc = dict(SLASH_COMMANDS)
+    cmd_to_desc = {command.split()[0]: desc for command, desc in SLASH_COMMANDS}
 
     # Stronger visual header for slash help (vision polish)
     header = Panel(
         "[bold]agentX slash commands[/bold]\n"
-        "輸入指令即可使用，許多操作會依風險等級要求確認\n\n"
+        "輸入指令即可使用，許多操作會依風險等級要求確認\n"
+        "用 /help COMMAND 查看單一命令的 usage、examples、risk 與 related commands\n\n"
         "[green]GREEN 自動執行[/green] ｜ [yellow]YELLOW 需注意[/yellow] ｜ [red]RED 預設受保護[/red]",
         border_style="dim",
         padding=(0, 1),

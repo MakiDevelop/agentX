@@ -8,6 +8,7 @@ from agentx.cli import (
     ShellState,
     format_workflow_recipe,
     print_guide,
+    slash_command_help,
     workflow_recipe,
 )
 
@@ -15,9 +16,13 @@ from agentx.cli import (
 def test_guide_command_is_registered() -> None:
     commands = dict(SLASH_COMMANDS)
 
+    command_keys = {command.split()[0]: desc for command, desc in SLASH_COMMANDS}
+
+    assert "/help" in command_keys
     assert "/guide" in commands
     assert "/workflows" in commands
     assert "/workflow NAME" in commands
+    assert "單一命令" in command_keys["/help"]
     assert "快速導覽" in commands["/guide"]
 
 
@@ -52,6 +57,24 @@ def test_format_workflow_recipe_reports_missing_name() -> None:
 
     assert "workflow not found: missing" in output
     assert "headless" in output
+
+
+def test_slash_command_help_formats_single_command() -> None:
+    output = slash_command_help("workflow")
+
+    assert "Command: /workflow" in output
+    assert "Usage: /workflow NAME" in output
+    assert "Examples:" in output
+    assert "/workflow headless" in output
+    assert "Risk:" in output
+    assert "Related:" in output
+
+
+def test_slash_command_help_reports_unknown_command() -> None:
+    output = slash_command_help("missing")
+
+    assert "command not found: missing" in output
+    assert "/workflow" in output
 
 
 def test_mode_ask_alias_uses_agent_mode(tmp_path) -> None:

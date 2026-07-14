@@ -1276,11 +1276,27 @@ def test_handle_help_writes_transcript_and_calls_print(tmp_path: Path) -> None:
         state,
         "/help",
         transcript=transcript,
-        print_slash_help=lambda: calls.append("help"),
+        print_slash_help=lambda topic: calls.append(topic),
     )
 
     assert transcript.events == [("slash_command", {"command": "/help"})]
-    assert calls == ["help"]
+    assert calls == [""]
+
+
+def test_handle_help_passes_command_topic(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    calls: list[str] = []
+
+    handle_help(
+        state,
+        "/help workflow",
+        transcript=transcript,
+        print_slash_help=lambda topic: calls.append(topic),
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/help workflow"})]
+    assert calls == ["workflow"]
 
 
 def test_handle_guide_marks_seen_then_prints(tmp_path: Path) -> None:

@@ -751,12 +751,13 @@ def handle_help(
     prompt: str,
     *,
     transcript: Any,
-    print_slash_help: Callable[[], None],
+    print_slash_help: Callable[[str], None],
 ) -> None:
     """Show slash-command help; rendering stays in the shell layer."""
     _ = state
     transcript.write("slash_command", {"command": prompt})
-    print_slash_help()
+    topic = prompt.removeprefix("/help").strip()
+    print_slash_help(topic)
 
 
 def handle_guide(
