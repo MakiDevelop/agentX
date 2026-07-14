@@ -1153,6 +1153,7 @@ def main(
     max_steps: int | None = typer.Option(None, "--max-steps", help="Override max agent loop steps for -p."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for headless automation."),
     output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain or json."),
+    quiet: bool = typer.Option(False, "--quiet", help="Suppress plain stdout for headless automation; JSON output is still printed."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
 ) -> None:
@@ -1198,7 +1199,8 @@ def main(
         if structured_output:
             print_json_output(headless_json_payload(output, exit_code))
             raise typer.Exit(code=exit_code)
-        print_raw(output.output)
+        if not quiet:
+            print_raw(output.output)
         raise typer.Exit(
             code=exit_code
         )
@@ -1206,7 +1208,8 @@ def main(
         fallback_result = HeadlessRunResult(output=output)
         print_json_output(headless_json_payload(fallback_result, headless_exit_code(output)))
         raise typer.Exit(code=headless_exit_code(output))
-    print_raw(output)
+    if not quiet:
+        print_raw(output)
     raise typer.Exit(code=headless_exit_code(output))
 
 
@@ -1582,6 +1585,7 @@ def ask(
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan first, then execute in the same headless run."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for automation."),
     output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain or json."),
+    quiet: bool = typer.Option(False, "--quiet", help="Suppress plain stdout for automation; JSON output is still printed."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
 ) -> None:
@@ -1613,7 +1617,8 @@ def ask(
         if structured_output:
             print_json_output(headless_json_payload(output, exit_code))
             raise typer.Exit(code=exit_code)
-        print_raw(output.output)
+        if not quiet:
+            print_raw(output.output)
         raise typer.Exit(code=exit_code)
     if structured_output:
         fallback_result = HeadlessRunResult(output=output)
@@ -1624,7 +1629,8 @@ def ask(
             )
         )
         raise typer.Exit(code=headless_exit_code(output))
-    print_raw(output)
+    if not quiet:
+        print_raw(output)
     raise typer.Exit(code=headless_exit_code(output))
 
 

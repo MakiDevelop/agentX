@@ -64,6 +64,7 @@
 - [x] `--timeout SECONDS` 可在單次 headless run 覆蓋 LLM request timeout，適合慢本地模型或長 context。
 - [x] `agentx -p ... --json` 與 `agentx ask ... --json` 可輸出機器可讀 payload。
 - [x] `--output-format json` 可作為 `--json` 的 script-friendly 等價入口；非法格式會直接失敗。
+- [x] `--quiet` 可壓掉 plain stdout、保留 exit code；搭配 `--json` 時仍輸出 JSON payload。
 - Payload 包含 `output`、`exit_code`、`termination`、`failing_tools`、`stats`。
 - `stats` 目前提供 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies、task counts。
 - 一般文字輸出保持相容；JSON 模式會抑制 trace，避免污染 stdout。

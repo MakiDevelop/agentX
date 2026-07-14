@@ -298,6 +298,35 @@ def test_print_prompt_output_format_json_uses_structured_metadata(monkeypatch) -
     assert captured["suppress_trace"] is True
 
 
+def test_print_prompt_quiet_suppresses_plain_output(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(
+        cli,
+        "run_print_prompt",
+        lambda *args, **kwargs: cli.HeadlessRunResult(output="SHOULD_NOT_PRINT", termination="final_success"),
+    )
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--quiet"])
+
+    assert result.exit_code == 0
+    assert result.output == ""
+
+
+def test_print_prompt_quiet_keeps_json_output(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(
+        cli,
+        "run_print_prompt",
+        lambda *args, **kwargs: cli.HeadlessRunResult(output="ok", termination="final_success"),
+    )
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--quiet", "--json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert data["output"] == "ok"
+
+
 def test_print_prompt_uses_prompt_file(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
     runner = CliRunner()
     prompt = tmp_path / "briefing.md"
@@ -1075,3 +1104,17 @@ def test_ask_output_format_json(monkeypatch) -> None:  # noqa: ANN001
     assert result.exit_code == 0
     assert data["output"] == "ok"
     assert captured["suppress_trace"] is True
+
+
+def test_ask_quiet_suppresses_plain_output(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(
+        cli,
+        "run_print_prompt",
+        lambda *args, **kwargs: cli.HeadlessRunResult(output="SHOULD_NOT_PRINT", termination="final_success"),
+    )
+
+    result = runner.invoke(cli.app, ["ask", "demo", "--quiet"])
+
+    assert result.exit_code == 0
+    assert result.output == ""

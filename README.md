@@ -97,6 +97,7 @@ agentx -p "幫我看 repo" --agent --base-url http://127.0.0.1:8081
 agentx -p "幫我看 repo" --agent --timeout 180
 agentx -p "幫我看 repo" --agent --workspace /path/to/repo
 agentx -p "幫我看 repo" --agent --approval auto-approve
+agentx -p "幫我看 repo" --agent --quiet
 ```
 
 外部傳入 prompt，類似 `claude -p`：
