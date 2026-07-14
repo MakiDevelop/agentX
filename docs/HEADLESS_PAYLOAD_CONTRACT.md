@@ -60,6 +60,8 @@ For a local inspection helper:
 ```bash
 agentx handoff-inspect tests/fixtures/headless_result_failure.json
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --output-format jsonl
+agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command
+agentx handoff-inspect tests/fixtures/headless_result_failure.json --field recovery_checklist
 ```
 
 ## `log_summary`

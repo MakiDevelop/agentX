@@ -1462,6 +1462,25 @@ def format_handoff_inspect_plain(payload: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
+def handoff_inspect_field_payload(payload: dict[str, object], field: str) -> dict[str, object]:
+    normalized = field.strip()
+    if normalized not in payload:
+        allowed = ", ".join(sorted(payload))
+        raise typer.BadParameter(f"unknown handoff inspect field: {field}. Use one of: {allowed}")
+    return {"field": normalized, "value": payload[normalized]}
+
+
+def format_handoff_inspect_field_plain(field_payload: dict[str, object]) -> str:
+    value = field_payload.get("value")
+    if isinstance(value, list):
+        return "\n".join(str(item) for item in value)
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    if value is None:
+        return ""
+    return str(value)
+
+
 def backend_list_payload() -> list[str]:
     register_builtin_backends()
     return list_registered_backends()
@@ -2484,12 +2503,22 @@ def version_command(
 @app.command("handoff-inspect")
 def handoff_inspect(
     path: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True, help="Headless JSON/JSONL payload file to inspect."),
+    field: str | None = typer.Option(None, "--field", help="Print one takeover field, e.g. resume_command or recovery_checklist."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
     """Inspect a headless payload and print takeover fields."""
     structured_format = structured_output_format(json_output, output_format)
     payload = inspect_headless_handoff_payload(load_headless_payload_file(path))
+    if field:
+        field_payload = handoff_inspect_field_payload(payload, field)
+        if structured_format != "plain":
+            print_structured_payload(field_payload, output_format=structured_format, event="handoff_inspect_field")
+            return
+        sys.stdout.write(format_handoff_inspect_field_plain(field_payload))
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        return
     if structured_format != "plain":
         print_structured_payload(payload, output_format=structured_format, event="handoff_inspect")
         return

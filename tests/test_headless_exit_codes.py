@@ -292,6 +292,65 @@ def test_handoff_inspect_command_jsonl_output() -> None:
     assert event["data"]["recovery_actions"] == ["verify_assumption"]
 
 
+def test_handoff_inspect_field_resume_command_plain() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        ["handoff-inspect", "tests/fixtures/headless_result_failure.json", "--field", "resume_command"],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+
+
+def test_handoff_inspect_field_recovery_checklist_plain() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        ["handoff-inspect", "tests/fixtures/headless_result_failure.json", "--field", "recovery_checklist"],
+    )
+
+    assert result.exit_code == 0
+    assert "Inspect and verify pending edited paths before new edits.\n" in result.output
+    assert result.output.rstrip().endswith(
+        "Run the smallest targeted verification that can prove or disprove the assumption."
+    )
+
+
+def test_handoff_inspect_field_jsonl_output() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--output-format",
+            "jsonl",
+        ],
+    )
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event["event"] == "handoff_inspect_field"
+    assert event["data"] == {
+        "field": "resume_command",
+        "value": "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json",
+    }
+
+
+def test_handoff_inspect_field_rejects_unknown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        ["handoff-inspect", "tests/fixtures/headless_result_failure.json", "--field", "missing"],
+    )
+
+    assert result.exit_code != 0
+    assert "unknown handoff inspect field" in result.output
+
+
 def test_handoff_inspect_reads_jsonl_input(tmp_path: Path) -> None:
     fixture = Path("tests/fixtures/headless_result_failure.json")
     event = json.loads(fixture.read_text(encoding="utf-8"))
