@@ -26,6 +26,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | Command | JSON schema | JSONL event |
 |---------|-------------|-------------|
 | `agentx config --json` | `agentx.config.v1` | `config` |
+| `agentx init --json` | `agentx.init.v1` | `init` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
 | `agentx doctor --json` | `agentx.doctor.v1` | `doctor` |
 | `agentx commands --json` | `agentx.command_catalog.v1` | `commands` |
@@ -62,6 +63,36 @@ Required stable keys:
 | `approval` | string | Canonical approval mode. |
 | `learning_enabled` | boolean | Whether self-learning proposals are enabled. |
 | `project_config` | object | Raw project config values before runtime defaults. |
+
+## Init Payload
+
+`agentx init --json` emits `agentx.init.v1`.
+
+By default this command is read-only. It scans the workspace and prints the
+project profile. `--write-memory` is the explicit opt-in side effect that writes
+the profile to Memory Hall.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.init.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `namespace` | string | Target namespace. |
+| `write_memory` | boolean | Whether this invocation attempted a Memory Hall write. |
+| `memory_result` | object or null | Write result when `--write-memory` is used. |
+| `profile` | object | Embedded `agentx.project_profile.v1` payload. |
+
+`profile` required keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.project_profile.v1`. |
+| `namespace` | string | Namespace used for the profile. |
+| `workspace` | string | Resolved workspace path. |
+| `detected` | array of string | Detected project traits. |
+| `test_commands` | array of string | Suggested verification commands. |
+| `repo_context` | string | Bootstrap context excerpt for human/agent review. |
 
 ## Status Payload
 
@@ -214,6 +245,7 @@ Each workflow object includes:
 Contract coverage lives in:
 
 - `tests/test_config_cli.py`
+- `tests/test_init_cli.py`
 - `tests/test_status_cli.py`
 - `tests/test_doctor_cli.py`
 - `tests/test_command_catalog_cli.py`
@@ -223,5 +255,5 @@ Contract coverage lives in:
 Run:
 
 ```bash
-uv run pytest -q tests/test_config_cli.py tests/test_status_cli.py tests/test_doctor_cli.py tests/test_command_catalog_cli.py tests/test_tool_catalog_cli.py tests/test_workflows_cli.py
+uv run pytest -q tests/test_config_cli.py tests/test_init_cli.py tests/test_status_cli.py tests/test_doctor_cli.py tests/test_command_catalog_cli.py tests/test_tool_catalog_cli.py tests/test_workflows_cli.py
 ```

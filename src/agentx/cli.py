@@ -50,7 +50,7 @@ from agentx.ollama import OllamaCancelledError, OllamaClient
 from agentx.provider_registry import get_llm_client, list_registered_backends, LLMClient, register_builtin_backends
 from agentx.persona import list_personas, normalize_persona
 from agentx.project_config import load_project_config, set_project_config
-from agentx.project_profile import build_project_profile
+from agentx.project_profile import build_project_profile, build_project_profile_payload
 from agentx.project_state import mark_guide_hint_seen, should_show_guide_hint
 from agentx.prompting import SlashCommandCompleter
 from agentx.runtime_prompt import build_chat_system_prompt, build_headless_agent_system_prompt
@@ -2655,6 +2655,52 @@ def run_init(settings: Settings, tools: ToolRegistry, namespace: str) -> str:
     return "project profile write failed\n\n" + result.content
 
 
+def init_payload(
+    settings: Settings,
+    *,
+    namespace: str,
+    write_memory: bool = False,
+    memory_result: dict[str, object] | None = None,
+) -> dict[str, object]:
+    payload = build_project_profile_payload(settings.workspace, namespace)
+    return {
+        "schema": "agentx.init.v1",
+        "workspace": str(settings.workspace),
+        "namespace": namespace,
+        "write_memory": write_memory,
+        "memory_result": memory_result,
+        "profile": payload,
+    }
+
+
+def print_init_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="init",
+        )
+        return
+
+    profile = dict(payload["profile"])  # type: ignore[arg-type]
+    table = Table(title="agentX init", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    table.add_row("workspace", str(payload["workspace"]))
+    table.add_row("namespace", str(payload["namespace"]))
+    table.add_row("detected", ", ".join(str(item) for item in profile.get("detected", [])) or "unknown")
+    table.add_row("test_commands", ", ".join(str(item) for item in profile.get("test_commands", [])) or "unknown")
+    table.add_row("write_memory", str(payload["write_memory"]))
+    if payload.get("memory_result") is not None:
+        table.add_row("memory_result", json.dumps(payload["memory_result"], ensure_ascii=False))
+    console.print(table)
+
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
@@ -3469,6 +3515,54 @@ def config_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_config_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("init")
+def init_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for project profiling."),
+    namespace: str | None = typer.Option(None, "--namespace", help="Override namespace shown in the payload."),
+    write_memory: bool = typer.Option(False, "--write-memory", help="Write the generated project profile to Memory Hall."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Scan the workspace and optionally write a project profile to memory."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    project_config = load_project_config(settings.workspace)
+    resolved_namespace = namespace or project_config.namespace or "project:agentX"
+    memory_result = None
+    if write_memory:
+        if (settings.memory_backend or "memhall").lower() == "amh":
+            from agentx.memory_hall import AmhClient
+
+            memory: MemoryHallClient | NullMemoryClient = AmhClient(
+                store=settings.memory_amh_store,
+                store_path=settings.memory_amh_path,
+            )
+        else:
+            memory = MemoryHallClient(
+                base_url=settings.memory_hall_url,
+                token=settings.memory_hall_token,
+            )
+        tools = ToolRegistry(builtin_tools(settings.workspace, memory))
+        profile = build_project_profile(settings.workspace, resolved_namespace)
+        result = tools.run(
+            "memory_write",
+            {
+                "content": profile,
+                "namespace": resolved_namespace,
+                "tier": "human_confirmed",
+                "memory_type": "fact",
+            },
+        )
+        memory_result = {"ok": result.ok, "content": result.content[:1000]}
+    payload = init_payload(
+        settings,
+        namespace=resolved_namespace,
+        write_memory=write_memory,
+        memory_result=memory_result,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_init_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("status")
