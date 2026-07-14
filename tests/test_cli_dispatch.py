@@ -1,9 +1,10 @@
+import re
 import threading
 from pathlib import Path
 from typing import Any
 
 from agentx.approval import ApprovalMode, ApprovalPolicy
-from agentx.cli import NON_BLOCKING_COMMANDS, ShellState
+from agentx.cli import NON_BLOCKING_COMMANDS, SLASH_COMMANDS, ShellState
 from agentx.cli_slash_shims import (
     cmd_clear,
     cmd_exit,
@@ -18,6 +19,8 @@ from agentx.jobs import PromptJobQueue
 from agentx.protocol import ToolResult
 
 from helpers import make_settings
+
+_CLI_SOURCE = Path(__file__).resolve().parents[1] / "src" / "agentx" / "cli.py"
 
 # MT22: TaskState is legacy (task.py removed). Guarded import so this test module
 # does not break collection in a completely no-legacy environment.
@@ -196,7 +199,7 @@ def test_non_blocking_commands_set() -> None:
 def test_all_slash_commands_have_handlers() -> None:
     declared = {
         entry[0].split()[0]
-        for entry in __import__("agentx.cli", fromlist=["SLASH_COMMANDS"]).SLASH_COMMANDS
+        for entry in SLASH_COMMANDS
     }
     declared.discard("/exit")
     declared.discard("/quit")
@@ -211,6 +214,94 @@ def test_all_slash_commands_have_handlers() -> None:
     assert "/plan" in declared
     assert "/files" in declared
     assert "/clear" in declared
+
+
+def test_single_try_dispatch_call_in_prompt_loop() -> None:
+    """Guard: prompt loop must call _try_dispatch exactly once (no post-wait fallback)."""
+    source = _CLI_SOURCE.read_text(encoding="utf-8")
+    call_sites = re.findall(r"if _try_dispatch\(prompt\):", source)
+    assert len(call_sites) == 1, (
+        f"expected exactly one _try_dispatch(prompt) call site, found {len(call_sites)}"
+    )
+
+
+def test_no_duplicated_legacy_slash_fallback_after_wait() -> None:
+    """Guard: after wait_for_prompt_worker gate, do not re-dispatch or re-run legacy if-chain."""
+    source = _CLI_SOURCE.read_text(encoding="utf-8")
+    # Isolate the interactive prompt loop body between the first dispatch call
+    # and final job_queue.submit.
+    loop_match = re.search(
+        r"if _try_dispatch\(prompt\):\n"
+        r".*?"
+        r"job = job_queue\.submit\(prompt\)",
+        source,
+        flags=re.DOTALL,
+    )
+    assert loop_match is not None, "could not locate prompt-loop dispatch→submit span"
+    span = loop_match.group(0)
+    # Must keep the wait gate for unhandled slash commands (except non-blocking).
+    assert "wait_for_prompt_worker()" in span
+    assert 'prompt.startswith(("/jobs", "/cancel"))' in span or \
+        "prompt.startswith(('/jobs', '/cancel'))" in span
+    # Must NOT re-enter dispatch after the wait gate.
+    assert span.count("_try_dispatch(prompt)") == 1
+    # Legacy duplicated fallback markers that used to live after the wait gate.
+    assert 'if prompt == "/help":' not in span
+    assert 'if prompt == "/config":' not in span
+    assert 'if prompt == "/compact":' not in span
+    # Preserve natural-language execute path and final submit.
+    assert "is_natural_execute_trigger(prompt)" in span
+    assert "job_queue.submit(prompt)" in span
+
+
+def test_core_slash_commands_remain_declared() -> None:
+    """Core slash commands must stay in SLASH_COMMANDS help/completer surface."""
+    declared = {entry[0].split()[0] for entry in SLASH_COMMANDS}
+    required = {
+        "/help",
+        "/config",
+        "/task",
+        "/compact",
+        "/git",
+        "/diff",
+        "/apply",
+        "/approval",
+        "/run",
+        "/docker",
+        "/test",
+        "/review",
+        "/commit",
+        "/plan",
+        "/execute",
+        "/remember",
+        "/mode",
+        "/models",
+        "/model",
+        "/persona",
+        "/jobs",
+        "/cancel",
+        "/exit",
+        "/quit",
+        "/clear",
+        "/files",
+    }
+    missing = required - declared
+    assert not missing, f"core slash commands missing from SLASH_COMMANDS: {sorted(missing)}"
+
+
+def test_exit_quit_priority_path_present() -> None:
+    """`/exit` and `/quit` must keep the dedicated early-break path before dispatch."""
+    source = _CLI_SOURCE.read_text(encoding="utf-8")
+    assert 'if prompt in {"/exit", "/quit"}:' in source or \
+        "if prompt in {'/exit', '/quit'}:" in source
+    # Priority check must appear before the sole dispatch call in source order.
+    exit_idx = source.find('if prompt in {"/exit", "/quit"}:')
+    if exit_idx < 0:
+        exit_idx = source.find("if prompt in {'/exit', '/quit'}:")
+    dispatch_idx = source.find("if _try_dispatch(prompt):")
+    assert exit_idx >= 0
+    assert dispatch_idx >= 0
+    assert exit_idx < dispatch_idx
 
 
 def test_current_cancel_is_event(tmp_path: Path) -> None:
