@@ -71,7 +71,7 @@ Required stable keys:
 | `schema` | string | `agentx.capabilities.v1`. |
 | `query` | string | Filter query, or empty string. |
 | `count` | integer | Number of returned capabilities. |
-| `recommended_entrypoints` | array of object | Suggested runner entrypoints for discovery, preflight, next-step planning, gates, and verification. |
+| `recommended_entrypoints` | array of object | Suggested runner entrypoints for discovery, workspace preflight, infrastructure preflight, next-step planning, gates, and verification. |
 | `by_schema` | object | Map from schema name to the command, usage, and JSONL event that emits it, scoped to the returned capabilities. |
 | `capabilities` | array of object | Top-level CLI capability entries. |
 

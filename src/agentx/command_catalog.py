@@ -359,6 +359,12 @@ RUNNER_RECOMMENDED_ENTRYPOINTS: list[dict[str, object]] = [
         "reason": "collect read-only workspace status, diff, tasks, approvals, artifacts, next recommendation, and command plans",
     },
     {
+        "name": "infra_preflight",
+        "command": "agentx infra resource-bundle --json",
+        "schema": "agentx.infrastructure_context.v1",
+        "reason": "load read-only resource, home AI facilities, and VPS routing context before SSH, deploy, or cross-machine work",
+    },
+    {
         "name": "next",
         "command": "agentx next --json",
         "schema": "agentx.next.v1",

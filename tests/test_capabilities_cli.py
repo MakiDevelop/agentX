@@ -13,6 +13,13 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert payload["query"] == ""
     assert payload["count"] == len(CLI_CAPABILITIES)
     assert payload["recommended_entrypoints"] == RUNNER_RECOMMENDED_ENTRYPOINTS
+    entrypoints = {item["name"]: item for item in payload["recommended_entrypoints"]}  # type: ignore[index]
+    assert entrypoints["infra_preflight"] == {
+        "name": "infra_preflight",
+        "command": "agentx infra resource-bundle --json",
+        "schema": "agentx.infrastructure_context.v1",
+        "reason": "load read-only resource, home AI facilities, and VPS routing context before SSH, deploy, or cross-machine work",
+    }
     commands = {item["command"]: item for item in payload["capabilities"]}  # type: ignore[index]
     assert "agentx verify" in commands
     assert "agentx artifacts" in commands

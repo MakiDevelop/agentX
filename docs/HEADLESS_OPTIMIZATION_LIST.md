@@ -86,6 +86,7 @@
 - [x] `agentx command-plan` 會提前擋 headless output path / artifact-dir 逃出 workspace。
 - [x] `agentx tool-plan TOOL --args-json JSON --json` 可輸出 read-only tool-call preflight（alias resolution、risk、approval_required、known arg blockers），讓外部 runner 在真正 tool call 前先做機器可讀安全判斷。
 - [x] `agentx capabilities --json` 會提供 `recommended_entrypoints` 與 `by_schema`，讓外部 runner 第一次接入時能直接找到 discovery/preflight/next/gate/verify 入口與 schema 對應 command。
+- [x] `agentx capabilities --json` 的 `recommended_entrypoints` 會列出 `infra_preflight`，讓 runner 在 SSH/deploy/cross-machine 前能直接發現 `agentx infra resource-bundle --json`。
 - [x] `agentx capabilities --json` 會列出 `handoff-inspect` / `handoff-resume`，讓 command-plan 能辨識 artifact resume 流程中的接手命令。
 - [x] `agentx workflows --json` 會把人類可讀 `path` 拆成 `steps` 與可直接處理的 `commands`，讓 runner 能消費 headless/audit/commit recipe 而不用自行 parse 箭頭字串。
 - [x] `agentx workflows --json` 的每個 step 會標記 `kind`，且 top-level `agentx` step 會內嵌 `command_plan`，讓 runner 可在執行 recipe 前檢查 policy posture。
