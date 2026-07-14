@@ -98,6 +98,8 @@ agentx -p "幫我看 repo" --agent --timeout 180
 agentx -p "幫我看 repo" --agent --workspace /path/to/repo
 agentx -p "幫我看 repo" --agent --approval auto-approve
 agentx -p "幫我看 repo" --agent --quiet
+agentx --list-backends
+agentx backends --json
 ```
 
 外部傳入 prompt，類似 `claude -p`：

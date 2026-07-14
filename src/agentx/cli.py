@@ -34,7 +34,7 @@ from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaCancelledError, OllamaClient
-from agentx.provider_registry import get_llm_client, LLMClient, register_builtin_backends
+from agentx.provider_registry import get_llm_client, list_registered_backends, LLMClient, register_builtin_backends
 from agentx.persona import list_personas, normalize_persona
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile
@@ -999,6 +999,19 @@ def wants_json_output(json_output: bool, output_format: str | None) -> bool:
     return json_output or normalized == "json"
 
 
+def backend_list_payload() -> list[str]:
+    register_builtin_backends()
+    return list_registered_backends()
+
+
+def print_backend_list(*, json_output: bool = False) -> None:
+    backends = backend_list_payload()
+    if json_output:
+        print_json_output(json.dumps({"backends": backends}, ensure_ascii=False))
+        return
+    print_raw("\n".join(backends))
+
+
 def resolve_headless_workspace(workspace: str | None) -> Path | None:
     if workspace is None:
         return None
@@ -1144,6 +1157,7 @@ def main(
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan thoroughly first, then seamlessly continue into execution in the same run (recommended for complex tasks)."),
     orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
+    list_backends: bool = typer.Option(False, "--list-backends", help="List registered LLM backend keys and exit."),
     workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Run this headless task against a specific workspace directory."),
     approval: str | None = typer.Option(None, "--approval", help="Override approval policy for this headless run: ask, auto, off, strict, auto-approve, or deny."),
     backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
@@ -1160,6 +1174,9 @@ def main(
     """Run local Ollama agent workflows."""
     if ctx.invoked_subcommand is not None:
         return
+    if list_backends:
+        print_backend_list(json_output=wants_json_output(json_output, output_format))
+        raise typer.Exit(code=0)
     workspace_override = resolve_headless_workspace(workspace)
     settings_for_prompt = Settings(workspace=workspace_override)
     prompt = load_headless_prompt(
@@ -1632,6 +1649,15 @@ def ask(
     if not quiet:
         print_raw(output)
     raise typer.Exit(code=headless_exit_code(output))
+
+
+@app.command("backends")
+def backends(
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain or json."),
+) -> None:
+    """List registered LLM backend keys."""
+    print_backend_list(json_output=wants_json_output(json_output, output_format))
 
 
 @app.command()

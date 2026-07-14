@@ -135,6 +135,58 @@ def test_wants_json_output_rejects_unknown_format() -> None:
         raise AssertionError("unknown output format should fail")
 
 
+def test_backend_list_payload_registers_and_lists_backends(monkeypatch) -> None:  # noqa: ANN001
+    called: list[bool] = []
+
+    monkeypatch.setattr(cli, "register_builtin_backends", lambda: called.append(True))
+    monkeypatch.setattr(cli, "list_registered_backends", lambda: ["llama_cpp", "ollama"])
+
+    assert cli.backend_list_payload() == ["llama_cpp", "ollama"]
+    assert called == [True]
+
+
+def test_list_backends_option_plain(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "backend_list_payload", lambda: ["llama_cpp", "ollama"])
+
+    result = runner.invoke(cli.app, ["--list-backends"])
+
+    assert result.exit_code == 0
+    assert result.output == "llama_cpp\nollama\n"
+
+
+def test_list_backends_option_json(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "backend_list_payload", lambda: ["llama_cpp", "ollama"])
+
+    result = runner.invoke(cli.app, ["--list-backends", "--output-format", "json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert data == {"backends": ["llama_cpp", "ollama"]}
+
+
+def test_backends_command_plain(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "backend_list_payload", lambda: ["llama_cpp", "ollama"])
+
+    result = runner.invoke(cli.app, ["backends"])
+
+    assert result.exit_code == 0
+    assert result.output == "llama_cpp\nollama\n"
+
+
+def test_backends_command_json(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "backend_list_payload", lambda: ["llama_cpp", "ollama"])
+
+    result = runner.invoke(cli.app, ["backends", "--json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert data == {"backends": ["llama_cpp", "ollama"]}
+
+
 def test_load_headless_prompt_reads_workspace_file(tmp_path: Path) -> None:
     prompt = tmp_path / "briefing.md"
     prompt.write_text("DO THE THING", encoding="utf-8")
