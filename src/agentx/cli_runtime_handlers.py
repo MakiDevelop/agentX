@@ -1,9 +1,10 @@
 """Importable runtime slash handlers used by ``run_shell()``.
 
 These implement the real interactive-shell logic for a small set of
-commands (``/plan``, ``/execute``, ``/mode``). Nested handlers inside
-``cli.run_shell()`` should delegate here so unit tests can exercise the
-same path without driving the full interactive loop.
+commands (``/plan``, ``/execute``, ``/mode``, plus read-only tool-backed
+``/files``, ``/read``, ``/search``, ``/git``, ``/diff``). Nested handlers
+inside ``cli.run_shell()`` should delegate here so unit tests can exercise
+the same path without driving the full interactive loop.
 
 Do not confuse with ``cli_slash_shims`` — those are simplified test-only
 dispatch stubs and are *not* the runtime shell path.
@@ -23,6 +24,39 @@ EXECUTE_SYSTEM_MESSAGE = (
     "你現在已切換至執行模式。請使用工具實際執行方案中的每個步驟。\n"
     "如果需要，可以先列出下一步要做的動作，再逐步呼叫工具完成。"
 )
+
+# Transcript content truncation used by historical run_shell tool handlers.
+_TOOL_TRANSCRIPT_LIMIT = 2000
+
+
+def _run_tool_slash(
+    *,
+    command: str,
+    tool_name: str,
+    tool_args: dict[str, Any],
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+    fail_prefix: str,
+    transcript_extra: dict[str, Any] | None = None,
+) -> None:
+    """Shared path: tools.run → transcript tool event → emit success/failure text.
+
+    ``emit`` should be the same sink nested handlers used (``print_tool_result``),
+    so empty-output formatting stays in the shell layer.
+    """
+    result = tools.run(tool_name, tool_args)
+    payload: dict[str, Any] = {"command": command}
+    if transcript_extra:
+        payload.update(transcript_extra)
+    payload.update(
+        {
+            "ok": result.ok,
+            "content": result.content[:_TOOL_TRANSCRIPT_LIMIT],
+        }
+    )
+    transcript.write("tool", payload)
+    emit(result.content if result.ok else f"{fail_prefix}{result.content}")
 
 
 def handle_plan(
@@ -94,3 +128,109 @@ def handle_mode(
         return
     transcript.write("slash_command", {"command": prompt, "mode": state.mode})
     emit(f"mode={state.mode}")
+
+
+# --- read-only tool-backed slash handlers ---------------------------------
+
+
+def handle_files(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """List repo files (default ``.``)."""
+    path = prompt.removeprefix("/files").strip() or "."
+    _run_tool_slash(
+        command="/files",
+        tool_name="list_files",
+        tool_args={"path": path},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="工具執行失敗：",
+    )
+
+
+def handle_read(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Read a single file under the workspace."""
+    path = prompt.removeprefix("/read ").strip()
+    _run_tool_slash(
+        command="/read",
+        tool_name="read_file",
+        tool_args={"path": path},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="讀取失敗：",
+        transcript_extra={"path": path},
+    )
+
+
+def handle_search(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Search text in the workspace (pattern only; no extra transcript fields)."""
+    pattern = prompt.removeprefix("/search ").strip()
+    _run_tool_slash(
+        command="/search",
+        tool_name="search_text",
+        tool_args={"pattern": pattern},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="搜尋失敗：",
+    )
+
+
+def handle_git(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Show git status. Extra args on the slash line are ignored (historical)."""
+    _ = prompt
+    _run_tool_slash(
+        command="/git",
+        tool_name="git_status",
+        tool_args={},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="工具執行失敗：",
+    )
+
+
+def handle_diff(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Show git diff; optional path after ``/diff``."""
+    path = prompt.removeprefix("/diff").strip()
+    args: dict[str, Any] = {"path": path} if path else {}
+    _run_tool_slash(
+        command="/diff",
+        tool_name="git_diff",
+        tool_args=args,
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="工具執行失敗：",
+        transcript_extra={"path": path},
+    )

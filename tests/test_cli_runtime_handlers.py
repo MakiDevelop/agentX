@@ -1,7 +1,8 @@
 """Coverage for runtime slash handlers used by run_shell() nested handlers.
 
 These tests exercise ``agentx.cli_runtime_handlers`` — the real interactive
-logic for /plan, /execute, /mode — not the simplified ``cli_slash_shims``.
+logic for /plan, /execute, /mode, /files, /read, /search, /git, /diff —
+not the simplified ``cli_slash_shims``.
 """
 
 from __future__ import annotations
@@ -13,10 +14,16 @@ from typing import Any
 from agentx.cli import ShellState, format_plan_status
 from agentx.cli_runtime_handlers import (
     EXECUTE_SYSTEM_MESSAGE,
+    handle_diff,
     handle_execute,
+    handle_files,
+    handle_git,
     handle_mode,
     handle_plan,
+    handle_read,
+    handle_search,
 )
+from agentx.protocol import ToolResult
 from helpers import make_settings
 
 
@@ -32,6 +39,18 @@ class FakeTranscript:
 class FakeAgentSession:
     plan_only: bool = False
     messages: list[dict[str, str]] = field(default_factory=list)
+
+
+@dataclass
+class FakeTools:
+    """Records tools.run calls and returns a canned ToolResult."""
+
+    result: ToolResult
+    calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+
+    def run(self, name: str, args: dict[str, Any]) -> ToolResult:
+        self.calls.append((name, args))
+        return self.result
 
 
 def _state(
@@ -287,3 +306,155 @@ def test_handle_mode_rejects_invalid(tmp_path: Path) -> None:
     assert lines == []
     assert errors == ["mode must be chat, ask, or agent"]
     assert transcript.events == []
+
+
+# --- /files /read /search /git /diff (read-only tool-backed) ---------------
+
+
+def test_handle_files_defaults_path_to_dot() -> None:
+    tools = FakeTools(ToolResult(tool="list_files", ok=True, content="a.py\nb.py"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_files("/files", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("list_files", {"path": "."})]
+    assert lines == ["a.py\nb.py"]
+    assert transcript.events == [
+        ("tool", {"command": "/files", "ok": True, "content": "a.py\nb.py"})
+    ]
+
+
+def test_handle_files_accepts_path_and_emits_failure_prefix() -> None:
+    tools = FakeTools(ToolResult(tool="list_files", ok=False, content="not found"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_files("/files src", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("list_files", {"path": "src"})]
+    assert lines == ["工具執行失敗：not found"]
+    assert transcript.events == [
+        ("tool", {"command": "/files", "ok": False, "content": "not found"})
+    ]
+
+
+def test_handle_read_includes_path_in_transcript() -> None:
+    tools = FakeTools(ToolResult(tool="read_file", ok=True, content="hello"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_read("/read README.md", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("read_file", {"path": "README.md"})]
+    assert lines == ["hello"]
+    assert transcript.events == [
+        (
+            "tool",
+            {
+                "command": "/read",
+                "path": "README.md",
+                "ok": True,
+                "content": "hello",
+            },
+        )
+    ]
+
+
+def test_handle_read_failure_prefix() -> None:
+    tools = FakeTools(ToolResult(tool="read_file", ok=False, content="missing"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_read("/read no-such.py", tools=tools, transcript=transcript, emit=emit)
+
+    assert lines == ["讀取失敗：missing"]
+    assert transcript.events[0][1]["ok"] is False
+    assert transcript.events[0][1]["path"] == "no-such.py"
+
+
+def test_handle_search_success_and_failure() -> None:
+    tools = FakeTools(ToolResult(tool="search_text", ok=True, content="src/a.py:1:hit"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_search("/search foo", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("search_text", {"pattern": "foo"})]
+    # Historical payload: no pattern field in transcript
+    assert transcript.events == [
+        ("tool", {"command": "/search", "ok": True, "content": "src/a.py:1:hit"})
+    ]
+    assert lines == ["src/a.py:1:hit"]
+
+    tools_fail = FakeTools(ToolResult(tool="search_text", ok=False, content="bad regex"))
+    transcript_fail = FakeTranscript()
+    fail_lines, fail_emit = _capture()
+    handle_search("/search [", tools=tools_fail, transcript=transcript_fail, emit=fail_emit)
+    assert fail_lines == ["搜尋失敗：bad regex"]
+
+
+def test_handle_git_ignores_prompt_args() -> None:
+    tools = FakeTools(ToolResult(tool="git_status", ok=True, content="## main"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_git("/git anything", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("git_status", {})]
+    assert lines == ["## main"]
+    assert transcript.events == [
+        ("tool", {"command": "/git", "ok": True, "content": "## main"})
+    ]
+
+
+def test_handle_git_failure_prefix() -> None:
+    tools = FakeTools(ToolResult(tool="git_status", ok=False, content="not a repo"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_git("/git", tools=tools, transcript=transcript, emit=emit)
+
+    assert lines == ["工具執行失敗：not a repo"]
+
+
+def test_handle_diff_without_path_uses_empty_args() -> None:
+    tools = FakeTools(ToolResult(tool="git_diff", ok=True, content="diff --git a/x"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_diff("/diff", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("git_diff", {})]
+    assert lines == ["diff --git a/x"]
+    assert transcript.events == [
+        ("tool", {"command": "/diff", "path": "", "ok": True, "content": "diff --git a/x"})
+    ]
+
+
+def test_handle_diff_with_path_and_truncates_transcript_content() -> None:
+    long_content = "x" * 2500
+    tools = FakeTools(ToolResult(tool="git_diff", ok=True, content=long_content))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_diff("/diff src/a.py", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("git_diff", {"path": "src/a.py"})]
+    # emit gets full content; transcript is truncated to 2000
+    assert lines == [long_content]
+    event = transcript.events[0][1]
+    assert event["path"] == "src/a.py"
+    assert event["ok"] is True
+    assert len(event["content"]) == 2000
+    assert event["content"] == long_content[:2000]
+
+
+def test_handle_diff_failure_prefix() -> None:
+    tools = FakeTools(ToolResult(tool="git_diff", ok=False, content="diff failed"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_diff("/diff", tools=tools, transcript=transcript, emit=emit)
+
+    assert lines == ["工具執行失敗：diff failed"]

@@ -167,7 +167,8 @@ SLASH_COMMANDS = [
 NON_BLOCKING_COMMANDS = {"/jobs", "/cancel"}
 
 # Module-level slash test shims live in agentx.cli_slash_shims.
-# Runtime /plan, /execute, /mode logic lives in agentx.cli_runtime_handlers;
+# Runtime /plan, /execute, /mode, /files, /read, /search, /git, /diff logic
+# lives in agentx.cli_runtime_handlers;
 # nested run_shell() handlers delegate there and register into a local dict.
 SLASH_HANDLERS = _slash_shims.SLASH_HANDLERS
 dispatch_slash = _slash_shims.dispatch_slash
@@ -1696,38 +1697,35 @@ def shell(
     register_handler("/resume", handle_resume)
 
     def handle_files(state: ShellState, prompt: str):
-        """列出 repo 檔案（預設目前 workspace）"""
-        path = prompt.removeprefix("/files").strip() or "."
-        result = tools.run("list_files", {"path": path})
-        transcript.write(
-            "tool",
-            {"command": "/files", "ok": result.ok, "content": result.content[:2000]},
+        """列出 repo 檔案（預設目前 workspace）— delegates to runtime handler."""
+        _runtime_handlers.handle_files(
+            prompt,
+            tools=tools,
+            transcript=transcript,
+            emit=print_tool_result,
         )
-        print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
 
     register_handler("/files", handle_files)
 
     def handle_read(state: ShellState, prompt: str):
-        """讀取 repo 內指定檔案"""
-        path = prompt.removeprefix("/read ").strip()
-        result = tools.run("read_file", {"path": path})
-        transcript.write(
-            "tool",
-            {"command": "/read", "path": path, "ok": result.ok, "content": result.content[:2000]},
+        """讀取 repo 內指定檔案 — delegates to runtime handler."""
+        _runtime_handlers.handle_read(
+            prompt,
+            tools=tools,
+            transcript=transcript,
+            emit=print_tool_result,
         )
-        print_tool_result(result.content if result.ok else f"讀取失敗：{result.content}")
 
     register_handler("/read", handle_read)
 
     def handle_search(state: ShellState, prompt: str):
-        """在 repo 內搜尋文字"""
-        pattern = prompt.removeprefix("/search ").strip()
-        result = tools.run("search_text", {"pattern": pattern})
-        transcript.write(
-            "tool",
-            {"command": "/search", "ok": result.ok, "content": result.content[:2000]},
+        """在 repo 內搜尋文字 — delegates to runtime handler."""
+        _runtime_handlers.handle_search(
+            prompt,
+            tools=tools,
+            transcript=transcript,
+            emit=print_tool_result,
         )
-        print_tool_result(result.content if result.ok else f"搜尋失敗：{result.content}")
 
     register_handler("/search", handle_search)
 
@@ -1763,26 +1761,24 @@ def shell(
     register_handler("/attach", handle_attach)
 
     def handle_git(state: ShellState, prompt: str):
-        """顯示 git status --short --branch"""
-        result = tools.run("git_status", {})
-        transcript.write(
-            "tool",
-            {"command": "/git", "ok": result.ok, "content": result.content[:2000]},
+        """顯示 git status — delegates to runtime handler."""
+        _runtime_handlers.handle_git(
+            prompt,
+            tools=tools,
+            transcript=transcript,
+            emit=print_tool_result,
         )
-        print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
 
     register_handler("/git", handle_git)
 
     def handle_diff(state: ShellState, prompt: str):
-        """顯示 git diff，可指定單一檔案"""
-        path = prompt.removeprefix("/diff").strip()
-        args = {"path": path} if path else {}
-        result = tools.run("git_diff", args)
-        transcript.write(
-            "tool",
-            {"command": "/diff", "path": path, "ok": result.ok, "content": result.content[:2000]},
+        """顯示 git diff，可指定單一檔案 — delegates to runtime handler."""
+        _runtime_handlers.handle_diff(
+            prompt,
+            tools=tools,
+            transcript=transcript,
+            emit=print_tool_result,
         )
-        print_tool_result(result.content if result.ok else f"工具執行失敗：{result.content}")
 
     register_handler("/diff", handle_diff)
 
