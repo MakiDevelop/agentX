@@ -70,6 +70,20 @@ def test_command_plan_payload_allows_agentx_capability(tmp_path) -> None:  # noq
     assert payload["risk"] == "GREEN"
     assert payload["matched_policy"] == "agentx_cli_capability"
     assert payload["resolved_argv"] == ["agentx", "gate", "--json", "--fail-on-blocker"]
+    assert payload["tool_args"]["capability_command"] == "agentx gate"  # type: ignore[index]
+    assert payload["tool_args"]["schemas"] == ["agentx.gate.v1"]  # type: ignore[index]
+    assert payload["tool_args"]["jsonl_event"] == "gate"  # type: ignore[index]
+
+
+def test_command_plan_payload_includes_agentx_infra_capability_metadata(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx infra resource-bundle --json")
+
+    assert payload["ok"] is True
+    assert payload["matched_policy"] == "agentx_cli_capability"
+    assert payload["tool_args"]["capability_command"] == "agentx infra"  # type: ignore[index]
+    assert payload["tool_args"]["usage"] == "agentx infra [all|quick|project|resource|home|vps|resource-bundle] --json"  # type: ignore[index]
+    assert payload["tool_args"]["schemas"] == ["agentx.infrastructure_context.v1"]  # type: ignore[index]
+    assert payload["tool_args"]["jsonl_event"] == "infra"  # type: ignore[index]
 
 
 def test_command_plan_payload_marks_agentx_agent_run_yellow(tmp_path) -> None:  # noqa: ANN001

@@ -228,6 +228,11 @@ Required stable keys:
 `--fail-on-blocker` still prints the payload first. It exits `1` when
 `blockers` is non-empty; otherwise it exits `0`.
 
+For `matched_policy="agentx_cli_capability"`, `tool_args` includes
+`capability_command`, `usage`, `schemas`, `jsonl_event`, and `description` from
+`agentx.capabilities.v1`. This lets runners inspect the expected output schema
+and JSONL event without a second capabilities lookup.
+
 For `matched_policy="agentx_headless"`, `tool_args` includes runner posture
 metadata such as `agent_mode`, `prompt_source`, `workspace_override`,
 `prompt_source_count`, `prompt_file`, `artifact_dir`, `result_output`, `session_output`,

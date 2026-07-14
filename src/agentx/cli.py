@@ -854,7 +854,7 @@ def _agentx_command_plan(settings: Settings, argv: list[str]) -> dict[str, objec
                 "approval_required": risk == "YELLOW",
                 "matched_policy": "agentx_cli_capability",
                 "tool": None,
-                "tool_args": {},
+                "tool_args": _agentx_capability_tool_args(capability),
                 "resolved_argv": argv,
                 "blockers": [],
                 "warnings": [],
@@ -869,6 +869,16 @@ def _agentx_command_plan(settings: Settings, argv: list[str]) -> dict[str, objec
         "resolved_argv": argv,
         "blockers": ["agentx_command_not_in_capabilities"],
         "warnings": [],
+}
+
+
+def _agentx_capability_tool_args(capability: dict[str, object]) -> dict[str, object]:
+    return {
+        "capability_command": str(capability.get("command") or ""),
+        "usage": str(capability.get("usage") or ""),
+        "schemas": [str(schema) for schema in capability.get("schemas", [])],
+        "jsonl_event": str(capability.get("jsonl_event") or ""),
+        "description": str(capability.get("description") or ""),
     }
 
 
