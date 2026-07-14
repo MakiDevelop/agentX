@@ -28,6 +28,7 @@ from agentx.config import Settings
 from agentx.context_compactor import LLMContextCompactor
 from agentx.doctor import run_doctor
 from agentx.git_workflow import build_commit_plan, commit_and_push
+from agentx.intent import plan_task_items
 from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient
@@ -141,7 +142,7 @@ SLASH_COMMANDS = [
     ("/where TOPIC", "依 topic 定位最可能的檔案位置，輸出 ranked /read 建議"),
     ("/infra [all|quick|project|resource|home|vps]", "讀取專案地圖、家庭 AI 設施與 VPS 資源地圖（read-only）"),
     ("/intent TEXT", "把需求整理成目標、風險、建議讀檔與驗證計畫"),
-    ("/plan-task TEXT", "把需求拆成可加入 /task 的 checklist（read-only）"),
+    ("/plan-task [--apply] TEXT", "把需求拆成 checklist；--apply 會寫入 /task 清單"),
     ("/grep PATTERN [PATH]", "在指定 path 內做 rg 內容搜尋；預設整個 workspace"),
     ("/search PATTERN", "在 repo 內搜尋文字"),
     ("/fetch URL", "讀取指定外部網頁文字，會阻擋 localhost 與私有網段"),
@@ -507,6 +508,32 @@ def handle_keyboard_interrupt(
         return f"cancelled queued jobs: {ids}"
 
     return None
+
+
+def apply_plan_task(workspace: Path, request: str) -> str:
+    text = request.strip()
+    if not text:
+        return "usage: /plan-task --apply TEXT"
+
+    tasks = load_tasks(workspace)
+    next_id = get_next_task_id(tasks)
+    new_tasks = []
+    for index, description in enumerate(plan_task_items(text)):
+        new_tasks.append(
+            {
+                "id": next_id + index,
+                "description": description[:200],
+                "status": "in_progress" if index == 0 else "pending",
+                "notes": "[來自 /plan-task --apply]",
+            }
+        )
+    tasks.extend(new_tasks)
+    save_tasks(workspace, tasks)
+
+    lines = [f"已新增 {len(new_tasks)} 個任務："]
+    for task in new_tasks:
+        lines.append(f"- #{task['id']} [{task['status']}] {task['description']}")
+    return "\n".join(lines)
 
 
 def print_sessions(settings: Settings) -> None:
@@ -1808,6 +1835,16 @@ def shell(
 
     def handle_plan_task(state: ShellState, prompt: str):
         """把自然語言需求拆成 task checklist — delegates to runtime handler."""
+        raw = prompt.removeprefix("/plan-task").strip()
+        if raw.startswith("--apply "):
+            text = raw.removeprefix("--apply ").strip()
+            output = apply_plan_task(state.settings.workspace, text)
+            transcript.write(
+                "slash_command",
+                {"command": "/plan-task", "apply": True, "text": text, "content": output[:4000]},
+            )
+            print_tool_result(output)
+            return
         _runtime_handlers.handle_plan_task(
             prompt,
             tools=tools,

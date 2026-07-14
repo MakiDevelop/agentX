@@ -1,6 +1,6 @@
 import pytest
 
-from agentx.intent import analyze_intent, plan_task_checklist
+from agentx.intent import analyze_intent, plan_task_checklist, plan_task_items
 
 
 def test_analyze_intent_builds_low_risk_execution_brief() -> None:
@@ -50,6 +50,16 @@ def test_plan_task_checklist_builds_task_commands() -> None:
     assert "## Suggested /task Commands" in plan
     assert "/task add 釐清目標與風險：新增 /plan-task 指令並補測試" in plan
     assert "/task add 實作最小可逆改動" in plan
+
+
+def test_plan_task_items_match_checklist_task_commands() -> None:
+    text = "新增 /plan-task apply mode"
+    items = plan_task_items(text)
+    plan = plan_task_checklist(text)
+
+    assert items
+    for item in items:
+        assert f"/task add {item}" in plan
 
 
 def test_plan_task_checklist_includes_high_risk_guardrail() -> None:

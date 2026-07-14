@@ -113,7 +113,8 @@ Acceptance:
 - The feature improves execution by producing deterministic goal/risk/inspection/verification briefs before tool work.
 - No automatic production, destructive, remote, or task mutation action is triggered by intent classification.
 - `/plan-task` tests cover low-risk checklist output, high-risk guardrails, missing text, runtime dispatch, registry wiring, and GREEN safety classification.
-- Remaining P2 follow-up: optional YELLOW apply mode can write selected checklist entries into `.agentx/tasks.json` after explicit confirmation.
+- `/plan-task --apply TEXT` writes the generated checklist into `.agentx/tasks.json` only when the explicit apply flag is present.
+- Remaining P2 follow-up: selective apply can write only chosen checklist entries.
 
 ## Recommended Commit Order
 
