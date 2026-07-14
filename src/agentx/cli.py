@@ -954,6 +954,7 @@ class HeadlessRunResult:
     termination: str = "unknown"
     failing_tools: tuple[str, ...] = ()
     stats: dict[str, object] = field(default_factory=dict)
+    log_summary: dict[str, object] = field(default_factory=dict)
     session_path: str | None = None
     phases: tuple[dict[str, str], ...] = ()
 
@@ -979,6 +980,33 @@ def headless_run_stats(session: AgentSession) -> dict[str, object]:
     }
 
 
+def headless_log_summary(session: AgentSession) -> dict[str, object]:
+    tool_outcomes = {
+        str(name): bool(ok)
+        for name, ok in sorted((getattr(session, "_tool_outcomes", {}) or {}).items())
+    }
+    recent_errors = []
+    for error in (getattr(session, "error_history", []) or [])[-5:]:
+        error_type = getattr(error, "error_type", "")
+        recent_errors.append(
+            {
+                "type": getattr(error_type, "value", str(error_type)),
+                "tool": getattr(error, "tool_name", ""),
+                "message": str(getattr(error, "error_message", ""))[:500],
+                "attempt_count": int(getattr(error, "attempt_count", 1) or 1),
+            }
+        )
+    failing_tools = sorted(name for name, ok in tool_outcomes.items() if not ok)
+    return {
+        "termination": getattr(session, "last_termination", "unknown"),
+        "tool_outcomes": tool_outcomes,
+        "successful_tools": sorted(name for name, ok in tool_outcomes.items() if ok),
+        "failing_tools": failing_tools,
+        "recent_errors": recent_errors,
+        "pending_verifies": sorted(getattr(session, "pending_verifies", set())),
+    }
+
+
 def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
     payload = {
         "output": result.output,
@@ -986,11 +1014,35 @@ def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
         "termination": result.termination,
         "failing_tools": list(result.failing_tools),
         "stats": result.stats,
+        "log_summary": result.log_summary,
         "session_path": result.session_path,
     }
     if result.phases:
         payload["phases"] = list(result.phases)
     return json.dumps(payload, ensure_ascii=False)
+
+
+def headless_exception_result(exc: Exception) -> HeadlessRunResult:
+    message = f"{type(exc).__name__}: {exc}"
+    return HeadlessRunResult(
+        output=f"runtime error: {message}",
+        termination="runtime_error",
+        log_summary={
+            "termination": "runtime_error",
+            "tool_outcomes": {},
+            "successful_tools": [],
+            "failing_tools": [],
+            "recent_errors": [
+                {
+                    "type": "runtime_error",
+                    "tool": "",
+                    "message": message[:500],
+                    "attempt_count": 1,
+                }
+            ],
+            "pending_verifies": [],
+        },
+    )
 
 
 def wants_json_output(json_output: bool, output_format: str | None) -> bool:
@@ -1243,7 +1295,7 @@ def structured_headless_exit_code(
         return None
     if normalized in {"cancelled", "canceled", "request_cancelled"}:
         return 130
-    if normalized in {"max_steps_exceeded", "invalid_action", "bad_schema", "non_json"}:
+    if normalized in {"max_steps_exceeded", "invalid_action", "bad_schema", "non_json", "runtime_error"}:
         return 2
     if normalized in {"direct_tool_failure", "tool_failure", "final_failed"}:
         return 1
@@ -1389,26 +1441,29 @@ def main(
         )
         print_headless_dry_run(payload, json_output=structured_output, quiet=quiet)
         raise typer.Exit(code=0)
-    output = run_print_prompt(
-        prompt,
-        namespace=namespace,
-        agent_mode=agent,
-        plan_mode=plan,
-        plan_then_execute=plan_then_execute,
-        orchestrate=orchestrate,
-        workspace_override=workspace_override,
-        approval_override=approval,
-        backend_override=backend,
-        base_url_override=base_url,
-        model_override=model,
-        timeout_override=timeout,
-        return_metadata=True,
-        suppress_trace=structured_output,
-        save_session=save_session,
-        resume_session=resume_session,
-        max_steps=max_steps,
-        no_memory=no_memory,
-    )
+    try:
+        output = run_print_prompt(
+            prompt,
+            namespace=namespace,
+            agent_mode=agent,
+            plan_mode=plan,
+            plan_then_execute=plan_then_execute,
+            orchestrate=orchestrate,
+            workspace_override=workspace_override,
+            approval_override=approval,
+            backend_override=backend,
+            base_url_override=base_url,
+            model_override=model,
+            timeout_override=timeout,
+            return_metadata=True,
+            suppress_trace=structured_output,
+            save_session=save_session,
+            resume_session=resume_session,
+            max_steps=max_steps,
+            no_memory=no_memory,
+        )
+    except Exception as exc:
+        output = headless_exception_result(exc)
     if isinstance(output, HeadlessRunResult):
         exit_code = headless_exit_code(
             output.output,
@@ -1641,6 +1696,7 @@ def run_print_prompt(
                 termination=agent_loop.session.last_termination,
                 failing_tools=tuple(sorted(agent_loop.session.last_failing_tools)),
                 stats=headless_run_stats(agent_loop.session),
+                log_summary=headless_log_summary(agent_loop.session),
                 session_path=str(session_path) if session_path else None,
                 phases=phases,
             )
@@ -1836,24 +1892,27 @@ def ask(
         )
         print_headless_dry_run(payload, json_output=structured_output, quiet=quiet)
         raise typer.Exit(code=0)
-    output = run_print_prompt(
-        prompt,
-        namespace=namespace,
-        agent_mode=True,
-        plan_then_execute=plan_then_execute,
-        workspace_override=workspace_override,
-        approval_override=approval,
-        backend_override=backend,
-        base_url_override=base_url,
-        model_override=model,
-        timeout_override=timeout,
-        return_metadata=True,
-        suppress_trace=structured_output,
-        save_session=save_session,
-        resume_session=resume_session,
-        max_steps=max_steps,
-        no_memory=no_memory,
-    )
+    try:
+        output = run_print_prompt(
+            prompt,
+            namespace=namespace,
+            agent_mode=True,
+            plan_then_execute=plan_then_execute,
+            workspace_override=workspace_override,
+            approval_override=approval,
+            backend_override=backend,
+            base_url_override=base_url,
+            model_override=model,
+            timeout_override=timeout,
+            return_metadata=True,
+            suppress_trace=structured_output,
+            save_session=save_session,
+            resume_session=resume_session,
+            max_steps=max_steps,
+            no_memory=no_memory,
+        )
+    except Exception as exc:
+        output = headless_exception_result(exc)
     if isinstance(output, HeadlessRunResult):
         exit_code = headless_exit_code(
             output.output,

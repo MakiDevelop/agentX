@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typer.testing import CliRunner
 
 from agentx import cli
+from agentx.errors import ErrorContext, ErrorType
 from agentx.session_store import SessionStore
 
 
@@ -30,6 +31,7 @@ def test_headless_exit_code_cancelled() -> None:
 def test_structured_headless_exit_code_overrides_success_text() -> None:
     assert cli.headless_exit_code("看起來完成", termination="final_failed", failing_tools=("run_tests",)) == 1
     assert cli.headless_exit_code("完成", termination="max_steps_exceeded") == 2
+    assert cli.headless_exit_code("runtime error: timeout", termination="runtime_error") == 2
     assert cli.headless_exit_code("完成", termination="cancelled") == 130
 
 
@@ -83,6 +85,7 @@ def test_headless_json_payload_includes_stats() -> None:
             output="完成",
             termination="final_success",
             stats={"message_count": 3, "error_count": 0},
+            log_summary={"tool_outcomes": {"run_tests": True}},
         ),
         exit_code=0,
     )
@@ -94,6 +97,7 @@ def test_headless_json_payload_includes_stats() -> None:
     assert data["termination"] == "final_success"
     assert data["failing_tools"] == []
     assert data["stats"]["message_count"] == 3
+    assert data["log_summary"]["tool_outcomes"] == {"run_tests": True}
     assert data["session_path"] is None
     assert "phases" not in data
 
@@ -117,6 +121,23 @@ def test_headless_json_payload_includes_optional_phases() -> None:
     assert data["phases"] == [
         {"name": "plan", "output": "PLAN"},
         {"name": "execution", "output": "EXEC"},
+    ]
+
+
+def test_headless_exception_result_is_structured() -> None:
+    result = cli.headless_exception_result(RuntimeError("boom"))
+    payload = json.loads(cli.headless_json_payload(result, cli.headless_exit_code(result.output, termination=result.termination)))
+
+    assert payload["termination"] == "runtime_error"
+    assert payload["exit_code"] == 2
+    assert payload["output"] == "runtime error: RuntimeError: boom"
+    assert payload["log_summary"]["recent_errors"] == [
+        {
+            "type": "runtime_error",
+            "tool": "",
+            "message": "RuntimeError: boom",
+            "attempt_count": 1,
+        }
     ]
 
 
@@ -509,6 +530,38 @@ def test_headless_run_stats_summarizes_session_state() -> None:
     }
 
 
+def test_headless_log_summary_summarizes_tool_outcomes_and_errors() -> None:
+    session = SimpleNamespace(
+        last_termination="final_failed",
+        _tool_outcomes={"run_tests": False, "read_file": True},
+        error_history=[
+            ErrorContext(
+                error_type=ErrorType.EXECUTION_ERROR,
+                tool_name="run_tests",
+                error_message="pytest failed\nwith details",
+                attempt_count=2,
+            )
+        ],
+        pending_verifies={"src/a.py"},
+    )
+
+    summary = cli.headless_log_summary(session)  # type: ignore[arg-type]
+
+    assert summary["termination"] == "final_failed"
+    assert summary["tool_outcomes"] == {"read_file": True, "run_tests": False}
+    assert summary["successful_tools"] == ["read_file"]
+    assert summary["failing_tools"] == ["run_tests"]
+    assert summary["pending_verifies"] == ["src/a.py"]
+    assert summary["recent_errors"] == [
+        {
+            "type": "execution_error",
+            "tool": "run_tests",
+            "message": "pytest failed\nwith details",
+            "attempt_count": 2,
+        }
+    ]
+
+
 def test_print_prompt_json_output_uses_structured_metadata(monkeypatch) -> None:  # noqa: ANN001
     runner = CliRunner()
     monkeypatch.setattr(
@@ -531,6 +584,38 @@ def test_print_prompt_json_output_uses_structured_metadata(monkeypatch) -> None:
     assert data["termination"] == "final_failed"
     assert data["failing_tools"] == ["run_tests"]
     assert data["stats"]["error_count"] == 1
+
+
+def test_print_prompt_json_output_catches_runtime_exception(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+
+    def fail_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        raise TimeoutError("model timed out")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fail_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 2
+    assert data["termination"] == "runtime_error"
+    assert data["log_summary"]["recent_errors"][0]["message"] == "TimeoutError: model timed out"
+    assert "Traceback" not in result.output
+
+
+def test_print_prompt_plain_output_catches_runtime_exception(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+
+    def fail_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        raise RuntimeError("backend unavailable")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fail_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent"])
+
+    assert result.exit_code == 2
+    assert "runtime error: RuntimeError: backend unavailable" in result.output
+    assert "Traceback" not in result.output
 
 
 def test_print_prompt_output_format_json_uses_structured_metadata(monkeypatch) -> None:  # noqa: ANN001
