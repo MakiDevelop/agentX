@@ -1,4 +1,5 @@
 import json
+from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -148,9 +149,22 @@ def test_load_headless_prompt_rejects_ambiguous_sources(tmp_path: Path) -> None:
     try:
         cli.load_headless_prompt("inline", "briefing.md", tmp_path)
     except Exception as exc:
-        assert "either -p/--print or --prompt-file" in str(exc)
+        assert "only one prompt source" in str(exc)
     else:
         raise AssertionError("ambiguous prompt sources should fail")
+
+
+def test_load_headless_prompt_reads_stdin(tmp_path: Path) -> None:
+    assert (
+        cli.load_headless_prompt(
+            None,
+            None,
+            tmp_path,
+            stdin_prompt=True,
+            stdin_reader=StringIO("PROMPT FROM STDIN"),
+        )
+        == "PROMPT FROM STDIN"
+    )
 
 
 def test_load_headless_prompt_blocks_workspace_escape(tmp_path: Path) -> None:
@@ -293,6 +307,30 @@ def test_print_prompt_uses_prompt_file(tmp_path: Path, monkeypatch) -> None:  # 
 
     assert result.exit_code == 0
     assert captured["args"][0] == "PROMPT FROM FILE"
+    assert captured["agent_mode"] is True
+    assert data["output"] == "ok"
+
+
+def test_print_prompt_uses_stdin(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured["args"] = args
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        ["--stdin", "--agent", "--output-format", "json"],
+        input="PROMPT FROM STDIN",
+    )
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert captured["args"][0] == "PROMPT FROM STDIN"
     assert captured["agent_mode"] is True
     assert data["output"] == "ok"
 

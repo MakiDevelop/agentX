@@ -1003,9 +1003,16 @@ def load_headless_prompt(
     print_prompt: str | None,
     prompt_file: str | None,
     workspace: Path,
+    *,
+    stdin_prompt: bool = False,
+    stdin_reader: object | None = None,
 ) -> str | None:
-    if print_prompt is not None and prompt_file is not None:
-        raise typer.BadParameter("use either -p/--print or --prompt-file, not both")
+    sources = sum(1 for enabled in (print_prompt is not None, prompt_file is not None, stdin_prompt) if enabled)
+    if sources > 1:
+        raise typer.BadParameter("use only one prompt source: -p/--print, --prompt-file, or --stdin")
+    if stdin_prompt:
+        reader = stdin_reader or sys.stdin
+        return reader.read()
     if prompt_file is None:
         return print_prompt
 
@@ -1122,6 +1129,7 @@ def main(
     ctx: typer.Context,
     print_prompt: str | None = typer.Option(None, "-p", "--print", help="Print one response and exit."),
     prompt_file: str | None = typer.Option(None, "--prompt-file", help="Read the headless prompt from a workspace file."),
+    stdin_prompt: bool = typer.Option(False, "--stdin", help="Read the headless prompt from stdin."),
     agent: bool = typer.Option(False, "--agent", help="Use agent/tool mode with -p."),
     plan: bool = typer.Option(False, "--plan", help="Start in pure planning mode for -p (only produce high-quality plan + reflection, no tools)."),
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan thoroughly first, then seamlessly continue into execution in the same run (recommended for complex tasks)."),
@@ -1137,7 +1145,12 @@ def main(
     if ctx.invoked_subcommand is not None:
         return
     settings_for_prompt = Settings()
-    prompt = load_headless_prompt(print_prompt, prompt_file, settings_for_prompt.workspace)
+    prompt = load_headless_prompt(
+        print_prompt,
+        prompt_file,
+        settings_for_prompt.workspace,
+        stdin_prompt=stdin_prompt,
+    )
     if prompt is None:
         return
     structured_output = wants_json_output(json_output, output_format)
