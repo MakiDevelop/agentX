@@ -1449,58 +1449,21 @@ def shell(
         SLASH_HANDLERS[command] = handler
 
     def handle_status(state: ShellState, prompt: str):
-        """顯示目前 shell 狀態（含安全姿勢）"""
-        transcript.write("slash_command", {"command": prompt})
-        approx_tokens = state.agent_session.context_chars // 4 if state.agent_session else 0
-        plan_status = format_plan_status(state.plan_mode)
+        """顯示目前 shell 狀態（含安全姿勢）— delegates to runtime handler."""
+        def _status_panel(content: str, title: str) -> None:
+            console.print(Panel(content, title=title, border_style="cyan"))
 
-        # Show approval posture for better safety awareness (vision alignment)
-        approval_display = approval_policy.mode.value if approval_policy else "ask"
-        safety_note = {
-            "auto": "YELLOW 自動執行",
-            "ask": "YELLOW 會詢問",
-            "off": "YELLOW 受限",
-        }.get(approval_display, approval_display)
-
-        console.print(
-            f"model={state.settings.model}  mode={state.mode}  plan={plan_status}\n"
-            f"approval={approval_display} ({safety_note})  |  "
-            f"namespace={state.namespace}  persona={state.settings.persona}\n"
-            f"context ~{approx_tokens} tokens  |  messages={len(chat_messages)}"
+        _runtime_handlers.handle_status(
+            state,
+            prompt,
+            transcript=transcript,
+            emit=console.print,
+            approval_mode=approval_policy.mode.value if approval_policy else "ask",
+            message_count=len(chat_messages),
+            format_status=format_plan_status,
+            collect_aca_probe_info=_collect_aca_probe_info,
+            emit_panel=_status_panel,
         )
-
-        # ACA live conformance signals: make /status also show the complete post-governance-record
-        # audit event list (full list + 「全部事件」/捲動提示), using the shared collector.
-        try:
-            mem = getattr(state, "memory", None)
-            if getattr(state.settings, "memory_backend", "memhall") == "amh" and mem is not None:
-                pinfo = _collect_aca_probe_info(state.settings, mem)
-                if pinfo["client_type"] != "N/A":
-                    console.print(
-                        f"[dim]記憶 client: {pinfo['client_type']} | "
-                        f"最新 probe 過期: {pinfo['latest_probe_expires'] or 'N/A'} | "
-                        f"gov record: {pinfo['latest_probe_gov'] or 'N/A'}[/dim]"
-                    )
-                    gov_evs = pinfo.get("latest_probe_gov_audit_full")
-                    if gov_evs is not None:
-                        evs = gov_evs or []
-                        formatted = []
-                        for i, e in enumerate(evs, 1):
-                            s = str(e).replace("\n", " | ")[:120]
-                            formatted.append(f"{i}. {s}")
-                        events_str = "\n".join(formatted) or "(none)"
-                        events_str += (
-                            "\n（已列出全部事件；長列表請向上捲動查看；完整列表亦見 /config 表格）"
-                        )
-                        console.print(
-                            Panel(
-                                events_str,
-                                title="最新 probe gov audit events (ACA, 完整列表) — /status",
-                                border_style="cyan",
-                            )
-                        )
-        except Exception:
-            pass  # non-fatal for status display
 
     register_handler("/status", handle_status)
 
@@ -1543,9 +1506,13 @@ def shell(
     register_handler("/memory", handle_memory)
 
     def handle_sessions(state: ShellState, prompt: str):
-        """列出最近 transcript，可搭配 /resume"""
-        transcript.write("slash_command", {"command": prompt})
-        print_sessions(state.settings)
+        """列出最近 transcript，可搭配 /resume — delegates to runtime handler."""
+        _runtime_handlers.handle_sessions(
+            state,
+            prompt,
+            transcript=transcript,
+            print_sessions=print_sessions,
+        )
 
     register_handler("/sessions", handle_sessions)
 
@@ -1610,9 +1577,14 @@ def shell(
     register_handler("/history", handle_history)
 
     def handle_jobs(state: ShellState, prompt: str):
-        """顯示目前 jobs 佇列狀態"""
-        transcript.write("slash_command", {"command": prompt})
-        print_jobs(job_queue)
+        """顯示目前 jobs 佇列狀態 — delegates to runtime handler."""
+        _runtime_handlers.handle_jobs(
+            state,
+            prompt,
+            transcript=transcript,
+            job_queue=job_queue,
+            print_jobs=print_jobs,
+        )
 
     register_handler("/jobs", handle_jobs)
 
@@ -2095,12 +2067,17 @@ def shell(
 
         tasks = load_tasks(state.settings.workspace)
 
-        # 顯示狀態
-        if not value or value == "status" or value == "list":
-            summary = format_task_list_summary(tasks)
-            console.print(Panel(summary, title="Task List (多任務清單)", border_style="cyan"))
-            if tasks:
-                console.print("[dim]提示：使用 /task update <id> done|in_progress [notes] 來更新[/dim]")
+        # 顯示狀態（empty / status / list）— delegates to read-only runtime helper
+        def _task_panel(content: str, title: str) -> None:
+            console.print(Panel(content, title=title, border_style="cyan"))
+
+        if _runtime_handlers.handle_task_readonly(
+            value,
+            tasks=tasks,
+            format_summary=format_task_list_summary,
+            emit_panel=_task_panel,
+            emit=console.print,
+        ):
             return
 
         # 新增任務

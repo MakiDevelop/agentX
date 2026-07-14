@@ -2,12 +2,17 @@
 
 These implement the real interactive-shell logic for a small set of
 commands (``/plan``, ``/execute``, ``/mode``, plus read-only tool-backed
-``/files``, ``/read``, ``/search``, ``/git``, ``/diff``). Nested handlers
-inside ``cli.run_shell()`` should delegate here so unit tests can exercise
-the same path without driving the full interactive loop.
+``/files``, ``/read``, ``/search``, ``/git``, ``/diff``, and low-risk
+inspection handlers ``/status``, ``/sessions``, ``/jobs``, and the
+read-only ``/task`` empty/status/list branch). Nested handlers inside
+``cli.run_shell()`` should delegate here so unit tests can exercise the
+same path without driving the full interactive loop.
 
 Do not confuse with ``cli_slash_shims`` — those are simplified test-only
 dispatch stubs and are *not* the runtime shell path.
+
+Side-effect branches (``/cancel``, ``/task add|update|done|clear``,
+``/apply``, ``/commit``, ``/run``, ``/docker``) stay in ``cli.py``.
 """
 
 from __future__ import annotations
@@ -234,3 +239,125 @@ def handle_diff(
         fail_prefix="工具執行失敗：",
         transcript_extra={"path": path},
     )
+
+
+# --- low-risk inspection handlers -----------------------------------------
+
+
+def handle_status(
+    state: Any,
+    prompt: str,
+    *,
+    transcript: Any,
+    emit: Callable[[str], None],
+    approval_mode: str,
+    message_count: int,
+    format_status: Callable[[bool], str],
+    collect_aca_probe_info: Callable[[Any, Any], dict[str, Any]] | None = None,
+    emit_panel: Callable[[str, str], None] | None = None,
+) -> None:
+    """Show model/mode/plan/approval/namespace/persona/context/messages (+ ACA probe).
+
+    ``emit_panel(content, title)`` is used for the ACA audit events panel when
+    probe data is available. ``collect_aca_probe_info`` is injected so the
+    shell-layer collector (shared with /config and /doctor) stays in ``cli.py``.
+    """
+    transcript.write("slash_command", {"command": prompt})
+    approx_tokens = state.agent_session.context_chars // 4 if state.agent_session else 0
+    plan_status = format_status(state.plan_mode)
+
+    # Show approval posture for better safety awareness (vision alignment)
+    approval_display = approval_mode or "ask"
+    safety_note = {
+        "auto": "YELLOW 自動執行",
+        "ask": "YELLOW 會詢問",
+        "off": "YELLOW 受限",
+    }.get(approval_display, approval_display)
+
+    emit(
+        f"model={state.settings.model}  mode={state.mode}  plan={plan_status}\n"
+        f"approval={approval_display} ({safety_note})  |  "
+        f"namespace={state.namespace}  persona={state.settings.persona}\n"
+        f"context ~{approx_tokens} tokens  |  messages={message_count}"
+    )
+
+    # ACA live conformance signals: make /status also show the complete
+    # post-governance-record audit event list when probe data is available.
+    if collect_aca_probe_info is None:
+        return
+    try:
+        mem = getattr(state, "memory", None)
+        if getattr(state.settings, "memory_backend", "memhall") == "amh" and mem is not None:
+            pinfo = collect_aca_probe_info(state.settings, mem)
+            if pinfo["client_type"] != "N/A":
+                emit(
+                    f"[dim]記憶 client: {pinfo['client_type']} | "
+                    f"最新 probe 過期: {pinfo['latest_probe_expires'] or 'N/A'} | "
+                    f"gov record: {pinfo['latest_probe_gov'] or 'N/A'}[/dim]"
+                )
+                gov_evs = pinfo.get("latest_probe_gov_audit_full")
+                if gov_evs is not None and emit_panel is not None:
+                    evs = gov_evs or []
+                    formatted = []
+                    for i, e in enumerate(evs, 1):
+                        s = str(e).replace("\n", " | ")[:120]
+                        formatted.append(f"{i}. {s}")
+                    events_str = "\n".join(formatted) or "(none)"
+                    events_str += (
+                        "\n（已列出全部事件；長列表請向上捲動查看；完整列表亦見 /config 表格）"
+                    )
+                    emit_panel(
+                        events_str,
+                        "最新 probe gov audit events (ACA, 完整列表) — /status",
+                    )
+    except Exception:
+        pass  # non-fatal for status display
+
+
+def handle_sessions(
+    state: Any,
+    prompt: str,
+    *,
+    transcript: Any,
+    print_sessions: Callable[[Any], None],
+) -> None:
+    """List recent transcripts; delegates rendering to ``print_sessions``."""
+    transcript.write("slash_command", {"command": prompt})
+    print_sessions(state.settings)
+
+
+def handle_jobs(
+    state: Any,
+    prompt: str,
+    *,
+    transcript: Any,
+    job_queue: Any,
+    print_jobs: Callable[[Any], None],
+) -> None:
+    """Show job queue; delegates rendering to ``print_jobs``."""
+    transcript.write("slash_command", {"command": prompt})
+    print_jobs(job_queue)
+
+
+def handle_task_readonly(
+    value: str,
+    *,
+    tasks: list[dict[str, Any]],
+    format_summary: Callable[[list[dict[str, Any]]], str],
+    emit_panel: Callable[[str, str], None],
+    emit: Callable[[str], None],
+) -> bool:
+    """Handle ``/task`` empty / status / list only.
+
+    Returns True when this branch handled the command (caller should return).
+    Write branches (add / update / done / clear / legacy free-text add) stay
+    in ``cli.py``.
+    """
+    if value and value not in {"status", "list"}:
+        return False
+
+    summary = format_summary(tasks)
+    emit_panel(summary, "Task List (多任務清單)")
+    if tasks:
+        emit("[dim]提示：使用 /task update <id> done|in_progress [notes] 來更新[/dim]")
+    return True

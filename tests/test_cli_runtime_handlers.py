@@ -1,7 +1,8 @@
 """Coverage for runtime slash handlers used by run_shell() nested handlers.
 
 These tests exercise ``agentx.cli_runtime_handlers`` — the real interactive
-logic for /plan, /execute, /mode, /files, /read, /search, /git, /diff —
+logic for /plan, /execute, /mode, /files, /read, /search, /git, /diff,
+and low-risk inspection handlers /status, /sessions, /jobs, /task readonly —
 not the simplified ``cli_slash_shims``.
 """
 
@@ -18,10 +19,14 @@ from agentx.cli_runtime_handlers import (
     handle_execute,
     handle_files,
     handle_git,
+    handle_jobs,
     handle_mode,
     handle_plan,
     handle_read,
     handle_search,
+    handle_sessions,
+    handle_status,
+    handle_task_readonly,
 )
 from agentx.protocol import ToolResult
 from helpers import make_settings
@@ -39,6 +44,7 @@ class FakeTranscript:
 class FakeAgentSession:
     plan_only: bool = False
     messages: list[dict[str, str]] = field(default_factory=list)
+    context_chars: int = 0
 
 
 @dataclass
@@ -458,3 +464,232 @@ def test_handle_diff_failure_prefix() -> None:
     handle_diff("/diff", tools=tools, transcript=transcript, emit=emit)
 
     assert lines == ["工具執行失敗：diff failed"]
+
+
+# --- /status /sessions /jobs /task readonly (inspection) -------------------
+
+
+def test_handle_status_basic_fields_and_transcript(tmp_path: Path) -> None:
+    state = _state(tmp_path, mode="agent", plan_mode=True)
+    assert state.agent_session is not None
+    state.agent_session.context_chars = 400  # ~100 tokens
+    state.settings = state.settings.with_updates(model="test-model", persona="coder")
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+    panels: list[tuple[str, str]] = []
+
+    handle_status(
+        state,
+        "/status",
+        transcript=transcript,
+        emit=emit,
+        approval_mode="ask",
+        message_count=3,
+        format_status=format_plan_status,
+        collect_aca_probe_info=None,
+        emit_panel=lambda content, title: panels.append((content, title)),
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/status"})]
+    assert len(lines) == 1
+    text = lines[0]
+    assert "model=test-model" in text
+    assert "mode=agent" in text
+    assert f"plan={format_plan_status(True)}" in text
+    assert "approval=ask (YELLOW 會詢問)" in text
+    assert "namespace=project:test" in text
+    assert "persona=coder" in text
+    assert "context ~100 tokens" in text
+    assert "messages=3" in text
+    assert panels == []
+
+
+def test_handle_status_without_session_zero_tokens(tmp_path: Path) -> None:
+    state = _state(tmp_path, with_session=False)
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_status(
+        state,
+        "/status",
+        transcript=transcript,
+        emit=emit,
+        approval_mode="auto",
+        message_count=0,
+        format_status=format_plan_status,
+    )
+
+    assert "context ~0 tokens" in lines[0]
+    assert "approval=auto (YELLOW 自動執行)" in lines[0]
+    assert "messages=0" in lines[0]
+
+
+def test_handle_status_aca_probe_panel_when_available(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    state.settings = state.settings.with_updates(memory_backend="amh")
+    state.memory = object()  # type: ignore[assignment]
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+    panels: list[tuple[str, str]] = []
+
+    def fake_collect(_settings: Any, _memory: Any) -> dict[str, Any]:
+        return {
+            "client_type": "AmhClient",
+            "latest_probe_expires": "2099-01-01",
+            "latest_probe_audit": "2 events",
+            "latest_probe_gov": "type=probe_completed, evidence_ids=['x']",
+            "latest_probe_gov_audit_full": [
+                "write: marker",
+                "tier_upgrade\nconfirmed",
+            ],
+        }
+
+    handle_status(
+        state,
+        "/status",
+        transcript=transcript,
+        emit=emit,
+        approval_mode="off",
+        message_count=1,
+        format_status=format_plan_status,
+        collect_aca_probe_info=fake_collect,
+        emit_panel=lambda content, title: panels.append((content, title)),
+    )
+
+    assert any("記憶 client: AmhClient" in line for line in lines)
+    assert any("最新 probe 過期: 2099-01-01" in line for line in lines)
+    assert any("gov record: type=probe_completed" in line for line in lines)
+    assert len(panels) == 1
+    content, title = panels[0]
+    assert title == "最新 probe gov audit events (ACA, 完整列表) — /status"
+    assert "1. write: marker" in content
+    assert "2. tier_upgrade | confirmed" in content
+    assert "（已列出全部事件；長列表請向上捲動查看；完整列表亦見 /config 表格）" in content
+
+
+def test_handle_status_aca_probe_swallowed_on_collector_error(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    state.settings = state.settings.with_updates(memory_backend="amh")
+    state.memory = object()  # type: ignore[assignment]
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    def boom(_settings: Any, _memory: Any) -> dict[str, Any]:
+        raise RuntimeError("probe failed")
+
+    handle_status(
+        state,
+        "/status",
+        transcript=transcript,
+        emit=emit,
+        approval_mode="ask",
+        message_count=0,
+        format_status=format_plan_status,
+        collect_aca_probe_info=boom,
+        emit_panel=lambda *_a: None,
+    )
+
+    # Main status still emitted; probe failure is non-fatal
+    assert len(lines) == 1
+    assert "model=" in lines[0]
+
+
+def test_handle_sessions_delegates_to_print_sessions(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    seen: list[Any] = []
+
+    def fake_print_sessions(settings: Any) -> None:
+        seen.append(settings)
+
+    handle_sessions(
+        state,
+        "/sessions",
+        transcript=transcript,
+        print_sessions=fake_print_sessions,
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/sessions"})]
+    assert seen == [state.settings]
+
+
+def test_handle_jobs_delegates_to_print_jobs(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    queue = object()
+    seen: list[Any] = []
+
+    def fake_print_jobs(job_queue: Any) -> None:
+        seen.append(job_queue)
+
+    handle_jobs(
+        state,
+        "/jobs",
+        transcript=transcript,
+        job_queue=queue,
+        print_jobs=fake_print_jobs,
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/jobs"})]
+    assert seen == [queue]
+
+
+def test_handle_task_readonly_status_list_empty() -> None:
+    lines: list[str] = []
+    panels: list[tuple[str, str]] = []
+    tasks = [
+        {"id": 1, "description": "do thing", "status": "in_progress", "notes": ""},
+    ]
+
+    def format_summary(ts: list[dict[str, Any]]) -> str:
+        return f"summary:{len(ts)}"
+
+    # empty value
+    handled = handle_task_readonly(
+        "",
+        tasks=tasks,
+        format_summary=format_summary,
+        emit_panel=lambda c, t: panels.append((c, t)),
+        emit=lines.append,
+    )
+    assert handled is True
+    assert panels == [("summary:1", "Task List (多任務清單)")]
+    assert lines == ["[dim]提示：使用 /task update <id> done|in_progress [notes] 來更新[/dim]"]
+
+    # status
+    panels.clear()
+    lines.clear()
+    assert handle_task_readonly(
+        "status",
+        tasks=[],
+        format_summary=format_summary,
+        emit_panel=lambda c, t: panels.append((c, t)),
+        emit=lines.append,
+    )
+    assert panels == [("summary:0", "Task List (多任務清單)")]
+    assert lines == []  # no hint when empty task list
+
+    # list
+    assert handle_task_readonly(
+        "list",
+        tasks=[],
+        format_summary=format_summary,
+        emit_panel=lambda c, t: panels.append((c, t)),
+        emit=lines.append,
+    )
+
+
+def test_handle_task_readonly_does_not_claim_write_branches() -> None:
+    calls: list[str] = []
+
+    for value in ("add foo", "update 1 done", "done 1", "clear", "free text task"):
+        handled = handle_task_readonly(
+            value,
+            tasks=[],
+            format_summary=lambda _t: "x",
+            emit_panel=lambda c, t: calls.append(f"panel:{c}:{t}"),
+            emit=lambda m: calls.append(f"emit:{m}"),
+        )
+        assert handled is False
+
+    assert calls == []
