@@ -3135,6 +3135,21 @@ def gate_exit_code(payload: dict[str, object], *, fail_on_blocker: bool = False)
     return 0 if payload.get("ok") is True else 1
 
 
+def _next_task_reason(base: str, task: dict[str, object] | None) -> str:
+    if not task:
+        return base
+    task_id = task.get("id")
+    description = str(task.get("description") or "").strip()
+    status = str(task.get("status") or "").strip()
+    task_ref = f"#{task_id}" if task_id is not None else "active task"
+    details = [task_ref]
+    if status:
+        details.append(status)
+    if description:
+        details.append(description[:80])
+    return f"{base}; primary={': '.join(details)}"
+
+
 def next_payload(
     settings: Settings,
     *,
@@ -3151,6 +3166,9 @@ def next_payload(
     denied_count = int(approvals.get("denied_count", 0) or 0) if approvals.get("ok") is True else 0
     dirty = diff.get("dirty") is True
     active_task_count = int(tasks.get("count", 0) or 0)
+    active_task_items = [dict(task) for task in tasks.get("tasks", [])] if isinstance(tasks.get("tasks"), list) else []
+    active_task_ids = [task.get("id") for task in active_task_items if task.get("id") is not None]
+    primary_active_task = active_task_items[0] if active_task_items else None
     artifact_items = list(artifacts.get("artifacts", [])) if artifacts.get("ok") is True else []
     latest_artifact = dict(artifact_items[0]) if artifact_items else None
     latest_needs_handoff = bool(latest_artifact and latest_artifact.get("needs_handoff") is True)
@@ -3201,7 +3219,7 @@ def next_payload(
                 "rank": len(recommendations) + 1,
                 "kind": "task_resume",
                 "command": "agentx tasks active --json",
-                "reason": "active tasks exist and the workspace is clean",
+                "reason": _next_task_reason("active tasks exist and the workspace is clean", primary_active_task),
                 "risk": "GREEN",
             }
         )
@@ -3210,7 +3228,7 @@ def next_payload(
                 "rank": len(recommendations) + 1,
                 "kind": "headless_continue",
                 "command": "agentx -p '繼續目前 active task' --agent --json",
-                "reason": "continue active task work from current repo state",
+                "reason": _next_task_reason("continue active task work from current repo state", primary_active_task),
                 "risk": "YELLOW",
             }
         )
@@ -3238,6 +3256,8 @@ def next_payload(
             "dirty": dirty,
             "diff_ok": diff.get("ok") is True,
             "active_task_count": active_task_count,
+            "active_task_ids": active_task_ids,
+            "primary_active_task": primary_active_task,
             "artifact_count": artifacts.get("count", 0),
             "latest_artifact_needs_handoff": latest_needs_handoff,
             "denied_approval_count": denied_count,

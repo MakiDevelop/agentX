@@ -101,13 +101,27 @@ def test_next_payload_recommends_handoff_resume_for_latest_artifact(tmp_path: Pa
 
 def test_next_payload_recommends_active_tasks_when_clean(tmp_path: Path) -> None:
     _git_repo(tmp_path)
-    save_tasks(tmp_path, [{"id": 1, "description": "continue", "status": "in_progress", "notes": ""}])
+    save_tasks(
+        tmp_path,
+        [
+            {"id": 1, "description": "continue", "status": "in_progress", "notes": ""},
+            {"id": 2, "description": "next", "status": "pending", "notes": ""},
+        ],
+    )
 
     payload = next_payload(Settings(workspace=tmp_path))
 
-    assert payload["signals"]["active_task_count"] == 1  # type: ignore[index]
+    assert payload["signals"]["active_task_count"] == 2  # type: ignore[index]
+    assert payload["signals"]["active_task_ids"] == [1, 2]  # type: ignore[index]
+    assert payload["signals"]["primary_active_task"] == {  # type: ignore[index]
+        "id": 1,
+        "description": "continue",
+        "status": "in_progress",
+        "notes": "",
+    }
     assert payload["recommendations"][0]["kind"] == "task_resume"  # type: ignore[index]
     assert payload["recommendations"][1]["kind"] == "headless_continue"  # type: ignore[index]
+    assert "primary=#1: in_progress: continue" in payload["recommendations"][0]["reason"]  # type: ignore[index]
 
 
 def test_next_payload_defaults_to_inspect_when_idle(tmp_path: Path) -> None:

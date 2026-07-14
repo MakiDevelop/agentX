@@ -354,6 +354,12 @@ Required stable keys:
 | `artifacts` | object | Embedded `agentx.artifacts.v1`. |
 | `approvals` | object | Embedded denied-only latest `agentx.approvals.v1`. |
 
+`signals` includes `dirty`, `diff_ok`, `active_task_count`,
+`active_task_ids`, `primary_active_task`, `artifact_count`,
+`latest_artifact_needs_handoff`, `denied_approval_count`, and
+`approvals_available`. `primary_active_task` is the first task from the embedded
+active `tasks` payload, or null when no active tasks exist.
+
 Each recommendation object includes:
 
 | Key | Type |
