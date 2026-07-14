@@ -1508,6 +1508,17 @@ def format_handoff_inspect_field_plain(field_payload: dict[str, object]) -> str:
     return str(value)
 
 
+def handoff_inspect_exit_code(payload: dict[str, object], *, use_payload_exit_code: bool) -> int:
+    if not use_payload_exit_code:
+        return 0
+    raw = payload.get("exit_code")
+    if isinstance(raw, bool):
+        return 1 if raw else 0
+    if isinstance(raw, int):
+        return max(0, min(raw, 255))
+    return 1
+
+
 def backend_list_payload() -> list[str]:
     register_builtin_backends()
     return list_registered_backends()
@@ -2532,6 +2543,11 @@ def handoff_inspect(
     source: str = typer.Argument(..., help="Headless JSON/JSONL payload file to inspect, or '-' for stdin."),
     field: str | None = typer.Option(None, "--field", help="Print one takeover field, e.g. resume_command or recovery_checklist."),
     next_prompt: str | None = typer.Option(None, "--next-prompt", help="Replace the resume command placeholder with this prompt."),
+    use_payload_exit_code: bool = typer.Option(
+        False,
+        "--use-payload-exit-code",
+        help="Exit with the payload exit_code after printing takeover fields.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
@@ -2541,21 +2557,23 @@ def handoff_inspect(
         inspect_headless_handoff_payload(load_headless_payload_source(source)),
         next_prompt,
     )
+    exit_code = handoff_inspect_exit_code(payload, use_payload_exit_code=use_payload_exit_code)
     if field:
         field_payload = handoff_inspect_field_payload(payload, field)
         if structured_format != "plain":
             print_structured_payload(field_payload, output_format=structured_format, event="handoff_inspect_field")
-            return
+            raise typer.Exit(code=exit_code)
         sys.stdout.write(format_handoff_inspect_field_plain(field_payload))
         sys.stdout.write("\n")
         sys.stdout.flush()
-        return
+        raise typer.Exit(code=exit_code)
     if structured_format != "plain":
         print_structured_payload(payload, output_format=structured_format, event="handoff_inspect")
-        return
+        raise typer.Exit(code=exit_code)
     sys.stdout.write(format_handoff_inspect_plain(payload))
     sys.stdout.write("\n")
     sys.stdout.flush()
+    raise typer.Exit(code=exit_code)
 
 
 @app.command()

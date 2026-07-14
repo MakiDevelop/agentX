@@ -4,6 +4,7 @@ from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from typer.testing import CliRunner
 
 from agentx import cli
@@ -301,6 +302,76 @@ def test_handoff_inspect_field_resume_command_plain() -> None:
 
     assert result.exit_code == 0
     assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+
+
+def test_handoff_inspect_default_exit_zero_for_failed_payload() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        ["handoff-inspect", "tests/fixtures/headless_result_failure.json", "--field", "resume_command"],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+
+
+def test_handoff_inspect_use_payload_exit_code_plain() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--use-payload-exit-code",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+
+
+def test_handoff_inspect_use_payload_exit_code_jsonl() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--output-format",
+            "jsonl",
+            "--use-payload-exit-code",
+        ],
+    )
+    event = json.loads(result.output)
+
+    assert result.exit_code == 1
+    assert event["event"] == "handoff_inspect_field"
+    assert event["data"]["value"] == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json"
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        ({"exit_code": 0}, 0),
+        ({"exit_code": 124}, 124),
+        ({"exit_code": 999}, 255),
+        ({"exit_code": -3}, 0),
+        ({"exit_code": True}, 1),
+        ({"exit_code": False}, 0),
+        ({"exit_code": "failed"}, 1),
+        ({}, 1),
+    ],
+)
+def test_handoff_inspect_exit_code_normalizes_payload_exit_code(
+    payload: dict[str, object],
+    expected: int,
+) -> None:
+    assert cli.handoff_inspect_exit_code(payload, use_payload_exit_code=True) == expected
+    assert cli.handoff_inspect_exit_code(payload, use_payload_exit_code=False) == 0
 
 
 def test_handoff_inspect_next_prompt_updates_resume_command() -> None:
