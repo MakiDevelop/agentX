@@ -1436,6 +1436,19 @@ def test_build_headless_dry_run_payload_records_result_output(tmp_path: Path) ->
     assert payload["handoff_briefing_output"] == str(briefing)
 
 
+def test_build_headless_dry_run_payload_records_artifact_dir(tmp_path: Path) -> None:
+    artifact_dir = tmp_path / "artifacts" / "run"
+
+    payload = cli.build_headless_dry_run_payload(
+        "hello",
+        workspace_override=tmp_path,
+        agent_mode=True,
+        artifact_dir=artifact_dir,
+    )
+
+    assert payload["artifact_dir"] == str(artifact_dir)
+
+
 def test_build_headless_dry_run_payload_session_output_implies_save(tmp_path: Path) -> None:
     target = tmp_path / "artifacts" / "run.session.jsonl"
 
@@ -2141,6 +2154,148 @@ def test_print_prompt_handoff_briefing_output_requires_agent(tmp_path: Path) -> 
 
     assert result.exit_code != 0
     assert "--handoff-briefing-output requires --agent" in result.output
+
+
+def test_print_prompt_artifact_dir_writes_standard_bundle(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    artifact_dir = tmp_path / "artifacts" / "run"
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        session_output_path = kwargs["session_output_path"]
+        assert session_output_path == artifact_dir / "session.session.jsonl"
+        session_output_path.parent.mkdir(parents=True, exist_ok=True)
+        session_output_path.write_text('{"role":"system","content":"session"}\n', encoding="utf-8")
+        return headless_result_with_handoff(session_path=str(session_output_path))
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "-p",
+            "demo",
+            "--agent",
+            "--workspace",
+            str(tmp_path),
+            "--artifact-dir",
+            "artifacts/run",
+            "--quiet",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert result.output == ""
+    assert (artifact_dir / "session.session.jsonl").is_file()
+    payload = json.loads((artifact_dir / "result.json").read_text(encoding="utf-8"))
+    briefing = (artifact_dir / "handoff.md").read_text(encoding="utf-8")
+    assert payload["termination"] == "max_steps_exceeded"
+    assert "agentx -p '<next prompt>' --agent --resume-session session.session.jsonl --json" in briefing
+
+
+def test_print_prompt_artifact_dir_uses_jsonl_result_name(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    artifact_dir = tmp_path / "artifacts" / "run"
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        session_output_path = kwargs["session_output_path"]
+        session_output_path.parent.mkdir(parents=True, exist_ok=True)
+        session_output_path.write_text('{"role":"system","content":"session"}\n', encoding="utf-8")
+        return headless_result_with_handoff(session_path=str(session_output_path))
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "-p",
+            "demo",
+            "--agent",
+            "--workspace",
+            str(tmp_path),
+            "--artifact-dir",
+            "artifacts/run",
+            "--result-output-format",
+            "jsonl",
+            "--quiet",
+        ],
+    )
+    event = json.loads((artifact_dir / "result.jsonl").read_text(encoding="utf-8"))
+
+    assert result.exit_code == 2
+    assert event["event"] == "result"
+    assert event["data"]["termination"] == "max_steps_exceeded"
+    assert not (artifact_dir / "result.json").exists()
+
+
+def test_print_prompt_artifact_dir_rejects_output_overrides(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "-p",
+            "demo",
+            "--agent",
+            "--workspace",
+            str(tmp_path),
+            "--artifact-dir",
+            "artifacts/run",
+            "--result-output",
+            "artifacts/result.json",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--artifact-dir cannot be combined with --result-output" in result.output
+
+
+def test_print_prompt_artifact_dir_rejects_existing_bundle_file(tmp_path: Path) -> None:
+    runner = CliRunner()
+    existing = tmp_path / "artifacts" / "run" / "result.json"
+    existing.parent.mkdir(parents=True)
+    existing.write_text("existing", encoding="utf-8")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "-p",
+            "demo",
+            "--agent",
+            "--workspace",
+            str(tmp_path),
+            "--artifact-dir",
+            "artifacts/run",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--result-output already exists" in result.output
+    assert existing.read_text(encoding="utf-8") == "existing"
+
+
+def test_print_prompt_artifact_dir_requires_agent(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "-p",
+            "demo",
+            "--workspace",
+            str(tmp_path),
+            "--artifact-dir",
+            "artifacts/run",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--artifact-dir requires --agent" in result.output
 
 
 def test_print_prompt_quiet_suppresses_plain_output(monkeypatch) -> None:  # noqa: ANN001
@@ -3118,6 +3273,42 @@ def test_ask_handoff_briefing_output_writes_markdown_artifact(
     assert result.output == ""
     assert "# agentX Handoff Briefing" in content
     assert "agentx -p '<next prompt>' --agent --resume-session ask.session.jsonl --json" in content
+
+
+def test_ask_artifact_dir_writes_standard_bundle(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    artifact_dir = tmp_path / "artifacts" / "ask"
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        session_output_path = kwargs["session_output_path"]
+        assert session_output_path == artifact_dir / "session.session.jsonl"
+        session_output_path.parent.mkdir(parents=True, exist_ok=True)
+        session_output_path.write_text('{"role":"system","content":"session"}\n', encoding="utf-8")
+        return headless_result_with_handoff(session_path=str(session_output_path))
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "ask",
+            "demo",
+            "--workspace",
+            str(tmp_path),
+            "--artifact-dir",
+            "artifacts/ask",
+            "--quiet",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert result.output == ""
+    assert (artifact_dir / "session.session.jsonl").is_file()
+    assert json.loads((artifact_dir / "result.json").read_text(encoding="utf-8"))["termination"] == "max_steps_exceeded"
+    assert "# agentX Handoff Briefing" in (artifact_dir / "handoff.md").read_text(encoding="utf-8")
 
 
 def test_ask_forwards_plan_then_execute(monkeypatch) -> None:  # noqa: ANN001

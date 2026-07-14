@@ -1736,6 +1736,7 @@ def build_headless_dry_run_payload(
     result_output: Path | None = None,
     result_output_format: str = "auto",
     handoff_briefing_output: Path | None = None,
+    artifact_dir: Path | None = None,
     no_memory: bool = False,
 ) -> dict[str, object]:
     settings = Settings(workspace=workspace_override)
@@ -1783,6 +1784,7 @@ def build_headless_dry_run_payload(
         "result_output": str(result_output) if result_output else None,
         "result_output_format": result_output_format,
         "handoff_briefing_output": str(handoff_briefing_output) if handoff_briefing_output else None,
+        "artifact_dir": str(artifact_dir) if artifact_dir else None,
         "prompt_chars": len(prompt),
     }
 
@@ -1811,6 +1813,7 @@ def format_headless_dry_run(payload: dict[str, object]) -> str:
             f"result_output: {payload['result_output']}",
             f"result_output_format: {payload['result_output_format']}",
             f"handoff_briefing_output: {payload['handoff_briefing_output']}",
+            f"artifact_dir: {payload['artifact_dir']}",
             f"prompt_chars: {payload['prompt_chars']}",
         ]
     )
@@ -1959,6 +1962,66 @@ def resolve_headless_result_output(workspace: Path, value: str | None) -> Path |
     if target.name in {"", ".", ".."}:
         raise typer.BadParameter(f"invalid result output path: {value}")
     return target
+
+
+def resolve_headless_artifact_dir(workspace: Path, value: str | None) -> Path | None:
+    if value is None:
+        return None
+    try:
+        target = resolve_inside_workspace(workspace, value)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if target.exists() and not target.is_dir():
+        raise typer.BadParameter(f"artifact dir is not a directory: {value}")
+    if target.name in {"", ".", ".."}:
+        raise typer.BadParameter(f"invalid artifact dir path: {value}")
+    return target
+
+
+def reject_artifact_dir_output_overrides(
+    artifact_dir: Path | None,
+    *,
+    session_output: str | None,
+    result_output: str | None,
+    handoff_briefing_output: str | None,
+) -> None:
+    if artifact_dir is None:
+        return
+    conflicts = [
+        name
+        for name, value in [
+            ("--session-output", session_output),
+            ("--result-output", result_output),
+            ("--handoff-briefing-output", handoff_briefing_output),
+        ]
+        if value is not None
+    ]
+    if conflicts:
+        joined = ", ".join(conflicts)
+        raise typer.BadParameter(f"--artifact-dir cannot be combined with {joined}")
+
+
+def artifact_bundle_paths(
+    artifact_dir: Path | None,
+    *,
+    result_output_format: str,
+) -> tuple[Path | None, Path | None, Path | None]:
+    if artifact_dir is None:
+        return None, None, None
+    result_suffix = "jsonl" if result_output_format == "jsonl" else "json"
+    return (
+        artifact_dir / "session.session.jsonl",
+        artifact_dir / f"result.{result_suffix}",
+        artifact_dir / "handoff.md",
+    )
+
+
+def ensure_headless_output_paths_available(
+    *paths: tuple[str, Path | None],
+) -> None:
+    for label, path in paths:
+        if path is not None and path.exists():
+            raise typer.BadParameter(f"{label} already exists: {path}")
 
 
 def write_headless_result_output(
@@ -2120,6 +2183,7 @@ def main(
     result_output: str | None = typer.Option(None, "--result-output", help="Write the headless result JSON/JSONL payload to a specific workspace path."),
     result_output_format: str = typer.Option("auto", "--result-output-format", help="Result artifact format: auto, json, or jsonl."),
     handoff_briefing_output: str | None = typer.Option(None, "--handoff-briefing-output", help="Write a Markdown handoff briefing artifact to a specific workspace path."),
+    artifact_dir: str | None = typer.Option(None, "--artifact-dir", help="Write standard headless artifacts under this workspace directory."),
     no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
 ) -> None:
     """Run local Ollama agent workflows."""
@@ -2136,17 +2200,35 @@ def main(
         raise typer.Exit(code=0)
     workspace_override = resolve_headless_workspace(workspace)
     settings_for_prompt = Settings(workspace=workspace_override)
-    session_output_path = resolve_headless_session_output(settings_for_prompt.workspace, session_output)
-    result_output_path = resolve_headless_result_output(settings_for_prompt.workspace, result_output)
-    handoff_briefing_output_path = resolve_handoff_briefing_output(settings_for_prompt.workspace, handoff_briefing_output)
+    artifact_dir_path = resolve_headless_artifact_dir(settings_for_prompt.workspace, artifact_dir)
+    reject_artifact_dir_output_overrides(
+        artifact_dir_path,
+        session_output=session_output,
+        result_output=result_output,
+        handoff_briefing_output=handoff_briefing_output,
+    )
+    result_artifact_format = resolve_headless_result_output_format(result_output_format, stdout_format=structured_format)
+    bundle_session_output_path, bundle_result_output_path, bundle_handoff_briefing_output_path = artifact_bundle_paths(
+        artifact_dir_path,
+        result_output_format=result_artifact_format,
+    )
+    session_output_path = bundle_session_output_path or resolve_headless_session_output(settings_for_prompt.workspace, session_output)
+    result_output_path = bundle_result_output_path or resolve_headless_result_output(settings_for_prompt.workspace, result_output)
+    handoff_briefing_output_path = bundle_handoff_briefing_output_path or resolve_handoff_briefing_output(settings_for_prompt.workspace, handoff_briefing_output)
     ensure_distinct_headless_output_paths(
         ("--session-output", session_output_path),
         ("--result-output", result_output_path),
         ("--handoff-briefing-output", handoff_briefing_output_path),
     )
+    ensure_headless_output_paths_available(
+        ("--session-output", session_output_path),
+        ("--result-output", result_output_path),
+        ("--handoff-briefing-output", handoff_briefing_output_path),
+    )
+    if artifact_dir_path is not None and not agent:
+        raise typer.BadParameter("--artifact-dir requires --agent")
     if handoff_briefing_output_path is not None and not agent:
         raise typer.BadParameter("--handoff-briefing-output requires --agent")
-    result_artifact_format = resolve_headless_result_output_format(result_output_format, stdout_format=structured_format)
     if list_models:
         payload = model_list_payload(
             workspace_override=workspace_override,
@@ -2187,6 +2269,7 @@ def main(
             result_output=result_output_path,
             result_output_format=result_artifact_format,
             handoff_briefing_output=handoff_briefing_output_path,
+            artifact_dir=artifact_dir_path,
             no_memory=no_memory,
         )
         print_headless_dry_run(payload, json_output=structured_output, jsonl_output=jsonl_output, quiet=quiet)
@@ -2667,6 +2750,7 @@ def ask(
     result_output: str | None = typer.Option(None, "--result-output", help="Write the headless result JSON/JSONL payload to a specific workspace path."),
     result_output_format: str = typer.Option("auto", "--result-output-format", help="Result artifact format: auto, json, or jsonl."),
     handoff_briefing_output: str | None = typer.Option(None, "--handoff-briefing-output", help="Write a Markdown handoff briefing artifact to a specific workspace path."),
+    artifact_dir: str | None = typer.Option(None, "--artifact-dir", help="Write standard headless artifacts under this workspace directory."),
     no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
 ) -> None:
     structured_format = structured_output_format(json_output, output_format)
@@ -2674,15 +2758,31 @@ def ask(
     jsonl_output = structured_format == "jsonl"
     workspace_override = resolve_headless_workspace(workspace)
     settings_for_prompt = Settings(workspace=workspace_override)
-    session_output_path = resolve_headless_session_output(settings_for_prompt.workspace, session_output)
-    result_output_path = resolve_headless_result_output(settings_for_prompt.workspace, result_output)
-    handoff_briefing_output_path = resolve_handoff_briefing_output(settings_for_prompt.workspace, handoff_briefing_output)
+    artifact_dir_path = resolve_headless_artifact_dir(settings_for_prompt.workspace, artifact_dir)
+    reject_artifact_dir_output_overrides(
+        artifact_dir_path,
+        session_output=session_output,
+        result_output=result_output,
+        handoff_briefing_output=handoff_briefing_output,
+    )
+    result_artifact_format = resolve_headless_result_output_format(result_output_format, stdout_format=structured_format)
+    bundle_session_output_path, bundle_result_output_path, bundle_handoff_briefing_output_path = artifact_bundle_paths(
+        artifact_dir_path,
+        result_output_format=result_artifact_format,
+    )
+    session_output_path = bundle_session_output_path or resolve_headless_session_output(settings_for_prompt.workspace, session_output)
+    result_output_path = bundle_result_output_path or resolve_headless_result_output(settings_for_prompt.workspace, result_output)
+    handoff_briefing_output_path = bundle_handoff_briefing_output_path or resolve_handoff_briefing_output(settings_for_prompt.workspace, handoff_briefing_output)
     ensure_distinct_headless_output_paths(
         ("--session-output", session_output_path),
         ("--result-output", result_output_path),
         ("--handoff-briefing-output", handoff_briefing_output_path),
     )
-    result_artifact_format = resolve_headless_result_output_format(result_output_format, stdout_format=structured_format)
+    ensure_headless_output_paths_available(
+        ("--session-output", session_output_path),
+        ("--result-output", result_output_path),
+        ("--handoff-briefing-output", handoff_briefing_output_path),
+    )
     if dry_run:
         payload = build_headless_dry_run_payload(
             prompt,
@@ -2703,6 +2803,7 @@ def ask(
             result_output=result_output_path,
             result_output_format=result_artifact_format,
             handoff_briefing_output=handoff_briefing_output_path,
+            artifact_dir=artifact_dir_path,
             no_memory=no_memory,
         )
         print_headless_dry_run(payload, json_output=structured_output, jsonl_output=jsonl_output, quiet=quiet)

@@ -101,8 +101,10 @@ agentx -p "..." --agent --result-output .agentx/results/run.json --quiet
 agentx -p "..." --agent --output-format jsonl --result-output .agentx/results/run.jsonl
 agentx -p "..." --agent --result-output .agentx/results/run.jsonl --result-output-format jsonl
 agentx -p "..." --agent --handoff-briefing-output .agentx/handoff/next.md --quiet
+agentx -p "..." --agent --artifact-dir .agentx/runs/latest --quiet
 agentx ask "..." --result-output .agentx/results/ask.json --quiet
 agentx ask "..." --handoff-briefing-output .agentx/handoff/ask-next.md --quiet
+agentx ask "..." --artifact-dir .agentx/runs/ask-latest --quiet
 ```
 
 `--result-output` writes inside the active workspace only, refuses to overwrite
@@ -116,6 +118,15 @@ briefing during the original headless run, without requiring a follow-up
 `handoff-inspect` command. The path must stay inside the active workspace,
 parents are created as needed, existing files are rejected, and it must be
 distinct from `--session-output` and `--result-output`.
+`--artifact-dir DIR` is the standard bundle preset for external runners. It
+writes these files under `DIR`:
+
+- `session.session.jsonl`
+- `result.json` or `result.jsonl`, depending on `--result-output-format`
+- `handoff.md`
+
+It requires agent mode, is mutually exclusive with individual artifact output
+options, and rejects any pre-existing standard bundle file.
 
 ## `log_summary`
 

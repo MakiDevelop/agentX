@@ -72,6 +72,7 @@
 - [x] `--quiet` 可壓掉 plain stdout、保留 exit code；搭配 `--json` 時仍輸出 JSON payload。
 - [x] `--result-output PATH` 可把 headless result payload 寫入 workspace 內 artifact；plain stdout 時寫 JSON，`--output-format jsonl` 時寫 JSONL event，拒絕 workspace escape 與覆蓋既有檔案；`--result-output-format auto|json|jsonl` 可讓 artifact 格式獨立於 stdout。
 - [x] `--handoff-briefing-output PATH` 可在原 headless run 結束時直接寫出 deterministic Markdown 接手檔，拒絕 workspace escape、覆寫既有檔案，以及與 session/result artifact 共用同一路徑。
+- [x] `--artifact-dir DIR` 可用一個 workspace 內目錄輸出標準 runner bundle：`session.session.jsonl`、`result.json/jsonl`、`handoff.md`；與個別 artifact output option 互斥，並拒絕覆寫既有 bundle 檔。
 - [x] `agentx handoff-inspect --require-handoff` 可把 result artifact 當成接手 gate：需要 `needs_handoff=true` 與 `resume_command`，否則 exit 1；可搭配 `--field`、`--output-format jsonl` 與 `--use-payload-exit-code`。
 - [x] `agentx handoff-inspect --require-schema-version` 可拒絕舊版或未知 headless result payload contract；inspection output 也會顯示 `schema_version`。
 - [x] `agentx handoff-inspect --next-prompt-file PATH` 可把 `resume_command` 的 `-p '<next prompt>'` 改成 `--prompt-file PATH`，方便 Codex/Grok runner 用長 briefing 接手。
