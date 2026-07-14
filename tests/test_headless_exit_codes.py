@@ -619,6 +619,94 @@ def test_handoff_inspect_next_prompt_file_jsonl_output() -> None:
     )
 
 
+def test_handoff_inspect_resume_output_format_jsonl_updates_resume_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--next-prompt",
+            "照上一輪繼續",
+            "--resume-output-format",
+            "jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == (
+        "agentx -p '照上一輪繼續' --agent --resume-session contract.session.jsonl --output-format jsonl\n"
+    )
+
+
+def test_handoff_inspect_prompt_file_with_resume_output_format_jsonl() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--next-prompt-file",
+            ".agentx/handoff/next.md",
+            "--resume-output-format",
+            "jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == (
+        "agentx --prompt-file .agentx/handoff/next.md --agent --resume-session contract.session.jsonl --output-format jsonl\n"
+    )
+
+
+def test_handoff_inspect_resume_output_format_json_keeps_json_mode() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--resume-output-format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+
+
+def test_handoff_inspect_resume_output_format_rejects_unknown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--resume-output-format",
+            "yaml",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "resume output format" in result.output
+
+
+def test_apply_handoff_resume_output_format_replaces_existing_output_format() -> None:
+    payload = {"resume_command": "agentx -p next --agent --resume-session s.jsonl --output-format jsonl"}
+
+    assert cli.apply_handoff_resume_output_format(payload, "json") == {
+        "resume_command": "agentx -p next --agent --resume-session s.jsonl --json"
+    }
+
+
 def test_handoff_inspect_next_prompt_and_file_are_mutually_exclusive() -> None:
     runner = CliRunner()
     result = runner.invoke(

@@ -1497,6 +1497,42 @@ def apply_handoff_next_prompt_file(payload: dict[str, object], next_prompt_file:
     return enriched
 
 
+def apply_handoff_resume_output_format(payload: dict[str, object], resume_output_format: str | None) -> dict[str, object]:
+    if not resume_output_format:
+        return payload
+    normalized = resume_output_format.strip().lower()
+    if normalized not in {"json", "jsonl"}:
+        raise typer.BadParameter("resume output format must be one of: json, jsonl")
+
+    enriched = dict(payload)
+    command = enriched.get("resume_command")
+    if not isinstance(command, str):
+        return enriched
+
+    parts = shlex.split(command)
+    rewritten: list[str] = []
+    skip_next = False
+    for part in parts:
+        if skip_next:
+            skip_next = False
+            continue
+        if part == "--json":
+            continue
+        if part == "--output-format":
+            skip_next = True
+            continue
+        if part.startswith("--output-format="):
+            continue
+        rewritten.append(part)
+
+    if normalized == "json":
+        rewritten.append("--json")
+    else:
+        rewritten.extend(["--output-format", "jsonl"])
+    enriched["resume_command"] = shlex.join(rewritten)
+    return enriched
+
+
 def format_handoff_inspect_plain(payload: dict[str, object]) -> str:
     lines = [
         f"schema_version: {payload.get('schema_version')}",
@@ -2654,6 +2690,7 @@ def handoff_inspect(
     field: str | None = typer.Option(None, "--field", help="Print one takeover field, e.g. resume_command or recovery_checklist."),
     next_prompt: str | None = typer.Option(None, "--next-prompt", help="Replace the resume command placeholder with this prompt."),
     next_prompt_file: str | None = typer.Option(None, "--next-prompt-file", help="Replace the resume command placeholder with --prompt-file PATH."),
+    resume_output_format: str | None = typer.Option(None, "--resume-output-format", help="Rewrite resume_command output mode: json or jsonl."),
     use_payload_exit_code: bool = typer.Option(
         False,
         "--use-payload-exit-code",
@@ -2679,6 +2716,7 @@ def handoff_inspect(
     payload = inspect_headless_handoff_payload(load_headless_payload_source(source))
     payload = apply_handoff_next_prompt(payload, next_prompt)
     payload = apply_handoff_next_prompt_file(payload, next_prompt_file)
+    payload = apply_handoff_resume_output_format(payload, resume_output_format)
     exit_code = handoff_inspect_exit_code(payload, use_payload_exit_code=use_payload_exit_code)
     if require_handoff and not handoff_takeover_ready(payload):
         exit_code = 1

@@ -66,6 +66,7 @@ agentx handoff-inspect tests/fixtures/headless_result_failure.json --output-form
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --next-prompt "照上一輪繼續"
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --next-prompt-file .agentx/handoff/next.md
+agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --resume-output-format jsonl
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --use-payload-exit-code
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --require-handoff
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --require-schema-version
@@ -85,6 +86,8 @@ the requested inspection output before exiting.
 `--next-prompt-file PATH` rewrites the generated `resume_command` to use
 `--prompt-file PATH` instead of `-p '<next prompt>'`; it is mutually exclusive
 with `--next-prompt`.
+`--resume-output-format json|jsonl` rewrites the generated `resume_command`
+output mode. Use `jsonl` when the next runner expects event envelopes.
 
 For automation that needs a stable artifact path instead of stdout parsing:
 
