@@ -1450,6 +1450,7 @@ def inspect_headless_handoff_payload(payload: dict[str, object]) -> dict[str, ob
         raise typer.BadParameter("payload missing log_summary.handoff_summary object")
 
     return {
+        "schema_version": payload.get("schema_version"),
         "status": handoff.get("status"),
         "needs_handoff": bool(handoff.get("needs_handoff", False)),
         "termination": payload.get("termination"),
@@ -1482,6 +1483,7 @@ def apply_handoff_next_prompt(payload: dict[str, object], next_prompt: str | Non
 
 def format_handoff_inspect_plain(payload: dict[str, object]) -> str:
     lines = [
+        f"schema_version: {payload.get('schema_version')}",
         f"status: {payload.get('status')}",
         f"needs_handoff: {str(payload.get('needs_handoff')).lower()}",
         f"termination: {payload.get('termination')}",
@@ -1538,6 +1540,10 @@ def handoff_inspect_exit_code(payload: dict[str, object], *, use_payload_exit_co
 
 def handoff_takeover_ready(payload: dict[str, object]) -> bool:
     return bool(payload.get("needs_handoff")) and bool(payload.get("resume_command"))
+
+
+def handoff_schema_version_matches(payload: dict[str, object]) -> bool:
+    return payload.get("schema_version") == HEADLESS_PAYLOAD_SCHEMA_VERSION
 
 
 def backend_list_payload() -> list[str]:
@@ -2641,6 +2647,11 @@ def handoff_inspect(
         "--require-handoff",
         help="Exit 1 unless the payload has needs_handoff=true and a resume_command.",
     ),
+    require_schema_version: bool = typer.Option(
+        False,
+        "--require-schema-version",
+        help=f"Exit 1 unless schema_version is {HEADLESS_PAYLOAD_SCHEMA_VERSION}.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
@@ -2652,6 +2663,8 @@ def handoff_inspect(
     )
     exit_code = handoff_inspect_exit_code(payload, use_payload_exit_code=use_payload_exit_code)
     if require_handoff and not handoff_takeover_ready(payload):
+        exit_code = 1
+    if require_schema_version and not handoff_schema_version_matches(payload):
         exit_code = 1
     if field:
         field_payload = handoff_inspect_field_payload(payload, field)

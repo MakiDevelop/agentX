@@ -67,6 +67,7 @@ agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resum
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --next-prompt "照上一輪繼續"
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --use-payload-exit-code
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --require-handoff
+agentx handoff-inspect tests/fixtures/headless_result_failure.json --require-schema-version
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field recovery_checklist
 agentx -p "..." --agent --output-format jsonl | agentx handoff-inspect - --field resume_command --next-prompt "照上一輪繼續" --use-payload-exit-code
 ```
@@ -78,6 +79,8 @@ then exits with the payload `exit_code` clamped to the shell range `0..255`.
 `--require-handoff` is a runner gate: it exits 1 unless the inspected payload has
 `needs_handoff=true` and a non-empty `resume_command`. The command still prints
 the requested inspection output before exiting.
+`--require-schema-version` is a compatibility gate: it exits 1 unless
+`schema_version` matches the current contract version.
 
 For automation that needs a stable artifact path instead of stdout parsing:
 

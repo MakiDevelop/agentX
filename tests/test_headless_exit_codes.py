@@ -260,6 +260,7 @@ def test_handoff_inspect_payload_extracts_takeover_fields() -> None:
     payload = cli.load_headless_payload_file(fixture)
     inspected = cli.inspect_headless_handoff_payload(payload)
 
+    assert inspected["schema_version"] == cli.HEADLESS_PAYLOAD_SCHEMA_VERSION
     assert inspected["status"] == "final_failed"
     assert inspected["needs_handoff"] is True
     assert inspected["resume_session"] == "contract.session.jsonl"
@@ -277,6 +278,7 @@ def test_handoff_inspect_command_plain_output() -> None:
     result = runner.invoke(cli.app, ["handoff-inspect", "tests/fixtures/headless_result_failure.json"])
 
     assert result.exit_code == 0
+    assert "schema_version: agentx.headless_result.v1" in result.output
     assert "status: final_failed" in result.output
     assert "resume_command: agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json" in result.output
     assert "- Run the smallest targeted verification" in result.output
@@ -428,6 +430,59 @@ def test_handoff_inspect_require_handoff_ready_can_preserve_payload_exit_code() 
     assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
 
 
+def test_handoff_inspect_require_schema_version_accepts_current_fixture() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "schema_version",
+            "--require-schema-version",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == f"{cli.HEADLESS_PAYLOAD_SCHEMA_VERSION}\n"
+
+
+def test_handoff_inspect_require_schema_version_rejects_missing_schema(tmp_path: Path) -> None:
+    runner = CliRunner()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    event = json.loads(fixture.read_text(encoding="utf-8"))
+    event["data"].pop("schema_version")
+    target = tmp_path / "legacy-result.json"
+    target.write_text(json.dumps(event), encoding="utf-8")
+
+    result = runner.invoke(
+        cli.app,
+        ["handoff-inspect", str(target), "--field", "schema_version", "--require-schema-version"],
+    )
+
+    assert result.exit_code == 1
+    assert result.output == "\n"
+
+
+def test_handoff_inspect_require_schema_version_jsonl_still_prints_payload(tmp_path: Path) -> None:
+    runner = CliRunner()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    event = json.loads(fixture.read_text(encoding="utf-8"))
+    event["data"]["schema_version"] = "agentx.headless_result.v0"
+    target = tmp_path / "old-result.json"
+    target.write_text(json.dumps(event), encoding="utf-8")
+
+    result = runner.invoke(
+        cli.app,
+        ["handoff-inspect", str(target), "--output-format", "jsonl", "--require-schema-version"],
+    )
+    output_event = json.loads(result.output)
+
+    assert result.exit_code == 1
+    assert output_event["event"] == "handoff_inspect"
+    assert output_event["data"]["schema_version"] == "agentx.headless_result.v0"
+
+
 @pytest.mark.parametrize(
     ("payload", "expected"),
     [
@@ -453,6 +508,12 @@ def test_handoff_takeover_ready_requires_flag_and_resume_command() -> None:
     assert cli.handoff_takeover_ready({"needs_handoff": True, "resume_command": "agentx ..."}) is True
     assert cli.handoff_takeover_ready({"needs_handoff": False, "resume_command": "agentx ..."}) is False
     assert cli.handoff_takeover_ready({"needs_handoff": True, "resume_command": None}) is False
+
+
+def test_handoff_schema_version_matches_current_contract() -> None:
+    assert cli.handoff_schema_version_matches({"schema_version": cli.HEADLESS_PAYLOAD_SCHEMA_VERSION}) is True
+    assert cli.handoff_schema_version_matches({"schema_version": "agentx.headless_result.v0"}) is False
+    assert cli.handoff_schema_version_matches({}) is False
 
 
 def test_handoff_inspect_next_prompt_updates_resume_command() -> None:
