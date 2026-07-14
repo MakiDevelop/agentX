@@ -281,6 +281,36 @@ Constraint: {已知限制，例如 headless 測試需 Ollama 跑 gemma4}
 5. **影響範圍與風險等級** — GREEN / YELLOW / RED；RED 僅能提案。
 6. **Post-check 計畫** — 動手前先寫好「怎麼驗證成功」的 3-5 步清單（例如 `agentx doctor` + 特定測試）。
 
+### 資源地圖 Gate（家庭 AI / VPS / 跨 repo）
+
+agentX 遇到任何家庭 AI 設施、VPS、SSH、deploy、service restart、cron / launchd、跨機器、跨 repo 對應、domain-to-repo 消歧義時，必須先讀資源地圖。這是 read-only context，不代表取得遠端操作權限。
+
+| 需求 | 先讀 | 用途 |
+|------|------|------|
+| SSH alias、IP、port、常用入口 | `/infra quick` | 查高頻 runtime facts |
+| domain / service / repo 對應 | `/infra project` | 避免把 domain 當 repo 名 |
+| machine / service / access plane | `/infra resource` | 確認服務實際落點 |
+| Mac mini、mini2、DGX、RTX3090、NAS、S20、PDSNET | `/infra home` 或 `/infra 家庭AI設施` | 家庭 AI 算力與常駐服務路由 |
+| n1k、2ch、ranran、chiba.tw、blog、paul、kerker | `/infra vps` 或 `/infra VPS地圖` | 外網主機與多服務 VPS 消歧義 |
+
+動手前必須填 runtime state：
+
+```text
+Machine:
+Service:
+Run Mode:
+Constraint:
+Risk:
+Source:
+```
+
+停止條件：
+- runtime state 任一欄位只能用猜的。
+- `~/GitLab` 公司脈絡、PopDaily 私人接案、家庭 AI、個人 VPS 混在同一請求中但未被 Maki 明確指定。
+- 操作會造成 SSH、deploy、production、外部寫入、刪除、DB / volume 影響，且尚未取得 Maki 明確確認。
+
+長期規格見 `docs/RESOURCE_MAPS.md`。`~/infrastructure/*` 是 SSOT；AGENTX.md 只記使用規則，不複製完整機密或易漂移清單。
+
 ---
 
 ## 8. 每日工作流程與 Session Handoff（agentX 專案版）
