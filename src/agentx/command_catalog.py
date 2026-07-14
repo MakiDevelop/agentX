@@ -182,6 +182,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local inspection and existing verification commands",
     },
     {
+        "command": "agentx next",
+        "usage": "agentx next --json",
+        "description": "Recommend the next runner command from local diff, tasks, artifacts, and approval receipts.",
+        "examples": ["agentx next --json", "agentx next --output-format jsonl"],
+        "schemas": ["agentx.next.v1"],
+        "jsonl_event": "next",
+        "risk": "GREEN - read-only local planning",
+    },
+    {
         "command": "agentx tasks",
         "usage": "agentx tasks [STATUS] --json",
         "description": "List project task state from .agentx/tasks.json.",

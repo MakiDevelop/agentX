@@ -2465,6 +2465,150 @@ def gate_exit_code(payload: dict[str, object], *, fail_on_blocker: bool = False)
     return 0 if payload.get("ok") is True else 1
 
 
+def next_payload(
+    settings: Settings,
+    *,
+    artifacts_root: str = ".agentx/runs",
+    artifacts_limit: int = 5,
+    approvals_limit: int = 20,
+) -> dict[str, object]:
+    diff = diff_payload(settings)
+    tasks = tasks_payload(settings, status_filter="active")
+    artifacts = artifacts_payload(settings, root=artifacts_root, limit=artifacts_limit)
+    approvals = approvals_payload(settings, session="latest", limit=approvals_limit, denied_only=True)
+
+    recommendations: list[dict[str, object]] = []
+    denied_count = int(approvals.get("denied_count", 0) or 0) if approvals.get("ok") is True else 0
+    dirty = diff.get("dirty") is True
+    active_task_count = int(tasks.get("count", 0) or 0)
+    artifact_items = list(artifacts.get("artifacts", [])) if artifacts.get("ok") is True else []
+    latest_artifact = dict(artifact_items[0]) if artifact_items else None
+    latest_needs_handoff = bool(latest_artifact and latest_artifact.get("needs_handoff") is True)
+
+    if denied_count > 0:
+        recommendations.append(
+            {
+                "rank": len(recommendations) + 1,
+                "kind": "approval_audit",
+                "command": "agentx approvals latest --denied --json --fail-on-denied",
+                "reason": "latest transcript has denied approval receipts",
+                "risk": "GREEN",
+            }
+        )
+    if dirty:
+        recommendations.append(
+            {
+                "rank": len(recommendations) + 1,
+                "kind": "gate",
+                "command": "agentx gate --json --fail-on-blocker",
+                "reason": "workspace has git changes; run aggregate gate before commit or handoff",
+                "risk": "GREEN",
+            }
+        )
+        recommendations.append(
+            {
+                "rank": len(recommendations) + 1,
+                "kind": "commit_plan",
+                "command": "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker",
+                "reason": "after the gate passes, preview explicit files and commit message",
+                "risk": "GREEN",
+            }
+        )
+    if latest_artifact is not None and latest_needs_handoff:
+        artifact_path = str(latest_artifact.get("relative_path") or latest_artifact.get("path") or artifacts_root)
+        recommendations.append(
+            {
+                "rank": len(recommendations) + 1,
+                "kind": "handoff_resume",
+                "command": f"agentx handoff-resume {shlex.quote(artifact_path)} --dry-run",
+                "reason": "latest artifact reports needs_handoff=true",
+                "risk": "GREEN",
+            }
+        )
+    if not dirty and active_task_count > 0:
+        recommendations.append(
+            {
+                "rank": len(recommendations) + 1,
+                "kind": "task_resume",
+                "command": "agentx tasks active --json",
+                "reason": "active tasks exist and the workspace is clean",
+                "risk": "GREEN",
+            }
+        )
+        recommendations.append(
+            {
+                "rank": len(recommendations) + 1,
+                "kind": "headless_continue",
+                "command": "agentx -p '繼續目前 active task' --agent --json",
+                "reason": "continue active task work from current repo state",
+                "risk": "YELLOW",
+            }
+        )
+    if not recommendations:
+        recommendations.append(
+            {
+                "rank": 1,
+                "kind": "inspect",
+                "command": "agentx inspect --json",
+                "reason": "workspace is clean and no active runner handoff was detected",
+                "risk": "GREEN",
+            }
+        )
+
+    return {
+        "schema": "agentx.next.v1",
+        "workspace": str(settings.workspace),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "ok": True,
+        "recommended_command": recommendations[0]["command"] if recommendations else None,
+        "recommendations": recommendations,
+        "signals": {
+            "dirty": dirty,
+            "diff_ok": diff.get("ok") is True,
+            "active_task_count": active_task_count,
+            "artifact_count": artifacts.get("count", 0),
+            "latest_artifact_needs_handoff": latest_needs_handoff,
+            "denied_approval_count": denied_count,
+            "approvals_available": approvals.get("ok") is True,
+        },
+        "diff": diff,
+        "tasks": tasks,
+        "artifacts": artifacts,
+        "approvals": approvals,
+    }
+
+
+def print_next_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="next",
+        )
+        return
+
+    table = Table(title="agentX next", show_header=True, header_style="bold")
+    table.add_column("Rank", style="cyan", justify="right")
+    table.add_column("Kind")
+    table.add_column("Command")
+    table.add_column("Reason")
+    for item in payload["recommendations"]:  # type: ignore[index]
+        row = dict(item)
+        table.add_row(
+            str(row.get("rank", "")),
+            str(row.get("kind", "")),
+            str(row.get("command", "")),
+            str(row.get("reason", "")),
+        )
+    console.print(table)
+    console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
+
+
 def print_verify_payload(
     payload: dict[str, object],
     *,
@@ -5320,6 +5464,27 @@ def gate_command(
     structured_format = structured_output_format(json_output, output_format)
     print_gate_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=gate_exit_code(payload, fail_on_blocker=fail_on_blocker))
+
+
+@app.command("next")
+def next_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for next-step planning."),
+    artifacts_root: str = typer.Option(".agentx/runs", "--artifacts-root", help="Workspace-relative artifact root to inspect."),
+    artifacts_limit: int = typer.Option(5, "--artifacts-limit", min=1, help="Maximum artifact bundles to inspect."),
+    approvals_limit: int = typer.Option(20, "--approvals-limit", min=1, help="Maximum denied approval receipts to inspect."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Recommend the next runner command from local repo state."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = next_payload(
+        settings,
+        artifacts_root=artifacts_root,
+        artifacts_limit=artifacts_limit,
+        approvals_limit=approvals_limit,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_next_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("inspect")

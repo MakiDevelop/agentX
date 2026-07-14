@@ -38,6 +38,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx review --json` | `agentx.review.v1` | `review` |
 | `agentx commit-plan --json` | `agentx.commit_plan.v1` | `commit_plan` |
 | `agentx gate --json` | `agentx.gate.v1` | `gate` |
+| `agentx next --json` | `agentx.next.v1` | `next` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
@@ -257,6 +258,49 @@ Required stable keys:
 | `doctor` | object or null | Embedded static `agentx.doctor.v1`, or null when `--skip-doctor` was used. |
 | `approvals` | object or null | Embedded latest `agentx.approvals.v1`, or null when `--skip-approvals` was used. |
 | `next_commands` | array of string | Suggested follow-up commands for humans or runners. |
+
+## Next Payload
+
+`agentx next --json` emits `agentx.next.v1`.
+
+This is a deterministic next-step planner for external runners. It reads local
+state only: current diff, active tasks, latest artifact bundles, and denied
+approval receipts. It does not run verification commands, call an LLM, apply
+patches, stage, commit, push, or deploy.
+
+Recommendation priority is intentionally conservative:
+
+1. Denied approval audit.
+2. Dirty diff aggregate gate.
+3. Latest artifact handoff resume.
+4. Active task resume.
+5. Idle inspect.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.next.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `generated_at` | string | Local ISO timestamp. |
+| `ok` | boolean | True when local planning completed. |
+| `recommended_command` | string or null | First ranked command from `recommendations`. |
+| `recommendations` | array of object | Ranked command recommendations. |
+| `signals` | object | Cheap derived booleans/counts used by the planner. |
+| `diff` | object | Embedded `agentx.diff.v1`. |
+| `tasks` | object | Embedded active `agentx.tasks.v1`. |
+| `artifacts` | object | Embedded `agentx.artifacts.v1`. |
+| `approvals` | object | Embedded denied-only latest `agentx.approvals.v1`. |
+
+Each recommendation object includes:
+
+| Key | Type |
+|-----|------|
+| `rank` | integer |
+| `kind` | string |
+| `command` | string |
+| `reason` | string |
+| `risk` | string |
 
 ## Artifacts Payload
 

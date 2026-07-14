@@ -80,6 +80,7 @@
 - [x] `agentx review --json` 可輸出 deterministic review gate（diff + verify + commit_ready + blockers/warnings + next commands），`--fail-on-blocker` 可讓 CI/wrapper 在未達 commit 條件時 exit 1。
 - [x] `agentx commit-plan --message TEXT --json` 可輸出 read-only commit plan（files_to_stage、commit message、review gate、blockers/warnings、next commands），不 stage、不 commit、不 push，讓外部 runner 可先展示/審核。
 - [x] `agentx gate --json` 可輸出 aggregate runner gate（review + doctor static + latest approvals audit），用單一 `agentx.gate.v1` payload 回報 commit readiness、blockers、warnings 與 next commands；`--fail-on-blocker` 可給 CI/wrapper 擋流程。
+- [x] `agentx next --json` 可輸出 deterministic next-step planner（denied approvals → dirty diff gate → artifact handoff → active tasks → inspect），讓外部 runner 不必自行拼狀態分支；不跑測試、不呼叫 LLM、不 mutate。
 - [x] `agentx handoff-inspect --require-handoff` 可把 result artifact 當成接手 gate：需要 `needs_handoff=true` 與 `resume_command`，否則 exit 1；可搭配 `--field`、`--output-format jsonl` 與 `--use-payload-exit-code`。
 - [x] `agentx handoff-inspect --require-schema-version` 可拒絕舊版或未知 headless result payload contract；inspection output 也會顯示 `schema_version`。
 - [x] `agentx handoff-inspect --next-prompt-file PATH` 可把 `resume_command` 的 `-p '<next prompt>'` 改成 `--prompt-file PATH`，方便 Codex/Grok runner 用長 briefing 接手。
