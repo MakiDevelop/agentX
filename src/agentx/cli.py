@@ -2922,10 +2922,23 @@ def review_payload(
         next_commands.append("agentx verify --json --fail-on-error")
     if commit_ready:
         next_commands.append("/commit 中文訊息")
+        recommended_command = "/commit 中文訊息"
+        recommended_kind = "commit"
+        recommended_risk = "YELLOW"
     elif blockers:
         next_commands.append("fix blockers, then rerun agentx review --json")
+        recommended_command = "fix blockers, then rerun agentx review --json"
+        recommended_kind = "fix_blockers"
+        recommended_risk = "UNKNOWN"
+    elif verify is None:
+        recommended_command = "agentx verify --json --fail-on-error"
+        recommended_kind = "verify"
+        recommended_risk = "GREEN"
     else:
         next_commands.append("agentx review --json")
+        recommended_command = "agentx review --json"
+        recommended_kind = "review"
+        recommended_risk = "GREEN"
 
     return {
         "schema": "agentx.review.v1",
@@ -2933,6 +2946,9 @@ def review_payload(
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "ok": not blockers,
         "commit_ready": commit_ready,
+        "recommended_command": recommended_command,
+        "recommended_kind": recommended_kind,
+        "recommended_risk": recommended_risk,
         "blockers": blockers,
         "warnings": warnings,
         "diff": diff,
@@ -3097,10 +3113,19 @@ def gate_payload(
     ]
     if commit_ready:
         next_commands.append("agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker")
+        recommended_command = "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker"
+        recommended_kind = "commit_plan"
+        recommended_risk = "GREEN"
     elif blockers:
         next_commands.append("fix blockers, then rerun agentx gate --json --fail-on-blocker")
+        recommended_command = "fix blockers, then rerun agentx gate --json --fail-on-blocker"
+        recommended_kind = "fix_blockers"
+        recommended_risk = "UNKNOWN"
     else:
         next_commands.append("agentx gate --json")
+        recommended_command = "agentx gate --json"
+        recommended_kind = "gate"
+        recommended_risk = "GREEN"
 
     return {
         "schema": "agentx.gate.v1",
@@ -3108,6 +3133,9 @@ def gate_payload(
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "ok": not blockers,
         "commit_ready": commit_ready,
+        "recommended_command": recommended_command,
+        "recommended_kind": recommended_kind,
+        "recommended_risk": recommended_risk,
         "blockers": blockers,
         "warnings": warnings,
         "review": review,

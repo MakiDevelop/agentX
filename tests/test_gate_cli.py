@@ -74,6 +74,9 @@ def test_gate_payload_passes_when_review_doctor_and_approvals_pass(tmp_path: Pat
     assert payload["schema"] == "agentx.gate.v1"
     assert payload["ok"] is True
     assert payload["commit_ready"] is True
+    assert payload["recommended_command"] == "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker"
+    assert payload["recommended_kind"] == "commit_plan"
+    assert payload["recommended_risk"] == "GREEN"
     assert payload["blockers"] == []
     assert payload["review"]["schema"] == "agentx.review.v1"  # type: ignore[index]
     assert payload["doctor"]["schema"] == "agentx.doctor.v1"  # type: ignore[index]
@@ -93,6 +96,9 @@ def test_gate_payload_carries_review_blockers(tmp_path: Path, monkeypatch) -> No
 
     assert payload["ok"] is False
     assert payload["commit_ready"] is False
+    assert payload["recommended_command"] == "fix blockers, then rerun agentx gate --json --fail-on-blocker"
+    assert payload["recommended_kind"] == "fix_blockers"
+    assert payload["recommended_risk"] == "UNKNOWN"
     assert payload["blockers"] == ["verify_failed"]
     assert gate_exit_code(payload, fail_on_blocker=True) == 1
 
@@ -151,6 +157,9 @@ def test_gate_payload_skip_options_warn_and_omit_sections(tmp_path: Path, monkey
 
     assert payload["ok"] is True
     assert payload["commit_ready"] is False
+    assert payload["recommended_command"] == "agentx gate --json"
+    assert payload["recommended_kind"] == "gate"
+    assert payload["recommended_risk"] == "GREEN"
     assert payload["doctor"] is None
     assert payload["approvals"] is None
     assert payload["warnings"] == ["doctor_skipped", "approvals_skipped"]

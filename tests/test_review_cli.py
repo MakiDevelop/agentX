@@ -62,6 +62,9 @@ def test_review_payload_reports_commit_ready(tmp_path: Path, monkeypatch) -> Non
     assert payload["schema"] == "agentx.review.v1"
     assert payload["ok"] is True
     assert payload["commit_ready"] is True
+    assert payload["recommended_command"] == "/commit 中文訊息"
+    assert payload["recommended_kind"] == "commit"
+    assert payload["recommended_risk"] == "YELLOW"
     assert payload["blockers"] == []
     assert payload["diff"]["schema"] == "agentx.diff.v1"  # type: ignore[index]
     assert payload["diff"]["file_count"] == 1  # type: ignore[index]
@@ -77,6 +80,8 @@ def test_review_payload_blocks_when_verify_fails(tmp_path: Path, monkeypatch) ->
 
     assert payload["ok"] is False
     assert payload["commit_ready"] is False
+    assert payload["recommended_kind"] == "fix_blockers"
+    assert payload["recommended_risk"] == "UNKNOWN"
     assert payload["blockers"] == ["verify_failed"]
     assert review_exit_code(payload, fail_on_blocker=True) == 1
 
@@ -89,6 +94,8 @@ def test_review_payload_blocks_when_no_changes(tmp_path: Path, monkeypatch) -> N
 
     assert payload["ok"] is False
     assert payload["commit_ready"] is False
+    assert payload["recommended_command"] == "fix blockers, then rerun agentx review --json"
+    assert payload["recommended_kind"] == "fix_blockers"
     assert "no_changes" in payload["blockers"]
 
 
@@ -99,6 +106,9 @@ def test_review_payload_skip_verify_warns(tmp_path: Path) -> None:
 
     assert payload["ok"] is True
     assert payload["commit_ready"] is False
+    assert payload["recommended_command"] == "agentx verify --json --fail-on-error"
+    assert payload["recommended_kind"] == "verify"
+    assert payload["recommended_risk"] == "GREEN"
     assert payload["verify"] is None
     assert payload["warnings"] == ["verify_skipped"]
     assert "agentx verify --json --fail-on-error" in payload["next_commands"]

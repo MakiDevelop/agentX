@@ -266,6 +266,9 @@ Required stable keys:
 | `generated_at` | string | Local ISO timestamp. |
 | `ok` | boolean | True when no blockers are present. |
 | `commit_ready` | boolean | True when there are changes, verification ran, and no blockers are present. |
+| `recommended_command` | string | First suggested follow-up command or instruction for simple runners. |
+| `recommended_kind` | string | Machine-readable kind for `recommended_command`, such as `commit`, `verify`, or `fix_blockers`. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
 | `blockers` | array of string | Machine-readable blockers such as `no_changes`, `verify_failed`, or `diff_unavailable`. |
 | `warnings` | array of string | Non-blocking warnings such as `verify_skipped` or `has_untracked_files`. |
 | `diff` | object | Embedded `agentx.diff.v1`. |
@@ -321,6 +324,9 @@ Required stable keys:
 | `generated_at` | string | Local ISO timestamp. |
 | `ok` | boolean | True when no blockers are present. |
 | `commit_ready` | boolean | True when embedded review is commit-ready and aggregate blockers are empty. |
+| `recommended_command` | string | First suggested follow-up command or instruction for simple runners. |
+| `recommended_kind` | string | Machine-readable kind for `recommended_command`, such as `commit_plan`, `gate`, or `fix_blockers`. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
 | `blockers` | array of string | Machine-readable blockers such as `verify_failed`, `doctor_failed`, or `approval_denied`. |
 | `warnings` | array of string | Non-blocking warnings such as `verify_skipped`, `doctor_skipped`, `approvals_skipped`, or `approvals_unavailable`. |
 | `review` | object | Embedded `agentx.review.v1`. |

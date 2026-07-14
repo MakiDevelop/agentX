@@ -95,6 +95,7 @@
 - [x] `agentx workflows --json` 會提供 `Infra preflight` recipe（alias: infra/vps/ssh/deploy），第一步是 `agentx infra resource-bundle --json` 並內嵌 command-plan。
 - [x] `agentx inspect --json` 會內嵌 `verify_command_plans`，把每個預設 verify command 轉成 `agentx.command_plan.v1`，讓 runner 一次取得可執行檢查與 command policy posture。
 - [x] `agentx review --json` 可輸出 deterministic review gate（diff + verify + commit_ready + blockers/warnings + next commands），`--fail-on-blocker` 可讓 CI/wrapper 在未達 commit 條件時 exit 1。
+- [x] `agentx review --json` / `agentx gate --json` 會提供 top-level `recommended_command` / `recommended_kind` / `recommended_risk`，讓提交前 runner 不必解析 next_commands 字串。
 - [x] `agentx commit-plan --message TEXT --json` 可輸出 read-only commit plan（files_to_stage、commit message、review gate、blockers/warnings、next commands），不 stage、不 commit、不 push，讓外部 runner 可先展示/審核。
 - [x] `agentx gate --json` 可輸出 aggregate runner gate（review + doctor static + latest approvals audit），用單一 `agentx.gate.v1` payload 回報 commit readiness、blockers、warnings 與 next commands；`--fail-on-blocker` 可給 CI/wrapper 擋流程。
 - [x] `agentx next --json` 可輸出 deterministic next-step planner（denied approvals → dirty diff gate → artifact handoff → active tasks → inspect），讓外部 runner 不必自行拼狀態分支；不跑測試、不呼叫 LLM、不 mutate。
