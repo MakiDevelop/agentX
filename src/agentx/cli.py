@@ -961,13 +961,7 @@ class HeadlessRunResult:
 
 
 def headless_run_stats(session: AgentSession) -> dict[str, object]:
-    tasks = getattr(session, "tasks", []) or []
-    task_counts = {
-        "pending": sum(1 for task in tasks if task.get("status") == "pending"),
-        "in_progress": sum(1 for task in tasks if task.get("status") == "in_progress"),
-        "done": sum(1 for task in tasks if task.get("status") == "done"),
-        "blocked": sum(1 for task in tasks if task.get("status") == "blocked"),
-    }
+    task_counts = _headless_task_counts(getattr(session, "tasks", []) or [])
     return {
         "message_count": session.message_count,
         "context_tokens_estimate": session.context_tokens_estimate,
@@ -978,6 +972,15 @@ def headless_run_stats(session: AgentSession) -> dict[str, object]:
         "reflection_count": getattr(session, "reflection_count", 0),
         "pending_verifies": sorted(getattr(session, "pending_verifies", set())),
         "task_counts": task_counts,
+    }
+
+
+def _headless_task_counts(tasks: list[dict]) -> dict[str, int]:
+    return {
+        "pending": sum(1 for task in tasks if task.get("status") == "pending"),
+        "in_progress": sum(1 for task in tasks if task.get("status") == "in_progress"),
+        "done": sum(1 for task in tasks if task.get("status") == "done"),
+        "blocked": sum(1 for task in tasks if task.get("status") == "blocked"),
     }
 
 
@@ -999,14 +1002,70 @@ def headless_log_summary(session: AgentSession) -> dict[str, object]:
         )
     failing_tools = sorted(name for name, ok in tool_outcomes.items() if not ok)
     recovery_suggestions = _headless_recovery_suggestions(session)
+    pending_verifies = sorted(getattr(session, "pending_verifies", set()))
+    stats = {"task_counts": _headless_task_counts(getattr(session, "tasks", []) or [])}
+    termination = getattr(session, "last_termination", "unknown")
     return {
-        "termination": getattr(session, "last_termination", "unknown"),
+        "termination": termination,
         "tool_outcomes": tool_outcomes,
         "successful_tools": sorted(name for name, ok in tool_outcomes.items() if ok),
         "failing_tools": failing_tools,
         "recent_errors": recent_errors,
         "recovery_suggestions": recovery_suggestions,
-        "pending_verifies": sorted(getattr(session, "pending_verifies", set())),
+        "pending_verifies": pending_verifies,
+        "handoff_summary": headless_handoff_summary(
+            termination=str(termination),
+            failing_tools=failing_tools,
+            recent_errors=recent_errors,
+            recovery_suggestions=recovery_suggestions,
+            pending_verifies=pending_verifies,
+            stats=stats,
+        ),
+    }
+
+
+def headless_handoff_summary(
+    *,
+    termination: str,
+    failing_tools: list[str],
+    recent_errors: list[dict[str, object]],
+    recovery_suggestions: list[dict[str, object]],
+    pending_verifies: list[str],
+    stats: dict[str, object],
+) -> dict[str, object]:
+    """Deterministic takeover summary for scripts/agents after a headless run.
+
+    This intentionally avoids a second model call. It is a compact, stable
+    handoff scaffold derived from runtime state, useful when a run fails,
+    exhausts steps, or needs another agent to resume.
+    """
+    next_steps: list[str] = []
+    if pending_verifies:
+        next_steps.append("Verify pending edited paths before making more changes.")
+    if failing_tools:
+        next_steps.append(f"Inspect or rerun failing tool(s): {', '.join(failing_tools)}.")
+    if recovery_suggestions:
+        action = str(recovery_suggestions[0].get("action", ""))
+        if action:
+            next_steps.append(f"Apply recovery action: {action}.")
+    if termination == "max_steps_exceeded":
+        next_steps.append("Resume from the saved session if session_path is present, or rerun with higher --max-steps.")
+    elif termination == "final_failed":
+        next_steps.append("Do not treat the final answer as done; resolve failing tools or pending verifies first.")
+    elif termination in {"runtime_error", "timeout"}:
+        next_steps.append("Fix the runtime condition, then rerun the same prompt with --resume-session if available.")
+    elif not next_steps:
+        next_steps.append("No immediate recovery action detected.")
+
+    task_counts = stats.get("task_counts", {}) if isinstance(stats.get("task_counts", {}), dict) else {}
+    return {
+        "status": termination,
+        "needs_handoff": termination not in {"final_success", "direct_tool_success", "chat", "final"},
+        "failing_tools": failing_tools,
+        "pending_verifies": pending_verifies,
+        "task_counts": task_counts,
+        "last_error": recent_errors[-1] if recent_errors else None,
+        "next_steps": next_steps,
     }
 
 
@@ -1047,6 +1106,14 @@ def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
 
 def headless_exception_result(exc: Exception, *, session_path: str | None = None) -> HeadlessRunResult:
     message = f"{type(exc).__name__}: {exc}"
+    recent_errors: list[dict[str, object]] = [
+        {
+            "type": "runtime_error",
+            "tool": "",
+            "message": message[:500],
+            "attempt_count": 1,
+        }
+    ]
     return HeadlessRunResult(
         output=f"runtime error: {message}",
         termination="runtime_error",
@@ -1056,15 +1123,16 @@ def headless_exception_result(exc: Exception, *, session_path: str | None = None
             "tool_outcomes": {},
             "successful_tools": [],
             "failing_tools": [],
-            "recent_errors": [
-                {
-                    "type": "runtime_error",
-                    "tool": "",
-                    "message": message[:500],
-                    "attempt_count": 1,
-                }
-            ],
+            "recent_errors": recent_errors,
             "recovery_suggestions": [],
+            "handoff_summary": headless_handoff_summary(
+                termination="runtime_error",
+                failing_tools=[],
+                recent_errors=recent_errors,
+                recovery_suggestions=[],
+                pending_verifies=[],
+                stats={"task_counts": {}},
+            ),
             "pending_verifies": [],
         },
     )
@@ -1072,6 +1140,14 @@ def headless_exception_result(exc: Exception, *, session_path: str | None = None
 
 def headless_timeout_result(seconds: float, *, session_path: str | None = None) -> HeadlessRunResult:
     message = f"run timed out after {seconds:g}s"
+    recent_errors: list[dict[str, object]] = [
+        {
+            "type": "timeout",
+            "tool": "",
+            "message": message,
+            "attempt_count": 1,
+        }
+    ]
     return HeadlessRunResult(
         output=message,
         termination="timeout",
@@ -1081,15 +1157,16 @@ def headless_timeout_result(seconds: float, *, session_path: str | None = None) 
             "tool_outcomes": {},
             "successful_tools": [],
             "failing_tools": [],
-            "recent_errors": [
-                {
-                    "type": "timeout",
-                    "tool": "",
-                    "message": message,
-                    "attempt_count": 1,
-                }
-            ],
+            "recent_errors": recent_errors,
             "recovery_suggestions": [],
+            "handoff_summary": headless_handoff_summary(
+                termination="timeout",
+                failing_tools=[],
+                recent_errors=recent_errors,
+                recovery_suggestions=[],
+                pending_verifies=[],
+                stats={"task_counts": {}},
+            ),
             "pending_verifies": [],
         },
     )

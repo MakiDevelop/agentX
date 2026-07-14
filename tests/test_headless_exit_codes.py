@@ -142,6 +142,9 @@ def test_headless_exception_result_is_structured() -> None:
             "attempt_count": 1,
         }
     ]
+    assert payload["log_summary"]["handoff_summary"]["status"] == "runtime_error"
+    assert payload["log_summary"]["handoff_summary"]["needs_handoff"] is True
+    assert payload["log_summary"]["handoff_summary"]["last_error"]["message"] == "RuntimeError: boom"
 
 
 def test_headless_timeout_result_is_structured() -> None:
@@ -160,6 +163,8 @@ def test_headless_timeout_result_is_structured() -> None:
             "attempt_count": 1,
         }
     ]
+    assert payload["log_summary"]["handoff_summary"]["status"] == "timeout"
+    assert payload["log_summary"]["handoff_summary"]["needs_handoff"] is True
 
 
 def test_run_with_headless_timeout_returns_timeout_result() -> None:
@@ -635,6 +640,58 @@ def test_headless_run_stats_summarizes_session_state() -> None:
     }
 
 
+def test_headless_handoff_summary_recommends_takeover_steps() -> None:
+    summary = cli.headless_handoff_summary(
+        termination="final_failed",
+        failing_tools=["run_tests"],
+        recent_errors=[
+            {
+                "type": "execution_error",
+                "tool": "run_tests",
+                "message": "pytest failed",
+                "attempt_count": 1,
+            }
+        ],
+        recovery_suggestions=[
+            {
+                "action": "verify_assumption",
+                "confidence": 0.75,
+                "description": "read files",
+                "rationale": "state stale",
+            }
+        ],
+        pending_verifies=["src/a.py"],
+        stats={"task_counts": {"in_progress": 1}},
+    )
+
+    assert summary["status"] == "final_failed"
+    assert summary["needs_handoff"] is True
+    assert summary["failing_tools"] == ["run_tests"]
+    assert summary["pending_verifies"] == ["src/a.py"]
+    assert summary["task_counts"] == {"in_progress": 1}
+    assert summary["last_error"]["message"] == "pytest failed"
+    assert summary["next_steps"] == [
+        "Verify pending edited paths before making more changes.",
+        "Inspect or rerun failing tool(s): run_tests.",
+        "Apply recovery action: verify_assumption.",
+        "Do not treat the final answer as done; resolve failing tools or pending verifies first.",
+    ]
+
+
+def test_headless_handoff_summary_for_max_steps_mentions_resume() -> None:
+    summary = cli.headless_handoff_summary(
+        termination="max_steps_exceeded",
+        failing_tools=[],
+        recent_errors=[],
+        recovery_suggestions=[],
+        pending_verifies=[],
+        stats={"task_counts": {}},
+    )
+
+    assert summary["needs_handoff"] is True
+    assert "Resume from the saved session" in summary["next_steps"][0]
+
+
 def test_headless_log_summary_summarizes_tool_outcomes_and_errors() -> None:
     session = SimpleNamespace(
         last_termination="final_failed",
@@ -681,6 +738,10 @@ def test_headless_log_summary_summarizes_tool_outcomes_and_errors() -> None:
             "rationale": "state may be stale",
         }
     ]
+    assert summary["handoff_summary"]["status"] == "final_failed"
+    assert summary["handoff_summary"]["needs_handoff"] is True
+    assert summary["handoff_summary"]["failing_tools"] == ["run_tests"]
+    assert summary["handoff_summary"]["pending_verifies"] == ["src/a.py"]
 
 
 def test_headless_log_summary_falls_back_to_recovery_actions() -> None:
