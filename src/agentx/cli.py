@@ -859,6 +859,69 @@ def print_config(
     )
 
 
+def config_payload(
+    settings: Settings,
+    *,
+    namespace: str,
+    mode: str,
+    approval: str,
+) -> dict[str, object]:
+    project_config = load_project_config(settings.workspace)
+    return {
+        "schema": "agentx.config.v1",
+        "model": settings.model,
+        "ollama_url": settings.ollama_url,
+        "ollama_timeout": settings.ollama_timeout,
+        "memory_backend": settings.memory_backend,
+        "memory_amh_store": settings.memory_amh_store,
+        "memory_amh_path": settings.memory_amh_path,
+        "memory_hall_url": settings.memory_hall_url,
+        "memory_hall_token": "set" if settings.memory_hall_token else "missing",
+        "max_steps": settings.max_steps,
+        "context_limit_tokens": settings.context_limit_tokens,
+        "auto_handoff": settings.auto_handoff,
+        "persona": settings.persona,
+        "workspace": str(settings.workspace),
+        "namespace": namespace,
+        "mode": mode,
+        "approval": approval,
+        "learning_enabled": settings.learning_enabled,
+        "project_config": {
+            "model": project_config.model,
+            "namespace": project_config.namespace,
+            "mode": project_config.mode,
+            "approval": project_config.approval,
+            "persona": project_config.persona,
+            "auto_handoff": project_config.auto_handoff,
+            "memory_amh_store": project_config.memory_amh_store,
+            "memory_amh_path": project_config.memory_amh_path,
+        },
+    }
+
+
+def print_config_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="config",
+        )
+        return
+    table = Table(title="agentX config", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    for key, value in payload.items():
+        if key == "schema":
+            continue
+        table.add_row(key, json.dumps(value, ensure_ascii=False) if isinstance(value, dict) else str(value))
+    console.print(table)
+
+
 def _collect_aca_probe_info(
     settings: Settings, memory: "MemoryHallClient | None"
 ) -> dict:
@@ -3074,6 +3137,33 @@ def tools_command(
     registry = ToolRegistry(builtin_tools(workspace_path, NullMemoryClient()))
     structured_format = structured_output_format(json_output, output_format)
     print_tool_catalog(registry, query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("config")
+def config_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for config resolution."),
+    namespace: str | None = typer.Option(None, "--namespace", help="Override namespace shown in the payload."),
+    mode: str | None = typer.Option(None, "--mode", help="Override mode shown in the payload."),
+    approval: str | None = typer.Option(None, "--approval", help="Override approval mode shown in the payload."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Show resolved agentX configuration without live probes."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    project_config = load_project_config(settings.workspace)
+    resolved_namespace = namespace or project_config.namespace or "project:agentX"
+    resolved_mode = mode or project_config.mode or "chat"
+    if resolved_mode == "ask":
+        resolved_mode = "agent"
+    approval_mode = normalize_approval_mode(approval or project_config.approval or ApprovalMode.ASK.value).value
+    payload = config_payload(
+        settings,
+        namespace=resolved_namespace,
+        mode=resolved_mode,
+        approval=approval_mode,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_config_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("models")

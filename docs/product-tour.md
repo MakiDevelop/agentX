@@ -42,6 +42,8 @@ uv run agentx shell
 
 ## 3. Tools And Workflows
 
+外部 wrapper 可用 `agentx config --json` 取得目前 workspace、model、memory backend、approval、persona 等解析後設定；token 只會顯示 set/missing。
+
 用 `/tools` 看工具與風險分級：
 
 ```text
