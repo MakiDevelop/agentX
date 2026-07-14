@@ -21,7 +21,7 @@
 - 自修改協議已寫死：允許學習後修改 AGENTX.md（帶 gate 與驗證）。
 
 ## 下一步 / 接續點
-1. 實作/強化 fidelity probe（參考 ai-tetsu fidelity-question-bank + constitution）：定期驗證 agentX 是否仍遵守 AGENTX.md 原則。
+1. fidelity probe：已補 deterministic v0（檢查 AGENTX.md、MT22 真相、bootstrap、learning gate、no-legacy pre-commit）；後續再強化 ai-tetsu fidelity-question-bank + constitution。
 2. 將 rules layer（確定性 guardrail，如 ruff + no-legacy + AGENTX.md 一致性檢查）整合進開發流程 / CI / pre-commit。
 3. learning / 自改進提案：已補 proposal status gate（proposed/under_review/approved/applied/rejected，applied 必須記 applied_to）；後續再補人工核准後寫 AGENTX.md / handoff 的操作面。
 4. 更新本檔（或本機 .agentx/handoff/NEXT_SESSION.md）當有新 RATIFIED 決策（從 Codex/Grok Build/Gemini council 或人類）。
