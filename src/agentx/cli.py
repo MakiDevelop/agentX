@@ -934,6 +934,38 @@ def run_commit_flow(settings: Settings, tools: ToolRegistry, message: str | None
     return commit_and_push(settings.workspace, plan.files, commit_message)
 
 
+def headless_exit_code(output: str) -> int:
+    normalized = " ".join((output or "").strip().split()).lower()
+    if not normalized:
+        return 2
+    if any(marker in normalized for marker in ("cancelled", "request cancelled", "ollama request cancelled")):
+        return 130
+    if any(
+        marker in normalized
+        for marker in (
+            "模型沒有輸出有效的工具呼叫 json",
+            "max_steps_exceeded",
+            "invalid response",
+            "bad_schema",
+            "non_json",
+        )
+    ):
+        return 2
+    if any(
+        marker in normalized
+        for marker in (
+            "任務失敗",
+            "工具執行失敗",
+            "tests failed",
+            "tool is blocked",
+            "permissionerror",
+            "traceback",
+        )
+    ):
+        return 1
+    return 0
+
+
 def run_init(settings: Settings, tools: ToolRegistry, namespace: str) -> str:
     profile = build_project_profile(settings.workspace, namespace)
     # /init is explicit user action → human_confirmed (ACA L2)
@@ -966,15 +998,16 @@ def main(
         return
     if ctx.invoked_subcommand is not None:
         return
-    print_raw(run_print_prompt(
+    output = run_print_prompt(
         print_prompt,
         namespace=namespace,
         agent_mode=agent,
         plan_mode=plan,
         plan_then_execute=plan_then_execute,
         orchestrate=orchestrate,
-    ))
-    raise typer.Exit()
+    )
+    print_raw(output)
+    raise typer.Exit(code=headless_exit_code(output))
 
 
 def build_runtime(
@@ -1266,7 +1299,9 @@ def ask(
     ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
     compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None
     agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace, compactor=compactor, memory=memory)
-    print_raw(agent.run(prompt, namespace=namespace))
+    output = agent.run(prompt, namespace=namespace)
+    print_raw(output)
+    raise typer.Exit(code=headless_exit_code(output))
 
 
 @app.command()
