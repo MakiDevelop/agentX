@@ -81,6 +81,135 @@ COMMAND_RISK_HINTS = {
     if "risk" in item
 }
 
+CLI_CAPABILITIES: list[CommandCatalogItem] = [
+    {
+        "command": "agentx",
+        "usage": "agentx -p TEXT --agent --json",
+        "description": "Run a headless agent task and emit agentx.headless_result.v1.",
+        "examples": ["agentx -p 'inspect repo' --agent --json", "agentx --prompt-file briefing.md --agent --output-format jsonl"],
+        "schemas": ["agentx.headless_result.v1"],
+        "jsonl_event": "result",
+        "risk": "YELLOW - agent mode may run tools according to approval policy",
+    },
+    {
+        "command": "agentx init",
+        "usage": "agentx init --json",
+        "description": "Inspect workspace project profile; --write-memory is explicit opt-in.",
+        "examples": ["agentx init --json", "agentx init --write-memory --json"],
+        "schemas": ["agentx.init.v1", "agentx.project_profile.v1"],
+        "jsonl_event": "init",
+        "risk": "GREEN by default; YELLOW with --write-memory",
+    },
+    {
+        "command": "agentx sessions",
+        "usage": "agentx sessions --json",
+        "description": "List saved transcript summaries for resume and audit routing.",
+        "examples": ["agentx sessions --json", "agentx sessions --limit 5 --output-format jsonl"],
+        "schemas": ["agentx.sessions.v1"],
+        "jsonl_event": "sessions",
+        "risk": "GREEN - read-only local inspection",
+    },
+    {
+        "command": "agentx approvals",
+        "usage": "agentx approvals [SESSION] --json",
+        "description": "List approval receipts from transcripts; can fail CI on denied receipts.",
+        "examples": ["agentx approvals latest --json", "agentx approvals latest --denied --fail-on-denied --json"],
+        "schemas": ["agentx.approvals.v1"],
+        "jsonl_event": "approvals",
+        "risk": "GREEN - read-only local inspection",
+    },
+    {
+        "command": "agentx tasks",
+        "usage": "agentx tasks [STATUS] --json",
+        "description": "List project task state from .agentx/tasks.json.",
+        "examples": ["agentx tasks --json", "agentx tasks active --output-format jsonl"],
+        "schemas": ["agentx.tasks.v1"],
+        "jsonl_event": "tasks",
+        "risk": "GREEN - read-only local inspection",
+    },
+    {
+        "command": "agentx verify",
+        "usage": "agentx verify --json",
+        "description": "Run detected project verification commands and emit check results.",
+        "examples": ["agentx verify --json", "agentx verify --json --fail-on-error"],
+        "schemas": ["agentx.verify.v1"],
+        "jsonl_event": "verify",
+        "risk": "GREEN - runs existing local verification commands",
+    },
+    {
+        "command": "agentx status",
+        "usage": "agentx status --json",
+        "description": "Inspect runtime, git posture, task counts, and resolved config.",
+        "examples": ["agentx status --json", "agentx status --output-format jsonl"],
+        "schemas": ["agentx.status.v1", "agentx.config.v1"],
+        "jsonl_event": "status",
+        "risk": "GREEN - read-only local inspection",
+    },
+    {
+        "command": "agentx doctor",
+        "usage": "agentx doctor --json",
+        "description": "Run health checks; --static avoids live Ollama and memory probes.",
+        "examples": ["agentx doctor --static --json", "agentx doctor --static --json --fail-on-error"],
+        "schemas": ["agentx.doctor.v1"],
+        "jsonl_event": "doctor",
+        "risk": "GREEN - local checks; live probes may touch configured local services",
+    },
+    {
+        "command": "agentx commands",
+        "usage": "agentx commands [QUERY] --json",
+        "description": "List slash command catalog for interactive shell routing.",
+        "examples": ["agentx commands --json", "agentx commands memory --json"],
+        "schemas": ["agentx.command_catalog.v1"],
+        "jsonl_event": "commands",
+        "risk": "GREEN - read-only catalog",
+    },
+    {
+        "command": "agentx tools",
+        "usage": "agentx tools [QUERY] --json",
+        "description": "List tool catalog and GREEN/YELLOW/RED risk metadata.",
+        "examples": ["agentx tools --json", "agentx tools YELLOW --json"],
+        "schemas": ["agentx.tool_catalog.v1"],
+        "jsonl_event": "tools",
+        "risk": "GREEN - read-only catalog",
+    },
+    {
+        "command": "agentx workflows",
+        "usage": "agentx workflows [QUERY] --json",
+        "description": "List practical workflow recipes for headless, audit, and commit flows.",
+        "examples": ["agentx workflows --json", "agentx workflows headless --json"],
+        "schemas": ["agentx.workflow_catalog.v1"],
+        "jsonl_event": "workflows",
+        "risk": "GREEN - read-only catalog",
+    },
+    {
+        "command": "agentx models",
+        "usage": "agentx models --json",
+        "description": "List models for the selected backend.",
+        "examples": ["agentx models --json", "agentx models --backend llama_cpp --base-url http://127.0.0.1:8081 --json"],
+        "schemas": [],
+        "jsonl_event": "models",
+        "risk": "GREEN - backend catalog probe",
+    },
+    {
+        "command": "agentx backends",
+        "usage": "agentx backends --json",
+        "description": "List registered LLM backend implementations.",
+        "examples": ["agentx backends --json"],
+        "schemas": [],
+        "jsonl_event": "backends",
+        "risk": "GREEN - read-only catalog",
+    },
+    {
+        "command": "agentx version",
+        "usage": "agentx version --json",
+        "description": "Print agentX and Python runtime versions.",
+        "examples": ["agentx version --json"],
+        "schemas": [],
+        "jsonl_event": "version",
+        "risk": "GREEN - read-only local inspection",
+    },
+]
+
 
 def command_catalog_payload() -> dict[str, object]:
     return filtered_command_catalog_payload()
@@ -123,6 +252,43 @@ def filtered_command_catalog_payload(query: str | None = None) -> dict[str, obje
     }
 
 
+def capabilities_payload(query: str | None = None) -> dict[str, object]:
+    normalized_query = (query or "").strip().lower()
+    capabilities: list[dict[str, object]] = []
+    for item in CLI_CAPABILITIES:
+        schemas = [str(schema) for schema in item.get("schemas", [])]
+        examples = [str(example) for example in item["examples"]]
+        risk = str(item["risk"])
+        if normalized_query and not _capability_item_matches(
+            normalized_query,
+            command=str(item["command"]),
+            usage=str(item["usage"]),
+            description=str(item["description"]),
+            examples=examples,
+            schemas=schemas,
+            jsonl_event=str(item["jsonl_event"]),
+            risk=risk,
+        ):
+            continue
+        capabilities.append(
+            {
+                "command": str(item["command"]),
+                "usage": str(item["usage"]),
+                "description": str(item["description"]),
+                "examples": examples,
+                "schemas": schemas,
+                "jsonl_event": str(item["jsonl_event"]),
+                "risk": risk,
+            }
+        )
+    return {
+        "schema": "agentx.capabilities.v1",
+        "query": query or "",
+        "count": len(capabilities),
+        "capabilities": capabilities,
+    }
+
+
 def _catalog_item_matches(
     query: str,
     *,
@@ -136,6 +302,21 @@ def _catalog_item_matches(
     if query.startswith("/"):
         return command.lower().startswith(query) or usage.lower().startswith(query)
     haystack = " ".join([command, usage, description, *examples, *related, risk]).lower()
+    return query in haystack
+
+
+def _capability_item_matches(
+    query: str,
+    *,
+    command: str,
+    usage: str,
+    description: str,
+    examples: list[str],
+    schemas: list[str],
+    jsonl_event: str,
+    risk: str,
+) -> bool:
+    haystack = " ".join([command, usage, description, *examples, *schemas, jsonl_event, risk]).lower()
     return query in haystack
 
 

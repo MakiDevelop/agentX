@@ -42,6 +42,7 @@ uv run agentx shell
 
 ## 3. Tools And Workflows
 
+外部 runner 第一次接 agentX 時可用 `agentx capabilities --json` 取得 `agentx.capabilities.v1`，一次知道 top-level automation commands、stable schemas、JSONL events 與風險。
 外部 wrapper 可用 `agentx config --json` 取得目前 workspace、model、memory backend、approval、persona 等解析後設定；token 只會顯示 set/missing。
 初次接入 repo 時可用 `agentx init --json` 取得 `agentx.init.v1` project profile；預設只讀，加 `--write-memory` 才寫入 Memory Hall。
 需要接續工作時可用 `agentx sessions --json` 取得 `agentx.sessions.v1` transcript overview，外部 runner 可依最新 session、approval denied counts 或 transcript path 決定下一步。

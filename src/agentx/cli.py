@@ -32,6 +32,7 @@ from agentx.config import Settings
 from agentx.command_catalog import (
     COMMAND_CATALOG,
     SLASH_COMMANDS,
+    capabilities_payload,
     command_catalog_payload,
     filtered_command_catalog_payload,
     format_unknown_slash_command,
@@ -2543,6 +2544,39 @@ def print_command_catalog(
     console.print(table)
 
 
+def print_capabilities(
+    query: str | None = None,
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    payload = capabilities_payload(query)
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="capabilities",
+        )
+        return
+
+    title = "agentX capabilities"
+    if payload["query"]:
+        title = f"{title}: {payload['query']}"
+    table = Table(title=title, show_header=True, header_style="bold")
+    table.add_column("Command", style="cyan", no_wrap=True)
+    table.add_column("Schema/Event")
+    table.add_column("Description")
+    for item in payload["capabilities"]:  # type: ignore[index]
+        capability = dict(item)
+        schemas = ", ".join(str(schema) for schema in capability["schemas"]) or "-"
+        table.add_row(
+            str(capability["command"]),
+            f"{schemas} / {capability['jsonl_event']}",
+            str(capability["description"]),
+        )
+    console.print(table)
+
+
 def build_headless_dry_run_payload(
     prompt: str,
     *,
@@ -3888,6 +3922,17 @@ def init_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_init_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("capabilities")
+def capabilities_command(
+    query: str | None = typer.Argument(None, help="Optional capability filter, e.g. verify, tasks, headless, schema name."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """List machine-readable top-level CLI capabilities for runners."""
+    structured_format = structured_output_format(json_output, output_format)
+    print_capabilities(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("sessions")

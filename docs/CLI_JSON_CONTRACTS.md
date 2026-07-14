@@ -25,6 +25,7 @@ Consumers should branch on `event` and read the payload from `data`.
 
 | Command | JSON schema | JSONL event |
 |---------|-------------|-------------|
+| `agentx capabilities --json` | `agentx.capabilities.v1` | `capabilities` |
 | `agentx config --json` | `agentx.config.v1` | `config` |
 | `agentx init --json` | `agentx.init.v1` | `init` |
 | `agentx sessions --json` | `agentx.sessions.v1` | `sessions` |
@@ -39,6 +40,36 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx version --json` | no `schema` key | `version` |
 | `agentx backends --json` | no `schema` key | `backends` |
 | `agentx models --json` | backend-specific catalog payload | `models` |
+
+## Capabilities Payload
+
+`agentx capabilities --json` emits `agentx.capabilities.v1`.
+
+This is the top-level runner discovery catalog. It lists non-interactive CLI
+capabilities, their stable JSON schemas, JSONL event names, examples, and risk
+posture. Use `agentx commands --json` for slash command discovery inside the
+interactive shell.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.capabilities.v1`. |
+| `query` | string | Filter query, or empty string. |
+| `count` | integer | Number of returned capabilities. |
+| `capabilities` | array of object | Top-level CLI capability entries. |
+
+Each capability object includes:
+
+| Key | Type |
+|-----|------|
+| `command` | string |
+| `usage` | string |
+| `description` | string |
+| `examples` | array of string |
+| `schemas` | array of string |
+| `jsonl_event` | string |
+| `risk` | string |
 
 ## Config Payload
 
