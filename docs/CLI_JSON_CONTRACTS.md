@@ -35,6 +35,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx traces --json` | `agentx.traces.v1` | `traces` |
 | `agentx diff --json` | `agentx.diff.v1` | `diff` |
 | `agentx patch-check --json` | `agentx.patch_check.v1` | `patch_check` |
+| `agentx command-plan --json` | `agentx.command_plan.v1` | `command_plan` |
 | `agentx review --json` | `agentx.review.v1` | `review` |
 | `agentx commit-plan --json` | `agentx.commit_plan.v1` | `commit_plan` |
 | `agentx gate --json` | `agentx.gate.v1` | `gate` |
@@ -178,6 +179,40 @@ Required stable keys:
 | `files` | array of object | Per-file path, added/deleted stats when available, binary flag, safe flag, detail, and source list. |
 | `next_commands` | array of string | Suggested follow-up commands. Successful checks include `/apply PATCH`. |
 | `detail` | string | Combined diagnostic text for blockers. |
+
+## Command Plan Payload
+
+`agentx command-plan COMMAND --json` emits `agentx.command_plan.v1`.
+
+This is a read-only command policy preflight for runners. It parses a shell
+command string, checks it against `ALLOWED_COMMANDS`, `BUILD_COMMANDS`, docker
+compose policy, and destructive blockers, then returns the matching tool and
+approval posture. It never executes the command.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.command_plan.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `generated_at` | string | Local ISO timestamp. |
+| `command` | string | Original command string after trimming. |
+| `argv` | array of string | `shlex.split` result, or empty when syntax is invalid. |
+| `ok` | boolean | True when the command matched an allowed policy and has no blockers. |
+| `allowed` | boolean | Whether agentX policy allows the command through a known tool. |
+| `risk` | string | `GREEN`, `YELLOW`, `RED`, or `UNKNOWN`. |
+| `approval_required` | boolean | True for YELLOW build/docker actions. |
+| `matched_policy` | string or null | `allowed_command`, `build_command`, `docker_compose`, or null. |
+| `tool` | string or null | Tool name that would run the command, such as `run_command`. |
+| `tool_args` | object | Tool arguments for the matched tool. |
+| `resolved_argv` | array of string or null | Exact argv agentX would use for matched policies. |
+| `blockers` | array of string | Machine-readable blockers such as `command_not_allowlisted`, `destructive_git_clean`, or `invalid_command_syntax`. |
+| `warnings` | array of string | Non-blocking diagnostics. |
+| `next_commands` | array of string | Suggested follow-up commands for humans or runners. |
+| `detail` | string | Empty string or a human-readable diagnostic. |
+
+`--fail-on-blocker` still prints the payload first. It exits `1` when
+`blockers` is non-empty; otherwise it exits `0`.
 
 ## Review Payload
 

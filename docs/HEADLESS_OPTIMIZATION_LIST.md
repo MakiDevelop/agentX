@@ -77,6 +77,7 @@
 - [x] `agentx traces [SESSION] --json` 可讀取 transcript，輸出 event/tool counts、approval denials、tool failures、error-like records 與 recent events，方便外部 runner 不解析整份 JSONL 就能做觀測與決策。
 - [x] `agentx diff [PATH] --json` 可輸出 read-only git diff 摘要（file status、insertions/deletions、stat；`--staged` 看 index，`--patch` 才附 patch），方便 Codex/Grok runner 在 review/commit 前不用解析自然語言 diff。
 - [x] `agentx patch-check PATCH --json` 可輸出 read-only patch preflight（`git apply --check -`、touched files、safe path blockers、JSONL event `patch_check`），讓外部 runner 在 `/apply` 前先擋 workspace escape / protected path / malformed patch。
+- [x] `agentx command-plan COMMAND --json` 可輸出 read-only command policy preflight（allowlist / build approval / docker compose / destructive blockers），讓外部 runner 不執行命令也能知道風險、tool args、approval posture 與 blocker。
 - [x] `agentx review --json` 可輸出 deterministic review gate（diff + verify + commit_ready + blockers/warnings + next commands），`--fail-on-blocker` 可讓 CI/wrapper 在未達 commit 條件時 exit 1。
 - [x] `agentx commit-plan --message TEXT --json` 可輸出 read-only commit plan（files_to_stage、commit message、review gate、blockers/warnings、next commands），不 stage、不 commit、不 push，讓外部 runner 可先展示/審核。
 - [x] `agentx gate --json` 可輸出 aggregate runner gate（review + doctor static + latest approvals audit），用單一 `agentx.gate.v1` payload 回報 commit readiness、blockers、warnings 與 next commands；`--fail-on-blocker` 可給 CI/wrapper 擋流程。

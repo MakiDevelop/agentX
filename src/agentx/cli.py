@@ -66,6 +66,8 @@ from agentx.tasks import (
     save_tasks,
 )
 from agentx.tools import (
+    ALLOWED_COMMANDS,
+    BUILD_COMMANDS,
     DOCKER_COMPOSE_ACTIONS,
     ToolRegistry,
     builtin_tools,
@@ -573,6 +575,215 @@ def print_infra_payload(
         print_structured_payload(payload, output_format=output_format, event="infra")
         return
     print_raw(str(payload["content"]))
+
+
+def _is_recursive_flag(token: str) -> bool:
+    return token == "-R" or (token.startswith("-") and "R" in token[1:])
+
+
+def _destructive_command_blockers(argv: list[str]) -> list[str]:
+    if not argv:
+        return []
+    blockers: list[str] = []
+    executable = Path(argv[0]).name
+    if any(token in {"--delete", "--remove-source-files"} for token in argv):
+        blockers.append("destructive_transfer_flag")
+    if executable in {"rm", "rmdir", "unlink", "trash"}:
+        blockers.append("destructive_delete_command")
+    if executable == "find" and "-delete" in argv:
+        blockers.append("destructive_find_delete")
+    if argv[:2] == ["git", "clean"]:
+        blockers.append("destructive_git_clean")
+    if argv[:2] == ["git", "reset"] and "--hard" in argv:
+        blockers.append("destructive_git_reset_hard")
+    if argv[:2] == ["git", "push"] and any(
+        token in {"--force", "--force-with-lease", "-f"} or token.startswith("--force-with-lease=")
+        for token in argv[2:]
+    ):
+        blockers.append("destructive_git_force_push")
+    if executable in {"chmod", "chown"} and any(_is_recursive_flag(token) for token in argv[1:]):
+        blockers.append("destructive_recursive_permission_change")
+    return blockers
+
+
+def _docker_plan(settings: Settings, argv: list[str]) -> dict[str, object] | None:
+    if len(argv) < 3 or argv[:2] != ["docker", "compose"]:
+        return None
+    action = argv[2]
+    if action not in DOCKER_COMPOSE_ACTIONS:
+        return {
+            "matched": False,
+            "blockers": ["docker_compose_action_not_allowlisted"],
+            "warnings": [],
+        }
+    try:
+        resolved_argv = docker_compose_command(settings.workspace, action)
+    except (FileNotFoundError, ValueError) as exc:
+        return {
+            "matched": True,
+            "blockers": ["docker_compose_unavailable"],
+            "warnings": [str(exc)],
+            "action": action,
+            "tool": f"docker_compose_{action}",
+            "tool_args": {"compose_file": None},
+        }
+    risk = "GREEN" if action in {"ps", "logs"} else "YELLOW"
+    return {
+        "matched": True,
+        "blockers": [],
+        "warnings": [],
+        "action": action,
+        "risk": risk,
+        "approval_required": risk == "YELLOW",
+        "matched_policy": "docker_compose",
+        "tool": f"docker_compose_{action}",
+        "tool_args": {"compose_file": None},
+        "resolved_argv": resolved_argv,
+    }
+
+
+def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
+    command_text = command.strip()
+    blockers: list[str] = []
+    warnings: list[str] = []
+    detail = ""
+    try:
+        argv = shlex.split(command_text)
+    except ValueError as exc:
+        argv = []
+        blockers.append("invalid_command_syntax")
+        detail = str(exc)
+
+    destructive_blockers = _destructive_command_blockers(argv)
+    blockers.extend(destructive_blockers)
+
+    payload: dict[str, object] = {
+        "schema": "agentx.command_plan.v1",
+        "workspace": str(settings.workspace),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "command": command_text,
+        "argv": argv,
+        "ok": False,
+        "allowed": False,
+        "risk": "RED" if destructive_blockers else "UNKNOWN",
+        "approval_required": False,
+        "matched_policy": None,
+        "tool": None,
+        "tool_args": {},
+        "resolved_argv": None,
+        "blockers": blockers,
+        "warnings": warnings,
+        "next_commands": [],
+        "detail": detail,
+    }
+
+    if not command_text and "invalid_command_syntax" not in blockers:
+        blockers.append("empty_command")
+        payload["detail"] = "command is required"
+        return payload
+
+    if destructive_blockers or "invalid_command_syntax" in blockers:
+        payload["next_commands"] = ["Do not execute this command; ask Maki for a safer plan or human-run deletion path"]
+        return payload
+
+    if command_text in ALLOWED_COMMANDS:
+        payload.update(
+            {
+                "ok": True,
+                "allowed": True,
+                "risk": "GREEN",
+                "approval_required": False,
+                "matched_policy": "allowed_command",
+                "tool": "run_command",
+                "tool_args": {"command": command_text},
+                "resolved_argv": ALLOWED_COMMANDS[command_text],
+                "next_commands": [f"/run {command_text}"],
+            }
+        )
+        return payload
+
+    if command_text in BUILD_COMMANDS:
+        payload.update(
+            {
+                "ok": True,
+                "allowed": True,
+                "risk": "YELLOW",
+                "approval_required": True,
+                "matched_policy": "build_command",
+                "tool": "run_build_command",
+                "tool_args": {"command": command_text},
+                "resolved_argv": BUILD_COMMANDS[command_text],
+                "next_commands": [f"/run {command_text}", "Confirm YELLOW approval before execution"],
+            }
+        )
+        return payload
+
+    docker_plan = _docker_plan(settings, argv)
+    if docker_plan is not None:
+        blockers.extend(str(item) for item in docker_plan.get("blockers", []))
+        warnings.extend(str(item) for item in docker_plan.get("warnings", []))
+        action = str(docker_plan.get("action") or "")
+        if docker_plan.get("matched") and not blockers:
+            payload.update(
+                {
+                    "ok": True,
+                    "allowed": True,
+                    "risk": docker_plan["risk"],
+                    "approval_required": docker_plan["approval_required"],
+                    "matched_policy": docker_plan["matched_policy"],
+                    "tool": docker_plan["tool"],
+                    "tool_args": docker_plan["tool_args"],
+                    "resolved_argv": docker_plan["resolved_argv"],
+                    "next_commands": [f"/docker {action}"],
+                }
+            )
+        else:
+            payload.update(
+                {
+                    "risk": "UNKNOWN",
+                    "matched_policy": "docker_compose",
+                    "tool": docker_plan.get("tool"),
+                    "tool_args": docker_plan.get("tool_args", {}),
+                    "next_commands": ["Check compose file and use /docker ps|build|up|logs|down"],
+                }
+            )
+        return payload
+
+    blockers.append("command_not_allowlisted")
+    payload["detail"] = "Command is not in ALLOWED_COMMANDS, BUILD_COMMANDS, or docker compose allowlist"
+    payload["next_commands"] = ["Use agentx tools --json to inspect runnable tools", "Ask Maki before expanding command policy"]
+    return payload
+
+
+def command_plan_exit_code(payload: dict[str, object], *, fail_on_blocker: bool = False) -> int:
+    return 1 if fail_on_blocker and payload.get("blockers") else 0
+
+
+def print_command_plan_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output or jsonl_output:
+        output_format = "jsonl" if jsonl_output else "json"
+        print_structured_payload(payload, output_format=output_format, event="command_plan")
+        return
+    status = "allowed" if payload.get("allowed") else "blocked"
+    print_raw(f"{status}: {payload.get('command')}")
+    print_raw(f"risk: {payload.get('risk')}")
+    if payload.get("tool"):
+        print_raw(f"tool: {payload.get('tool')}")
+    blockers = payload.get("blockers") or []
+    if blockers:
+        print_raw("blockers:")
+        for blocker in blockers:
+            print_raw(f"- {blocker}")
+    next_commands = payload.get("next_commands") or []
+    if next_commands:
+        print_raw("next:")
+        for command_item in next_commands:
+            print_raw(f"- {command_item}")
 
 
 def print_raw(text: object) -> None:
@@ -5234,6 +5445,22 @@ def infra_command(
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
     print_infra_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("command-plan")
+def command_plan_command(
+    command: str = typer.Argument(..., help="Shell command string to classify without executing."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for compose-file discovery."),
+    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 after printing the payload when blockers are present."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Classify a shell command against agentX command policy without executing it."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = command_plan_payload(settings, command)
+    structured_format = structured_output_format(json_output, output_format)
+    print_command_plan_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(command_plan_exit_code(payload, fail_on_blocker=fail_on_blocker))
 
 
 @app.command("config")

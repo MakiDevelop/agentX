@@ -155,6 +155,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local patch inspection",
     },
     {
+        "command": "agentx command-plan",
+        "usage": "agentx command-plan COMMAND --json",
+        "description": "Classify a shell command against agentX allowlists, approval policy, and destructive blockers without executing it.",
+        "examples": ["agentx command-plan 'uv run pytest -q' --json", "agentx command-plan 'npm test' --json", "agentx command-plan 'git clean -fd' --json --fail-on-blocker"],
+        "schemas": ["agentx.command_plan.v1"],
+        "jsonl_event": "command_plan",
+        "risk": "GREEN - read-only command policy inspection",
+    },
+    {
         "command": "agentx review",
         "usage": "agentx review --json",
         "description": "Run a deterministic review gate: diff summary plus verification posture.",
