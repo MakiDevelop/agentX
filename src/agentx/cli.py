@@ -31,6 +31,7 @@ from agentx.attachments import extract_file_paths, format_attachment_context, re
 from agentx.config import Settings
 from agentx.command_catalog import (
     SLASH_COMMANDS,
+    command_catalog_payload,
     format_unknown_slash_command,
     normalize_slash_command_topic,
     slash_command_help,
@@ -1764,6 +1765,33 @@ def print_version(*, json_output: bool = False, jsonl_output: bool = False) -> N
     print_raw(f"agentx {payload['agentx']}\npython {payload['python']}")
 
 
+def print_command_catalog(*, json_output: bool = False, jsonl_output: bool = False) -> None:
+    payload = command_catalog_payload()
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="commands",
+        )
+        return
+
+    table = Table(title="agentX command catalog", show_header=True, header_style="bold")
+    table.add_column("Command", style="cyan", no_wrap=True)
+    table.add_column("Usage")
+    table.add_column("Risk")
+    table.add_column("Description")
+    for item in payload["commands"]:
+        command = dict(item)
+        risk = str(command["risk"]).split(" - ", 1)[0]
+        table.add_row(
+            str(command["command"]),
+            str(command["usage"]),
+            risk,
+            str(command["description"]),
+        )
+    console.print(table)
+
+
 def build_headless_dry_run_payload(
     prompt: str,
     *,
@@ -2952,6 +2980,16 @@ def backends(
     """List registered LLM backend keys."""
     structured_format = structured_output_format(json_output, output_format)
     print_backend_list(json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("commands")
+def commands_command(
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """List slash command catalog entries."""
+    structured_format = structured_output_format(json_output, output_format)
+    print_command_catalog(json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("models")

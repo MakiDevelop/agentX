@@ -81,6 +81,28 @@ COMMAND_RISK_HINTS = {
 }
 
 
+def command_catalog_payload() -> dict[str, object]:
+    commands: list[dict[str, object]] = []
+    for item in COMMAND_CATALOG:
+        usage = str(item["usage"])
+        command = usage.split()[0]
+        commands.append(
+            {
+                "command": command,
+                "usage": usage,
+                "description": str(item["description"]),
+                "examples": [str(example) for example in item["examples"]],
+                "related": [str(related) for related in item["related"]],
+                "risk": str(item.get("risk", "GREEN - read-only, local display, or low-risk routing")),
+            }
+        )
+    return {
+        "schema": "agentx.command_catalog.v1",
+        "count": len(commands),
+        "commands": commands,
+    }
+
+
 def slash_command_entries() -> dict[str, tuple[str, str]]:
     return {command.split()[0]: (command, desc) for command, desc in SLASH_COMMANDS}
 
