@@ -1532,6 +1532,10 @@ def handoff_inspect_exit_code(payload: dict[str, object], *, use_payload_exit_co
     return 1
 
 
+def handoff_takeover_ready(payload: dict[str, object]) -> bool:
+    return bool(payload.get("needs_handoff")) and bool(payload.get("resume_command"))
+
+
 def backend_list_payload() -> list[str]:
     register_builtin_backends()
     return list_registered_backends()
@@ -2628,6 +2632,11 @@ def handoff_inspect(
         "--use-payload-exit-code",
         help="Exit with the payload exit_code after printing takeover fields.",
     ),
+    require_handoff: bool = typer.Option(
+        False,
+        "--require-handoff",
+        help="Exit 1 unless the payload has needs_handoff=true and a resume_command.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
@@ -2638,6 +2647,8 @@ def handoff_inspect(
         next_prompt,
     )
     exit_code = handoff_inspect_exit_code(payload, use_payload_exit_code=use_payload_exit_code)
+    if require_handoff and not handoff_takeover_ready(payload):
+        exit_code = 1
     if field:
         field_payload = handoff_inspect_field_payload(payload, field)
         if structured_format != "plain":

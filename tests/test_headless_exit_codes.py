@@ -353,6 +353,78 @@ def test_handoff_inspect_use_payload_exit_code_jsonl() -> None:
     assert event["data"]["value"] == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json"
 
 
+def test_handoff_inspect_require_handoff_accepts_ready_payload() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--require-handoff",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+
+
+def test_handoff_inspect_require_handoff_rejects_missing_resume_command(tmp_path: Path) -> None:
+    runner = CliRunner()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    event = json.loads(fixture.read_text(encoding="utf-8"))
+    event["data"]["log_summary"]["handoff_summary"]["resume_command"] = None
+    event["data"]["log_summary"]["handoff_summary"]["resume_session"] = None
+    target = tmp_path / "result.json"
+    target.write_text(json.dumps(event), encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["handoff-inspect", str(target), "--field", "resume_command", "--require-handoff"])
+
+    assert result.exit_code == 1
+    assert result.output == "\n"
+
+
+def test_handoff_inspect_require_handoff_jsonl_still_prints_payload(tmp_path: Path) -> None:
+    runner = CliRunner()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    event = json.loads(fixture.read_text(encoding="utf-8"))
+    event["data"]["log_summary"]["handoff_summary"]["needs_handoff"] = False
+    target = tmp_path / "result.json"
+    target.write_text(json.dumps(event), encoding="utf-8")
+
+    result = runner.invoke(
+        cli.app,
+        ["handoff-inspect", str(target), "--output-format", "jsonl", "--require-handoff"],
+    )
+    output_event = json.loads(result.output)
+
+    assert result.exit_code == 1
+    assert output_event["event"] == "handoff_inspect"
+    assert output_event["data"]["needs_handoff"] is False
+    assert output_event["data"]["resume_command"] == (
+        "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json"
+    )
+
+
+def test_handoff_inspect_require_handoff_ready_can_preserve_payload_exit_code() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+            "--require-handoff",
+            "--use-payload-exit-code",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+
+
 @pytest.mark.parametrize(
     ("payload", "expected"),
     [
@@ -372,6 +444,12 @@ def test_handoff_inspect_exit_code_normalizes_payload_exit_code(
 ) -> None:
     assert cli.handoff_inspect_exit_code(payload, use_payload_exit_code=True) == expected
     assert cli.handoff_inspect_exit_code(payload, use_payload_exit_code=False) == 0
+
+
+def test_handoff_takeover_ready_requires_flag_and_resume_command() -> None:
+    assert cli.handoff_takeover_ready({"needs_handoff": True, "resume_command": "agentx ..."}) is True
+    assert cli.handoff_takeover_ready({"needs_handoff": False, "resume_command": "agentx ..."}) is False
+    assert cli.handoff_takeover_ready({"needs_handoff": True, "resume_command": None}) is False
 
 
 def test_handoff_inspect_next_prompt_updates_resume_command() -> None:

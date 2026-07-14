@@ -63,6 +63,7 @@ agentx handoff-inspect tests/fixtures/headless_result_failure.json --output-form
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --next-prompt "照上一輪繼續"
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --use-payload-exit-code
+agentx handoff-inspect tests/fixtures/headless_result_failure.json --field resume_command --require-handoff
 agentx handoff-inspect tests/fixtures/headless_result_failure.json --field recovery_checklist
 agentx -p "..." --agent --output-format jsonl | agentx handoff-inspect - --field resume_command --next-prompt "照上一輪繼續" --use-payload-exit-code
 ```
@@ -71,6 +72,9 @@ agentx -p "..." --agent --output-format jsonl | agentx handoff-inspect - --field
 after a successful inspection even when the inspected payload represents a
 failed headless run. With it, the command prints the requested takeover data and
 then exits with the payload `exit_code` clamped to the shell range `0..255`.
+`--require-handoff` is a runner gate: it exits 1 unless the inspected payload has
+`needs_handoff=true` and a non-empty `resume_command`. The command still prints
+the requested inspection output before exiting.
 
 For automation that needs a stable artifact path instead of stdout parsing:
 
