@@ -711,6 +711,138 @@ def sessions_payload(settings: Settings, *, limit: int = 10) -> dict[str, object
     }
 
 
+def resolve_artifacts_root(workspace: Path, value: str) -> Path:
+    try:
+        target = resolve_inside_workspace(workspace, value)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if target.exists() and not target.is_dir():
+        raise typer.BadParameter(f"artifacts root is not a directory: {value}")
+    return target
+
+
+def artifact_mtime(path: Path) -> float:
+    candidates = [path / "result.json", path / "result.jsonl", path / "session.session.jsonl", path / "handoff.md"]
+    existing = [candidate.stat().st_mtime for candidate in candidates if candidate.exists()]
+    if existing:
+        return max(existing)
+    return path.stat().st_mtime
+
+
+def artifact_mtime_text(path: Path) -> str:
+    return datetime.fromtimestamp(artifact_mtime(path)).isoformat(timespec="seconds")
+
+
+def relative_workspace_path(workspace: Path, path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(workspace.resolve()))
+    except ValueError:
+        return str(path)
+
+
+def read_artifact_result_payload(path: Path) -> dict[str, object] | None:
+    if not path.is_file():
+        return None
+    try:
+        return load_headless_payload_file(path)
+    except (OSError, typer.BadParameter):
+        return None
+
+
+def artifact_handoff_summary(result_payload: dict[str, object] | None) -> dict[str, object]:
+    if not result_payload:
+        return {}
+    log_summary = result_payload.get("log_summary")
+    if not isinstance(log_summary, dict):
+        return {}
+    handoff = log_summary.get("handoff_summary")
+    return dict(handoff) if isinstance(handoff, dict) else {}
+
+
+def artifact_bundle_overview(workspace: Path, bundle: Path) -> dict[str, object]:
+    result_json = bundle / "result.json"
+    result_jsonl = bundle / "result.jsonl"
+    session_path = bundle / "session.session.jsonl"
+    handoff_path = bundle / "handoff.md"
+    result_path: Path | None = None
+    result_format: str | None = None
+    result_conflict = result_json.is_file() and result_jsonl.is_file()
+    if result_json.is_file():
+        result_path = result_json
+        result_format = "json"
+    elif result_jsonl.is_file():
+        result_path = result_jsonl
+        result_format = "jsonl"
+
+    result_payload = read_artifact_result_payload(result_path) if result_path else None
+    handoff = artifact_handoff_summary(result_payload)
+    return {
+        "name": bundle.name,
+        "path": str(bundle),
+        "relative_path": relative_workspace_path(workspace, bundle),
+        "updated_at": artifact_mtime_text(bundle),
+        "has_result": result_path is not None,
+        "result_path": str(result_path) if result_path else None,
+        "result_relative_path": relative_workspace_path(workspace, result_path) if result_path else None,
+        "result_format": result_format,
+        "result_conflict": result_conflict,
+        "has_session": session_path.is_file(),
+        "session_path": str(session_path) if session_path.is_file() else None,
+        "session_relative_path": relative_workspace_path(workspace, session_path) if session_path.is_file() else None,
+        "has_handoff": handoff_path.is_file(),
+        "handoff_path": str(handoff_path) if handoff_path.is_file() else None,
+        "handoff_relative_path": relative_workspace_path(workspace, handoff_path) if handoff_path.is_file() else None,
+        "schema_version": result_payload.get("schema_version") if result_payload else None,
+        "termination": result_payload.get("termination") if result_payload else None,
+        "exit_code": result_payload.get("exit_code") if result_payload else None,
+        "needs_handoff": bool(handoff.get("needs_handoff", False)),
+        "resume_command": handoff.get("resume_command"),
+    }
+
+
+def is_artifact_bundle(path: Path) -> bool:
+    return any(
+        (path / name).is_file()
+        for name in ("result.json", "result.jsonl", "session.session.jsonl", "handoff.md")
+    )
+
+
+def list_artifact_bundles(root: Path) -> list[Path]:
+    if is_artifact_bundle(root):
+        return [root]
+    return [path for path in root.iterdir() if path.is_dir() and is_artifact_bundle(path)]
+
+
+def artifacts_payload(settings: Settings, *, root: str = ".agentx/runs", limit: int = 20) -> dict[str, object]:
+    artifact_root = resolve_artifacts_root(settings.workspace, root)
+    if not artifact_root.exists():
+        return {
+            "schema": "agentx.artifacts.v1",
+            "workspace": str(settings.workspace),
+            "root": str(artifact_root),
+            "root_relative_path": relative_workspace_path(settings.workspace, artifact_root),
+            "ok": True,
+            "limit": limit,
+            "count": 0,
+            "artifacts": [],
+            "detail": f"artifacts root not found: {root}",
+        }
+
+    bundles = sorted(list_artifact_bundles(artifact_root), key=artifact_mtime, reverse=True)[:limit]
+    artifacts = [artifact_bundle_overview(settings.workspace, bundle) for bundle in bundles]
+    return {
+        "schema": "agentx.artifacts.v1",
+        "workspace": str(settings.workspace),
+        "root": str(artifact_root),
+        "root_relative_path": relative_workspace_path(settings.workspace, artifact_root),
+        "ok": True,
+        "limit": limit,
+        "count": len(artifacts),
+        "artifacts": artifacts,
+        "detail": "",
+    }
+
+
 def approvals_payload(
     settings: Settings,
     *,
@@ -819,6 +951,47 @@ def print_sessions_payload(
             str(overview["approval"]),
             str(overview["last"]),
         )
+    console.print(table)
+
+
+def print_artifacts_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="artifacts",
+        )
+        return
+
+    table = Table(title="agentX artifacts", show_header=True, header_style="bold")
+    table.add_column("Name", style="cyan")
+    table.add_column("Updated")
+    table.add_column("Result")
+    table.add_column("Exit", justify="right")
+    table.add_column("Termination")
+    table.add_column("Handoff")
+    table.add_column("Path")
+    for overview in payload["artifacts"]:  # type: ignore[index]
+        artifact = dict(overview)
+        result = str(artifact.get("result_format") or "-")
+        if artifact.get("result_conflict"):
+            result = "conflict"
+        table.add_row(
+            str(artifact["name"]),
+            str(artifact["updated_at"]),
+            result,
+            str(artifact.get("exit_code")),
+            str(artifact.get("termination")),
+            "yes" if artifact.get("needs_handoff") else "no",
+            str(artifact["relative_path"]),
+        )
+    if not payload.get("count"):
+        table.caption = str(payload.get("detail") or "No artifact bundles found.")
     console.print(table)
 
 
@@ -4035,6 +4208,21 @@ def sessions_command(
     payload = sessions_payload(settings, limit=limit)
     structured_format = structured_output_format(json_output, output_format)
     print_sessions_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("artifacts")
+def artifacts_command(
+    root: str = typer.Argument(".agentx/runs", help="Workspace-relative artifact root or a single artifact bundle directory."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for artifact discovery."),
+    limit: int = typer.Option(20, "--limit", min=1, help="Maximum number of artifact bundles to return."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """List saved headless artifact bundles for external runners."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = artifacts_payload(settings, root=root, limit=limit)
+    structured_format = structured_output_format(json_output, output_format)
+    print_artifacts_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("approvals")

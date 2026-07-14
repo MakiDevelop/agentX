@@ -14,7 +14,9 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert payload["count"] == len(CLI_CAPABILITIES)
     commands = {item["command"]: item for item in payload["capabilities"]}  # type: ignore[index]
     assert "agentx verify" in commands
+    assert "agentx artifacts" in commands
     assert commands["agentx verify"]["schemas"] == ["agentx.verify.v1"]
+    assert commands["agentx artifacts"]["schemas"] == ["agentx.artifacts.v1"]
     assert commands["agentx approvals"]["jsonl_event"] == "approvals"
     assert all(
         set(item) == {

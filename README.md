@@ -181,13 +181,14 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `agentx inspect --json` 會輸出 `agentx.inspect.v1` read-only preflight bundle，彙整 status、active tasks、sessions、latest approvals、capabilities 與可跑的 verify commands，但不執行測試或 live probes。
 `agentx init --json` 會輸出 `agentx.init.v1` project profile；預設 read-only，加 `--write-memory` 才會寫入 Memory Hall。
 `agentx sessions --json` 會輸出 `agentx.sessions.v1` transcript overview，方便外部 runner 找最近 session、approval denials 與 resume 目標。
+`agentx artifacts --json` 會輸出 `agentx.artifacts.v1` headless artifact bundle catalog，預設掃 `.agentx/runs`，方便外部 runner 找到上一輪 `result.json/jsonl`、`session.session.jsonl` 與 `handoff.md`。
 `agentx approvals latest --json` 會輸出 `agentx.approvals.v1` approval receipts；加 `--denied --fail-on-denied` 時，會在輸出 payload 後用 exit 1 擋下含拒絕項的 audit。
 `agentx tasks --json` 會輸出 `agentx.tasks.v1` 完整 task list；`agentx tasks active --json` 可只看 pending / in_progress / blocked，方便外部 runner 接續長任務。
 `agentx verify --json` 會輸出 `agentx.verify.v1`，依 workspace 偵測並執行預設驗證命令；加 `--fail-on-error` 時，任何驗證失敗會在輸出 payload 後以 exit 1 結束。
 `agentx status --json` 會輸出 `agentx.status.v1`，整合 version、resolved runtime、git dirty/ahead/behind 與 task counts；它只做本機 read-only 檢查，不探測網路服務。
 `agentx doctor --json` 會輸出 `agentx.doctor.v1` health checks；CI 或 wrapper 可用 `agentx doctor --static --json` 只檢查本機 `uv`、git、task migration，避開 Ollama / memory live probes。加上 `--fail-on-error` 時，任一 check 失敗會在輸出 payload 後以 exit 1 結束。
 `agentx workflows --json` 會輸出 `agentx.workflow_catalog.v1`，讓 wrapper 能讀取 headless、audit、commit 等可執行 recipe；也可用 `agentx workflows headless --json` 查單一路徑。
-`--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、capabilities、inspect、config、sessions、approvals、tasks、verify、status、doctor、commands、workflows、tools、models 會分別使用 `dry_run`、`version`、`backends`、`capabilities`、`inspect`、`config`、`sessions`、`approvals`、`tasks`、`verify`、`status`、`doctor`、`commands`、`workflows`、`tools`、`models` event。
+`--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、capabilities、inspect、config、sessions、artifacts、approvals、tasks、verify、status、doctor、commands、workflows、tools、models 會分別使用 `dry_run`、`version`、`backends`、`capabilities`、`inspect`、`config`、`sessions`、`artifacts`、`approvals`、`tasks`、`verify`、`status`、`doctor`、`commands`、`workflows`、`tools`、`models` event。
 `--result-output PATH` 可把同一份 result payload 寫成 workspace 內 artifact，plain stdout 時預設寫 JSON，`--output-format jsonl` 時寫 JSONL event；路徑拒絕 workspace escape 與覆蓋既有檔案。需要 artifact 格式和 stdout 格式分開時，可用 `--result-output-format auto|json|jsonl`。
 `--handoff-briefing-output PATH` 可在同一輪 headless run 結束時直接寫出 Markdown 接手檔；路徑同樣限制在 workspace 內、拒絕覆寫，且不可與 `--session-output` / `--result-output` 指到同一檔案。
 `--artifact-dir DIR` 是 runner-friendly preset，會在 workspace 內一次產生 `session.session.jsonl`、`result.json`（或 `result.jsonl`）與 `handoff.md`；它和個別 artifact output option 互斥，且會拒絕覆寫標準檔名。
@@ -205,6 +206,7 @@ agentx ask "照上一輪下一步繼續" --resume-session latest --save-session 
 `--resume-session` 只會讀取目前 workspace 的 `.agentx/sessions/*.session.jsonl`；JSON payload 的 `session_path` 會回報實際保存或恢復的 session 檔，`log_summary.handoff_summary` 也會在可用時附上 `resume_session` 與可複製的 `resume_command`。Resume 會還原關鍵 runtime state，包括 tool outcomes、file ops、pending verifies、termination 與 observability counters。
 已保存的 JSON/JSONL payload 可用 `agentx handoff-inspect PATH` 抽出接手資訊，例如 resume command 與 recovery checklist；script 可用 `--field resume_command --next-prompt "照上一輪繼續"` 只取可直接執行的續跑命令，長 briefing 可用 `--next-prompt-file .agentx/handoff/next.md` 產生 `--prompt-file` 續跑命令，並可用 `--briefing-output .agentx/handoff/next.md` 同步寫出 Markdown 接手檔。需要 JSONL 接手時可加 `--resume-output-format jsonl`，也可用 `agentx ... --output-format jsonl | agentx handoff-inspect - --field resume_command` 走 stdin pipeline。需要讓 wrapper 同時感知原 headless run 的失敗或 timeout 時，加上 `--use-payload-exit-code`，會先輸出接手資訊再用 payload 的 `exit_code` 結束。需要把 artifact 當成接手 gate 時，加上 `--require-handoff`，若沒有 `needs_handoff=true` 與 `resume_command` 會 exit 1；加上 `--require-schema-version` 可拒絕舊版或未知 payload contract。
 已保存的 artifact bundle 可用 `agentx handoff-resume .agentx/runs/latest` 直接輸出續跑命令；若 bundle 內有 `handoff.md`，預設會輸出 `--prompt-file <bundle>/handoff.md` 版本的 resume command。可加 `--next-prompt`、`--next-prompt-file` 或 `--resume-output-format jsonl` 改寫續跑命令。`handoff-resume --dry-run` 會顯示最終 argv；只有明確加 `--execute` 才會執行續跑命令。
+需要先發現有哪些 bundle 時，用 `agentx artifacts --json` 列出 `.agentx/runs`；也可指定單一 bundle，例如 `agentx artifacts .agentx/runs/latest --json`，取得 result/session/handoff 路徑、exit code、termination 與 resume command。
 需要穩定 artifact path 給 CI 或其他 agent 時，可用 `--session-output PATH` 指定 workspace 內 JSONL 檔；它會隱含開啟 session persistence，且拒絕覆蓋既有檔案：
 
 ```bash

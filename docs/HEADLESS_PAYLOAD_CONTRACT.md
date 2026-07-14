@@ -117,6 +117,8 @@ agentx -p "..." --agent --artifact-dir .agentx/runs/latest --quiet
 agentx ask "..." --result-output .agentx/results/ask.json --quiet
 agentx ask "..." --handoff-briefing-output .agentx/handoff/ask-next.md --quiet
 agentx ask "..." --artifact-dir .agentx/runs/ask-latest --quiet
+agentx artifacts --json
+agentx artifacts .agentx/runs/latest --json
 ```
 
 `--result-output` writes inside the active workspace only, refuses to overwrite
@@ -139,6 +141,12 @@ writes these files under `DIR`:
 
 It requires agent mode, is mutually exclusive with individual artifact output
 options, and rejects any pre-existing standard bundle file.
+
+`agentx artifacts [DIR] --json` is the read-only discovery command for these
+bundles. It scans `.agentx/runs` by default, or returns one bundle when `DIR`
+itself contains standard artifact files. The payload includes result/session/
+handoff paths, result format, exit code, termination, `needs_handoff`, and any
+embedded `resume_command`.
 
 ## `log_summary`
 

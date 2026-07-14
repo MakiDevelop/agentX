@@ -110,6 +110,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local inspection",
     },
     {
+        "command": "agentx artifacts",
+        "usage": "agentx artifacts [.agentx/runs] --json",
+        "description": "List saved headless artifact bundles for runner discovery and resume routing.",
+        "examples": ["agentx artifacts --json", "agentx artifacts .agentx/runs/latest --output-format jsonl"],
+        "schemas": ["agentx.artifacts.v1"],
+        "jsonl_event": "artifacts",
+        "risk": "GREEN - read-only local inspection",
+    },
+    {
         "command": "agentx approvals",
         "usage": "agentx approvals [SESSION] --json",
         "description": "List approval receipts from transcripts; can fail CI on denied receipts.",

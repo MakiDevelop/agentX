@@ -30,6 +30,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx inspect --json` | `agentx.inspect.v1` | `inspect` |
 | `agentx init --json` | `agentx.init.v1` | `init` |
 | `agentx sessions --json` | `agentx.sessions.v1` | `sessions` |
+| `agentx artifacts --json` | `agentx.artifacts.v1` | `artifacts` |
 | `agentx approvals --json` | `agentx.approvals.v1` | `approvals` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
@@ -95,6 +96,55 @@ Required stable keys:
 | `capabilities` | object | Embedded `agentx.capabilities.v1`. |
 | `verify_commands` | array of object | Detected verification argv lists without executing them. |
 | `next_commands` | array of string | Suggested follow-up commands for runners. |
+
+## Artifacts Payload
+
+`agentx artifacts --json` emits `agentx.artifacts.v1`.
+
+This is a read-only catalog of saved headless artifact bundles. By default it
+scans `.agentx/runs` inside the active workspace. If the argument itself is a
+bundle directory, it returns that one bundle. A bundle is any directory with at
+least one standard artifact file: `result.json`, `result.jsonl`,
+`session.session.jsonl`, or `handoff.md`.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.artifacts.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `root` | string | Resolved artifact root or bundle directory. |
+| `root_relative_path` | string | Workspace-relative root path when possible. |
+| `ok` | boolean | Whether discovery completed. Missing roots are still `ok=true` with count 0. |
+| `limit` | integer | Maximum number of bundles requested. |
+| `count` | integer | Number of returned bundles. |
+| `artifacts` | array of object | Bundle summaries sorted by latest artifact mtime descending. |
+| `detail` | string | Empty string or a human-readable note. |
+
+Each artifact object includes:
+
+| Key | Type |
+|-----|------|
+| `name` | string |
+| `path` | string |
+| `relative_path` | string |
+| `updated_at` | string |
+| `has_result` | boolean |
+| `result_path` | string or null |
+| `result_relative_path` | string or null |
+| `result_format` | string or null |
+| `result_conflict` | boolean |
+| `has_session` | boolean |
+| `session_path` | string or null |
+| `session_relative_path` | string or null |
+| `has_handoff` | boolean |
+| `handoff_path` | string or null |
+| `handoff_relative_path` | string or null |
+| `schema_version` | string or null |
+| `termination` | string or null |
+| `exit_code` | integer or null |
+| `needs_handoff` | boolean |
+| `resume_command` | string or null |
 
 ## Config Payload
 
