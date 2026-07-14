@@ -1,8 +1,10 @@
 from unittest.mock import MagicMock, patch
 
 from agentx.cli import (
+    COMMAND_CATALOG,
     COMMAND_EXAMPLES,
     COMMAND_RELATED,
+    COMMAND_RISK_HINTS,
     GUIDE_MODE_ROWS,
     GUIDE_WORKFLOW_ROWS,
     SLASH_COMMANDS,
@@ -85,6 +87,25 @@ def test_all_slash_commands_have_help_metadata() -> None:
         assert COMMAND_EXAMPLES[command]
         assert COMMAND_RELATED[command]
         assert any(example.startswith(command) for example in COMMAND_EXAMPLES[command])
+
+
+def test_command_catalog_generates_help_surfaces() -> None:
+    usages = [str(item["usage"]) for item in COMMAND_CATALOG]
+    catalog_keys = [str(item["usage"]).split()[0] for item in COMMAND_CATALOG]
+
+    assert len(usages) == len(set(usages))
+    assert SLASH_COMMANDS == [
+        (str(item["usage"]), str(item["description"]))
+        for item in COMMAND_CATALOG
+    ]
+    assert set(COMMAND_EXAMPLES) == set(catalog_keys)
+    assert set(COMMAND_RELATED) == set(catalog_keys)
+    for item in COMMAND_CATALOG:
+        key = str(item["usage"]).split()[0]
+        assert key in COMMAND_EXAMPLES
+        assert key in COMMAND_RELATED
+        if "risk" in item:
+            assert COMMAND_RISK_HINTS[key] == item["risk"]
 
 
 def test_slash_command_help_reports_unknown_command() -> None:
