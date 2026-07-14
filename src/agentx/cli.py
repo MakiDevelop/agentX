@@ -10,6 +10,7 @@ import threading
 import json
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from difflib import get_close_matches
 from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -328,6 +329,30 @@ def slash_command_help(topic: str) -> str:
     ]
     if related:
         lines.extend(["Related:", *[f"- {command}" for command in related]])
+    return "\n".join(lines)
+
+
+def slash_command_suggestions(command: str, *, limit: int = 3) -> list[str]:
+    key = _normalize_slash_command_topic(command)
+    entries = _slash_command_entries()
+    if not key or key in entries:
+        return []
+    commands = sorted(entries)
+    matches = get_close_matches(key, commands, n=limit, cutoff=0.58)
+    if matches:
+        return matches
+    prefix_matches = [item for item in commands if item.startswith(key[:3])]
+    return prefix_matches[:limit]
+
+
+def format_unknown_slash_command(prompt: str) -> str:
+    command = prompt.strip().split(None, 1)[0] if prompt.strip() else ""
+    suggestions = slash_command_suggestions(command)
+    lines = [f"unknown slash command: {command or '(empty)'}"]
+    if suggestions:
+        lines.append("Did you mean:")
+        lines.extend(f"- {item}" for item in suggestions)
+    lines.append("Use /help for all commands or /help COMMAND for details.")
     return "\n".join(lines)
 
 
@@ -4469,6 +4494,12 @@ def shell(
                 continue
             if prompt.startswith("/") and not prompt.startswith(("/jobs", "/cancel")):
                 wait_for_prompt_worker()
+                transcript.write(
+                    "slash_command_unknown",
+                    {"command": prompt, "suggestions": slash_command_suggestions(prompt)},
+                )
+                print_tool_result(format_unknown_slash_command(prompt))
+                continue
 
             # Natural language trigger for execute when in plan mode
             if state.plan_mode and is_natural_execute_trigger(prompt):

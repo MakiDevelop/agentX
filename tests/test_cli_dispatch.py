@@ -243,6 +243,8 @@ def test_no_duplicated_legacy_slash_fallback_after_wait() -> None:
     assert "wait_for_prompt_worker()" in span
     assert 'prompt.startswith(("/jobs", "/cancel"))' in span or \
         "prompt.startswith(('/jobs', '/cancel'))" in span
+    assert "slash_command_unknown" in span
+    assert "format_unknown_slash_command(prompt)" in span
     # Must NOT re-enter dispatch after the wait gate.
     assert span.count("_try_dispatch(prompt)") == 1
     # Legacy duplicated fallback markers that used to live after the wait gate.

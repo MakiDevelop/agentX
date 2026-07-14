@@ -6,9 +6,11 @@ from agentx.cli import (
     SLASH_COMMANDS,
     WORKFLOW_ROWS,
     ShellState,
+    format_unknown_slash_command,
     format_workflow_recipe,
     print_guide,
     slash_command_help,
+    slash_command_suggestions,
     workflow_recipe,
 )
 
@@ -75,6 +77,20 @@ def test_slash_command_help_reports_unknown_command() -> None:
 
     assert "command not found: missing" in output
     assert "/workflow" in output
+
+
+def test_slash_command_suggestions_find_typo() -> None:
+    assert "/workflow" in slash_command_suggestions("/wrkflow")
+    assert "/transcript" in slash_command_suggestions("trancript")
+
+
+def test_format_unknown_slash_command_includes_suggestions() -> None:
+    output = format_unknown_slash_command("/wrkflow headless")
+
+    assert "unknown slash command: /wrkflow" in output
+    assert "Did you mean:" in output
+    assert "/workflow" in output
+    assert "/help COMMAND" in output
 
 
 def test_mode_ask_alias_uses_agent_mode(tmp_path) -> None:
