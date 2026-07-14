@@ -1,20 +1,22 @@
 from unittest.mock import MagicMock, patch
 
-from agentx.cli import (
+from agentx.command_catalog import (
     COMMAND_CATALOG,
     COMMAND_EXAMPLES,
     COMMAND_RELATED,
     COMMAND_RISK_HINTS,
-    GUIDE_MODE_ROWS,
-    GUIDE_WORKFLOW_ROWS,
     SLASH_COMMANDS,
-    WORKFLOW_ROWS,
-    ShellState,
     format_unknown_slash_command,
-    format_workflow_recipe,
-    print_guide,
     slash_command_help,
     slash_command_suggestions,
+)
+from agentx.cli import (
+    GUIDE_MODE_ROWS,
+    GUIDE_WORKFLOW_ROWS,
+    WORKFLOW_ROWS,
+    ShellState,
+    format_workflow_recipe,
+    print_guide,
     workflow_recipe,
 )
 
