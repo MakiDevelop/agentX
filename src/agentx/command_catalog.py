@@ -128,6 +128,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local inspection",
     },
     {
+        "command": "agentx traces",
+        "usage": "agentx traces [SESSION] --json",
+        "description": "Summarize transcript events, tools, approvals, and error-like records.",
+        "examples": ["agentx traces latest --json", "agentx traces 20260102-000000 --output-format jsonl"],
+        "schemas": ["agentx.traces.v1"],
+        "jsonl_event": "traces",
+        "risk": "GREEN - read-only local inspection",
+    },
+    {
         "command": "agentx tasks",
         "usage": "agentx tasks [STATUS] --json",
         "description": "List project task state from .agentx/tasks.json.",

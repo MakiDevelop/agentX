@@ -8,6 +8,7 @@ import subprocess
 import sys
 import threading
 import json
+from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from importlib.metadata import PackageNotFoundError, version as package_version
@@ -884,6 +885,133 @@ def approvals_payload(
     }
 
 
+def read_transcript_records(path: Path) -> tuple[list[dict[str, object]], int]:
+    records: list[dict[str, object]] = []
+    invalid_line_count = 0
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                invalid_line_count += 1
+                continue
+            if isinstance(record, dict):
+                records.append(record)
+            else:
+                invalid_line_count += 1
+    return records, invalid_line_count
+
+
+def trace_event_name(record: dict[str, object]) -> str:
+    event = record.get("event")
+    if event:
+        return str(event)
+    metadata = record.get("metadata")
+    if isinstance(metadata, dict) and metadata.get("event"):
+        return str(metadata["event"])
+    role = record.get("role")
+    if role:
+        return f"role:{role}"
+    return "record"
+
+
+def transcript_event_excerpt(record: dict[str, object]) -> dict[str, object]:
+    excerpt: dict[str, object] = {
+        "ts": record.get("ts"),
+        "event": trace_event_name(record),
+    }
+    for key in ("mode", "command", "tool", "action", "ok", "allowed", "risk", "source", "reason"):
+        if key in record:
+            excerpt[key] = record.get(key)
+    text = record.get("content") or record.get("result") or record.get("summary")
+    if text is not None:
+        excerpt["text"] = str(text).replace("\n", " ")[:240]
+    return excerpt
+
+
+def trace_tool_name(record: dict[str, object]) -> str | None:
+    if trace_event_name(record) != "tool":
+        return None
+    for key in ("tool", "command", "action"):
+        value = record.get(key)
+        if value:
+            return str(value)
+    return "(unknown)"
+
+
+def traces_payload(
+    settings: Settings,
+    *,
+    session: str = "latest",
+    limit: int = 20,
+) -> dict[str, object]:
+    path = find_transcript(settings.workspace, session)
+    if path is None:
+        return {
+            "schema": "agentx.traces.v1",
+            "workspace": str(settings.workspace),
+            "session": session,
+            "ok": False,
+            "path": None,
+            "limit": limit,
+            "count": 0,
+            "invalid_line_count": 0,
+            "event_counts": {},
+            "tool_counts": {},
+            "approval_count": 0,
+            "approval_denied_count": 0,
+            "tool_failure_count": 0,
+            "error_like_count": 0,
+            "first_ts": None,
+            "last_ts": None,
+            "recent_events": [],
+            "detail": f"transcript not found: {session}",
+        }
+
+    records, invalid_line_count = read_transcript_records(path)
+    event_counts = Counter(trace_event_name(record) for record in records)
+    tool_counts = Counter(
+        tool_name
+        for record in records
+        if (tool_name := trace_tool_name(record)) is not None
+    )
+    approval_count = int(event_counts.get("approval", 0))
+    approval_denied_count = sum(
+        1 for record in records if trace_event_name(record) == "approval" and record.get("allowed") is False
+    )
+    tool_failure_count = sum(
+        1 for record in records if trace_event_name(record) == "tool" and record.get("ok") is False
+    )
+    error_like_count = sum(
+        1
+        for record in records
+        if "error" in trace_event_name(record).lower()
+        or record.get("ok") is False
+        or record.get("allowed") is False
+    )
+    timestamps = [str(record.get("ts")) for record in records if record.get("ts")]
+    return {
+        "schema": "agentx.traces.v1",
+        "workspace": str(settings.workspace),
+        "session": session,
+        "ok": True,
+        "path": str(path),
+        "limit": limit,
+        "count": len(records),
+        "invalid_line_count": invalid_line_count,
+        "event_counts": dict(sorted(event_counts.items())),
+        "tool_counts": dict(sorted(tool_counts.items())),
+        "approval_count": approval_count,
+        "approval_denied_count": approval_denied_count,
+        "tool_failure_count": tool_failure_count,
+        "error_like_count": error_like_count,
+        "first_ts": timestamps[0] if timestamps else None,
+        "last_ts": timestamps[-1] if timestamps else None,
+        "recent_events": [transcript_event_excerpt(record) for record in records[-limit:]],
+        "detail": "",
+    }
+
+
 def approvals_exit_code(payload: dict[str, object], *, fail_on_denied: bool = False) -> int:
     if not fail_on_denied:
         return 0
@@ -917,6 +1045,44 @@ def print_approvals_payload(
             denied_only=bool(payload["denied_only"]),
         )
     )
+
+
+def print_traces_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="traces",
+        )
+        return
+
+    if not payload.get("ok"):
+        print_raw(str(payload.get("detail", "transcript not found")))
+        return
+
+    table = Table(title="agentX trace summary", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    for key in [
+        "path",
+        "count",
+        "invalid_line_count",
+        "first_ts",
+        "last_ts",
+        "approval_count",
+        "approval_denied_count",
+        "tool_failure_count",
+        "error_like_count",
+    ]:
+        table.add_row(key, str(payload.get(key)))
+    table.add_row("event_counts", json.dumps(payload.get("event_counts", {}), ensure_ascii=False))
+    table.add_row("tool_counts", json.dumps(payload.get("tool_counts", {}), ensure_ascii=False))
+    console.print(table)
 
 
 def print_sessions_payload(
@@ -1607,12 +1773,14 @@ def inspect_payload(
         "tasks": tasks_payload(settings, status_filter="active"),
         "sessions": sessions_payload(settings, limit=sessions_limit),
         "approvals": approvals_payload(settings, session="latest", limit=approvals_limit),
+        "traces": traces_payload(settings, session="latest", limit=20),
         "capabilities": capabilities_payload(),
         "verify_commands": verify_commands,
         "next_commands": [
             "agentx verify --json --fail-on-error",
             "agentx tasks active --json",
             "agentx approvals latest --denied --json --fail-on-denied",
+            "agentx traces latest --json",
         ],
     }
 
@@ -4241,6 +4409,21 @@ def approvals_command(
     structured_format = structured_output_format(json_output, output_format)
     print_approvals_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=approvals_exit_code(payload, fail_on_denied=fail_on_denied))
+
+
+@app.command("traces")
+def traces_command(
+    session: str = typer.Argument("latest", help="Transcript name, file name, or latest."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for trace discovery."),
+    limit: int = typer.Option(20, "--limit", min=1, help="Maximum number of recent events to include."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Summarize transcript events, tools, approvals, and error-like records."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = traces_payload(settings, session=session, limit=limit)
+    structured_format = structured_output_format(json_output, output_format)
+    print_traces_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("tasks")

@@ -50,6 +50,8 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     assert payload["sessions"]["schema"] == "agentx.sessions.v1"  # type: ignore[index]
     assert payload["approvals"]["schema"] == "agentx.approvals.v1"  # type: ignore[index]
     assert payload["approvals"]["denied_count"] == 1  # type: ignore[index]
+    assert payload["traces"]["schema"] == "agentx.traces.v1"  # type: ignore[index]
+    assert payload["traces"]["event_counts"]["approval"] == 1  # type: ignore[index]
     assert payload["capabilities"]["schema"] == "agentx.capabilities.v1"  # type: ignore[index]
     assert payload["verify_commands"] == [
         {"command": "uv run ruff check .", "argv": ["uv", "run", "ruff", "check", "."]},
@@ -70,6 +72,7 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["status"]["git"]["ok"] is True
     assert payload["verify_commands"][0]["command"] == "uv run ruff check ."
     assert payload["next_commands"][0] == "agentx verify --json --fail-on-error"
+    assert "agentx traces latest --json" in payload["next_commands"]
 
 
 def test_inspect_jsonl_outputs_event_envelope(tmp_path) -> None:  # noqa: ANN001

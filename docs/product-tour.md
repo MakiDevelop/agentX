@@ -43,12 +43,13 @@ uv run agentx shell
 ## 3. Tools And Workflows
 
 外部 runner 第一次接 agentX 時可用 `agentx capabilities --json` 取得 `agentx.capabilities.v1`，一次知道 top-level automation commands、stable schemas、JSONL events 與風險。
-需要一次拿 runner preflight bundle 時，用 `agentx inspect --json` 取得 `agentx.inspect.v1`；它只讀本機狀態，包含 status、active tasks、sessions、latest approvals、capabilities 與 verify command 清單，不跑測試或 live probes。
+需要一次拿 runner preflight bundle 時，用 `agentx inspect --json` 取得 `agentx.inspect.v1`；它只讀本機狀態，包含 status、active tasks、sessions、latest approvals、latest traces、capabilities 與 verify command 清單，不跑測試或 live probes。
 外部 wrapper 可用 `agentx config --json` 取得目前 workspace、model、memory backend、approval、persona 等解析後設定；token 只會顯示 set/missing。
 初次接入 repo 時可用 `agentx init --json` 取得 `agentx.init.v1` project profile；預設只讀，加 `--write-memory` 才寫入 Memory Hall。
 需要接續工作時可用 `agentx sessions --json` 取得 `agentx.sessions.v1` transcript overview，外部 runner 可依最新 session、approval denied counts 或 transcript path 決定下一步。
 需要找 headless artifact bundle 時，用 `agentx artifacts --json` 取得 `agentx.artifacts.v1`，列出 `.agentx/runs` 下的 result/session/handoff 路徑、termination、exit code 與 resume command。
 需要審計 YELLOW 操作時，用 `agentx approvals latest --json` 取得 `agentx.approvals.v1`；CI 或上游 agent 可加 `--denied --fail-on-denied`，在輸出 payload 後用 exit code 擋下被拒絕的 approval receipts。
+需要看一輪 transcript 發生了什麼時，用 `agentx traces latest --json` 取得 `agentx.traces.v1`，彙整 event/tool counts、tool failures、approval denials、error-like records 與 recent events。
 需要讀取長任務狀態時，用 `agentx tasks --json` 取得 `agentx.tasks.v1`；`agentx tasks active --json` 只回 pending / in_progress / blocked，適合接手 agent 決定下一步。
 需要跑 repo 驗證時，用 `agentx verify --json` 取得 `agentx.verify.v1`；CI 或上游 agent 可加 `--fail-on-error`，在輸出完整 checks payload 後用 exit code 擋流程。
 需要判斷當前 workspace 姿態時，用 `agentx status --json` 取得 version、runtime、git dirty/ahead/behind 與 task counts；這是本機 read-only 狀態檢查，不探測網路服務。

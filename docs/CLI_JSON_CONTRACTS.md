@@ -32,6 +32,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx sessions --json` | `agentx.sessions.v1` | `sessions` |
 | `agentx artifacts --json` | `agentx.artifacts.v1` | `artifacts` |
 | `agentx approvals --json` | `agentx.approvals.v1` | `approvals` |
+| `agentx traces --json` | `agentx.traces.v1` | `traces` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
@@ -93,6 +94,7 @@ Required stable keys:
 | `tasks` | object | Embedded `agentx.tasks.v1` filtered to active tasks. |
 | `sessions` | object | Embedded `agentx.sessions.v1`. |
 | `approvals` | object | Embedded `agentx.approvals.v1` for `latest`. |
+| `traces` | object | Embedded `agentx.traces.v1` for `latest`. |
 | `capabilities` | object | Embedded `agentx.capabilities.v1`. |
 | `verify_commands` | array of object | Detected verification argv lists without executing them. |
 | `next_commands` | array of string | Suggested follow-up commands for runners. |
@@ -173,6 +175,37 @@ Required stable keys:
 | `approval` | string | Canonical approval mode. |
 | `learning_enabled` | boolean | Whether self-learning proposals are enabled. |
 | `project_config` | object | Raw project config values before runtime defaults. |
+
+## Traces Payload
+
+`agentx traces [SESSION] --json` emits `agentx.traces.v1`.
+
+This is a read-only transcript observability summary. `SESSION` defaults to
+`latest` and can be a transcript stem or file name. Use `agentx sessions --json`
+to discover transcript names.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.traces.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `session` | string | Requested transcript selector. |
+| `ok` | boolean | Whether the transcript was found. |
+| `path` | string or null | Transcript path when found. |
+| `limit` | integer | Number of recent events requested. |
+| `count` | integer | Number of valid JSON object records read. |
+| `invalid_line_count` | integer | Lines skipped because they were invalid JSON or not objects. |
+| `event_counts` | object | Event name to count. |
+| `tool_counts` | object | Tool or command name to count for `tool` events. |
+| `approval_count` | integer | Number of approval events. |
+| `approval_denied_count` | integer | Number of denied approval events. |
+| `tool_failure_count` | integer | Number of `tool` events with `ok=false`. |
+| `error_like_count` | integer | Records that look operationally negative: error events, `ok=false`, or `allowed=false`. |
+| `first_ts` | string or null | First timestamp seen. |
+| `last_ts` | string or null | Last timestamp seen. |
+| `recent_events` | array of object | Sanitized newest events, capped by `limit`. |
+| `detail` | string | Empty string or a human-readable note. |
 
 ## Init Payload
 
