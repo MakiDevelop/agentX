@@ -13,4 +13,5 @@ playground/
 .agentx/state.json
 .agentx/*.md
 .agentx/handoff/
+.agentx/learning/
 tmp/
