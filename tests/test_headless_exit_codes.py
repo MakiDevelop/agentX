@@ -1,4 +1,5 @@
 import json
+import time
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -32,6 +33,7 @@ def test_structured_headless_exit_code_overrides_success_text() -> None:
     assert cli.headless_exit_code("看起來完成", termination="final_failed", failing_tools=("run_tests",)) == 1
     assert cli.headless_exit_code("完成", termination="max_steps_exceeded") == 2
     assert cli.headless_exit_code("runtime error: timeout", termination="runtime_error") == 2
+    assert cli.headless_exit_code("run timed out", termination="timeout") == 124
     assert cli.headless_exit_code("完成", termination="cancelled") == 130
 
 
@@ -140,6 +142,49 @@ def test_headless_exception_result_is_structured() -> None:
             "attempt_count": 1,
         }
     ]
+
+
+def test_headless_timeout_result_is_structured() -> None:
+    result = cli.headless_timeout_result(1.5, session_path="/tmp/run.session.jsonl")
+    payload = json.loads(cli.headless_json_payload(result, cli.headless_exit_code(result.output, termination=result.termination)))
+
+    assert payload["termination"] == "timeout"
+    assert payload["exit_code"] == 124
+    assert payload["output"] == "run timed out after 1.5s"
+    assert payload["session_path"] == "/tmp/run.session.jsonl"
+    assert payload["log_summary"]["recent_errors"] == [
+        {
+            "type": "timeout",
+            "tool": "",
+            "message": "run timed out after 1.5s",
+            "attempt_count": 1,
+        }
+    ]
+
+
+def test_run_with_headless_timeout_returns_timeout_result() -> None:
+    def slow_runner(cancel_event):  # noqa: ANN001
+        time.sleep(1)
+        return cli.HeadlessRunResult(output="late", termination="final_success")
+
+    result = cli.run_with_headless_timeout(slow_runner, run_timeout=0.01)
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert result.termination == "timeout"
+
+
+def test_run_with_headless_timeout_passes_cancel_event() -> None:
+    seen: list[bool] = []
+
+    def quick_runner(cancel_event):  # noqa: ANN001
+        seen.append(cancel_event is not None)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    result = cli.run_with_headless_timeout(quick_runner, run_timeout=1)
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert result.output == "ok"
+    assert seen == [True]
 
 
 def test_wants_json_output_accepts_json_alias() -> None:
@@ -384,6 +429,7 @@ def test_build_headless_dry_run_payload_applies_overrides(tmp_path: Path, monkey
         base_url_override="http://127.0.0.1:8081",
         model_override="gpt-oss:20b",
         timeout_override=123.0,
+        run_timeout=9.0,
         max_steps=2,
         save_session=True,
         resume_session="latest",
@@ -398,6 +444,7 @@ def test_build_headless_dry_run_payload_applies_overrides(tmp_path: Path, monkey
     assert payload["base_url"] == "http://127.0.0.1:8081"
     assert payload["model"] == "gpt-oss:20b"
     assert payload["timeout"] == 123.0
+    assert payload["run_timeout"] == 9.0
     assert payload["max_steps"] == 2
     assert payload["no_memory"] is True
     assert payload["save_session"] is True
@@ -659,6 +706,23 @@ def test_print_prompt_json_output_catches_runtime_exception(monkeypatch) -> None
     assert data["termination"] == "runtime_error"
     assert data["log_summary"]["recent_errors"][0]["message"] == "TimeoutError: model timed out"
     assert "Traceback" not in result.output
+
+
+def test_print_prompt_json_output_catches_run_timeout(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+
+    def slow_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        time.sleep(1)
+        return cli.HeadlessRunResult(output="late", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", slow_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--run-timeout", "0.01", "--json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 124
+    assert data["termination"] == "timeout"
+    assert data["log_summary"]["recent_errors"][0]["type"] == "timeout"
 
 
 def test_print_prompt_plain_output_catches_runtime_exception(monkeypatch) -> None:  # noqa: ANN001
@@ -959,6 +1023,17 @@ def test_print_prompt_forwards_timeout_override(monkeypatch) -> None:  # noqa: A
     assert captured["timeout_override"] == 180.0
 
 
+def test_print_prompt_dry_run_includes_run_timeout(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "run_print_prompt", lambda *args, **kwargs: "should not run")
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--run-timeout", "7", "--dry-run", "--json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert data["run_timeout"] == 7.0
+
+
 def test_print_prompt_forwards_max_steps(monkeypatch) -> None:  # noqa: ANN001
     runner = CliRunner()
     captured: dict[str, object] = {}
@@ -995,7 +1070,7 @@ def test_run_print_prompt_plan_then_execute_runs_two_phases(monkeypatch) -> None
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
             calls.append((prompt, plan_only))
             if plan_only:
                 return "PLAN_RESULT"
@@ -1046,7 +1121,7 @@ def test_run_print_prompt_uses_model_override(monkeypatch) -> None:  # noqa: ANN
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, **kwargs):  # noqa: ANN001
@@ -1088,7 +1163,7 @@ def test_run_print_prompt_uses_base_url_override(monkeypatch) -> None:  # noqa: 
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, **kwargs):  # noqa: ANN001
@@ -1136,7 +1211,7 @@ def test_run_print_prompt_uses_workspace_override_and_project_config(
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, **kwargs):  # noqa: ANN001
@@ -1178,7 +1253,7 @@ def test_run_print_prompt_uses_timeout_override(monkeypatch) -> None:  # noqa: A
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, **kwargs):  # noqa: ANN001
@@ -1227,7 +1302,7 @@ def test_run_print_prompt_approval_override_wins_over_project_config(
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, approval_policy=None, **kwargs):  # noqa: ANN001
@@ -1286,7 +1361,7 @@ def test_run_print_prompt_forwards_backend_override_to_runtime(monkeypatch) -> N
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, backend_override=None, **kwargs):  # noqa: ANN001
@@ -1328,7 +1403,7 @@ def test_run_print_prompt_forwards_no_memory_to_runtime(monkeypatch) -> None:  #
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, no_memory=False, **kwargs):  # noqa: ANN001
@@ -1366,7 +1441,7 @@ def test_run_print_prompt_writes_explicit_session_output(tmp_path: Path, monkeyp
                 memory=None,
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
             return "ok"
 
     target = tmp_path / "artifacts" / "run.session.jsonl"
@@ -1407,7 +1482,7 @@ def test_run_print_prompt_runtime_error_preserves_explicit_session_output(
                 memory=None,
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
             raise TimeoutError("model timed out")
 
     target = tmp_path / "artifacts" / "run.session.jsonl"
@@ -1677,6 +1752,22 @@ def test_ask_forwards_timeout_override(monkeypatch) -> None:  # noqa: ANN001
 
     assert result.exit_code == 0
     assert captured["timeout_override"] == 180.0
+
+
+def test_ask_json_output_catches_run_timeout(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+
+    def slow_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        time.sleep(1)
+        return cli.HeadlessRunResult(output="late", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", slow_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["ask", "demo", "--run-timeout", "0.01", "--json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 124
+    assert data["termination"] == "timeout"
 
 
 def test_ask_output_format_json(monkeypatch) -> None:  # noqa: ANN001

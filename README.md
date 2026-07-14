@@ -95,6 +95,7 @@ agentx -p "幫我看 repo" --agent --model gpt-oss:20b
 agentx -p "幫我看 repo" --agent --backend llama_cpp --model local-model
 agentx -p "幫我看 repo" --agent --base-url http://127.0.0.1:8081
 agentx -p "幫我看 repo" --agent --timeout 180
+agentx -p "幫我看 repo" --agent --run-timeout 300
 agentx -p "幫我看 repo" --agent --workspace /path/to/repo
 agentx -p "幫我看 repo" --agent --approval auto-approve
 agentx -p "幫我看 repo" --agent --quiet
@@ -174,11 +175,13 @@ Headless exit code：
 - `0`：成功或一般回答
 - `1`：任務/工具/測試明確失敗
 - `2`：模型沒有輸出有效工具 JSON、空輸出或 agent 控制流程失敗
+- `124`：整輪 headless run 超過 `--run-timeout`
 - `130`：請求被取消
 
 `agentx -p --agent` 與 `agentx ask` 會優先使用 `AgentSession` 的結構化結束狀態
 （例如 `final_success`、`final_failed`、`max_steps_exceeded`、`direct_tool_failure`）
 判斷 exit code；舊的文字分類只作為 fallback。
+`--timeout` 控制單次模型 request timeout；`--run-timeout` 控制整輪 headless run deadline，逾時會回 `termination=timeout` 並使用 exit code `124`。
 
 如果目前 terminal 還沒有 `ax`：
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import queue
 import re
 import shlex
 import sys
@@ -1046,6 +1047,66 @@ def headless_exception_result(exc: Exception, *, session_path: str | None = None
     )
 
 
+def headless_timeout_result(seconds: float, *, session_path: str | None = None) -> HeadlessRunResult:
+    message = f"run timed out after {seconds:g}s"
+    return HeadlessRunResult(
+        output=message,
+        termination="timeout",
+        session_path=session_path,
+        log_summary={
+            "termination": "timeout",
+            "tool_outcomes": {},
+            "successful_tools": [],
+            "failing_tools": [],
+            "recent_errors": [
+                {
+                    "type": "timeout",
+                    "tool": "",
+                    "message": message,
+                    "attempt_count": 1,
+                }
+            ],
+            "pending_verifies": [],
+        },
+    )
+
+
+def run_with_headless_timeout(
+    runner: "Callable[[threading.Event | None], str | HeadlessRunResult]",
+    *,
+    run_timeout: float | None,
+    session_output_path: Path | None = None,
+) -> str | HeadlessRunResult:
+    if run_timeout is None:
+        return runner(None)
+    if run_timeout <= 0:
+        raise typer.BadParameter("--run-timeout must be greater than 0")
+
+    cancel_event = threading.Event()
+    results: queue.Queue[str | HeadlessRunResult | Exception] = queue.Queue(maxsize=1)
+
+    def target() -> None:
+        try:
+            results.put(runner(cancel_event))
+        except Exception as exc:
+            results.put(exc)
+
+    worker = threading.Thread(target=target, daemon=True)
+    worker.start()
+    worker.join(run_timeout)
+    if worker.is_alive():
+        cancel_event.set()
+        return headless_timeout_result(
+            run_timeout,
+            session_path=str(session_output_path) if session_output_path and session_output_path.exists() else None,
+        )
+
+    result = results.get()
+    if isinstance(result, Exception):
+        raise result
+    return result
+
+
 def wants_json_output(json_output: bool, output_format: str | None) -> bool:
     normalized = (output_format or "plain").strip().lower()
     if normalized not in {"plain", "json"}:
@@ -1101,6 +1162,7 @@ def build_headless_dry_run_payload(
     base_url_override: str | None = None,
     model_override: str | None = None,
     timeout_override: float | None = None,
+    run_timeout: float | None = None,
     max_steps: int | None = None,
     save_session: bool = False,
     resume_session: str | None = None,
@@ -1142,6 +1204,7 @@ def build_headless_dry_run_payload(
         "base_url": settings.ollama_url,
         "model": settings.model,
         "timeout": settings.ollama_timeout,
+        "run_timeout": run_timeout,
         "max_steps": settings.max_steps,
         "no_memory": no_memory,
         "approval": approval_mode,
@@ -1162,6 +1225,7 @@ def format_headless_dry_run(payload: dict[str, object]) -> str:
             f"base_url: {payload['base_url']}",
             f"model: {payload['model']}",
             f"timeout: {payload['timeout']}",
+            f"run_timeout: {payload['run_timeout']}",
             f"max_steps: {payload['max_steps']}",
             f"no_memory: {payload['no_memory']}",
             f"approval: {payload['approval']}",
@@ -1312,6 +1376,8 @@ def structured_headless_exit_code(
         return None
     if normalized in {"cancelled", "canceled", "request_cancelled"}:
         return 130
+    if normalized in {"timeout", "timed_out", "run_timeout"}:
+        return 124
     if normalized in {"max_steps_exceeded", "invalid_action", "bad_schema", "non_json", "runtime_error"}:
         return 2
     if normalized in {"direct_tool_failure", "tool_failure", "final_failed"}:
@@ -1398,6 +1464,7 @@ def main(
     base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL for this headless run."),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
     timeout: float | None = typer.Option(None, "--timeout", help="Override LLM request timeout seconds for this headless run."),
+    run_timeout: float | None = typer.Option(None, "--run-timeout", help="Limit total headless run time in seconds; returns exit 124 on timeout."),
     max_steps: int | None = typer.Option(None, "--max-steps", help="Override max agent loop steps for -p."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for headless automation."),
     output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain or json."),
@@ -1453,6 +1520,7 @@ def main(
             base_url_override=base_url,
             model_override=model,
             timeout_override=timeout,
+            run_timeout=run_timeout,
             max_steps=max_steps,
             save_session=save_session,
             resume_session=resume_session,
@@ -1462,26 +1530,31 @@ def main(
         print_headless_dry_run(payload, json_output=structured_output, quiet=quiet)
         raise typer.Exit(code=0)
     try:
-        output = run_print_prompt(
-            prompt,
-            namespace=namespace,
-            agent_mode=agent,
-            plan_mode=plan,
-            plan_then_execute=plan_then_execute,
-            orchestrate=orchestrate,
-            workspace_override=workspace_override,
-            approval_override=approval,
-            backend_override=backend,
-            base_url_override=base_url,
-            model_override=model,
-            timeout_override=timeout,
-            return_metadata=True,
-            suppress_trace=structured_output,
-            save_session=save_session,
-            resume_session=resume_session,
+        output = run_with_headless_timeout(
+            lambda cancel_event: run_print_prompt(
+                prompt,
+                namespace=namespace,
+                agent_mode=agent,
+                plan_mode=plan,
+                plan_then_execute=plan_then_execute,
+                orchestrate=orchestrate,
+                workspace_override=workspace_override,
+                approval_override=approval,
+                backend_override=backend,
+                base_url_override=base_url,
+                model_override=model,
+                timeout_override=timeout,
+                cancel_event=cancel_event,
+                return_metadata=True,
+                suppress_trace=structured_output,
+                save_session=save_session,
+                resume_session=resume_session,
+                session_output_path=session_output_path,
+                max_steps=max_steps,
+                no_memory=no_memory,
+            ),
+            run_timeout=run_timeout,
             session_output_path=session_output_path,
-            max_steps=max_steps,
-            no_memory=no_memory,
         )
     except Exception as exc:
         output = headless_exception_result(exc)
@@ -1574,6 +1647,7 @@ def run_print_prompt(
     base_url_override: str | None = None,
     model_override: str | None = None,
     timeout_override: float | None = None,
+    cancel_event: threading.Event | None = None,
     return_metadata: bool = False,
     suppress_trace: bool = False,
     save_session: bool = False,
@@ -1703,7 +1777,7 @@ def run_print_prompt(
             session_path = agent_loop.session._session_store.path if agent_loop.session._session_store else session_path
         try:
             if plan_then_execute:
-                plan_output = agent_loop.run(plan_prompt, namespace=namespace, plan_only=True)
+                plan_output = agent_loop.run(plan_prompt, namespace=namespace, plan_only=True, cancel_event=cancel_event)
                 execute_prompt = (
                     "你已經完成上一步 headless planning。現在切換到 EXECUTE MODE。\n"
                     "請依照已產出的方案執行使用者任務；必要時使用工具，小步實作並驗證。\n"
@@ -1711,14 +1785,14 @@ def run_print_prompt(
                     f"上一階段計畫：\n{plan_output}\n\n"
                     f"使用者原始任務：{prompt}"
                 )
-                execute_output = agent_loop.run(execute_prompt, namespace=namespace, plan_only=False)
+                execute_output = agent_loop.run(execute_prompt, namespace=namespace, plan_only=False, cancel_event=cancel_event)
                 output = f"## Plan\n{plan_output}\n\n## Execution\n{execute_output}"
                 phases = (
                     {"name": "plan", "output": plan_output},
                     {"name": "execution", "output": execute_output},
                 )
             else:
-                output = agent_loop.run(agent_prompt, namespace=namespace, plan_only=plan_mode)
+                output = agent_loop.run(agent_prompt, namespace=namespace, plan_only=plan_mode, cancel_event=cancel_event)
                 phases = ()
         except Exception as exc:
             active_store = getattr(agent_loop.session, "_session_store", None)
@@ -1904,6 +1978,7 @@ def ask(
     base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL for this headless run."),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
     timeout: float | None = typer.Option(None, "--timeout", help="Override LLM request timeout seconds."),
+    run_timeout: float | None = typer.Option(None, "--run-timeout", help="Limit total headless run time in seconds; returns exit 124 on timeout."),
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan first, then execute in the same headless run."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for automation."),
@@ -1930,6 +2005,7 @@ def ask(
             base_url_override=base_url,
             model_override=model,
             timeout_override=timeout,
+            run_timeout=run_timeout,
             max_steps=max_steps,
             save_session=save_session,
             resume_session=resume_session,
@@ -1939,24 +2015,29 @@ def ask(
         print_headless_dry_run(payload, json_output=structured_output, quiet=quiet)
         raise typer.Exit(code=0)
     try:
-        output = run_print_prompt(
-            prompt,
-            namespace=namespace,
-            agent_mode=True,
-            plan_then_execute=plan_then_execute,
-            workspace_override=workspace_override,
-            approval_override=approval,
-            backend_override=backend,
-            base_url_override=base_url,
-            model_override=model,
-            timeout_override=timeout,
-            return_metadata=True,
-            suppress_trace=structured_output,
-            save_session=save_session,
-            resume_session=resume_session,
+        output = run_with_headless_timeout(
+            lambda cancel_event: run_print_prompt(
+                prompt,
+                namespace=namespace,
+                agent_mode=True,
+                plan_then_execute=plan_then_execute,
+                workspace_override=workspace_override,
+                approval_override=approval,
+                backend_override=backend,
+                base_url_override=base_url,
+                model_override=model,
+                timeout_override=timeout,
+                cancel_event=cancel_event,
+                return_metadata=True,
+                suppress_trace=structured_output,
+                save_session=save_session,
+                resume_session=resume_session,
+                session_output_path=session_output_path,
+                max_steps=max_steps,
+                no_memory=no_memory,
+            ),
+            run_timeout=run_timeout,
             session_output_path=session_output_path,
-            max_steps=max_steps,
-            no_memory=no_memory,
         )
     except Exception as exc:
         output = headless_exception_result(exc)

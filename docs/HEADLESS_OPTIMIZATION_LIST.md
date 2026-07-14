@@ -65,6 +65,7 @@
 - [x] `--base-url URL` 可在單次 headless run 覆蓋 LLM backend base URL，不用改 `AGENTX_OLLAMA_URL`。
 - [x] `--model MODEL` 可在單次 headless run 覆蓋模型，不必改環境變數或進 shell 後 `/model`。
 - [x] `--timeout SECONDS` 可在單次 headless run 覆蓋 LLM request timeout，適合慢本地模型或長 context。
+- [x] `--run-timeout SECONDS` 可限制整輪 headless run deadline；逾時回 `termination=timeout`、exit code 124，並透過 cancel_event 嘗試中止模型串流。
 - [x] `agentx -p ... --json` 與 `agentx ask ... --json` 可輸出機器可讀 payload。
 - [x] `--output-format json` 可作為 `--json` 的 script-friendly 等價入口；非法格式會直接失敗。
 - [x] `--quiet` 可壓掉 plain stdout、保留 exit code；搭配 `--json` 時仍輸出 JSON payload。
