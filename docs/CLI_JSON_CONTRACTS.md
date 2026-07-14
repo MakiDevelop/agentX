@@ -27,6 +27,7 @@ Consumers should branch on `event` and read the payload from `data`.
 |---------|-------------|-------------|
 | `agentx capabilities --json` | `agentx.capabilities.v1` | `capabilities` |
 | `agentx config --json` | `agentx.config.v1` | `config` |
+| `agentx inspect --json` | `agentx.inspect.v1` | `inspect` |
 | `agentx init --json` | `agentx.init.v1` | `init` |
 | `agentx sessions --json` | `agentx.sessions.v1` | `sessions` |
 | `agentx approvals --json` | `agentx.approvals.v1` | `approvals` |
@@ -70,6 +71,30 @@ Each capability object includes:
 | `schemas` | array of string |
 | `jsonl_event` | string |
 | `risk` | string |
+
+## Inspect Payload
+
+`agentx inspect --json` emits `agentx.inspect.v1`.
+
+This is a read-only aggregate preflight bundle for external runners. It does
+not run verification commands or live service probes. Use `agentx verify --json`
+when the runner wants to execute checks.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.inspect.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `generated_at` | string | Local ISO timestamp. |
+| `live_probes` | boolean | Always false; inspect is read-only and local. |
+| `status` | object | Embedded `agentx.status.v1`. |
+| `tasks` | object | Embedded `agentx.tasks.v1` filtered to active tasks. |
+| `sessions` | object | Embedded `agentx.sessions.v1`. |
+| `approvals` | object | Embedded `agentx.approvals.v1` for `latest`. |
+| `capabilities` | object | Embedded `agentx.capabilities.v1`. |
+| `verify_commands` | array of object | Detected verification argv lists without executing them. |
+| `next_commands` | array of string | Suggested follow-up commands for runners. |
 
 ## Config Payload
 

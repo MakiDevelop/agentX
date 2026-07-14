@@ -1407,6 +1407,94 @@ def print_verify_payload(
     console.print(f"[dim]ok={payload['ok']} count={payload['count']}[/dim]")
 
 
+def inspect_payload(
+    settings: Settings,
+    *,
+    namespace: str,
+    mode: str,
+    approval: str,
+    sessions_limit: int = 5,
+    approvals_limit: int = 20,
+) -> dict[str, object]:
+    verify_commands = [
+        {"command": shlex.join(command), "argv": command}
+        for command in default_verify_commands(settings.workspace)
+    ]
+    return {
+        "schema": "agentx.inspect.v1",
+        "workspace": str(settings.workspace),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "live_probes": False,
+        "status": status_payload(
+            settings,
+            namespace=namespace,
+            mode=mode,
+            approval=approval,
+        ),
+        "tasks": tasks_payload(settings, status_filter="active"),
+        "sessions": sessions_payload(settings, limit=sessions_limit),
+        "approvals": approvals_payload(settings, session="latest", limit=approvals_limit),
+        "capabilities": capabilities_payload(),
+        "verify_commands": verify_commands,
+        "next_commands": [
+            "agentx verify --json --fail-on-error",
+            "agentx tasks active --json",
+            "agentx approvals latest --denied --json --fail-on-denied",
+        ],
+    }
+
+
+def print_inspect_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="inspect",
+        )
+        return
+
+    status = dict(payload["status"])  # type: ignore[arg-type]
+    runtime = dict(status["runtime"])  # type: ignore[arg-type]
+    git = dict(status["git"])  # type: ignore[arg-type]
+    tasks = dict(payload["tasks"])  # type: ignore[arg-type]
+    sessions = dict(payload["sessions"])  # type: ignore[arg-type]
+    approvals = dict(payload["approvals"])  # type: ignore[arg-type]
+    table = Table(title="agentX inspect", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    table.add_row("workspace", str(payload["workspace"]))
+    table.add_row(
+        "runtime",
+        f"model={runtime.get('model')} mode={runtime.get('mode')} approval={runtime.get('approval')} "
+        f"namespace={runtime.get('namespace')}",
+    )
+    table.add_row(
+        "git",
+        f"ok={git.get('ok')} dirty={git.get('dirty')} branch={git.get('branch')} "
+        f"ahead={git.get('ahead')} behind={git.get('behind')}",
+    )
+    table.add_row(
+        "tasks",
+        f"active={tasks.get('count')} total={tasks.get('total_count')} "
+        f"by_status={json.dumps(tasks.get('by_status'), ensure_ascii=False)}",
+    )
+    table.add_row("sessions", f"count={sessions.get('count')}")
+    table.add_row(
+        "approvals",
+        f"ok={approvals.get('ok')} count={approvals.get('count')} denied={approvals.get('denied_count')}",
+    )
+    table.add_row(
+        "verify_commands",
+        ", ".join(str(item["command"]) for item in payload["verify_commands"]) or "-",
+    )
+    console.print(table)
+
+
 def status_payload(
     settings: Settings,
     *,
@@ -3995,6 +4083,37 @@ def verify_command(
     structured_format = structured_output_format(json_output, output_format)
     print_verify_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=verify_exit_code(payload, fail_on_error=fail_on_error))
+
+
+@app.command("inspect")
+def inspect_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for inspection."),
+    namespace: str | None = typer.Option(None, "--namespace", help="Override namespace shown in the payload."),
+    mode: str | None = typer.Option(None, "--mode", help="Override mode shown in the payload."),
+    approval: str | None = typer.Option(None, "--approval", help="Override approval mode shown in the payload."),
+    sessions_limit: int = typer.Option(5, "--sessions-limit", min=1, help="Maximum number of session summaries to include."),
+    approvals_limit: int = typer.Option(20, "--approvals-limit", min=1, help="Maximum number of approval receipts to include."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Print a read-only aggregate preflight bundle for external runners."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    project_config = load_project_config(settings.workspace)
+    resolved_namespace = namespace or project_config.namespace or "project:agentX"
+    resolved_mode = mode or project_config.mode or "chat"
+    if resolved_mode == "ask":
+        resolved_mode = "agent"
+    approval_mode = normalize_approval_mode(approval or project_config.approval or ApprovalMode.ASK.value).value
+    payload = inspect_payload(
+        settings,
+        namespace=resolved_namespace,
+        mode=resolved_mode,
+        approval=approval_mode,
+        sessions_limit=sessions_limit,
+        approvals_limit=approvals_limit,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_inspect_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("status")

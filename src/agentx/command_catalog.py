@@ -137,6 +137,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - runs existing local verification commands",
     },
     {
+        "command": "agentx inspect",
+        "usage": "agentx inspect --json",
+        "description": "Print a read-only aggregate preflight bundle for external runners.",
+        "examples": ["agentx inspect --json", "agentx inspect --output-format jsonl"],
+        "schemas": ["agentx.inspect.v1"],
+        "jsonl_event": "inspect",
+        "risk": "GREEN - read-only local inspection",
+    },
+    {
         "command": "agentx status",
         "usage": "agentx status --json",
         "description": "Inspect runtime, git posture, task counts, and resolved config.",
