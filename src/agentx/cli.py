@@ -240,10 +240,13 @@ def workflow_catalog_payload(query: str | None = None) -> dict[str, object]:
     recipes = []
     for goal, path in WORKFLOW_ROWS:
         aliases = sorted(alias for alias, target in WORKFLOW_ALIASES.items() if target == goal)
+        steps = _workflow_steps(path)
         recipes.append(
             {
                 "goal": goal,
                 "path": path,
+                "steps": steps,
+                "commands": [str(step["command"]) for step in steps if step["runnable"]],
                 "aliases": aliases,
             }
         )
@@ -260,6 +263,15 @@ def workflow_catalog_payload(query: str | None = None) -> dict[str, object]:
         "count": len(recipes),
         "workflows": recipes,
     }
+
+
+def _workflow_steps(path: str) -> list[dict[str, object]]:
+    steps: list[dict[str, object]] = []
+    for raw_step in path.split("→"):
+        command = raw_step.strip()
+        runnable = command.startswith("/") or command.startswith("agentx ")
+        steps.append({"command": command, "runnable": runnable})
+    return steps
 
 
 def print_workflow_catalog(

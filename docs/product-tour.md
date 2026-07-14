@@ -77,7 +77,7 @@ Shell 內可用 `/tools git` 或 `/tools YELLOW` 聚焦查看工具；外部 wra
 核心 slash command 都有 examples 與 related commands，適合用來快速探索下一步。
 Shell 內可用 `/commands memory` 搜尋 catalog；外部工具可用 `agentx commands --json` 取得同一份 machine-readable command catalog，需要聚焦時可用 `agentx commands /workflow --json` 或 `agentx commands memory --json`。
 如果輸入錯字，例如 `/wrkflow`，agentX 會提示最接近的候選命令。
-外部 runner 可用 `agentx workflows --json` 取得常用 recipe catalog；需要單一路徑時用 `agentx workflows headless --json` 或 `agentx workflows audit --json`。
+外部 runner 可用 `agentx workflows --json` 取得常用 recipe catalog；每個 workflow 會提供 `steps` 與可直接處理的 `commands`，需要單一路徑時用 `agentx workflows headless --json` 或 `agentx workflows audit --json`。
 
 用 `/workflows` 看常用路徑：
 

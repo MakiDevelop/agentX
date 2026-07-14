@@ -14,8 +14,15 @@ def test_workflow_catalog_payload_lists_aliases() -> None:
     workflows = {item["goal"]: item for item in payload["workflows"]}
     assert "Headless bundle" in workflows
     assert "headless" in workflows["Headless bundle"]["aliases"]
+    assert workflows["Headless bundle"]["commands"] == [
+        'agentx -p "任務" --agent --artifact-dir .agentx/runs/latest --quiet',
+        "agentx handoff-resume .agentx/runs/latest --dry-run",
+    ]
+    assert all(step["runnable"] is True for step in workflows["Headless bundle"]["steps"])
     assert "Approval audit" in workflows
     assert "audit" in workflows["Approval audit"]["aliases"]
+    assert workflows["小步修改"]["steps"][2] == {"command": "讓 agent 讀檔與改檔", "runnable": False}
+    assert "讓 agent 讀檔與改檔" not in workflows["小步修改"]["commands"]
 
 
 def test_workflow_catalog_payload_filters_by_alias() -> None:
@@ -25,6 +32,7 @@ def test_workflow_catalog_payload_filters_by_alias() -> None:
     assert payload["count"] == 1
     assert payload["workflows"][0]["goal"] == "Headless bundle"
     assert "--artifact-dir" in payload["workflows"][0]["path"]
+    assert payload["workflows"][0]["commands"][0].startswith("agentx -p")
 
 
 def test_workflows_json_outputs_catalog() -> None:
@@ -35,6 +43,7 @@ def test_workflows_json_outputs_catalog() -> None:
     assert payload["schema"] == "agentx.workflow_catalog.v1"
     assert payload["count"] >= 5
     assert any(item["goal"] == "提交收尾" for item in payload["workflows"])
+    assert all("steps" in item and "commands" in item for item in payload["workflows"])
 
 
 def test_workflows_json_accepts_alias_filter() -> None:

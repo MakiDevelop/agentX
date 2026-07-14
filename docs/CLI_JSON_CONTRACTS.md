@@ -817,6 +817,8 @@ Each workflow object includes:
 |-----|------|
 | `goal` | string |
 | `path` | string |
+| `steps` | array of object, each with `command` and `runnable` |
+| `commands` | array of string, runnable steps extracted from `path` |
 | `aliases` | array of string |
 
 ## Stability Tests
