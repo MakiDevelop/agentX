@@ -12,6 +12,30 @@ from agentx.errors import ErrorContext, ErrorType
 from agentx.session_store import SessionStore
 
 
+def headless_result_with_handoff(
+    *,
+    output: str = "needs handoff",
+    termination: str = "max_steps_exceeded",
+    session_path: str = "/tmp/contract.session.jsonl",
+) -> cli.HeadlessRunResult:
+    return cli.HeadlessRunResult(
+        output=output,
+        termination=termination,
+        log_summary={
+            "handoff_summary": {
+                "status": termination,
+                "needs_handoff": True,
+                "failing_tools": ["run_tests"],
+                "pending_verifies": ["tests/test_demo.py"],
+                "recovery_actions": ["verify_assumption"],
+                "recovery_checklist": ["Inspect pending verifies before new edits."],
+                "next_steps": ["Resume with focused verification."],
+            }
+        },
+        session_path=session_path,
+    )
+
+
 def test_headless_exit_code_success() -> None:
     assert cli.headless_exit_code("完成") == 0
 
@@ -1390,11 +1414,13 @@ def test_build_headless_dry_run_payload_applies_overrides(tmp_path: Path, monkey
     assert payload["resume_session"] == "latest"
     assert payload["session_output"] is None
     assert payload["result_output"] is None
+    assert payload["handoff_briefing_output"] is None
     assert payload["prompt_chars"] == 5
 
 
 def test_build_headless_dry_run_payload_records_result_output(tmp_path: Path) -> None:
     target = tmp_path / "artifacts" / "result.json"
+    briefing = tmp_path / "artifacts" / "handoff.md"
 
     payload = cli.build_headless_dry_run_payload(
         "hello",
@@ -1402,10 +1428,12 @@ def test_build_headless_dry_run_payload_records_result_output(tmp_path: Path) ->
         agent_mode=True,
         result_output=target,
         result_output_format="jsonl",
+        handoff_briefing_output=briefing,
     )
 
     assert payload["result_output"] == str(target)
     assert payload["result_output_format"] == "jsonl"
+    assert payload["handoff_briefing_output"] == str(briefing)
 
 
 def test_build_headless_dry_run_payload_session_output_implies_save(tmp_path: Path) -> None:
@@ -2033,6 +2061,86 @@ def test_print_prompt_result_output_format_json_with_jsonl_stdout(
     assert stdout_event["event"] == "result"
     assert artifact["output"] == "ok"
     assert "event" not in artifact
+
+
+def test_print_prompt_handoff_briefing_output_writes_markdown_artifact(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    briefing_path = tmp_path / "artifacts" / "handoff.md"
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        return headless_result_with_handoff(session_path=str(tmp_path / ".agentx" / "sessions" / "run.session.jsonl"))
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "-p",
+            "demo",
+            "--agent",
+            "--workspace",
+            str(tmp_path),
+            "--handoff-briefing-output",
+            "artifacts/handoff.md",
+            "--quiet",
+        ],
+    )
+    content = briefing_path.read_text(encoding="utf-8")
+
+    assert result.exit_code == 2
+    assert result.output == ""
+    assert "# agentX Handoff Briefing" in content
+    assert "Status: max_steps_exceeded" in content
+    assert "agentx -p '<next prompt>' --agent --resume-session run.session.jsonl --json" in content
+    assert "- Inspect pending verifies before new edits." in content
+
+
+def test_print_prompt_handoff_briefing_output_rejects_collision_with_result_output(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "run_print_prompt", lambda *args, **kwargs: headless_result_with_handoff())
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "-p",
+            "demo",
+            "--agent",
+            "--workspace",
+            str(tmp_path),
+            "--result-output",
+            "artifacts/run.md",
+            "--handoff-briefing-output",
+            "artifacts/run.md",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--handoff-briefing-output must differ from --result-output" in result.output
+
+
+def test_print_prompt_handoff_briefing_output_requires_agent(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "-p",
+            "demo",
+            "--workspace",
+            str(tmp_path),
+            "--handoff-briefing-output",
+            "artifacts/handoff.md",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--handoff-briefing-output requires --agent" in result.output
 
 
 def test_print_prompt_quiet_suppresses_plain_output(monkeypatch) -> None:  # noqa: ANN001
@@ -2978,6 +3086,38 @@ def test_ask_result_output_format_jsonl_with_plain_stdout(
     assert result.output == "ok\n"
     assert event["event"] == "result"
     assert event["data"]["output"] == "ok"
+
+
+def test_ask_handoff_briefing_output_writes_markdown_artifact(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    briefing_path = tmp_path / "artifacts" / "ask-handoff.md"
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        return headless_result_with_handoff(session_path=str(tmp_path / ".agentx" / "sessions" / "ask.session.jsonl"))
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "ask",
+            "demo",
+            "--workspace",
+            str(tmp_path),
+            "--handoff-briefing-output",
+            "artifacts/ask-handoff.md",
+            "--quiet",
+        ],
+    )
+    content = briefing_path.read_text(encoding="utf-8")
+
+    assert result.exit_code == 2
+    assert result.output == ""
+    assert "# agentX Handoff Briefing" in content
+    assert "agentx -p '<next prompt>' --agent --resume-session ask.session.jsonl --json" in content
 
 
 def test_ask_forwards_plan_then_execute(monkeypatch) -> None:  # noqa: ANN001

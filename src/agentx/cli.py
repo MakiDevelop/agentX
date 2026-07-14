@@ -1735,6 +1735,7 @@ def build_headless_dry_run_payload(
     session_output: Path | None = None,
     result_output: Path | None = None,
     result_output_format: str = "auto",
+    handoff_briefing_output: Path | None = None,
     no_memory: bool = False,
 ) -> dict[str, object]:
     settings = Settings(workspace=workspace_override)
@@ -1781,6 +1782,7 @@ def build_headless_dry_run_payload(
         "session_output": str(session_output) if session_output else None,
         "result_output": str(result_output) if result_output else None,
         "result_output_format": result_output_format,
+        "handoff_briefing_output": str(handoff_briefing_output) if handoff_briefing_output else None,
         "prompt_chars": len(prompt),
     }
 
@@ -1808,6 +1810,7 @@ def format_headless_dry_run(payload: dict[str, object]) -> str:
             f"session_output: {payload['session_output']}",
             f"result_output: {payload['result_output']}",
             f"result_output_format: {payload['result_output_format']}",
+            f"handoff_briefing_output: {payload['handoff_briefing_output']}",
             f"prompt_chars: {payload['prompt_chars']}",
         ]
     )
@@ -1974,6 +1977,30 @@ def write_headless_result_output(
     )
 
 
+def ensure_distinct_headless_output_paths(
+    *paths: tuple[str, Path | None],
+) -> None:
+    seen: dict[Path, str] = {}
+    for label, path in paths:
+        if path is None:
+            continue
+        resolved = path.resolve()
+        if resolved in seen:
+            raise typer.BadParameter(f"{label} must differ from {seen[resolved]}")
+        seen[resolved] = label
+
+
+def write_headless_handoff_briefing_output(
+    path: Path | None,
+    result: HeadlessRunResult,
+    exit_code: int,
+) -> None:
+    if path is None:
+        return
+    payload = inspect_headless_handoff_payload(headless_payload(result, exit_code))
+    write_handoff_briefing_output(path, payload)
+
+
 def resolve_headless_result_output_format(value: str | None, *, stdout_format: str) -> str:
     normalized = (value or "auto").strip().lower()
     if normalized == "auto":
@@ -2092,6 +2119,7 @@ def main(
     session_output: str | None = typer.Option(None, "--session-output", help="Write the headless session JSONL artifact to a specific workspace path."),
     result_output: str | None = typer.Option(None, "--result-output", help="Write the headless result JSON/JSONL payload to a specific workspace path."),
     result_output_format: str = typer.Option("auto", "--result-output-format", help="Result artifact format: auto, json, or jsonl."),
+    handoff_briefing_output: str | None = typer.Option(None, "--handoff-briefing-output", help="Write a Markdown handoff briefing artifact to a specific workspace path."),
     no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
 ) -> None:
     """Run local Ollama agent workflows."""
@@ -2110,6 +2138,14 @@ def main(
     settings_for_prompt = Settings(workspace=workspace_override)
     session_output_path = resolve_headless_session_output(settings_for_prompt.workspace, session_output)
     result_output_path = resolve_headless_result_output(settings_for_prompt.workspace, result_output)
+    handoff_briefing_output_path = resolve_handoff_briefing_output(settings_for_prompt.workspace, handoff_briefing_output)
+    ensure_distinct_headless_output_paths(
+        ("--session-output", session_output_path),
+        ("--result-output", result_output_path),
+        ("--handoff-briefing-output", handoff_briefing_output_path),
+    )
+    if handoff_briefing_output_path is not None and not agent:
+        raise typer.BadParameter("--handoff-briefing-output requires --agent")
     result_artifact_format = resolve_headless_result_output_format(result_output_format, stdout_format=structured_format)
     if list_models:
         payload = model_list_payload(
@@ -2150,6 +2186,7 @@ def main(
             session_output=session_output_path,
             result_output=result_output_path,
             result_output_format=result_artifact_format,
+            handoff_briefing_output=handoff_briefing_output_path,
             no_memory=no_memory,
         )
         print_headless_dry_run(payload, json_output=structured_output, jsonl_output=jsonl_output, quiet=quiet)
@@ -2189,6 +2226,7 @@ def main(
             termination=output.termination,
             failing_tools=output.failing_tools,
         )
+        write_headless_handoff_briefing_output(handoff_briefing_output_path, output, exit_code)
         if structured_output:
             write_headless_result_output(result_output_path, output, exit_code, output_format=result_artifact_format)
             print_headless_payload(output, exit_code, output_format=structured_format)
@@ -2202,6 +2240,7 @@ def main(
     if structured_output:
         fallback_result = HeadlessRunResult(output=output)
         fallback_exit_code = headless_exit_code(output)
+        write_headless_handoff_briefing_output(handoff_briefing_output_path, fallback_result, fallback_exit_code)
         write_headless_result_output(result_output_path, fallback_result, fallback_exit_code, output_format=result_artifact_format)
         print_headless_payload(
             fallback_result,
@@ -2210,7 +2249,9 @@ def main(
         )
         raise typer.Exit(code=fallback_exit_code)
     fallback_exit_code = headless_exit_code(output)
-    write_headless_result_output(result_output_path, HeadlessRunResult(output=output), fallback_exit_code, output_format=result_artifact_format)
+    fallback_result = HeadlessRunResult(output=output)
+    write_headless_handoff_briefing_output(handoff_briefing_output_path, fallback_result, fallback_exit_code)
+    write_headless_result_output(result_output_path, fallback_result, fallback_exit_code, output_format=result_artifact_format)
     if not quiet:
         print_raw(output)
     raise typer.Exit(code=fallback_exit_code)
@@ -2625,6 +2666,7 @@ def ask(
     session_output: str | None = typer.Option(None, "--session-output", help="Write the headless session JSONL artifact to a specific workspace path."),
     result_output: str | None = typer.Option(None, "--result-output", help="Write the headless result JSON/JSONL payload to a specific workspace path."),
     result_output_format: str = typer.Option("auto", "--result-output-format", help="Result artifact format: auto, json, or jsonl."),
+    handoff_briefing_output: str | None = typer.Option(None, "--handoff-briefing-output", help="Write a Markdown handoff briefing artifact to a specific workspace path."),
     no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
 ) -> None:
     structured_format = structured_output_format(json_output, output_format)
@@ -2634,6 +2676,12 @@ def ask(
     settings_for_prompt = Settings(workspace=workspace_override)
     session_output_path = resolve_headless_session_output(settings_for_prompt.workspace, session_output)
     result_output_path = resolve_headless_result_output(settings_for_prompt.workspace, result_output)
+    handoff_briefing_output_path = resolve_handoff_briefing_output(settings_for_prompt.workspace, handoff_briefing_output)
+    ensure_distinct_headless_output_paths(
+        ("--session-output", session_output_path),
+        ("--result-output", result_output_path),
+        ("--handoff-briefing-output", handoff_briefing_output_path),
+    )
     result_artifact_format = resolve_headless_result_output_format(result_output_format, stdout_format=structured_format)
     if dry_run:
         payload = build_headless_dry_run_payload(
@@ -2654,6 +2702,7 @@ def ask(
             session_output=session_output_path,
             result_output=result_output_path,
             result_output_format=result_artifact_format,
+            handoff_briefing_output=handoff_briefing_output_path,
             no_memory=no_memory,
         )
         print_headless_dry_run(payload, json_output=structured_output, jsonl_output=jsonl_output, quiet=quiet)
@@ -2691,6 +2740,7 @@ def ask(
             termination=output.termination,
             failing_tools=output.failing_tools,
         )
+        write_headless_handoff_briefing_output(handoff_briefing_output_path, output, exit_code)
         if structured_output:
             write_headless_result_output(result_output_path, output, exit_code, output_format=result_artifact_format)
             print_headless_payload(output, exit_code, output_format=structured_format)
@@ -2702,6 +2752,7 @@ def ask(
     if structured_output:
         fallback_result = HeadlessRunResult(output=output)
         fallback_exit_code = headless_exit_code(output)
+        write_headless_handoff_briefing_output(handoff_briefing_output_path, fallback_result, fallback_exit_code)
         write_headless_result_output(result_output_path, fallback_result, fallback_exit_code, output_format=result_artifact_format)
         print_headless_payload(
             fallback_result,
@@ -2710,7 +2761,9 @@ def ask(
         )
         raise typer.Exit(code=fallback_exit_code)
     fallback_exit_code = headless_exit_code(output)
-    write_headless_result_output(result_output_path, HeadlessRunResult(output=output), fallback_exit_code, output_format=result_artifact_format)
+    fallback_result = HeadlessRunResult(output=output)
+    write_headless_handoff_briefing_output(handoff_briefing_output_path, fallback_result, fallback_exit_code)
+    write_headless_result_output(result_output_path, fallback_result, fallback_exit_code, output_format=result_artifact_format)
     if not quiet:
         print_raw(output)
     raise typer.Exit(code=fallback_exit_code)

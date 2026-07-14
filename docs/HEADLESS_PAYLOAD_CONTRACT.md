@@ -100,7 +100,9 @@ For automation that needs a stable artifact path instead of stdout parsing:
 agentx -p "..." --agent --result-output .agentx/results/run.json --quiet
 agentx -p "..." --agent --output-format jsonl --result-output .agentx/results/run.jsonl
 agentx -p "..." --agent --result-output .agentx/results/run.jsonl --result-output-format jsonl
+agentx -p "..." --agent --handoff-briefing-output .agentx/handoff/next.md --quiet
 agentx ask "..." --result-output .agentx/results/ask.json --quiet
+agentx ask "..." --handoff-briefing-output .agentx/handoff/ask-next.md --quiet
 ```
 
 `--result-output` writes inside the active workspace only, refuses to overwrite
@@ -109,6 +111,11 @@ artifact is JSON. With `--output-format jsonl` the artifact is the same single
 `result` event envelope that can be passed to `agentx handoff-inspect`.
 `--result-output-format auto|json|jsonl` can decouple artifact format from
 stdout format; `auto` keeps the default behavior.
+`--handoff-briefing-output PATH` writes the same deterministic Markdown takeover
+briefing during the original headless run, without requiring a follow-up
+`handoff-inspect` command. The path must stay inside the active workspace,
+parents are created as needed, existing files are rejected, and it must be
+distinct from `--session-output` and `--result-output`.
 
 ## `log_summary`
 
