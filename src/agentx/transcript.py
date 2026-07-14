@@ -145,7 +145,7 @@ def _format_approval_overview(total: int, denied: int) -> str:
     return f"{total}/{denied} denied"
 
 
-def approval_receipts(path: Path, limit: int = 20) -> list[dict[str, Any]]:
+def approval_receipts(path: Path, limit: int = 20, *, denied_only: bool = False) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     with path.open(encoding="utf-8") as handle:
         for line in handle:
@@ -154,15 +154,18 @@ def approval_receipts(path: Path, limit: int = 20) -> list[dict[str, Any]]:
             except json.JSONDecodeError:
                 continue
             if record.get("event") == "approval":
+                if denied_only and record.get("allowed") is not False:
+                    continue
                 records.append(record)
     return records[-limit:]
 
 
-def format_approval_receipts(path: Path, limit: int = 20) -> str:
-    receipts = approval_receipts(path, limit=limit)
+def format_approval_receipts(path: Path, limit: int = 20, *, denied_only: bool = False) -> str:
+    receipts = approval_receipts(path, limit=limit, denied_only=denied_only)
     if not receipts:
-        return "(no approval receipts)"
-    lines = [f"Approval receipts: {len(receipts)} most recent"]
+        return "(no denied approval receipts)" if denied_only else "(no approval receipts)"
+    label = "Denied approval receipts" if denied_only else "Approval receipts"
+    lines = [f"{label}: {len(receipts)} most recent"]
     for receipt in receipts:
         ts = str(receipt.get("ts", "-"))
         tool = str(receipt.get("tool", "-"))

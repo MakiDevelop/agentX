@@ -98,12 +98,43 @@ def test_format_approval_receipts_lists_recent_decisions(tmp_path: Path) -> None
     assert "apply_patch denied source=manual_denied mode=ask" in formatted
 
 
+def test_format_approval_receipts_can_filter_denied_decisions(tmp_path: Path) -> None:
+    session = tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl"
+    session.parent.mkdir(parents=True)
+    session.write_text(
+        "\n".join([
+            '{"ts":"2026-01-02T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}',
+            '{"ts":"2026-01-02T00:00:01","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}',
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    receipts = approval_receipts(session, denied_only=True)
+    formatted = format_approval_receipts(session, denied_only=True)
+
+    assert len(receipts) == 1
+    assert "Denied approval receipts: 1 most recent" in formatted
+    assert "apply_patch denied source=manual_denied mode=ask" in formatted
+    assert "memory_write" not in formatted
+
+
 def test_format_approval_receipts_handles_empty_session(tmp_path: Path) -> None:
     session = tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl"
     session.parent.mkdir(parents=True)
     session.write_text("", encoding="utf-8")
 
     assert format_approval_receipts(session) == "(no approval receipts)"
+
+
+def test_format_approval_receipts_handles_no_denied_session(tmp_path: Path) -> None:
+    session = tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl"
+    session.parent.mkdir(parents=True)
+    session.write_text(
+        '{"ts":"2026-01-02T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}\n',
+        encoding="utf-8",
+    )
+
+    assert format_approval_receipts(session, denied_only=True) == "(no denied approval receipts)"
 
 
 def test_resume_loaded_message_includes_source_and_size(tmp_path: Path) -> None:

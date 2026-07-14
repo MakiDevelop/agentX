@@ -149,7 +149,7 @@ Done:
 - GREEN / YELLOW / RED risk classification exists and is visible in `/tools`, `/help`, `/doctor`, `/status`, welcome UI.
 - Approval policy supports `ask`, `auto`, `off`, plus aliases `strict`, `auto-approve`, and `deny`.
 - Transcript and headless `log_summary.approval_receipts` distinguish YELLOW `auto_approved`, `manual_approved`, `manual_denied`, and `policy_denied` decisions.
-- `/sessions` overview surfaces approval receipt counts and denied counts; `/transcript approvals latest|SESSION` drills into current and historical receipt lists.
+- `/sessions` overview surfaces approval receipt counts and denied counts; `/transcript approvals latest|SESSION --denied` drills into current and historical receipt lists.
 - RED tools are blocked.
 - Dangerous command patterns and sensitive paths are guarded.
 - Cross-absolute-path `mv` is conservatively RED.
@@ -158,11 +158,11 @@ Done:
 
 Remaining gap:
 
-- Approval receipt drill-down is textual; there is no filtering by tool/source yet.
+- Approval receipt drill-down is textual and can filter denied receipts, but does not filter by tool/source yet.
 
 Recommended next:
 
-- Consider filter flags such as `/transcript approvals latest --denied` only if the unfiltered view becomes noisy.
+- Consider tool/source filters only if denied-only still becomes noisy.
 - Keep RED behavior unchanged.
 
 ## Current Gap Summary
@@ -173,7 +173,7 @@ Recommended next:
 | Mode clarity | 85% | `/mode ask` alias |
 | Tool discoverability | 80-85% | `/workflows` or `/guide --full` |
 | Memory continuity | 78-82% | Handoff section formatting |
-| Safety / approval UX | 91% | Optional approval receipt filters |
+| Safety / approval UX | 92% | Optional tool/source filters |
 | Visual polish | 55-65% | Optional TUI/web demo, not required for guarded MVP |
 
 ## Recommended Implementation Queue

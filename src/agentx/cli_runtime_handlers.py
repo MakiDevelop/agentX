@@ -843,17 +843,20 @@ def handle_transcript(
 ) -> None:
     """Emit current transcript details or approval receipt drill-down."""
     transcript.write("slash_command", {"command": prompt})
-    parts = prompt.strip().split(maxsplit=2)
+    parts = prompt.strip().split()
     if len(parts) >= 2 and parts[1] == "approvals":
-        if len(parts) == 2:
-            emit(format_approval_receipts(transcript.path))
+        args = parts[2:]
+        denied_only = "--denied" in args
+        targets = [part for part in args if part != "--denied"]
+        if not targets:
+            emit(format_approval_receipts(transcript.path, denied_only=denied_only))
             return
-        target = parts[2].strip()
+        target = targets[0]
         exclude = transcript.path if target == "latest" else None
         path = find_transcript(state.settings.workspace, target, exclude=exclude)
         if path is None:
             emit(f"transcript not found: {target}")
             return
-        emit(f"source: {path}\n{format_approval_receipts(path)}")
+        emit(f"source: {path}\n{format_approval_receipts(path, denied_only=denied_only)}")
         return
     emit(str(transcript.path))

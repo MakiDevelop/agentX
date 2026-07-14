@@ -1420,6 +1420,31 @@ def test_handle_transcript_approvals_emits_receipts(tmp_path: Path) -> None:
     assert "memory_write allowed source=auto_approved mode=auto" in lines[0]
 
 
+def test_handle_transcript_approvals_denied_filters_current_session(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    path = tmp_path / "session.jsonl"
+    path.write_text(
+        "\n".join([
+            '{"ts":"2026-01-02T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}',
+            '{"ts":"2026-01-02T00:00:01","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}',
+        ]) + "\n",
+        encoding="utf-8",
+    )
+    transcript = FakeTranscript(path=path)
+    lines, emit = _capture()
+
+    handle_transcript(
+        state,
+        "/transcript approvals --denied",
+        transcript=transcript,
+        emit=emit,
+    )
+
+    assert "Denied approval receipts: 1 most recent" in lines[0]
+    assert "apply_patch denied source=manual_denied mode=ask" in lines[0]
+    assert "memory_write" not in lines[0]
+
+
 def test_handle_transcript_approvals_latest_uses_previous_session(tmp_path: Path) -> None:
     state = _state(tmp_path)
     sessions = tmp_path / ".agentx" / "sessions"
@@ -1446,6 +1471,36 @@ def test_handle_transcript_approvals_latest_uses_previous_session(tmp_path: Path
 
     assert transcript.events == [("slash_command", {"command": "/transcript approvals latest"})]
     assert f"source: {previous}" in lines[0]
+    assert "apply_patch denied source=manual_denied mode=ask" in lines[0]
+    assert "memory_write" not in lines[0]
+
+
+def test_handle_transcript_approvals_latest_denied_filters_previous_session(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    sessions = tmp_path / ".agentx" / "sessions"
+    sessions.mkdir(parents=True)
+    previous = sessions / "20260101-000000.jsonl"
+    previous.write_text(
+        "\n".join([
+            '{"ts":"2026-01-01T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}',
+            '{"ts":"2026-01-01T00:00:01","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}',
+        ]) + "\n",
+        encoding="utf-8",
+    )
+    current = sessions / "20260102-000000.jsonl"
+    current.write_text("", encoding="utf-8")
+    transcript = FakeTranscript(path=current)
+    lines, emit = _capture()
+
+    handle_transcript(
+        state,
+        "/transcript approvals latest --denied",
+        transcript=transcript,
+        emit=emit,
+    )
+
+    assert f"source: {previous}" in lines[0]
+    assert "Denied approval receipts: 1 most recent" in lines[0]
     assert "apply_patch denied source=manual_denied mode=ask" in lines[0]
     assert "memory_write" not in lines[0]
 
