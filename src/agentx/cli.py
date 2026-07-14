@@ -370,11 +370,11 @@ def print_workflows() -> None:
     console.print("[dim]提示：/mode ask 與 /mode agent 使用同一個工具模式；ask 是面向使用者的命名。[/dim]")
 
 
-def print_tools(tools: ToolRegistry) -> None:
+def print_tools(tools: ToolRegistry, query: str | None = None) -> None:
     """Print tools with risk level (GREEN / YELLOW / RED) for better discoverability.
     This moves us closer to the vision in Image 03.
     """
-    tool_infos = tools.describe_tool_infos()
+    tool_infos = filtered_tool_infos(tools.describe_tool_infos(), query)
 
     # Group by risk for clearer presentation (vision alignment)
     by_risk: dict[str, list] = {"GREEN": [], "YELLOW": [], "RED": [], "UNKNOWN": []}
@@ -414,34 +414,63 @@ def print_tools(tools: ToolRegistry) -> None:
     console.print("[dim]風險由內建機制自動判斷。想調整 YELLOW 行為請用 /approval。[/dim]")
 
 
-def tool_catalog_payload(tools: ToolRegistry) -> dict[str, object]:
-    infos = tools.describe_tool_infos()
+def tool_catalog_payload(tools: ToolRegistry, query: str | None = None) -> dict[str, object]:
+    infos = filtered_tool_infos(tools.describe_tool_infos(), query)
     by_risk = {
         risk: sum(1 for item in infos if item["risk"] == risk)
         for risk in ("GREEN", "YELLOW", "RED")
     }
     return {
         "schema": "agentx.tool_catalog.v1",
+        "query": query or "",
         "count": len(infos),
         "by_risk": by_risk,
         "tools": infos,
     }
 
 
+def filtered_tool_infos(infos: list[dict[str, object]], query: str | None = None) -> list[dict[str, object]]:
+    normalized = (query or "").strip().lower()
+    if not normalized:
+        return infos
+    risk_query = normalized.upper()
+    if risk_query in {"GREEN", "YELLOW", "RED"}:
+        return [item for item in infos if item["risk"] == risk_query]
+    return [item for item in infos if _tool_info_matches(item, normalized)]
+
+
+def _tool_info_matches(item: dict[str, object], query: str) -> bool:
+    aliases = item.get("aliases", [])
+    alias_text = " ".join(str(alias) for alias in aliases) if isinstance(aliases, list) else str(aliases)
+    haystack = " ".join(
+        [
+            str(item.get("name", "")),
+            str(item.get("description", "")),
+            str(item.get("risk", "")),
+            str(item.get("signature", "")),
+            alias_text,
+        ]
+    ).lower()
+    return query in haystack
+
+
 def print_tool_catalog(
     tools: ToolRegistry,
+    query: str | None = None,
     *,
     json_output: bool = False,
     jsonl_output: bool = False,
 ) -> None:
     if json_output:
         print_structured_payload(
-            tool_catalog_payload(tools),
+            tool_catalog_payload(tools, query),
             output_format="jsonl" if jsonl_output else "json",
             event="tools",
         )
         return
-    print_tools(tools)
+    if query:
+        console.print(f"[bold]agentX tool catalog: {escape(query)}[/bold]")
+    print_tools(tools, query)
 
 
 def print_raw(text: object) -> None:
@@ -3035,15 +3064,16 @@ def commands_command(
 
 @app.command("tools")
 def tools_command(
+    query: str | None = typer.Argument(None, help="Optional tool, risk, or keyword filter, e.g. git, YELLOW, memory."),
     workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for tool discovery."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
-    """List available agent tools and risk metadata."""
+    """List or search available agent tools and risk metadata."""
     workspace_path = resolve_headless_workspace(workspace) or Settings().workspace
     registry = ToolRegistry(builtin_tools(workspace_path, NullMemoryClient()))
     structured_format = structured_output_format(json_output, output_format)
-    print_tool_catalog(registry, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_tool_catalog(registry, query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("models")
