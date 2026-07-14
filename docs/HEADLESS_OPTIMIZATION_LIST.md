@@ -80,7 +80,9 @@
 - [x] `agentx command-plan COMMAND --json` 可輸出 read-only command policy preflight（allowlist / build approval / docker compose / destructive blockers），讓外部 runner 不執行命令也能知道風險、tool args、approval posture 與 blocker。
 - [x] `agentx tool-plan TOOL --args-json JSON --json` 可輸出 read-only tool-call preflight（alias resolution、risk、approval_required、known arg blockers），讓外部 runner 在真正 tool call 前先做機器可讀安全判斷。
 - [x] `agentx capabilities --json` 會提供 `recommended_entrypoints` 與 `by_schema`，讓外部 runner 第一次接入時能直接找到 discovery/preflight/next/gate/verify 入口與 schema 對應 command。
+- [x] `agentx capabilities --json` 會列出 `handoff-inspect` / `handoff-resume`，讓 command-plan 能辨識 artifact resume 流程中的接手命令。
 - [x] `agentx workflows --json` 會把人類可讀 `path` 拆成 `steps` 與可直接處理的 `commands`，讓 runner 能消費 headless/audit/commit recipe 而不用自行 parse 箭頭字串。
+- [x] `agentx workflows --json` 的每個 step 會標記 `kind`，且 top-level `agentx` step 會內嵌 `command_plan`，讓 runner 可在執行 recipe 前檢查 policy posture。
 - [x] `agentx inspect --json` 會內嵌 `verify_command_plans`，把每個預設 verify command 轉成 `agentx.command_plan.v1`，讓 runner 一次取得可執行檢查與 command policy posture。
 - [x] `agentx review --json` 可輸出 deterministic review gate（diff + verify + commit_ready + blockers/warnings + next commands），`--fail-on-blocker` 可讓 CI/wrapper 在未達 commit 條件時 exit 1。
 - [x] `agentx commit-plan --message TEXT --json` 可輸出 read-only commit plan（files_to_stage、commit message、review gate、blockers/warnings、next commands），不 stage、不 commit、不 push，讓外部 runner 可先展示/審核。

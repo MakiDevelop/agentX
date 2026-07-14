@@ -119,6 +119,30 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local inspection",
     },
     {
+        "command": "agentx handoff-inspect",
+        "usage": "agentx handoff-inspect PATH --json",
+        "description": "Inspect a saved headless result payload and extract resume fields or handoff gates.",
+        "examples": [
+            "agentx handoff-inspect .agentx/runs/latest/result.json --json",
+            "agentx handoff-inspect result.json --field resume_command --output-format jsonl",
+        ],
+        "schemas": [],
+        "jsonl_event": "handoff_inspect",
+        "risk": "GREEN - read-only local artifact inspection",
+    },
+    {
+        "command": "agentx handoff-resume",
+        "usage": "agentx handoff-resume DIR_OR_RESULT --dry-run",
+        "description": "Build or execute the resume command from a headless artifact bundle or result payload.",
+        "examples": [
+            "agentx handoff-resume .agentx/runs/latest --dry-run",
+            "agentx handoff-resume .agentx/runs/latest --dry-run --output-format jsonl",
+        ],
+        "schemas": [],
+        "jsonl_event": "handoff_resume",
+        "risk": "GREEN with --dry-run; YELLOW with --execute because it runs the generated command",
+    },
+    {
         "command": "agentx approvals",
         "usage": "agentx approvals [SESSION] --json",
         "description": "List approval receipts from transcripts; can fail CI on denied receipts.",

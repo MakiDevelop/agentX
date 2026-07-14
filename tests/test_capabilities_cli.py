@@ -16,6 +16,8 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     commands = {item["command"]: item for item in payload["capabilities"]}  # type: ignore[index]
     assert "agentx verify" in commands
     assert "agentx artifacts" in commands
+    assert "agentx handoff-inspect" in commands
+    assert "agentx handoff-resume" in commands
     assert "agentx traces" in commands
     assert "agentx diff" in commands
     assert "agentx patch-check" in commands
@@ -28,6 +30,9 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert "agentx infra" in commands
     assert commands["agentx verify"]["schemas"] == ["agentx.verify.v1"]
     assert commands["agentx artifacts"]["schemas"] == ["agentx.artifacts.v1"]
+    assert commands["agentx handoff-inspect"]["jsonl_event"] == "handoff_inspect"
+    assert commands["agentx handoff-resume"]["jsonl_event"] == "handoff_resume"
+    assert commands["agentx handoff-resume"]["schemas"] == []
     assert commands["agentx traces"]["schemas"] == ["agentx.traces.v1"]
     assert commands["agentx diff"]["schemas"] == ["agentx.diff.v1"]
     assert commands["agentx patch-check"]["schemas"] == ["agentx.patch_check.v1"]

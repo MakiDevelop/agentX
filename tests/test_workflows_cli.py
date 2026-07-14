@@ -19,9 +19,15 @@ def test_workflow_catalog_payload_lists_aliases() -> None:
         "agentx handoff-resume .agentx/runs/latest --dry-run",
     ]
     assert all(step["runnable"] is True for step in workflows["Headless bundle"]["steps"])
+    assert workflows["Headless bundle"]["steps"][0]["kind"] == "agentx_cli"
+    assert workflows["Headless bundle"]["steps"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
+    assert workflows["Headless bundle"]["steps"][0]["command_plan"]["risk"] == "YELLOW"
+    assert workflows["Headless bundle"]["steps"][1]["command_plan"]["allowed"] is True
     assert "Approval audit" in workflows
     assert "audit" in workflows["Approval audit"]["aliases"]
-    assert workflows["小步修改"]["steps"][2] == {"command": "讓 agent 讀檔與改檔", "runnable": False}
+    assert workflows["理解 repo"]["steps"][0]["kind"] == "slash_command"
+    assert "command_plan" not in workflows["理解 repo"]["steps"][0]
+    assert workflows["小步修改"]["steps"][2] == {"command": "讓 agent 讀檔與改檔", "kind": "instruction", "runnable": False}
     assert "讓 agent 讀檔與改檔" not in workflows["小步修改"]["commands"]
 
 
@@ -33,6 +39,7 @@ def test_workflow_catalog_payload_filters_by_alias() -> None:
     assert payload["workflows"][0]["goal"] == "Headless bundle"
     assert "--artifact-dir" in payload["workflows"][0]["path"]
     assert payload["workflows"][0]["commands"][0].startswith("agentx -p")
+    assert payload["workflows"][0]["steps"][0]["command_plan"]["command"].startswith("agentx -p")
 
 
 def test_workflows_json_outputs_catalog() -> None:

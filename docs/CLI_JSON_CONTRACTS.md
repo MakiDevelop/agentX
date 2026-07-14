@@ -31,6 +31,8 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx init --json` | `agentx.init.v1` | `init` |
 | `agentx sessions --json` | `agentx.sessions.v1` | `sessions` |
 | `agentx artifacts --json` | `agentx.artifacts.v1` | `artifacts` |
+| `agentx handoff-inspect --json` | headless result inspection payload | `handoff_inspect` |
+| `agentx handoff-resume --json` | resume command field payload | `handoff_resume` |
 | `agentx approvals --json` | `agentx.approvals.v1` | `approvals` |
 | `agentx traces --json` | `agentx.traces.v1` | `traces` |
 | `agentx diff --json` | `agentx.diff.v1` | `diff` |
@@ -817,9 +819,13 @@ Each workflow object includes:
 |-----|------|
 | `goal` | string |
 | `path` | string |
-| `steps` | array of object, each with `command` and `runnable` |
+| `steps` | array of object, each with `command`, `kind`, `runnable`, and optional `command_plan` for `agentx_cli` steps |
 | `commands` | array of string, runnable steps extracted from `path` |
 | `aliases` | array of string |
+
+Step `kind` is one of `slash_command`, `agentx_cli`, or `instruction`.
+`agentx_cli` steps include an embedded `agentx.command_plan.v1` payload so
+runners can inspect policy posture before executing a top-level command.
 
 ## Stability Tests
 

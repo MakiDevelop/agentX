@@ -237,10 +237,11 @@ def format_workflow_recipe(name: str) -> str:
 
 def workflow_catalog_payload(query: str | None = None) -> dict[str, object]:
     normalized_query = (query or "").strip()
+    settings = Settings()
     recipes = []
     for goal, path in WORKFLOW_ROWS:
         aliases = sorted(alias for alias, target in WORKFLOW_ALIASES.items() if target == goal)
-        steps = _workflow_steps(path)
+        steps = _workflow_steps(path, settings=settings)
         recipes.append(
             {
                 "goal": goal,
@@ -265,12 +266,23 @@ def workflow_catalog_payload(query: str | None = None) -> dict[str, object]:
     }
 
 
-def _workflow_steps(path: str) -> list[dict[str, object]]:
+def _workflow_steps(path: str, *, settings: Settings) -> list[dict[str, object]]:
     steps: list[dict[str, object]] = []
     for raw_step in path.split("→"):
         command = raw_step.strip()
-        runnable = command.startswith("/") or command.startswith("agentx ")
-        steps.append({"command": command, "runnable": runnable})
+        if command.startswith("/"):
+            steps.append({"command": command, "kind": "slash_command", "runnable": True})
+        elif command.startswith("agentx "):
+            steps.append(
+                {
+                    "command": command,
+                    "kind": "agentx_cli",
+                    "runnable": True,
+                    "command_plan": command_plan_payload(settings, command),
+                }
+            )
+        else:
+            steps.append({"command": command, "kind": "instruction", "runnable": False})
     return steps
 
 
