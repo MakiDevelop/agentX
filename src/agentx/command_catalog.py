@@ -137,6 +137,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local inspection",
     },
     {
+        "command": "agentx diff",
+        "usage": "agentx diff [PATH] --json",
+        "description": "Summarize git diff as machine-readable file stats for review and commit runners.",
+        "examples": ["agentx diff --json", "agentx diff src/agentx/cli.py --staged --output-format jsonl"],
+        "schemas": ["agentx.diff.v1"],
+        "jsonl_event": "diff",
+        "risk": "GREEN - read-only local git inspection",
+    },
+    {
         "command": "agentx tasks",
         "usage": "agentx tasks [STATUS] --json",
         "description": "List project task state from .agentx/tasks.json.",

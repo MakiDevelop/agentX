@@ -1527,6 +1527,266 @@ def git_status_payload(workspace: Path) -> dict[str, object]:
     }
 
 
+def _git_read(
+    workspace: Path,
+    args: list[str],
+    *,
+    timeout: int = 10,
+) -> tuple[int, str, str]:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    return result.returncode, result.stdout, result.stderr
+
+
+def _diff_relative_path(workspace: Path, path: str | None) -> str | None:
+    if path in (None, ""):
+        return None
+    target = resolve_inside_workspace(workspace, path)
+    return str(target.relative_to(workspace))
+
+
+def _parse_diff_numstat(output: str) -> dict[str, dict[str, object]]:
+    parsed: dict[str, dict[str, object]] = {}
+    for line in output.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 3:
+            continue
+        added_raw, deleted_raw, file_path = parts[0], parts[1], parts[2]
+        binary = added_raw == "-" or deleted_raw == "-"
+        added = None if binary else int(added_raw)
+        deleted = None if binary else int(deleted_raw)
+        parsed[file_path] = {
+            "path": file_path,
+            "added": added,
+            "deleted": deleted,
+            "binary": binary,
+        }
+    return parsed
+
+
+def _parse_diff_name_status(output: str) -> list[dict[str, object]]:
+    files: list[dict[str, object]] = []
+    for line in output.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        status = parts[0]
+        if status.startswith("R") and len(parts) >= 3:
+            files.append({"status": status, "path": parts[2], "old_path": parts[1]})
+        elif status.startswith("C") and len(parts) >= 3:
+            files.append({"status": status, "path": parts[2], "old_path": parts[1]})
+        else:
+            files.append({"status": status, "path": parts[1]})
+    return files
+
+
+def _parse_untracked_status(output: str) -> list[dict[str, object]]:
+    files: list[dict[str, object]] = []
+    for line in output.splitlines():
+        if not line.startswith("?? "):
+            continue
+        file_path = line[3:].strip()
+        if file_path:
+            files.append(
+                {
+                    "status": "??",
+                    "path": file_path,
+                    "added": None,
+                    "deleted": None,
+                    "binary": False,
+                }
+            )
+    return files
+
+
+def _diff_args(*, staged: bool, path: str | None) -> list[str]:
+    args = ["diff", "--no-color"]
+    if staged:
+        args.append("--cached")
+    if path:
+        args.extend(["--", path])
+    return args
+
+
+def diff_payload(
+    settings: Settings,
+    *,
+    path: str | None = None,
+    staged: bool = False,
+    include_patch: bool = False,
+    max_patch_chars: int = 20000,
+) -> dict[str, object]:
+    workspace = settings.workspace
+    relative_path = _diff_relative_path(workspace, path)
+    try:
+        repo_code, repo_stdout, repo_stderr = _git_read(workspace, ["rev-parse", "--is-inside-work-tree"])
+    except Exception as exc:
+        return {
+            "schema": "agentx.diff.v1",
+            "workspace": str(workspace),
+            "path": relative_path,
+            "staged": staged,
+            "ok": False,
+            "is_git_repo": False,
+            "dirty": None,
+            "file_count": 0,
+            "insertions": 0,
+            "deletions": 0,
+            "binary_count": 0,
+            "untracked_count": 0,
+            "files": [],
+            "stat": "",
+            "patch_included": include_patch,
+            "patch": None,
+            "patch_truncated": False,
+            "detail": f"{type(exc).__name__}: {exc}",
+        }
+    is_git_repo = repo_code == 0 and repo_stdout.strip() == "true"
+    if not is_git_repo:
+        detail = (repo_stderr or repo_stdout).strip()
+        return {
+            "schema": "agentx.diff.v1",
+            "workspace": str(workspace),
+            "path": relative_path,
+            "staged": staged,
+            "ok": False,
+            "is_git_repo": False,
+            "dirty": None,
+            "file_count": 0,
+            "insertions": 0,
+            "deletions": 0,
+            "binary_count": 0,
+            "untracked_count": 0,
+            "files": [],
+            "stat": "",
+            "patch_included": include_patch,
+            "patch": None,
+            "patch_truncated": False,
+            "detail": detail or "not a git repository",
+        }
+
+    base_args = _diff_args(staged=staged, path=relative_path)
+    stat_code, stat_stdout, stat_stderr = _git_read(workspace, [*base_args, "--stat"])
+    numstat_code, numstat_stdout, numstat_stderr = _git_read(workspace, [*base_args, "--numstat"])
+    status_code, status_stdout, status_stderr = _git_read(workspace, [*base_args, "--name-status"])
+    untracked_code = 0
+    untracked_stdout = ""
+    untracked_stderr = ""
+    if not staged:
+        status_args = ["status", "--porcelain", "--untracked-files=all"]
+        if relative_path:
+            status_args.extend(["--", relative_path])
+        untracked_code, untracked_stdout, untracked_stderr = _git_read(workspace, status_args)
+    ok = stat_code == 0 and numstat_code == 0 and status_code == 0
+    ok = ok and (staged or untracked_code == 0)
+
+    numstat = _parse_diff_numstat(numstat_stdout if numstat_code == 0 else "")
+    files = []
+    for item in _parse_diff_name_status(status_stdout if status_code == 0 else ""):
+        file_path = str(item["path"])
+        stats = numstat.get(file_path, {})
+        files.append(
+            {
+                **item,
+                "added": stats.get("added"),
+                "deleted": stats.get("deleted"),
+                "binary": bool(stats.get("binary", False)),
+            }
+        )
+    existing_paths = {str(item.get("path")) for item in files}
+    untracked_files = [
+        item
+        for item in _parse_untracked_status(untracked_stdout if untracked_code == 0 else "")
+        if str(item.get("path")) not in existing_paths
+    ]
+    files.extend(untracked_files)
+
+    insertions = sum(int(item["added"]) for item in files if isinstance(item.get("added"), int))
+    deletions = sum(int(item["deleted"]) for item in files if isinstance(item.get("deleted"), int))
+    binary_count = sum(1 for item in files if item.get("binary") is True)
+    untracked_count = len(untracked_files)
+    patch_text = None
+    patch_truncated = False
+    patch_detail = ""
+    if include_patch:
+        patch_code, patch_stdout, patch_stderr = _git_read(workspace, base_args, timeout=20)
+        ok = ok and patch_code == 0
+        patch_text = patch_stdout[:max_patch_chars]
+        patch_truncated = len(patch_stdout) > max_patch_chars
+        patch_detail = patch_stderr.strip() if patch_code != 0 else ""
+
+    details = [
+        detail.strip()
+        for detail in (stat_stderr, numstat_stderr, status_stderr, patch_detail)
+        if detail.strip()
+    ]
+    if untracked_stderr.strip():
+        details.append(untracked_stderr.strip())
+    return {
+        "schema": "agentx.diff.v1",
+        "workspace": str(workspace),
+        "path": relative_path,
+        "staged": staged,
+        "ok": ok,
+        "is_git_repo": True,
+        "dirty": bool(files),
+        "file_count": len(files),
+        "insertions": insertions,
+        "deletions": deletions,
+        "binary_count": binary_count,
+        "untracked_count": untracked_count,
+        "files": files,
+        "stat": stat_stdout if stat_code == 0 else "",
+        "patch_included": include_patch,
+        "patch": patch_text,
+        "patch_truncated": patch_truncated,
+        "detail": "\n".join(details),
+    }
+
+
+def print_diff_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="diff",
+        )
+        return
+
+    table = Table(title="agentX diff", show_header=True, header_style="bold")
+    table.add_column("Status", style="cyan")
+    table.add_column("Path")
+    table.add_column("+", justify="right")
+    table.add_column("-", justify="right")
+    for item in payload["files"]:  # type: ignore[index]
+        row = dict(item)
+        table.add_row(
+            str(row.get("status", "")),
+            str(row.get("path", "")),
+            "-" if row.get("added") is None else str(row.get("added")),
+            "-" if row.get("deleted") is None else str(row.get("deleted")),
+        )
+    console.print(table)
+    console.print(
+        f"[dim]ok={payload['ok']} staged={payload['staged']} files={payload['file_count']} "
+        f"insertions={payload['insertions']} deletions={payload['deletions']} "
+        f"untracked={payload['untracked_count']}[/dim]"
+    )
+    if payload.get("stat"):
+        console.print(str(payload["stat"]).rstrip())
+
+
 def task_status_payload(workspace: Path) -> dict[str, object]:
     tasks = load_tasks(workspace)
     active = [task for task in tasks if task.get("status") in {"in_progress", "pending", "blocked"}]
@@ -1774,9 +2034,11 @@ def inspect_payload(
         "sessions": sessions_payload(settings, limit=sessions_limit),
         "approvals": approvals_payload(settings, session="latest", limit=approvals_limit),
         "traces": traces_payload(settings, session="latest", limit=20),
+        "diff": diff_payload(settings),
         "capabilities": capabilities_payload(),
         "verify_commands": verify_commands,
         "next_commands": [
+            "agentx diff --json",
             "agentx verify --json --fail-on-error",
             "agentx tasks active --json",
             "agentx approvals latest --denied --json --fail-on-denied",
@@ -1828,6 +2090,12 @@ def print_inspect_payload(
     table.add_row(
         "approvals",
         f"ok={approvals.get('ok')} count={approvals.get('count')} denied={approvals.get('denied_count')}",
+    )
+    diff = dict(payload["diff"])  # type: ignore[arg-type]
+    table.add_row(
+        "diff",
+        f"ok={diff.get('ok')} dirty={diff.get('dirty')} files={diff.get('file_count')} "
+        f"insertions={diff.get('insertions')} deletions={diff.get('deletions')}",
     )
     table.add_row(
         "verify_commands",
@@ -4424,6 +4692,29 @@ def traces_command(
     payload = traces_payload(settings, session=session, limit=limit)
     structured_format = structured_output_format(json_output, output_format)
     print_traces_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("diff")
+def diff_command(
+    path: str | None = typer.Argument(None, help="Optional workspace-relative path to diff."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for diff inspection."),
+    staged: bool = typer.Option(False, "--staged", help="Inspect staged changes instead of the worktree diff."),
+    patch: bool = typer.Option(False, "--patch", help="Include the git patch text in the payload."),
+    max_patch_chars: int = typer.Option(20000, "--max-patch-chars", min=0, help="Maximum patch characters to include."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Summarize git diff for external runners without mutating the index."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = diff_payload(
+        settings,
+        path=path,
+        staged=staged,
+        include_patch=patch,
+        max_patch_chars=max_patch_chars,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_diff_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("tasks")

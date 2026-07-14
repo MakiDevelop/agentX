@@ -16,9 +16,11 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert "agentx verify" in commands
     assert "agentx artifacts" in commands
     assert "agentx traces" in commands
+    assert "agentx diff" in commands
     assert commands["agentx verify"]["schemas"] == ["agentx.verify.v1"]
     assert commands["agentx artifacts"]["schemas"] == ["agentx.artifacts.v1"]
     assert commands["agentx traces"]["schemas"] == ["agentx.traces.v1"]
+    assert commands["agentx diff"]["schemas"] == ["agentx.diff.v1"]
     assert commands["agentx approvals"]["jsonl_event"] == "approvals"
     assert all(
         set(item) == {
@@ -37,11 +39,14 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
 def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     schema_payload = capabilities_payload("agentx.tasks.v1")
     keyword_payload = capabilities_payload("denied")
+    diff_payload = capabilities_payload("agentx.diff.v1")
 
     assert schema_payload["count"] == 1
     assert schema_payload["capabilities"][0]["command"] == "agentx tasks"  # type: ignore[index]
     assert keyword_payload["count"] == 1
     assert keyword_payload["capabilities"][0]["command"] == "agentx approvals"  # type: ignore[index]
+    assert diff_payload["count"] == 1
+    assert diff_payload["capabilities"][0]["command"] == "agentx diff"  # type: ignore[index]
 
 
 def test_capabilities_json_outputs_catalog() -> None:

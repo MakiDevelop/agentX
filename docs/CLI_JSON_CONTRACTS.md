@@ -33,6 +33,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx artifacts --json` | `agentx.artifacts.v1` | `artifacts` |
 | `agentx approvals --json` | `agentx.approvals.v1` | `approvals` |
 | `agentx traces --json` | `agentx.traces.v1` | `traces` |
+| `agentx diff --json` | `agentx.diff.v1` | `diff` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
@@ -95,9 +96,53 @@ Required stable keys:
 | `sessions` | object | Embedded `agentx.sessions.v1`. |
 | `approvals` | object | Embedded `agentx.approvals.v1` for `latest`. |
 | `traces` | object | Embedded `agentx.traces.v1` for `latest`. |
+| `diff` | object | Embedded `agentx.diff.v1` for current worktree diff, without patch text. |
 | `capabilities` | object | Embedded `agentx.capabilities.v1`. |
 | `verify_commands` | array of object | Detected verification argv lists without executing them. |
 | `next_commands` | array of string | Suggested follow-up commands for runners. |
+
+## Diff Payload
+
+`agentx diff [PATH] --json` emits `agentx.diff.v1`.
+
+This is a read-only git diff summary for review and commit runners. By default
+it reports unstaged worktree changes. `--staged` reports index changes.
+`--patch` is explicit opt-in and includes patch text capped by
+`--max-patch-chars`.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.diff.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `path` | string or null | Workspace-relative path filter, when provided. |
+| `staged` | boolean | Whether `--staged` / `git diff --cached` was used. |
+| `ok` | boolean | Whether git inspection completed successfully. |
+| `is_git_repo` | boolean | Whether the workspace is inside a git work tree. |
+| `dirty` | boolean or null | True when matching diff files exist; null outside git. |
+| `file_count` | integer | Number of files in `files`. |
+| `insertions` | integer | Sum of numeric inserted lines, excluding binary files. |
+| `deletions` | integer | Sum of numeric deleted lines, excluding binary files. |
+| `binary_count` | integer | Number of binary diff entries. |
+| `untracked_count` | integer | Number of untracked files added with `status="??"`; zero for `--staged`. |
+| `files` | array of object | Per-file diff summaries. |
+| `stat` | string | `git diff --stat --no-color` output. |
+| `patch_included` | boolean | True only when `--patch` was requested. |
+| `patch` | string or null | Patch text when included, otherwise null. |
+| `patch_truncated` | boolean | Whether patch text exceeded `--max-patch-chars`. |
+| `detail` | string | Empty string or git / runtime diagnostic text. |
+
+Each file object includes:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `status` | string | `git diff --name-status` status such as `M`, `A`, `D`, `R100`, or `??` for untracked files. |
+| `path` | string | Workspace-relative current path. |
+| `old_path` | string | Present for rename / copy entries. |
+| `added` | integer or null | Inserted lines; null for binary files. |
+| `deleted` | integer or null | Deleted lines; null for binary files. |
+| `binary` | boolean | Whether the diff entry is binary. |
 
 ## Artifacts Payload
 
