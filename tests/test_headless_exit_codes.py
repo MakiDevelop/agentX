@@ -179,6 +179,19 @@ def test_load_headless_prompt_blocks_workspace_escape(tmp_path: Path) -> None:
         raise AssertionError("prompt file outside workspace should fail")
 
 
+def test_resolve_headless_workspace_accepts_existing_directory(tmp_path: Path) -> None:
+    assert cli.resolve_headless_workspace(str(tmp_path)) == tmp_path.resolve()
+
+
+def test_resolve_headless_workspace_rejects_missing_directory(tmp_path: Path) -> None:
+    try:
+        cli.resolve_headless_workspace(str(tmp_path / "missing"))
+    except Exception as exc:
+        assert "workspace is not a directory" in str(exc)
+    else:
+        raise AssertionError("missing workspace should fail")
+
+
 def test_resolve_session_store_path_latest_and_name(tmp_path: Path) -> None:
     sessions = tmp_path / ".agentx" / "sessions"
     sessions.mkdir(parents=True)
@@ -311,6 +324,32 @@ def test_print_prompt_uses_prompt_file(tmp_path: Path, monkeypatch) -> None:  # 
     assert data["output"] == "ok"
 
 
+def test_print_prompt_workspace_option_controls_prompt_file_and_runner(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    prompt = tmp_path / "briefing.md"
+    prompt.write_text("PROMPT FROM WORKSPACE OPTION", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured["args"] = args
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        ["--workspace", str(tmp_path), "--prompt-file", "briefing.md", "--agent", "--output-format", "json"],
+    )
+
+    assert result.exit_code == 0
+    assert captured["args"][0] == "PROMPT FROM WORKSPACE OPTION"
+    assert captured["workspace_override"] == tmp_path.resolve()
+
+
 def test_print_prompt_uses_stdin(monkeypatch) -> None:  # noqa: ANN001
     runner = CliRunner()
     captured: dict[str, object] = {}
@@ -366,6 +405,7 @@ def test_print_prompt_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN0
     assert captured["resume_session"] == "latest"
     assert captured["suppress_trace"] is True
     assert captured["max_steps"] is None
+    assert captured["workspace_override"] is None
     assert captured["backend_override"] is None
     assert captured["base_url_override"] is None
     assert captured["model_override"] is None
@@ -403,6 +443,22 @@ def test_print_prompt_forwards_base_url_override(monkeypatch) -> None:  # noqa: 
 
     assert result.exit_code == 0
     assert captured["base_url_override"] == "http://127.0.0.1:8081"
+
+
+def test_print_prompt_forwards_workspace_override(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--cwd", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert captured["workspace_override"] == tmp_path.resolve()
 
 
 def test_print_prompt_forwards_model_override(monkeypatch) -> None:  # noqa: ANN001
@@ -589,6 +645,54 @@ def test_run_print_prompt_uses_base_url_override(monkeypatch) -> None:  # noqa: 
     assert seen_urls == ["http://127.0.0.1:8081"]
 
 
+def test_run_print_prompt_uses_workspace_override_and_project_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    from agentx.project_config import set_project_config
+
+    seen: list[tuple[Path, str]] = []
+    set_project_config(tmp_path, "model", "gemma4:e2b")
+
+    class FakeAgentLoop:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            self.session = SimpleNamespace(
+                message_count=1,
+                context_tokens_estimate=10,
+                error_history=[],
+                compaction_count=0,
+                model_turn_count=0,
+                tool_call_count=0,
+                reflection_count=0,
+                pending_verifies=set(),
+                tasks=[],
+                last_termination="final_success",
+                last_failing_tools=set(),
+            )
+
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+            return "ok"
+
+    def fake_build_runtime(settings, *args, **kwargs):  # noqa: ANN001
+        seen.append((settings.workspace, settings.model))
+        return object(), object(), object()
+
+    monkeypatch.setattr(cli, "build_runtime", fake_build_runtime)
+    monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
+
+    result = cli.run_print_prompt(
+        "demo",
+        namespace=None,
+        agent_mode=True,
+        workspace_override=tmp_path,
+        return_metadata=True,
+        suppress_trace=True,
+    )
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert seen == [(tmp_path.resolve(), "gemma4:e2b")]
+
+
 def test_run_print_prompt_uses_timeout_override(monkeypatch) -> None:  # noqa: ANN001
     seen_timeouts: list[float] = []
 
@@ -751,6 +855,7 @@ def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch)
     assert captured["resume_session"] == "latest"
     assert captured["max_steps"] == 3
     assert captured["plan_then_execute"] is False
+    assert captured["workspace_override"] is None
     assert captured["backend_override"] is None
     assert captured["base_url_override"] is None
     assert captured["model_override"] is None
@@ -804,6 +909,22 @@ def test_ask_forwards_base_url_override(monkeypatch) -> None:  # noqa: ANN001
 
     assert result.exit_code == 0
     assert captured["base_url_override"] == "http://127.0.0.1:8081"
+
+
+def test_ask_forwards_workspace_override(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["ask", "demo", "--workspace", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert captured["workspace_override"] == tmp_path.resolve()
 
 
 def test_ask_forwards_model_override(monkeypatch) -> None:  # noqa: ANN001

@@ -27,8 +27,8 @@ class Settings:
     workspace: Path
     learning_enabled: bool = True
 
-    def __init__(self) -> None:
-        workspace = Path(os.getenv("AGENTX_WORKSPACE", os.getcwd())).resolve()
+    def __init__(self, workspace: Path | None = None) -> None:
+        workspace = (workspace or Path(os.getenv("AGENTX_WORKSPACE", os.getcwd()))).resolve()
         config = load_project_config(workspace)
         auto_handoff = config.auto_handoff if config.auto_handoff is not None else True
         if "AGENTX_AUTO_HANDOFF" in os.environ:

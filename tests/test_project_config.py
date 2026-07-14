@@ -49,6 +49,16 @@ def test_settings_can_be_updated_without_reloading_env(tmp_path, monkeypatch):
     assert updated.workspace == tmp_path
 
 
+def test_settings_accepts_explicit_workspace(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENTX_WORKSPACE", str(tmp_path / "other"))
+    set_project_config(tmp_path, "model", "gemma4:e2b")
+
+    settings = Settings(workspace=tmp_path)
+
+    assert settings.workspace == tmp_path
+    assert settings.model == "gemma4:e2b"
+
+
 def test_settings_reads_context_limit_env(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENTX_WORKSPACE", str(tmp_path))
     monkeypatch.setenv("AGENTX_CONTEXT_LIMIT", "32768")

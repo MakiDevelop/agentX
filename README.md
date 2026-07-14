@@ -95,6 +95,7 @@ agentx -p "幫我看 repo" --agent --model gpt-oss:20b
 agentx -p "幫我看 repo" --agent --backend llama_cpp --model local-model
 agentx -p "幫我看 repo" --agent --base-url http://127.0.0.1:8081
 agentx -p "幫我看 repo" --agent --timeout 180
+agentx -p "幫我看 repo" --agent --workspace /path/to/repo
 ```
 
 外部傳入 prompt，類似 `claude -p`：
@@ -103,6 +104,7 @@ agentx -p "幫我看 repo" --agent --timeout 180
 agentx -p "只回一句話：你是什麼？"
 axp "只回一句話：你是什麼？"
 agentx --prompt-file briefing.md --agent --output-format json
+agentx --workspace /path/to/repo --prompt-file briefing.md --agent --output-format json
 cat briefing.md | agentx --stdin --agent --output-format json
 ```
 

@@ -999,6 +999,15 @@ def wants_json_output(json_output: bool, output_format: str | None) -> bool:
     return json_output or normalized == "json"
 
 
+def resolve_headless_workspace(workspace: str | None) -> Path | None:
+    if workspace is None:
+        return None
+    resolved = Path(workspace).expanduser().resolve()
+    if not resolved.is_dir():
+        raise typer.BadParameter(f"workspace is not a directory: {workspace}")
+    return resolved
+
+
 def load_headless_prompt(
     print_prompt: str | None,
     prompt_file: str | None,
@@ -1135,6 +1144,7 @@ def main(
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan thoroughly first, then seamlessly continue into execution in the same run (recommended for complex tasks)."),
     orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Run this headless task against a specific workspace directory."),
     backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
     base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL for this headless run."),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
@@ -1148,7 +1158,8 @@ def main(
     """Run local Ollama agent workflows."""
     if ctx.invoked_subcommand is not None:
         return
-    settings_for_prompt = Settings()
+    workspace_override = resolve_headless_workspace(workspace)
+    settings_for_prompt = Settings(workspace=workspace_override)
     prompt = load_headless_prompt(
         print_prompt,
         prompt_file,
@@ -1165,6 +1176,7 @@ def main(
         plan_mode=plan,
         plan_then_execute=plan_then_execute,
         orchestrate=orchestrate,
+        workspace_override=workspace_override,
         backend_override=backend,
         base_url_override=base_url,
         model_override=model,
@@ -1253,6 +1265,7 @@ def run_print_prompt(
     plan_mode: bool = False,
     plan_then_execute: bool = False,
     orchestrate: bool = False,
+    workspace_override: Path | None = None,
     backend_override: str | None = None,
     base_url_override: str | None = None,
     model_override: str | None = None,
@@ -1263,7 +1276,7 @@ def run_print_prompt(
     resume_session: str | None = None,
     max_steps: int | None = None,
 ) -> str | HeadlessRunResult:
-    settings = Settings()
+    settings = Settings(workspace=workspace_override)
     if base_url_override:
         settings = settings.with_updates(ollama_url=base_url_override)
     if model_override:
@@ -1549,6 +1562,7 @@ def write_handoff(
 def ask(
     prompt: str = typer.Argument(..., help="Task or question for agentX."),
     namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Run this headless task against a specific workspace directory."),
     backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
     base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL for this headless run."),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
@@ -1561,11 +1575,13 @@ def ask(
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
 ) -> None:
     structured_output = wants_json_output(json_output, output_format)
+    workspace_override = resolve_headless_workspace(workspace)
     output = run_print_prompt(
         prompt,
         namespace=namespace,
         agent_mode=True,
         plan_then_execute=plan_then_execute,
+        workspace_override=workspace_override,
         backend_override=backend,
         base_url_override=base_url,
         model_override=model,
