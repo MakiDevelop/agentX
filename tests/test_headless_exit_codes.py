@@ -1,3 +1,6 @@
+import json
+from types import SimpleNamespace
+
 from typer.testing import CliRunner
 
 from agentx import cli
@@ -69,3 +72,77 @@ def test_print_prompt_uses_structured_metadata(monkeypatch) -> None:  # noqa: AN
 
     assert result.exit_code == 1
     assert "文字看似完成" in result.output
+
+
+def test_headless_json_payload_includes_stats() -> None:
+    payload = cli.headless_json_payload(
+        cli.HeadlessRunResult(
+            output="完成",
+            termination="final_success",
+            stats={"message_count": 3, "error_count": 0},
+        ),
+        exit_code=0,
+    )
+
+    data = json.loads(payload)
+
+    assert data["output"] == "完成"
+    assert data["exit_code"] == 0
+    assert data["termination"] == "final_success"
+    assert data["failing_tools"] == []
+    assert data["stats"]["message_count"] == 3
+
+
+def test_headless_run_stats_summarizes_session_state() -> None:
+    session = SimpleNamespace(
+        message_count=9,
+        context_tokens_estimate=1234,
+        error_history=[object(), object()],
+        compaction_count=1,
+        pending_verifies={"src/a.py"},
+        tasks=[
+            {"status": "pending"},
+            {"status": "in_progress"},
+            {"status": "done"},
+            {"status": "blocked"},
+            {"status": "unknown"},
+        ],
+    )
+
+    stats = cli.headless_run_stats(session)  # type: ignore[arg-type]
+
+    assert stats["message_count"] == 9
+    assert stats["context_tokens_estimate"] == 1234
+    assert stats["error_count"] == 2
+    assert stats["compaction_count"] == 1
+    assert stats["pending_verifies"] == ["src/a.py"]
+    assert stats["task_counts"] == {
+        "pending": 1,
+        "in_progress": 1,
+        "done": 1,
+        "blocked": 1,
+    }
+
+
+def test_print_prompt_json_output_uses_structured_metadata(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(
+        cli,
+        "run_print_prompt",
+        lambda *args, **kwargs: cli.HeadlessRunResult(
+            output="文字看似完成",
+            termination="final_failed",
+            failing_tools=("run_tests",),
+            stats={"message_count": 7, "error_count": 1},
+        ),
+    )
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 1
+    assert data["output"] == "文字看似完成"
+    assert data["exit_code"] == 1
+    assert data["termination"] == "final_failed"
+    assert data["failing_tools"] == ["run_tests"]
+    assert data["stats"]["error_count"] == 1

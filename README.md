@@ -106,6 +106,16 @@ axp "只回一句話：你是什麼？"
 agentx -p "幫我列出這個 repo 的檔案" --agent
 ```
 
+需要給 CI、script 或其他 agent 讀取時，可輸出結構化 JSON：
+
+```bash
+agentx -p "幫我列出這個 repo 的檔案" --agent --json
+agentx ask "幫我列出這個 repo 的檔案" --json
+```
+
+JSON payload 會包含 `output`、`exit_code`、`termination`、`failing_tools` 與 `stats`。
+`stats` 目前包含 message count、粗估 context tokens、error count、compaction count、pending verifies 與 task counts。
+
 Headless exit code：
 
 - `0`：成功或一般回答

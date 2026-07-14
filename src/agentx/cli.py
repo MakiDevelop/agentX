@@ -5,7 +5,8 @@ import re
 import shlex
 import sys
 import threading
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -401,6 +402,12 @@ def print_tools(tools: ToolRegistry) -> None:
 
 def print_raw(text: object) -> None:
     console.print(ANSI_RE.sub("", str(text)), markup=False, highlight=False)
+
+
+def print_json_output(text: str) -> None:
+    sys.stdout.write(text)
+    sys.stdout.write("\n")
+    sys.stdout.flush()
 
 
 def print_delta(text: object) -> None:
@@ -939,6 +946,36 @@ class HeadlessRunResult:
     output: str
     termination: str = "unknown"
     failing_tools: tuple[str, ...] = ()
+    stats: dict[str, object] = field(default_factory=dict)
+
+
+def headless_run_stats(session: AgentSession) -> dict[str, object]:
+    tasks = getattr(session, "tasks", []) or []
+    task_counts = {
+        "pending": sum(1 for task in tasks if task.get("status") == "pending"),
+        "in_progress": sum(1 for task in tasks if task.get("status") == "in_progress"),
+        "done": sum(1 for task in tasks if task.get("status") == "done"),
+        "blocked": sum(1 for task in tasks if task.get("status") == "blocked"),
+    }
+    return {
+        "message_count": session.message_count,
+        "context_tokens_estimate": session.context_tokens_estimate,
+        "error_count": len(getattr(session, "error_history", [])),
+        "compaction_count": session.compaction_count,
+        "pending_verifies": sorted(getattr(session, "pending_verifies", set())),
+        "task_counts": task_counts,
+    }
+
+
+def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
+    payload = {
+        "output": result.output,
+        "exit_code": exit_code,
+        "termination": result.termination,
+        "failing_tools": list(result.failing_tools),
+        "stats": result.stats,
+    }
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def structured_headless_exit_code(
@@ -1026,6 +1063,7 @@ def main(
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan thoroughly first, then seamlessly continue into execution in the same run (recommended for complex tasks)."),
     orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for headless automation."),
 ) -> None:
     """Run local Ollama agent workflows."""
     if print_prompt is None:
@@ -1040,16 +1078,25 @@ def main(
         plan_then_execute=plan_then_execute,
         orchestrate=orchestrate,
         return_metadata=True,
+        suppress_trace=json_output,
     )
     if isinstance(output, HeadlessRunResult):
+        exit_code = headless_exit_code(
+            output.output,
+            termination=output.termination,
+            failing_tools=output.failing_tools,
+        )
+        if json_output:
+            print_json_output(headless_json_payload(output, exit_code))
+            raise typer.Exit(code=exit_code)
         print_raw(output.output)
         raise typer.Exit(
-            code=headless_exit_code(
-                output.output,
-                termination=output.termination,
-                failing_tools=output.failing_tools,
-            )
+            code=exit_code
         )
+    if json_output:
+        fallback_result = HeadlessRunResult(output=output)
+        print_json_output(headless_json_payload(fallback_result, headless_exit_code(output)))
+        raise typer.Exit(code=headless_exit_code(output))
     print_raw(output)
     raise typer.Exit(code=headless_exit_code(output))
 
@@ -1111,6 +1158,7 @@ def run_print_prompt(
     plan_then_execute: bool = False,
     orchestrate: bool = False,
     return_metadata: bool = False,
+    suppress_trace: bool = False,
 ) -> str | HeadlessRunResult:
     settings = Settings()
     project_config = load_project_config(settings.workspace)
@@ -1130,7 +1178,13 @@ def run_print_prompt(
 
     if orchestrate:
         from agentx.orchestrator import Orchestrator
-        orch = Orchestrator(settings=settings, llm=ollama, memory=memory, tools=tools, trace=print_trace)
+        orch = Orchestrator(
+            settings=settings,
+            llm=ollama,
+            memory=memory,
+            tools=tools,
+            trace=None if suppress_trace else print_trace,
+        )
         result = orch.run(prompt, namespace=namespace)
         if return_metadata:
             return HeadlessRunResult(output=result.summary, termination="final")
@@ -1178,6 +1232,7 @@ def run_print_prompt(
             namespace=namespace,
             system_prompt=system_prompt,
             compactor=compactor,
+            trace=None if suppress_trace else print_trace,
         )
         effective_plan_only = plan_mode or plan_then_execute
         output = agent_loop.run(agent_prompt, namespace=namespace, plan_only=effective_plan_only)
@@ -1186,6 +1241,7 @@ def run_print_prompt(
                 output=output,
                 termination=agent_loop.session.last_termination,
                 failing_tools=tuple(sorted(agent_loop.session.last_failing_tools)),
+                stats=headless_run_stats(agent_loop.session),
             )
         return output
     output = ollama.chat(
@@ -1343,6 +1399,7 @@ def ask(
     prompt: str = typer.Argument(..., help="Task or question for agentX."),
     namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for automation."),
 ) -> None:
     settings = Settings()
     if max_steps is not None:
@@ -1355,15 +1412,36 @@ def ask(
         approval_policy = ApprovalPolicy(mode)
     ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
     compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None
-    agent = AgentLoop(settings=settings, ollama=ollama, tools=tools, trace=print_trace, compactor=compactor, memory=memory)
+    agent = AgentLoop(
+        settings=settings,
+        ollama=ollama,
+        tools=tools,
+        trace=None if json_output else print_trace,
+        compactor=compactor,
+        memory=memory,
+    )
     output = agent.run(prompt, namespace=namespace)
+    exit_code = headless_exit_code(
+        output,
+        termination=agent.session.last_termination,
+        failing_tools=agent.session.last_failing_tools,
+    )
+    if json_output:
+        print_json_output(
+            headless_json_payload(
+                HeadlessRunResult(
+                    output=output,
+                    termination=agent.session.last_termination,
+                    failing_tools=tuple(sorted(agent.session.last_failing_tools)),
+                    stats=headless_run_stats(agent.session),
+                ),
+                exit_code,
+            )
+        )
+        raise typer.Exit(code=exit_code)
     print_raw(output)
     raise typer.Exit(
-        code=headless_exit_code(
-            output,
-            termination=agent.session.last_termination,
-            failing_tools=agent.session.last_failing_tools,
-        )
+        code=exit_code
     )
 
 
