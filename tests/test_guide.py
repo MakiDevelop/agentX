@@ -26,7 +26,11 @@ def test_guide_covers_three_modes_and_core_workflows() -> None:
     assert "/files" in workflows
     assert "/test" in workflows
     assert "/resume latest" in workflows
-    assert "/mode ask" in "\n".join(row[1] for row in WORKFLOW_ROWS)
+    workflow_rows = "\n".join(row[1] for row in WORKFLOW_ROWS)
+    assert "/mode ask" in workflow_rows
+    assert "--artifact-dir" in workflow_rows
+    assert "handoff-resume" in workflow_rows
+    assert "/transcript approvals latest --denied" in workflow_rows
 
 
 def test_mode_ask_alias_uses_agent_mode(tmp_path) -> None:

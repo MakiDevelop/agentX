@@ -223,6 +223,8 @@ WORKFLOW_ROWS = [
     ("工程驗證", "/git  →  /diff  →  /test  →  /review"),
     ("Docker 檢查", "/docker ps  →  /docker build  →  /docker up  →  /docker logs"),
     ("記憶交接", "/sessions  →  /resume latest  →  /handoff 完成與待辦"),
+    ("Headless bundle", "agentx -p \"任務\" --agent --artifact-dir .agentx/runs/latest --quiet  →  agentx handoff-resume .agentx/runs/latest --dry-run"),
+    ("Approval audit", "/sessions  →  /transcript approvals latest --denied  →  /transcript approvals SESSION"),
     ("提交收尾", "/review  →  /commit 中文訊息"),
 ]
 

@@ -54,6 +54,8 @@ uv run agentx shell
 /workflows
 ```
 
+它會列出理解 repo、小步修改、工程驗證、headless bundle/resume、approval audit 與提交收尾路徑。
+
 常見工程閉環：
 
 ```text
