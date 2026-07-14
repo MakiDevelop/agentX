@@ -23,7 +23,7 @@
 ## 下一步 / 接續點
 1. 實作/強化 fidelity probe（參考 ai-tetsu fidelity-question-bank + constitution）：定期驗證 agentX 是否仍遵守 AGENTX.md 原則。
 2. 將 rules layer（確定性 guardrail，如 ruff + no-legacy + AGENTX.md 一致性檢查）整合進開發流程 / CI / pre-commit。
-3. 讓 learning（如果 agentX 內部有學習機制）或自改進提案走 proposal → gate → 寫 AGENTX.md / handoff。
+3. learning / 自改進提案：已補 proposal status gate（proposed/under_review/approved/applied/rejected，applied 必須記 applied_to）；後續再補人工核准後寫 AGENTX.md / handoff 的操作面。
 4. 更新本檔（或本機 .agentx/handoff/NEXT_SESSION.md）當有新 RATIFIED 決策（從 Codex/Grok Build/Gemini council 或人類）。
 5. 借鏡 ai-tetsu：考慮在 .agentx/ 引入更明確的 episodes/ + proposals/ 子結構（md source-of-truth）。
 6. 測試 bootstrap 載入 AGENTX.md + handoff 的端到端（在 shell/ask 啟動時）。

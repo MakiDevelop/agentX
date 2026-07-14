@@ -10,6 +10,16 @@ from typing import Any
 from agentx.config import Settings
 
 
+PROPOSAL_STATUSES = ("proposed", "under_review", "approved", "applied", "rejected")
+PROPOSAL_STATUS_TRANSITIONS = {
+    "proposed": {"under_review", "approved", "rejected"},
+    "under_review": {"approved", "rejected"},
+    "approved": {"applied", "rejected"},
+    "applied": set(),
+    "rejected": set(),
+}
+
+
 @dataclass
 class LearningProposal:
     """A structured proposal for self-improvement / learning outcome."""
@@ -173,6 +183,8 @@ class LearningManager:
         """Update a proposal's status (e.g. after human review). For core applies, use with care per AGENTX.md protocol."""
         for p in self.index.get("proposals", []):
             if p["id"] == proposal_id:
+                current_status = str(p.get("status", "proposed"))
+                _validate_status_transition(current_status, new_status, applied_to)
                 p["status"] = new_status
                 self._save_index()
 
@@ -267,3 +279,17 @@ Only propose things that are generalizable and would have helped in this session
 def load_learning_manager(settings: Settings, memory: Any = None) -> LearningManager:
     enabled = getattr(settings, "learning_enabled", True)
     return LearningManager(settings, memory, enabled=enabled)
+
+
+def _validate_status_transition(
+    current_status: str,
+    new_status: str,
+    applied_to: list[str] | None = None,
+) -> None:
+    if new_status not in PROPOSAL_STATUSES:
+        raise ValueError(f"unknown proposal status: {new_status}")
+    allowed = PROPOSAL_STATUS_TRANSITIONS.get(current_status, set())
+    if new_status not in allowed:
+        raise ValueError(f"invalid proposal status transition: {current_status} -> {new_status}")
+    if new_status == "applied" and not applied_to:
+        raise ValueError("applied proposals must record applied_to")
