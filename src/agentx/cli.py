@@ -3624,7 +3624,7 @@ def shell(
             prompt,
             transcript=transcript,
             tools=tools,
-            print_tools=print_tools,
+            print_tools=print_tool_catalog,
         )
 
     register_handler("/tools", handle_tools)

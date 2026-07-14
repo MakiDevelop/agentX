@@ -830,12 +830,13 @@ def handle_tools(
     *,
     transcript: Any,
     tools: Any,
-    print_tools: Callable[[Any], None],
+    print_tools: Callable[[Any, str | None], None],
 ) -> None:
-    """List available tools (risk grouping stays in ``print_tools``)."""
+    """List or search available tools (risk grouping stays in ``print_tools``)."""
     _ = state
     transcript.write("slash_command", {"command": prompt})
-    print_tools(tools)
+    query = prompt.removeprefix("/tools").strip() or None
+    print_tools(tools, query)
 
 
 def handle_context(

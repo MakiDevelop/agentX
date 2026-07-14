@@ -15,7 +15,7 @@ COMMAND_CATALOG: list[CommandCatalogItem] = [
     {"usage": "/doctor", "description": "檢查 Ollama、模型、Memory Hall、git、uv 狀態", "examples": ["/doctor"], "related": ["/status", "/config", "/tools"]},
     {"usage": "/config", "description": "顯示目前 agentX 設定", "examples": ["/config", "/config set mode agent"], "related": ["/doctor", "/status", "/model"], "risk": "YELLOW - set 會寫入 .agentx/config.toml"},
     {"usage": "/config set KEY VALUE", "description": "寫入 .agentx/config.toml", "examples": ["/config", "/config set mode agent"], "related": ["/doctor", "/status", "/model"], "risk": "YELLOW - set 會寫入 .agentx/config.toml"},
-    {"usage": "/tools", "description": "列出可用工具（已依 GREEN/YELLOW/RED 風險分組，符合安全視覺化）", "examples": ["/tools"], "related": ["/approval", "/run", "/help"]},
+    {"usage": "/tools [QUERY]", "description": "列出或搜尋可用工具；QUERY 支援 keyword 或 GREEN/YELLOW/RED 風險分組", "examples": ["/tools", "/tools git", "/tools YELLOW"], "related": ["/approval", "/run", "/help"]},
     {"usage": "/context", "description": "顯示目前 agent 上下文使用量與壓縮次數", "examples": ["/context"], "related": ["/compact", "/status", "/clear"]},
     {"usage": "/compact", "description": "壓縮目前 agent session 上下文，保留最近訊息摘要", "examples": ["/compact"], "related": ["/context", "/status", "/clear"]},
     {"usage": "/history", "description": "顯示本輪 shell 的簡短互動紀錄", "examples": ["/history"], "related": ["/sessions", "/transcript", "/handoff"]},

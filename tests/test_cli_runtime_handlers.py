@@ -1413,18 +1413,36 @@ def test_handle_tools_passes_tools_registry(tmp_path: Path) -> None:
     state = _state(tmp_path)
     transcript = FakeTranscript()
     tools = object()
-    seen: list[Any] = []
+    seen: list[tuple[Any, str | None]] = []
 
     handle_tools(
         state,
         "/tools",
         transcript=transcript,
         tools=tools,
-        print_tools=lambda t: seen.append(t),
+        print_tools=lambda t, query: seen.append((t, query)),
     )
 
     assert transcript.events == [("slash_command", {"command": "/tools"})]
-    assert seen == [tools]
+    assert seen == [(tools, None)]
+
+
+def test_handle_tools_passes_query(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    transcript = FakeTranscript()
+    tools = object()
+    seen: list[tuple[Any, str | None]] = []
+
+    handle_tools(
+        state,
+        "/tools YELLOW",
+        transcript=transcript,
+        tools=tools,
+        print_tools=lambda t, query: seen.append((t, query)),
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/tools YELLOW"})]
+    assert seen == [(tools, "YELLOW")]
 
 
 def test_handle_context_passes_session_and_messages(tmp_path: Path) -> None:
