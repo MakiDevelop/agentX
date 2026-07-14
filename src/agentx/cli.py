@@ -145,6 +145,7 @@ SLASH_COMMANDS = [
     ("/diff [PATH]", "顯示 git diff，可指定單一檔案"),
     ("/stage PATH...", "逐檔 stage 指定檔案；拒絕 .、glob、目錄與 workspace 外路徑"),
     ("/unstage PATH...", "逐檔 unstage 指定檔案，保留 worktree 修改"),
+    ("/push", "推送目前 branch 到既有 upstream；不接受參數"),
     ("/apply PATCH_FILE", "套用 workspace 內 patch 檔，會先要求 approval"),
     ("/approval [ask|auto|off|strict|auto-approve|deny]", "查看或切換 YELLOW 工具 approval policy"),
     ("/memory QUERY", "查詢目前 namespace 的 Memory Hall 記憶"),
@@ -237,7 +238,7 @@ def print_slash_help() -> None:
             "/files", "/read", "/find", "/grep", "/search", "/attach", "/fetch",
         ]),
         ("Git 與變更", [
-            "/git", "/diff", "/stage", "/unstage", "/apply", "/commit",
+            "/git", "/diff", "/stage", "/unstage", "/push", "/apply", "/commit",
         ]),
         ("記憶與交接 (Memory Hall)", [
             "/memory", "/remember", "/handoff", "/resume", "/sessions", "/transcript",
@@ -1829,6 +1830,17 @@ def shell(
         )
 
     register_handler("/unstage", handle_unstage)
+
+    def handle_push(state: ShellState, prompt: str):
+        """推送目前 branch — delegates to runtime handler."""
+        _runtime_handlers.handle_push(
+            prompt,
+            tools=tools,
+            transcript=transcript,
+            emit=print_tool_result,
+        )
+
+    register_handler("/push", handle_push)
 
     def handle_apply(state: ShellState, prompt: str):
         """套用 patch 檔案（YELLOW 工具，會經過 approval gate）"""

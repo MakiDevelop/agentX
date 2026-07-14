@@ -3,7 +3,7 @@
 These implement the real interactive-shell logic for a small set of
 commands (``/plan``, ``/execute``, ``/mode``, plus read-only tool-backed
 ``/files``, ``/read``, ``/find``, ``/grep``, ``/search``, ``/git``, ``/diff``,
-YELLOW git index handlers ``/stage`` and ``/unstage``, low-risk
+YELLOW git handlers ``/stage``, ``/unstage`` and ``/push``, low-risk
 tool-backed ``/memory``, ``/fetch``, ``/run``, ``/test``, low-risk
 inspection handlers ``/status``, ``/sessions``, ``/jobs``, the read-only
 ``/task`` empty/status/list branch, and pure info/display handlers
@@ -402,6 +402,31 @@ def handle_unstage(
         emit=emit,
         fail_prefix="unstage failed: ",
         transcript_extra={"paths": paths},
+    )
+
+
+def handle_push(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Push current branch to its configured upstream; no args are supported."""
+    raw = prompt.removeprefix("/push").strip()
+    if raw:
+        content = "usage: /push (no arguments; force/refspec/upstream setup is not supported)"
+        transcript.write("tool", {"command": "/push", "ok": False, "content": content})
+        emit(f"push failed: {content}")
+        return
+    _run_tool_slash(
+        command="/push",
+        tool_name="git_push",
+        tool_args={},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="push failed: ",
     )
 
 

@@ -264,6 +264,7 @@ def test_core_slash_commands_remain_declared() -> None:
         "/compact",
         "/git",
         "/diff",
+        "/push",
         "/apply",
         "/approval",
         "/run",

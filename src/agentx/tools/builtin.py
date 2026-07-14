@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from agentx.git_workflow import stage_paths, unstage_paths
+from agentx.git_workflow import GitPushError, push_current_branch, stage_paths, unstage_paths
 from agentx.memory_hall import MemoryHallClient
 from agentx.protocol import Tool
 from agentx.safety import Risk
@@ -423,6 +423,21 @@ class GitUnstageTool(_WorkspaceTool):
 
     def run(self, args: dict[str, Any]) -> str:
         return unstage_paths(self.workspace, _coerce_git_paths(args))
+
+
+class GitPushTool(_WorkspaceTool):
+    name = "git_push"
+    description = "推送目前 branch 到既有 upstream；不接受 refspec、force 或 -u"
+    risk = Risk.YELLOW
+    signature = ""
+
+    def run(self, args: dict[str, Any]) -> str:
+        if args:
+            raise ValueError("git_push does not accept arguments")
+        output = push_current_branch(self.workspace)
+        if "push aborted:" in output:
+            raise GitPushError(output)
+        return output
 
 
 def _coerce_git_paths(args: dict[str, Any]) -> list[str]:
@@ -874,6 +889,7 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
         GitDiffTool(workspace),
         GitStageTool(workspace),
         GitUnstageTool(workspace),
+        GitPushTool(workspace),
         MemorySearchTool(memory),
         MemoryWriteTool(memory),
         MemoryTierUpgradeTool(memory),

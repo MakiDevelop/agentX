@@ -16,6 +16,10 @@ class GitPathError(ValueError):
     """Raised when a git path operation would be too broad or unsafe."""
 
 
+class GitPushError(ValueError):
+    """Raised when a git push operation is outside the supported safe path."""
+
+
 def build_commit_plan(workspace: Path) -> GitCommitPlan:
     status = _git(workspace, ["status", "--short", "--branch"]).stdout
     diff_stat = _git(workspace, ["diff", "--stat"]).stdout
@@ -75,6 +79,24 @@ def unstage_paths(workspace: Path, paths: list[str]) -> str:
         if result.returncode != 0:
             break
     return "\n\n".join(outputs)
+
+
+def push_current_branch(workspace: Path) -> str:
+    upstream = _git(
+        workspace,
+        ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+        check=False,
+    )
+    if upstream.returncode != 0:
+        return (
+            "$ git rev-parse --abbrev-ref --symbolic-full-name @{u}\n"
+            f"exit={upstream.returncode}\n"
+            "push aborted: current branch has no upstream. "
+            "Configure upstream manually before using /push."
+        )
+
+    push = _git(workspace, ["push"], check=False)
+    return _format_result(["git", "push"], push)
 
 
 def _validate_git_paths(workspace: Path, paths: list[str]) -> list[str]:

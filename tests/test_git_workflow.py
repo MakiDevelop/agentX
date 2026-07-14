@@ -2,7 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from agentx.git_workflow import GitPathError, parse_status_files, stage_paths, unstage_paths
+from agentx.git_workflow import (
+    GitPathError,
+    parse_status_files,
+    push_current_branch,
+    stage_paths,
+    unstage_paths,
+)
 
 
 class FakeMemory:
@@ -100,6 +106,37 @@ def test_stage_validates_all_paths_before_staging(tmp_path: Path) -> None:
     assert _git(tmp_path, "status", "--short") == "?? safe.py\n"
 
 
+def test_push_current_branch_requires_existing_upstream(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+
+    output = push_current_branch(tmp_path)
+
+    assert "push aborted" in output
+    assert "no upstream" in output
+    assert "$ git push" not in output
+
+
+def test_push_current_branch_uses_plain_git_push_with_upstream(tmp_path: Path) -> None:
+    remote = tmp_path / "remote.git"
+    local = tmp_path / "local"
+    local.mkdir()
+    _git(remote.parent, "init", "--bare", remote.name)
+    _init_repo(local)
+    _git(local, "remote", "add", "origin", str(remote))
+    _git(local, "push", "-u", "origin", "HEAD")
+
+    target = local / "README.md"
+    target.write_text("hello\n", encoding="utf-8")
+    _git(local, "add", "--", "README.md")
+    _git(local, "commit", "-m", "add readme")
+
+    output = push_current_branch(local)
+
+    assert "$ git push" in output
+    assert "git push -u" not in output
+    assert "exit=0" in output
+
+
 def test_git_readonly_tools_show_branch_log_and_revision(tmp_path: Path) -> None:
     from agentx.tools import ToolRegistry, builtin_tools
 
@@ -127,3 +164,16 @@ def test_git_readonly_tools_show_branch_log_and_revision(tmp_path: Path) -> None
     rejected = registry.run("git_show", {"rev": "--hard"})
     assert not rejected.ok
     assert "unsupported git revision" in rejected.content
+
+
+def test_git_push_tool_is_registered_and_requires_upstream(tmp_path: Path) -> None:
+    from agentx.tools import ToolRegistry, builtin_tools
+
+    _init_repo(tmp_path)
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    result = registry.run("git_push", {})
+
+    assert not result.ok
+    assert "push aborted" in result.content
+    assert "$ git push" not in result.content

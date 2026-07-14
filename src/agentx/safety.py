@@ -36,6 +36,7 @@ YELLOW_TOOLS = {
     "memory_write",
     "git_stage",
     "git_unstage",
+    "git_push",
 }
 
 RED_COMMAND_PATTERNS = (

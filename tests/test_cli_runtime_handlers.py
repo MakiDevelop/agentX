@@ -2,7 +2,8 @@
 
 These tests exercise ``agentx.cli_runtime_handlers`` — the real interactive
 logic for /plan, /execute, /mode, /files, /read, /find, /grep, /search, /git, /diff,
-low-risk tool-backed /memory, /fetch, /run, /test, low-risk inspection
+low-risk git handlers /stage, /unstage, /push, tool-backed /memory, /fetch, /run, /test,
+low-risk inspection
 handlers /status, /sessions, /jobs, /task readonly, and pure info/display
 handlers /help, /guide, /workflows, /tools, /context, /history,
 /transcript — not the simplified ``cli_slash_shims``.
@@ -32,6 +33,7 @@ from agentx.cli_runtime_handlers import (
     handle_memory,
     handle_mode,
     handle_plan,
+    handle_push,
     handle_read,
     handle_run,
     handle_search,
@@ -607,6 +609,37 @@ def test_handle_unstage_dispatches_paths_and_failure_prefix() -> None:
                 "paths": ["."],
                 "ok": False,
                 "content": "broad git path",
+            },
+        )
+    ]
+
+
+def test_handle_push_dispatches_without_args_and_rejects_args() -> None:
+    tools = FakeTools(ToolResult(tool="git_push", ok=True, content="$ git push\nexit=0"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_push("/push", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("git_push", {})]
+    assert lines == ["$ git push\nexit=0"]
+    assert transcript.events == [
+        ("tool", {"command": "/push", "ok": True, "content": "$ git push\nexit=0"})
+    ]
+
+    bad_transcript = FakeTranscript()
+    bad_lines, bad_emit = _capture()
+    handle_push("/push --force", tools=tools, transcript=bad_transcript, emit=bad_emit)
+
+    assert tools.calls == [("git_push", {})]
+    assert "usage: /push" in bad_lines[0]
+    assert bad_transcript.events == [
+        (
+            "tool",
+            {
+                "command": "/push",
+                "ok": False,
+                "content": "usage: /push (no arguments; force/refspec/upstream setup is not supported)",
             },
         )
     ]

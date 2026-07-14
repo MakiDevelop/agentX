@@ -10,6 +10,12 @@ def test_memory_write_is_yellow() -> None:
     assert classify_tool("memory_write") == Risk.YELLOW
 
 
+def test_git_push_tool_is_yellow_but_force_push_command_is_red() -> None:
+    assert classify_tool("git_push") == Risk.YELLOW
+    assert classify_command("git push --force") == Risk.RED
+    assert classify_command("git push -f") == Risk.RED
+
+
 def test_run_command_is_green_but_allowlisted_in_tool_layer() -> None:
     assert classify_tool("run_command") == Risk.GREEN
 
