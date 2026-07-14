@@ -106,6 +106,13 @@ axp "只回一句話：你是什麼？"
 agentx -p "幫我列出這個 repo 的檔案" --agent
 ```
 
+複雜任務可先規劃再執行；`--plan-then-execute` 會在同一個 headless session 內先跑 plan-only，再切到 execution：
+
+```bash
+agentx -p "重構 headless session resume" --agent --plan-then-execute
+agentx ask "重構 headless session resume" --plan-then-execute
+```
+
 需要給 CI、script 或其他 agent 讀取時，可輸出結構化 JSON：
 
 ```bash

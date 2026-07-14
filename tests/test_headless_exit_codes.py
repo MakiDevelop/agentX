@@ -224,6 +224,53 @@ def test_print_prompt_forwards_max_steps(monkeypatch) -> None:  # noqa: ANN001
     assert "ok" in result.output
 
 
+def test_run_print_prompt_plan_then_execute_runs_two_phases(monkeypatch) -> None:  # noqa: ANN001
+    calls: list[tuple[str, bool | None]] = []
+
+    class FakeAgentLoop:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            self.session = SimpleNamespace(
+                message_count=5,
+                context_tokens_estimate=100,
+                error_history=[],
+                compaction_count=0,
+                model_turn_count=2,
+                tool_call_count=1,
+                reflection_count=1,
+                pending_verifies=set(),
+                tasks=[],
+                last_termination="final_success",
+                last_failing_tools=set(),
+            )
+
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+            calls.append((prompt, plan_only))
+            if plan_only:
+                return "PLAN_RESULT"
+            return "EXECUTION_RESULT"
+
+    monkeypatch.setattr(cli, "build_runtime", lambda *args, **kwargs: (object(), object(), object()))
+    monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
+
+    result = cli.run_print_prompt(
+        "demo task",
+        namespace="project:test",
+        agent_mode=True,
+        plan_then_execute=True,
+        return_metadata=True,
+        suppress_trace=True,
+    )
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert result.output == "## Plan\nPLAN_RESULT\n\n## Execution\nEXECUTION_RESULT"
+    assert result.termination == "final_success"
+    assert calls[0][1] is True
+    assert "純 PLAN MODE" in calls[0][0]
+    assert calls[1][1] is False
+    assert "EXECUTE MODE" in calls[1][0]
+    assert "PLAN_RESULT" in calls[1][0]
+
+
 def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN001
     runner = CliRunner()
     captured: dict[str, object] = {}
@@ -249,4 +296,21 @@ def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch)
     assert captured["save_session"] is True
     assert captured["resume_session"] == "latest"
     assert captured["max_steps"] == 3
+    assert captured["plan_then_execute"] is False
     assert data["session_path"] == "/tmp/s.session.jsonl"
+
+
+def test_ask_forwards_plan_then_execute(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["ask", "demo", "--plan-then-execute"])
+
+    assert result.exit_code == 0
+    assert captured["plan_then_execute"] is True

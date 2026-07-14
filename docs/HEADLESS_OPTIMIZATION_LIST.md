@@ -46,6 +46,12 @@
 - Context 管理優化
 - 效能與 token 使用優化
 
+**Progress Update (Headless Plan-then-Execute, 2026-07)**：
+- [x] `agentx -p ... --agent --plan-then-execute` 會在同一個 `AgentSession` 內先跑 plan-only，再切換為 execution mode。
+- [x] `agentx ask ... --plan-then-execute` 走同一套 two-phase headless runner。
+- [x] 輸出會分成 `## Plan` 與 `## Execution`，方便人或上游 agent 判讀。
+- [x] 修正舊行為：不再把 `plan_then_execute` 當成整輪 `plan_only`，避免永遠不能執行工具。
+
 **Progress Update (Headless JSON Observability, 2026-07)**：
 - [x] `agentx -p ... --json` 與 `agentx ask ... --json` 可輸出機器可讀 payload。
 - Payload 包含 `output`、`exit_code`、`termination`、`failing_tools`、`stats`。

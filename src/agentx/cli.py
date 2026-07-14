@@ -1245,32 +1245,15 @@ def run_print_prompt(
         system_prompt = build_headless_agent_system_prompt(settings.persona, task_summary, model=settings.model)
 
         agent_prompt = prompt
-        if plan_mode or plan_then_execute:
-            # Headless planning (pure plan or plan-then-execute)
-            if plan_then_execute:
-                agent_prompt = (
-                    "你目前處於 PLAN-THEN-EXECUTE 模式（Headless）。\n"
-                    "請先進行**完整、深入、高品質的結構化規劃**，並進行認真 Reflection。\n\n"
-                    "當你認為規劃已經足夠好且風險可控時：\n"
-                    "1. 先輸出一個結構化的 final answer，清楚描述完整方案（目標、步驟、風險、驗證方式）。\n"
-                    "2. 然後**立即開始執行**，使用工具逐步實現規劃。\n\n"
-                    "規劃格式建議：\n"
-                    "1. 目標（Goal）\n"
-                    "2. 執行步驟（編號清楚，每步可驗證）\n"
-                    "3. 每個步驟預計工具\n"
-                    "4. 風險與注意事項\n"
-                    "5. 驗證方式\n\n"
-                    "使用者任務："
-                ) + prompt
-            else:
-                # Pure plan mode
-                agent_prompt = (
-                    "你目前處於純 PLAN MODE（Headless）。\n"
-                    "這次你只需要產生高品質規劃，**不要使用任何工具**。\n\n"
-                    "請先進行完整規劃與認真 Reflection，然後在 final answer 中輸出結構化方案。\n"
-                    "規劃完成後不要繼續執行。\n\n"
-                    "使用者任務："
-                ) + prompt
+        plan_prompt = (
+            "你目前處於純 PLAN MODE（Headless）。\n"
+            "這次你只需要產生高品質規劃，**不要使用任何工具**。\n\n"
+            "請先進行完整規劃與認真 Reflection，然後在 final answer 中輸出結構化方案。\n"
+            "規劃完成後不要繼續執行。\n\n"
+            "使用者任務："
+        ) + prompt
+        if plan_mode:
+            agent_prompt = plan_prompt
 
         compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None
         if resume_session:
@@ -1308,8 +1291,19 @@ def run_print_prompt(
         if save_session and not getattr(agent_loop.session, "_session_store", None):
             agent_loop.session.enable_persistence(settings.workspace)
             session_path = agent_loop.session._session_store.path if agent_loop.session._session_store else session_path
-        effective_plan_only = plan_mode or plan_then_execute
-        output = agent_loop.run(agent_prompt, namespace=namespace, plan_only=effective_plan_only)
+        if plan_then_execute:
+            plan_output = agent_loop.run(plan_prompt, namespace=namespace, plan_only=True)
+            execute_prompt = (
+                "你已經完成上一步 headless planning。現在切換到 EXECUTE MODE。\n"
+                "請依照已產出的方案執行使用者任務；必要時使用工具，小步實作並驗證。\n"
+                "不要重新輸出完整計畫，直接從下一個可驗證行動開始。\n\n"
+                f"上一階段計畫：\n{plan_output}\n\n"
+                f"使用者原始任務：{prompt}"
+            )
+            execute_output = agent_loop.run(execute_prompt, namespace=namespace, plan_only=False)
+            output = f"## Plan\n{plan_output}\n\n## Execution\n{execute_output}"
+        else:
+            output = agent_loop.run(agent_prompt, namespace=namespace, plan_only=plan_mode)
         active_store = getattr(agent_loop.session, "_session_store", None)
         if active_store is not None:
             session_path = active_store.path
@@ -1477,6 +1471,7 @@ def ask(
     prompt: str = typer.Argument(..., help="Task or question for agentX."),
     namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
+    plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan first, then execute in the same headless run."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for automation."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
@@ -1485,6 +1480,7 @@ def ask(
         prompt,
         namespace=namespace,
         agent_mode=True,
+        plan_then_execute=plan_then_execute,
         return_metadata=True,
         suppress_trace=json_output,
         save_session=save_session,
