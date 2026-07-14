@@ -3,7 +3,7 @@ import subprocess
 
 from typer.testing import CliRunner
 
-from agentx.cli import app, doctor_payload_from_checks
+from agentx.cli import app, doctor_exit_code, doctor_payload_from_checks
 from agentx.config import Settings
 
 
@@ -33,6 +33,17 @@ def test_doctor_payload_from_checks_aggregates_ok(tmp_path) -> None:  # noqa: AN
     ]
 
 
+def test_doctor_exit_code_is_opt_in(tmp_path) -> None:  # noqa: ANN001
+    payload = doctor_payload_from_checks(
+        [("git", False, "not a git repository")],
+        settings=Settings(workspace=tmp_path),
+        live_probes=False,
+    )
+
+    assert doctor_exit_code(payload, fail_on_error=False) == 0
+    assert doctor_exit_code(payload, fail_on_error=True) == 1
+
+
 def test_doctor_static_json_outputs_local_checks(tmp_path) -> None:  # noqa: ANN001
     _git_init(tmp_path)
 
@@ -46,6 +57,20 @@ def test_doctor_static_json_outputs_local_checks(tmp_path) -> None:  # noqa: ANN
     assert payload["ok"] is True
     names = {check["name"] for check in payload["checks"]}
     assert names == {"uv", "git", "task_migration (MT22)"}
+
+
+def test_doctor_static_fail_on_error_exits_one_but_prints_payload(tmp_path) -> None:  # noqa: ANN001
+    result = CliRunner().invoke(
+        app,
+        ["doctor", "--workspace", str(tmp_path), "--static", "--json", "--fail-on-error"],
+    )
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output)
+    assert payload["schema"] == "agentx.doctor.v1"
+    assert payload["ok"] is False
+    git_check = next(check for check in payload["checks"] if check["name"] == "git")
+    assert git_check["ok"] is False
 
 
 def test_doctor_static_jsonl_outputs_event_envelope(tmp_path) -> None:  # noqa: ANN001

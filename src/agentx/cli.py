@@ -1210,6 +1210,12 @@ def print_doctor_payload(
     console.print(table)
 
 
+def doctor_exit_code(payload: dict[str, object], *, fail_on_error: bool = False) -> int:
+    if not fail_on_error:
+        return 0
+    return 0 if payload.get("ok") is True else 1
+
+
 def _collect_aca_probe_info(
     settings: Settings, memory: "MemoryHallClient | None"
 ) -> dict:
@@ -3496,6 +3502,7 @@ def status_command(
 def doctor_command(
     workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for doctor checks."),
     static: bool = typer.Option(False, "--static", help="Run only local static checks; skip Ollama and memory probes."),
+    fail_on_error: bool = typer.Option(False, "--fail-on-error", help="Exit 1 when any doctor check fails."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
@@ -3527,6 +3534,7 @@ def doctor_command(
             ollama.close()
     structured_format = structured_output_format(json_output, output_format)
     print_doctor_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=doctor_exit_code(payload, fail_on_error=fail_on_error))
 
 
 @app.command("models")

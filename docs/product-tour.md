@@ -44,7 +44,7 @@ uv run agentx shell
 
 外部 wrapper 可用 `agentx config --json` 取得目前 workspace、model、memory backend、approval、persona 等解析後設定；token 只會顯示 set/missing。
 需要判斷當前 workspace 姿態時，用 `agentx status --json` 取得 version、runtime、git dirty/ahead/behind 與 task counts；這是本機 read-only 狀態檢查，不探測網路服務。
-需要健康檢查時，用 `agentx doctor --json` 取得 `agentx.doctor.v1`；CI 或上游 agent 可用 `agentx doctor --static --json` 只跑本機 `uv`、git、task migration 檢查。
+需要健康檢查時，用 `agentx doctor --json` 取得 `agentx.doctor.v1`；CI 或上游 agent 可用 `agentx doctor --static --json --fail-on-error` 只跑本機 `uv`、git、task migration 檢查，失敗時用 exit code 擋下流程。
 
 用 `/tools` 看工具與風險分級：
 
