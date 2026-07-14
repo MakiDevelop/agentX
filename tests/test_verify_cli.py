@@ -43,6 +43,9 @@ def test_verify_payload_runs_until_first_failure(tmp_path, monkeypatch) -> None:
         ["uv", "run", "ruff", "check", "."],
         ["uv", "run", "pytest", "-q"],
     ]
+    assert payload["recommended_command"] == "fix verification failures, then rerun agentx verify --json --fail-on-error"
+    assert payload["recommended_kind"] == "fix_verify"
+    assert payload["recommended_risk"] == "UNKNOWN"
     assert payload["checks"][0]["ok"] is True  # type: ignore[index]
     assert payload["checks"][1]["exit_code"] == 1  # type: ignore[index]
 
@@ -52,6 +55,8 @@ def test_verify_payload_reports_no_detected_commands(tmp_path) -> None:  # noqa:
 
     assert payload["ok"] is False
     assert payload["count"] == 1
+    assert payload["recommended_kind"] == "fix_verify"
+    assert payload["recommended_risk"] == "UNKNOWN"
     assert payload["checks"][0]["command"] == ""  # type: ignore[index]
     assert "no default verification commands" in payload["checks"][0]["output"]  # type: ignore[index]
 
@@ -71,6 +76,9 @@ def test_verify_json_outputs_payload(tmp_path, monkeypatch) -> None:  # noqa: AN
     assert payload["schema"] == "agentx.verify.v1"
     assert payload["ok"] is True
     assert payload["count"] == 2
+    assert payload["recommended_command"] == "agentx review --json"
+    assert payload["recommended_kind"] == "review"
+    assert payload["recommended_risk"] == "GREEN"
     assert payload["checks"][0]["command"] == "uv run ruff check ."
 
 

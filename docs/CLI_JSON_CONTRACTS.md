@@ -731,6 +731,9 @@ Required stable keys:
 | `workspace` | string | Resolved workspace path. |
 | `generated_at` | string | Local ISO timestamp. |
 | `ok` | boolean | True only when every detected verification command passed. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. Passing verification recommends `agentx review --json`; failures recommend fixing verification blockers and rerunning verify. |
+| `recommended_kind` | string | `review` when checks pass, otherwise `fix_verify`. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
 | `count` | integer | Number of emitted check records. |
 | `checks` | array of object | Per-command verification results. |
 

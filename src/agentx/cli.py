@@ -2883,11 +2883,22 @@ def verify_payload_from_checks(
     settings: Settings,
 ) -> dict[str, object]:
     ok = bool(checks) and all(bool(check.get("ok")) for check in checks)
+    if ok:
+        recommended_command = "agentx review --json"
+        recommended_kind = "review"
+        recommended_risk = "GREEN"
+    else:
+        recommended_command = "fix verification failures, then rerun agentx verify --json --fail-on-error"
+        recommended_kind = "fix_verify"
+        recommended_risk = "UNKNOWN"
     return {
         "schema": "agentx.verify.v1",
         "workspace": str(settings.workspace),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "ok": ok,
+        "recommended_command": recommended_command,
+        "recommended_kind": recommended_kind,
+        "recommended_risk": recommended_risk,
         "count": len(checks),
         "checks": checks,
     }
@@ -3470,7 +3481,10 @@ def print_verify_payload(
             "yes" if row.get("ok") is True else "no",
         )
     console.print(table)
-    console.print(f"[dim]ok={payload['ok']} count={payload['count']}[/dim]")
+    console.print(
+        f"[dim]ok={payload['ok']} count={payload['count']} "
+        f"recommended={payload.get('recommended_command') or '-'}[/dim]"
+    )
 
 
 def inspect_payload(
