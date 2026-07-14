@@ -2,7 +2,7 @@
 
 These implement the real interactive-shell logic for a small set of
 commands (``/plan``, ``/execute``, ``/mode``, plus read-only tool-backed
-``/files``, ``/read``, ``/search``, ``/git``, ``/diff``, low-risk
+``/files``, ``/read``, ``/find``, ``/search``, ``/git``, ``/diff``, low-risk
 tool-backed ``/memory``, ``/fetch``, ``/run``, ``/test``, low-risk
 inspection handlers ``/status``, ``/sessions``, ``/jobs``, the read-only
 ``/task`` empty/status/list branch, and pure info/display handlers
@@ -203,6 +203,27 @@ def handle_search(
         transcript=transcript,
         emit=emit,
         fail_prefix="搜尋失敗：",
+    )
+
+
+def handle_find(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Find relevant files by path/name and content keyword."""
+    keyword = prompt.removeprefix("/find ").strip()
+    _run_tool_slash(
+        command="/find",
+        tool_name="find_files",
+        tool_args={"keyword": keyword},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="檢索失敗：",
+        transcript_extra={"keyword": keyword},
     )
 
 

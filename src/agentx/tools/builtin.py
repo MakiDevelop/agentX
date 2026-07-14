@@ -221,6 +221,119 @@ class SearchTextTool(_WorkspaceTool):
         return "\n".join(output.splitlines()[:limit])
 
 
+class FindFilesTool(_WorkspaceTool):
+    name = "find_files"
+    description = "依 keyword 同時搜尋 workspace 檔名/路徑與內容，輸出分組結果與 /read 建議"
+    risk = Risk.GREEN
+    signature = 'keyword, path=".", path_limit=20, content_limit=50, read_limit=5'
+
+    def run(self, args: dict[str, Any]) -> str:
+        keyword = str(args.get("keyword", "")).strip()
+        if not keyword:
+            raise ValueError("keyword is required")
+
+        path = args.get("path", ".")
+        path_limit = max(1, min(int(args.get("path_limit", 20)), 100))
+        content_limit = max(1, min(int(args.get("content_limit", 50)), 200))
+        read_limit = max(1, min(int(args.get("read_limit", 5)), 20))
+        root = resolve_inside_workspace(self.workspace, path)
+        if not root.exists():
+            raise FileNotFoundError(path)
+
+        path_matches = self._path_matches(root, keyword, path_limit)
+        content_matches = self._content_matches(root, keyword, content_limit)
+        read_suggestions = self._read_suggestions(path_matches, content_matches, read_limit)
+
+        if not path_matches and not content_matches:
+            return f"No matches for {keyword!r} under {Path(path).as_posix() or '.'}."
+
+        sections: list[str] = []
+        sections.append("## Path matches")
+        sections.extend(f"- {match}" for match in path_matches)
+        if not path_matches:
+            sections.append("- (none)")
+
+        sections.append("## Content matches")
+        sections.extend(f"- {match}" for match in content_matches)
+        if not content_matches:
+            sections.append("- (none)")
+
+        sections.append("## Suggested /read")
+        sections.extend(f"- /read {match}" for match in read_suggestions)
+        if not read_suggestions:
+            sections.append("- (none)")
+
+        return "\n".join(sections)
+
+    def _path_matches(self, root: Path, keyword: str, limit: int) -> list[str]:
+        needle = keyword.casefold()
+        matches: list[str] = []
+        for item in sorted(root.rglob("*")):
+            try:
+                relative = item.relative_to(self.workspace)
+            except ValueError:
+                continue
+            if any(part in SKIPPED_DIRS for part in relative.parts):
+                continue
+            if not item.is_file():
+                continue
+            relative_text = relative.as_posix()
+            if needle in relative_text.casefold():
+                matches.append(relative_text)
+            if len(matches) >= limit:
+                break
+        return matches
+
+    def _content_matches(self, root: Path, keyword: str, limit: int) -> list[str]:
+        cmd = [
+            "rg",
+            "--line-number",
+            "--color",
+            "never",
+            "--fixed-strings",
+            "--ignore-case",
+        ]
+        for skipped in sorted(SKIPPED_DIRS):
+            cmd.extend(["--glob", f"!{skipped}/**"])
+        search_path = "." if root == self.workspace else root.relative_to(self.workspace).as_posix()
+        cmd.extend([keyword, search_path])
+        _, output = run_subprocess(cmd, cwd=self.workspace)
+        lines: list[str] = []
+        for line in output.splitlines():
+            if line.startswith("./"):
+                line = line[2:]
+            if line:
+                lines.append(line)
+            if len(lines) >= limit:
+                break
+        return lines
+
+    @staticmethod
+    def _read_suggestions(
+        path_matches: list[str],
+        content_matches: list[str],
+        limit: int,
+    ) -> list[str]:
+        suggestions: list[str] = []
+
+        def add(path: str) -> None:
+            if path and path not in suggestions:
+                suggestions.append(path)
+
+        for path in path_matches:
+            add(path)
+            if len(suggestions) >= limit:
+                return suggestions
+
+        for line in content_matches:
+            path = line.split(":", 1)[0]
+            add(path)
+            if len(suggestions) >= limit:
+                return suggestions
+
+        return suggestions
+
+
 class GitStatusTool(_WorkspaceTool):
     name = "git_status"
     description = "查看 git status --short --branch"
@@ -679,6 +792,7 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
         EditFileTool(workspace),
         InsertCodeTool(workspace),
         SearchTextTool(workspace),
+        FindFilesTool(workspace),
         GitStatusTool(workspace),
         GitDiffTool(workspace),
         MemorySearchTool(memory),

@@ -137,6 +137,7 @@ SLASH_COMMANDS = [
     ("/files [PATH]", "列出 repo 檔案，預設目前 workspace"),
     ("/read PATH", "讀取 repo 內指定檔案"),
     ("/attach PATH...", "把指定檔案內容加入本輪 context；支援拖曳路徑"),
+    ("/find KEYWORD", "依 keyword 搜尋檔名/路徑與內容，並建議 /read 目標"),
     ("/search PATTERN", "在 repo 內搜尋文字"),
     ("/fetch URL", "讀取指定外部網頁文字，會阻擋 localhost 與私有網段"),
     ("/git", "顯示 git status"),
@@ -230,7 +231,7 @@ def print_slash_help() -> None:
             "/help", "/guide", "/workflows", "/status", "/mode", "/plan", "/execute", "/clear", "/exit",
         ]),
         ("檔案與內容", [
-            "/files", "/read", "/search", "/attach", "/fetch",
+            "/files", "/read", "/find", "/search", "/attach", "/fetch",
         ]),
         ("Git 與變更", [
             "/git", "/diff", "/apply", "/commit",
@@ -1729,6 +1730,17 @@ def shell(
         )
 
     register_handler("/search", handle_search)
+
+    def handle_find(state: ShellState, prompt: str):
+        """依 keyword 檢索檔名/路徑與內容 — delegates to runtime handler."""
+        _runtime_handlers.handle_find(
+            prompt,
+            tools=tools,
+            transcript=transcript,
+            emit=print_tool_result,
+        )
+
+    register_handler("/find", handle_find)
 
     def handle_fetch(state: ShellState, prompt: str):
         """讀取指定外部網頁文字 — delegates to runtime handler."""

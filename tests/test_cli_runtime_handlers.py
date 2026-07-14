@@ -1,7 +1,7 @@
 """Coverage for runtime slash handlers used by run_shell() nested handlers.
 
 These tests exercise ``agentx.cli_runtime_handlers`` — the real interactive
-logic for /plan, /execute, /mode, /files, /read, /search, /git, /diff,
+logic for /plan, /execute, /mode, /files, /read, /find, /search, /git, /diff,
 low-risk tool-backed /memory, /fetch, /run, /test, low-risk inspection
 handlers /status, /sessions, /jobs, /task readonly, and pure info/display
 handlers /help, /guide, /workflows, /tools, /context, /history,
@@ -21,6 +21,7 @@ from agentx.cli_runtime_handlers import (
     handle_diff,
     handle_execute,
     handle_fetch,
+    handle_find,
     handle_files,
     handle_git,
     handle_guide,
@@ -412,6 +413,38 @@ def test_handle_search_success_and_failure() -> None:
     fail_lines, fail_emit = _capture()
     handle_search("/search [", tools=tools_fail, transcript=transcript_fail, emit=fail_emit)
     assert fail_lines == ["搜尋失敗：bad regex"]
+
+
+def test_handle_find_includes_keyword_in_transcript() -> None:
+    tools = FakeTools(ToolResult(tool="find_files", ok=True, content="## Path matches\n- src/a.py"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_find("/find approval", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("find_files", {"keyword": "approval"})]
+    assert lines == ["## Path matches\n- src/a.py"]
+    assert transcript.events == [
+        (
+            "tool",
+            {
+                "command": "/find",
+                "keyword": "approval",
+                "ok": True,
+                "content": "## Path matches\n- src/a.py",
+            },
+        )
+    ]
+
+
+def test_handle_find_failure_prefix() -> None:
+    tools = FakeTools(ToolResult(tool="find_files", ok=False, content="keyword is required"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_find("/find ", tools=tools, transcript=transcript, emit=emit)
+
+    assert lines == ["檢索失敗：keyword is required"]
 
 
 def test_handle_git_ignores_prompt_args() -> None:

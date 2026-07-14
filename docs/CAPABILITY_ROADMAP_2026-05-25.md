@@ -26,6 +26,13 @@ The next phase should make these capabilities more complete and easier to use fr
 
 Goal: make agentX quickly find relevant files by keyword, path, and topic before editing.
 
+Current status:
+
+- [x] `/find KEYWORD` implemented as a deterministic GREEN tool/slash command:
+  filename/path substring matches + fixed-string content matches + capped `/read` suggestions.
+- [ ] `/grep KEYWORD [PATH]` remains pending.
+- [ ] `/where TOPIC` remains pending; keep deterministic first and avoid model-only guessing.
+
 Proposed commands:
 
 - `/find KEYWORD`

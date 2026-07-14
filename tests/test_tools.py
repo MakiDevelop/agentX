@@ -28,6 +28,58 @@ def test_list_files(tmp_path: Path) -> None:
     assert result.content == "a.txt"
 
 
+def test_find_files_path_match_without_content_match(tmp_path: Path) -> None:
+    (tmp_path / "approval_policy.md").write_text("unrelated", encoding="utf-8")
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    result = registry.run("find_files", {"keyword": "approval"})
+
+    assert result.ok
+    assert "## Path matches" in result.content
+    assert "- approval_policy.md" in result.content
+    assert "## Content matches\n- (none)" in result.content
+    assert "- /read approval_policy.md" in result.content
+
+
+def test_find_files_content_match_and_no_result(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "config.py").write_text("APPROVAL_MODE = 'ask'\n", encoding="utf-8")
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    result = registry.run("find_files", {"keyword": "approval"})
+
+    assert result.ok
+    assert "## Content matches" in result.content
+    assert "src/config.py:1:APPROVAL_MODE = 'ask'" in result.content
+    assert "- /read src/config.py" in result.content
+
+    missing = registry.run("find_files", {"keyword": "not-present"})
+    assert missing.ok
+    assert "No matches for 'not-present'" in missing.content
+
+
+def test_find_files_respects_path_and_result_limits(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "docs").mkdir()
+    for index in range(3):
+        (tmp_path / "src" / f"needle_{index}.py").write_text("needle\n", encoding="utf-8")
+    (tmp_path / "docs" / "needle_docs.md").write_text("needle\n", encoding="utf-8")
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    result = registry.run(
+        "find_files",
+        {"keyword": "needle", "path": "src", "path_limit": 2, "content_limit": 1, "read_limit": 2},
+    )
+
+    assert result.ok
+    assert "- src/needle_0.py" in result.content
+    assert "- src/needle_1.py" in result.content
+    assert "- src/needle_2.py" not in result.content
+    assert "docs/needle_docs.md" not in result.content
+    assert result.content.count("/read ") == 2
+
+
 def test_run_command_prints_final_command_and_args(tmp_path: Path) -> None:
     # Note: test runs in a tmp_path that is not a git repo, so git status returns non-zero
     # with an error message (in Chinese in this env). The tool still succeeds in *executing*
