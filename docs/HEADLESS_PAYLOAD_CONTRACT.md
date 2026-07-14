@@ -12,6 +12,8 @@ agentX headless results without parsing natural language output.
   an explicit migration note and test update.
 - New keys may be added at any object level.
 - Consumers should ignore unknown keys.
+- `schema_version` identifies the result payload contract. Current value:
+  `agentx.headless_result.v1`.
 - `log_summary.handoff_summary` is the preferred takeover object after a failed,
   timed out, or max-steps run.
 - All handoff fields are deterministic runtime state. They must not require an
@@ -25,6 +27,7 @@ Required keys:
 
 | Key | Type | Meaning |
 |-----|------|---------|
+| `schema_version` | string | Stable contract marker. Current value: `agentx.headless_result.v1`. |
 | `output` | string | Final natural-language output for humans. |
 | `exit_code` | integer | Process-compatible outcome code. |
 | `termination` | string | Structured termination reason. |

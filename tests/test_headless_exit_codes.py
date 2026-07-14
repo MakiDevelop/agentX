@@ -95,6 +95,7 @@ def test_headless_json_payload_includes_stats() -> None:
 
     data = json.loads(payload)
 
+    assert data["schema_version"] == cli.HEADLESS_PAYLOAD_SCHEMA_VERSION
     assert data["output"] == "完成"
     assert data["exit_code"] == 0
     assert data["termination"] == "final_success"
@@ -191,6 +192,7 @@ def test_headless_payload_contract_required_keys() -> None:
     )
 
     assert {
+        "schema_version",
         "output",
         "exit_code",
         "termination",
@@ -199,6 +201,7 @@ def test_headless_payload_contract_required_keys() -> None:
         "log_summary",
         "session_path",
     }.issubset(payload)
+    assert payload["schema_version"] == cli.HEADLESS_PAYLOAD_SCHEMA_VERSION
 
     log_summary = payload["log_summary"]
     assert {

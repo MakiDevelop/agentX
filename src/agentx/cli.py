@@ -75,6 +75,9 @@ if TYPE_CHECKING:
     from agentx.loop import AgentSession
 
 
+HEADLESS_PAYLOAD_SCHEMA_VERSION = "agentx.headless_result.v1"
+
+
 
 
 @dataclass
@@ -1195,6 +1198,7 @@ def headless_payload(result: HeadlessRunResult, exit_code: int) -> dict[str, obj
             result.session_path,
         )
     payload = {
+        "schema_version": HEADLESS_PAYLOAD_SCHEMA_VERSION,
         "output": result.output,
         "exit_code": exit_code,
         "termination": result.termination,

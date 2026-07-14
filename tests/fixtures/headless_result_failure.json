@@ -1,6 +1,7 @@
 {
   "event": "result",
   "data": {
+    "schema_version": "agentx.headless_result.v1",
     "output": "stopped",
     "exit_code": 1,
     "termination": "final_failed",

@@ -145,7 +145,7 @@ agentx ask "幫我列出這個 repo 的檔案" --output-format jsonl
 agentx ask "幫我列出這個 repo 的檔案" --result-output .agentx/results/ask.json --quiet
 ```
 
-JSON payload 會包含 `output`、`exit_code`、`termination`、`failing_tools` 與 `stats`。
+JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`、`failing_tools` 與 `stats`。
 `stats` 目前包含 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies 與 task counts。
 `log_summary` 會提供精簡可機讀執行摘要：termination、tool outcomes、successful/failing tools、recent errors、recovery suggestions、pending verifies 與 deterministic `handoff_summary`。
 `--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、models 會分別使用 `dry_run`、`version`、`backends`、`models` event。
