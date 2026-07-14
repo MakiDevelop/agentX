@@ -3,7 +3,7 @@ import json
 from typer.testing import CliRunner
 
 from agentx.cli import app
-from agentx.command_catalog import CLI_CAPABILITIES, capabilities_payload
+from agentx.command_catalog import CLI_CAPABILITIES, RUNNER_RECOMMENDED_ENTRYPOINTS, capabilities_payload
 
 
 def test_capabilities_payload_lists_top_level_cli_commands() -> None:
@@ -12,6 +12,7 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert payload["schema"] == "agentx.capabilities.v1"
     assert payload["query"] == ""
     assert payload["count"] == len(CLI_CAPABILITIES)
+    assert payload["recommended_entrypoints"] == RUNNER_RECOMMENDED_ENTRYPOINTS
     commands = {item["command"]: item for item in payload["capabilities"]}  # type: ignore[index]
     assert "agentx verify" in commands
     assert "agentx artifacts" in commands
@@ -44,6 +45,12 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert commands["agentx infra"]["schemas"] == ["agentx.infrastructure_context.v1"]
     assert commands["agentx infra"]["jsonl_event"] == "infra"
     assert commands["agentx approvals"]["jsonl_event"] == "approvals"
+    assert payload["by_schema"]["agentx.inspect.v1"] == {  # type: ignore[index]
+        "command": "agentx inspect",
+        "jsonl_event": "inspect",
+        "usage": "agentx inspect --json",
+    }
+    assert payload["by_schema"]["agentx.gate.v1"]["command"] == "agentx gate"  # type: ignore[index]
     assert all(
         set(item) == {
             "command",
@@ -73,6 +80,7 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
 
     assert schema_payload["count"] == 1
     assert schema_payload["capabilities"][0]["command"] == "agentx tasks"  # type: ignore[index]
+    assert set(schema_payload["by_schema"]) == {"agentx.tasks.v1"}  # type: ignore[arg-type]
     assert keyword_payload["count"] == 1
     assert keyword_payload["capabilities"][0]["command"] == "agentx approvals"  # type: ignore[index]
     assert diff_payload["count"] == 1

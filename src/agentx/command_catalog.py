@@ -321,6 +321,39 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
     },
 ]
 
+RUNNER_RECOMMENDED_ENTRYPOINTS: list[dict[str, object]] = [
+    {
+        "name": "discover",
+        "command": "agentx capabilities --json",
+        "schema": "agentx.capabilities.v1",
+        "reason": "discover stable runner-facing commands, schemas, events, and recommended entrypoints",
+    },
+    {
+        "name": "preflight",
+        "command": "agentx inspect --json",
+        "schema": "agentx.inspect.v1",
+        "reason": "collect read-only workspace status, diff, tasks, approvals, artifacts, next recommendation, and command plans",
+    },
+    {
+        "name": "next",
+        "command": "agentx next --json",
+        "schema": "agentx.next.v1",
+        "reason": "choose the next deterministic runner command from local state",
+    },
+    {
+        "name": "gate",
+        "command": "agentx gate --json --fail-on-blocker",
+        "schema": "agentx.gate.v1",
+        "reason": "block commit or handoff when review, doctor, or approval audit finds blockers",
+    },
+    {
+        "name": "verify",
+        "command": "agentx verify --json --fail-on-error",
+        "schema": "agentx.verify.v1",
+        "reason": "run detected verification commands and return process-compatible status",
+    },
+]
+
 
 def command_catalog_payload() -> dict[str, object]:
     return filtered_command_catalog_payload()
@@ -396,8 +429,25 @@ def capabilities_payload(query: str | None = None) -> dict[str, object]:
         "schema": "agentx.capabilities.v1",
         "query": query or "",
         "count": len(capabilities),
+        "recommended_entrypoints": RUNNER_RECOMMENDED_ENTRYPOINTS,
+        "by_schema": _capabilities_by_schema(capabilities),
         "capabilities": capabilities,
     }
+
+
+def _capabilities_by_schema(capabilities: list[dict[str, object]]) -> dict[str, dict[str, str]]:
+    by_schema: dict[str, dict[str, str]] = {}
+    for capability in capabilities:
+        for schema in capability.get("schemas", []):
+            schema_key = str(schema)
+            if not schema_key:
+                continue
+            by_schema[schema_key] = {
+                "command": str(capability["command"]),
+                "jsonl_event": str(capability["jsonl_event"]),
+                "usage": str(capability["usage"]),
+            }
+    return by_schema
 
 
 def _catalog_item_matches(
