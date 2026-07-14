@@ -52,6 +52,8 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     assert payload["ok"] is True
     assert payload["live_probes"] is False
     assert payload["recommended_command"] == "agentx approvals latest --denied --json --fail-on-denied"
+    assert payload["recommended_kind"] == "approval_audit"
+    assert payload["recommended_risk"] == "GREEN"
     assert payload["signals"]["dirty"] is True  # type: ignore[index]
     assert payload["signals"]["denied_approval_count"] == 1  # type: ignore[index]
     assert payload["signals"]["verify_command_count"] == 2  # type: ignore[index]
@@ -101,6 +103,8 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["schema"] == "agentx.inspect.v1"
     assert payload["ok"] is True
     assert payload["recommended_command"] == payload["next"]["recommended_command"]
+    assert payload["recommended_kind"] == payload["next"]["recommended_kind"]
+    assert payload["recommended_risk"] == payload["next"]["recommended_risk"]
     assert payload["signals"]["verify_command_count"] == len(payload["verify_commands"])
     assert payload["status"]["git"]["ok"] is True
     assert payload["diff"]["schema"] == "agentx.diff.v1"

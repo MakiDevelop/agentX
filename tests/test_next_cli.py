@@ -70,6 +70,8 @@ def test_next_payload_recommends_gate_for_dirty_workspace(tmp_path: Path) -> Non
     assert payload["schema"] == "agentx.next.v1"
     assert payload["signals"]["dirty"] is True  # type: ignore[index]
     assert payload["recommended_command"] == "agentx gate --json --fail-on-blocker"
+    assert payload["recommended_kind"] == "gate"
+    assert payload["recommended_risk"] == "GREEN"
     assert payload["recommendations"][0]["kind"] == "gate"  # type: ignore[index]
     assert payload["recommendations"][1]["kind"] == "commit_plan"  # type: ignore[index]
     assert payload["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"  # type: ignore[index]
@@ -86,6 +88,7 @@ def test_next_payload_prioritizes_denied_approval(tmp_path: Path) -> None:
     assert payload["signals"]["denied_approval_count"] == 1  # type: ignore[index]
     assert payload["recommendations"][0]["kind"] == "approval_audit"  # type: ignore[index]
     assert payload["recommended_command"] == "agentx approvals latest --denied --json --fail-on-denied"
+    assert payload["recommended_kind"] == "approval_audit"
 
 
 def test_next_payload_recommends_handoff_resume_for_latest_artifact(tmp_path: Path) -> None:
@@ -97,6 +100,7 @@ def test_next_payload_recommends_handoff_resume_for_latest_artifact(tmp_path: Pa
     assert payload["signals"]["latest_artifact_needs_handoff"] is True  # type: ignore[index]
     assert payload["recommendations"][0]["kind"] == "handoff_resume"  # type: ignore[index]
     assert payload["recommended_command"] == "agentx handoff-resume .agentx/runs/latest --dry-run"
+    assert payload["recommended_kind"] == "handoff_resume"
 
 
 def test_next_payload_recommends_active_tasks_when_clean(tmp_path: Path) -> None:
@@ -134,6 +138,8 @@ def test_next_payload_defaults_to_inspect_when_idle(tmp_path: Path) -> None:
     assert payload["recommendations"][0]["rank"] == 1  # type: ignore[index]
     assert payload["recommendations"][0]["kind"] == "inspect"  # type: ignore[index]
     assert payload["recommendations"][0]["command"] == "agentx inspect --json"  # type: ignore[index]
+    assert payload["recommended_kind"] == "inspect"
+    assert payload["recommended_risk"] == "GREEN"
     assert payload["recommendations"][0]["reason"] == "workspace is clean and no active runner handoff was detected"  # type: ignore[index]
     assert payload["recommendations"][0]["risk"] == "GREEN"  # type: ignore[index]
     assert payload["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"  # type: ignore[index]

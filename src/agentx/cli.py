@@ -3251,6 +3251,8 @@ def next_payload(
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "ok": True,
         "recommended_command": recommendations[0]["command"] if recommendations else None,
+        "recommended_kind": recommendations[0]["kind"] if recommendations else None,
+        "recommended_risk": recommendations[0]["risk"] if recommendations else None,
         "recommendations": recommendations,
         "signals": {
             "dirty": dirty,
@@ -3369,6 +3371,8 @@ def inspect_payload(
         "ok": True,
         "live_probes": False,
         "recommended_command": next_steps.get("recommended_command"),
+        "recommended_kind": next_steps.get("recommended_kind"),
+        "recommended_risk": next_steps.get("recommended_risk"),
         "signals": signals,
         "status": status_payload(
             settings,

@@ -98,6 +98,7 @@
 - [x] `agentx next --json` 可輸出 deterministic next-step planner（denied approvals → dirty diff gate → artifact handoff → active tasks → inspect），讓外部 runner 不必自行拼狀態分支；不跑測試、不呼叫 LLM、不 mutate。
 - [x] `agentx next --json` 的每個 recommendation 會內嵌 `command_plan`（`agentx.command_plan.v1`），讓 runner 一次取得下一步排序與 command policy posture。
 - [x] `agentx next --json` 的 `signals` 會列出 `active_task_ids` 與 `primary_active_task`，讓 runner 不必二次查詢也能知道接手哪個 task。
+- [x] `agentx next --json` / `agentx inspect --json` 會提供 top-level `recommended_kind` / `recommended_risk`，讓簡單 runner 不必解析第一個 recommendation。
 - [x] `agentx inspect --json` 會內嵌 `artifacts`（`agentx.artifacts.v1`）與 `next`（`agentx.next.v1`），讓 runner 一次拿到 recent artifact catalog、下一步建議與 command-plan posture。
 - [x] `agentx inspect --json` 會提供 top-level `recommended_command` / `signals`，讓簡單 runner 不必深入解析 nested `next` payload 就能決定下一步。
 - [x] `agentx infra --json` 可輸出 read-only `agentx.infrastructure_context.v1`，讓 headless runner 在 SSH/deploy/cross-machine 前載入資源地圖、家庭 AI 設施與 VPS 地圖；只提供 evidence，不授權遠端操作。

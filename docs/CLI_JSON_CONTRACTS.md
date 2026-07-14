@@ -105,6 +105,8 @@ Required stable keys:
 | `ok` | boolean | True when the read-only aggregate payload was built successfully. |
 | `live_probes` | boolean | Always false; inspect is read-only and local. |
 | `recommended_command` | string or null | Top-level copy of `next.recommended_command` for simple runners. |
+| `recommended_kind` | string or null | Top-level copy of `next.recommended_kind` for simple runners. |
+| `recommended_risk` | string or null | Top-level copy of `next.recommended_risk` for simple runners. |
 | `signals` | object | Top-level summary signals copied from `next.signals`, plus inspect-specific counts. |
 | `status` | object | Embedded `agentx.status.v1`. |
 | `tasks` | object | Embedded `agentx.tasks.v1` filtered to active tasks. |
@@ -347,6 +349,8 @@ Required stable keys:
 | `generated_at` | string | Local ISO timestamp. |
 | `ok` | boolean | True when local planning completed. |
 | `recommended_command` | string or null | First ranked command from `recommendations`. |
+| `recommended_kind` | string or null | First ranked recommendation kind, copied for simple runners. |
+| `recommended_risk` | string or null | First ranked recommendation risk, copied for simple runners. |
 | `recommendations` | array of object | Ranked command recommendations. |
 | `signals` | object | Cheap derived booleans/counts used by the planner. |
 | `diff` | object | Embedded `agentx.diff.v1`. |
