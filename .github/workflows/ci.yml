@@ -46,6 +46,9 @@ jobs:
         # We keep the call so the step is visible and for future "PR diff mode".
         run: python scripts/check-lockfile-commit.py || true
 
+      - name: No legacy task module guard
+        run: python scripts/check_no_legacy_task.py
+
       - name: Vulnerability audit (pip-audit on the locked tree)
         # Equivalent to the "pip-audit / safety check" layer. We pin the tool via
         # uvx --from for determinism (no new permanent dev dep yet). Audit

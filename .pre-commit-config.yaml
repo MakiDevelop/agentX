@@ -55,3 +55,14 @@ repos:
           AGENTX_ALLOW_LOCKFILE_CHANGE=1 (or true/yes). This forces every
           lockfile change (direct or transitive) to be a deliberate reviewed
           action. See scripts/check-lockfile-commit.py and pi's equivalent.
+
+      - id: check-no-legacy-task
+        name: check-no-legacy-task (MT22 task.py guard)
+        entry: uv run --frozen python scripts/check_no_legacy_task.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        description: >
+          Fail if production source reintroduces src/agentx/task.py or imports
+          the removed agentx.task module. MT22 requires agentx.tasks as the
+          only task API.
