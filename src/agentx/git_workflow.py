@@ -12,6 +12,10 @@ class GitCommitPlan:
     files: list[str]
 
 
+class GitPathError(ValueError):
+    """Raised when a git path operation would be too broad or unsafe."""
+
+
 def build_commit_plan(workspace: Path) -> GitCommitPlan:
     status = _git(workspace, ["status", "--short", "--branch"]).stdout
     diff_stat = _git(workspace, ["diff", "--stat"]).stdout
@@ -49,6 +53,56 @@ def commit_and_push(workspace: Path, files: list[str], message: str) -> str:
     push = _git(workspace, ["push"], check=False)
     outputs.append(_format_result(["git", "push"], push))
     return "\n\n".join(outputs)
+
+
+def stage_paths(workspace: Path, paths: list[str]) -> str:
+    safe_paths = _validate_git_paths(workspace, paths)
+    outputs = []
+    for path in safe_paths:
+        result = _git(workspace, ["add", "--", path], check=False)
+        outputs.append(_format_result(["git", "add", "--", path], result))
+        if result.returncode != 0:
+            break
+    return "\n\n".join(outputs)
+
+
+def unstage_paths(workspace: Path, paths: list[str]) -> str:
+    safe_paths = _validate_git_paths(workspace, paths)
+    outputs = []
+    for path in safe_paths:
+        result = _git(workspace, ["restore", "--staged", "--", path], check=False)
+        outputs.append(_format_result(["git", "restore", "--staged", "--", path], result))
+        if result.returncode != 0:
+            break
+    return "\n\n".join(outputs)
+
+
+def _validate_git_paths(workspace: Path, paths: list[str]) -> list[str]:
+    if not paths:
+        raise GitPathError("at least one explicit file path is required")
+
+    workspace = workspace.resolve()
+    safe_paths: list[str] = []
+    for raw in paths:
+        path = str(raw).strip()
+        if not path:
+            raise GitPathError("empty path is not allowed")
+        if path in {".", "./", "*"}:
+            raise GitPathError(f"broad git path is not allowed: {path}")
+        if path.startswith("-"):
+            raise GitPathError(f"git option-like path is not allowed: {path}")
+        if any(char in path for char in "*?["):
+            raise GitPathError(f"glob path is not allowed: {path}")
+
+        target = (workspace / path).resolve()
+        if workspace != target and workspace not in target.parents:
+            raise GitPathError(f"path escapes workspace: {path}")
+        if target.is_dir():
+            raise GitPathError(f"directory path is not allowed: {path}")
+
+        safe_paths.append(target.relative_to(workspace).as_posix())
+
+    return list(dict.fromkeys(safe_paths))
 
 
 def _git(workspace: Path, args: list[str], check: bool = False) -> subprocess.CompletedProcess[str]:

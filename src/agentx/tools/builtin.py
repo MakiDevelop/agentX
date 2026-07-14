@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 
+from agentx.git_workflow import stage_paths, unstage_paths
 from agentx.memory_hall import MemoryHallClient
 from agentx.protocol import Tool
 from agentx.safety import Risk
@@ -359,6 +360,36 @@ class GitDiffTool(_WorkspaceTool):
             cmd.extend(["--", path])
         _, output = run_subprocess(cmd, cwd=self.workspace)
         return output[:max_chars]
+
+
+class GitStageTool(_WorkspaceTool):
+    name = "git_stage"
+    description = "逐檔 git add 指定 path；拒絕 .、glob、目錄與 workspace 外路徑"
+    risk = Risk.YELLOW
+    signature = "paths=[path, ...]"
+
+    def run(self, args: dict[str, Any]) -> str:
+        return stage_paths(self.workspace, _coerce_git_paths(args))
+
+
+class GitUnstageTool(_WorkspaceTool):
+    name = "git_unstage"
+    description = "逐檔 git restore --staged 指定 path；保留 worktree 修改"
+    risk = Risk.YELLOW
+    signature = "paths=[path, ...]"
+
+    def run(self, args: dict[str, Any]) -> str:
+        return unstage_paths(self.workspace, _coerce_git_paths(args))
+
+
+def _coerce_git_paths(args: dict[str, Any]) -> list[str]:
+    paths = args.get("paths")
+    if isinstance(paths, list):
+        return [str(path) for path in paths]
+    path = args.get("path")
+    if path is None:
+        return []
+    return [str(path)]
 
 
 class MemorySearchTool:
@@ -795,6 +826,8 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
         FindFilesTool(workspace),
         GitStatusTool(workspace),
         GitDiffTool(workspace),
+        GitStageTool(workspace),
+        GitUnstageTool(workspace),
         MemorySearchTool(memory),
         MemoryWriteTool(memory),
         MemoryTierUpgradeTool(memory),

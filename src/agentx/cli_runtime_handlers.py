@@ -2,7 +2,8 @@
 
 These implement the real interactive-shell logic for a small set of
 commands (``/plan``, ``/execute``, ``/mode``, plus read-only tool-backed
-``/files``, ``/read``, ``/find``, ``/grep``, ``/search``, ``/git``, ``/diff``, low-risk
+``/files``, ``/read``, ``/find``, ``/grep``, ``/search``, ``/git``, ``/diff``,
+YELLOW git index handlers ``/stage`` and ``/unstage``, low-risk
 tool-backed ``/memory``, ``/fetch``, ``/run``, ``/test``, low-risk
 inspection handlers ``/status``, ``/sessions``, ``/jobs``, the read-only
 ``/task`` empty/status/list branch, and pure info/display handlers
@@ -297,6 +298,63 @@ def handle_diff(
         emit=emit,
         fail_prefix="工具執行失敗：",
         transcript_extra={"path": path},
+    )
+
+
+def _parse_path_args(prompt: str, command: str) -> list[str]:
+    raw = prompt.removeprefix(command).strip()
+    return shlex.split(raw)
+
+
+def handle_stage(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Stage explicit file paths. Broad paths are rejected by git_stage."""
+    try:
+        paths = _parse_path_args(prompt, "/stage")
+    except ValueError as exc:
+        transcript.write("tool", {"command": "/stage", "ok": False, "content": str(exc)})
+        emit(f"stage failed: {exc}")
+        return
+    _run_tool_slash(
+        command="/stage",
+        tool_name="git_stage",
+        tool_args={"paths": paths},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="stage failed: ",
+        transcript_extra={"paths": paths},
+    )
+
+
+def handle_unstage(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Unstage explicit file paths while preserving worktree changes."""
+    try:
+        paths = _parse_path_args(prompt, "/unstage")
+    except ValueError as exc:
+        transcript.write("tool", {"command": "/unstage", "ok": False, "content": str(exc)})
+        emit(f"unstage failed: {exc}")
+        return
+    _run_tool_slash(
+        command="/unstage",
+        tool_name="git_unstage",
+        tool_args={"paths": paths},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="unstage failed: ",
+        transcript_extra={"paths": paths},
     )
 
 

@@ -62,8 +62,8 @@ Proposed commands:
 - `/git branch`
 - `/git log`
 - `/git show [REV]`
-- `/stage PATH`
-- `/unstage PATH`
+- [x] `/stage PATH...` (explicit files only; rejects broad paths, glob, directories, workspace escape)
+- [x] `/unstage PATH...` (explicit files only; preserves worktree changes)
 - `/push`
 
 Keep `/commit [MESSAGE]`, but make the flow clearer:

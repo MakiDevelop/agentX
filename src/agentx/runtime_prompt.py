@@ -89,6 +89,8 @@ def _base_tools_section() -> str:
 - search_text: {"pattern":"keyword","path":"."} — search in files
 - git_status: {} — show git status
 - git_diff: {} — show git diff
+- git_stage: {"paths":["file.py"]} — stage explicit files only; rejects broad paths
+- git_unstage: {"paths":["file.py"]} — unstage explicit files while keeping worktree changes
 - search_replace: {"path":"file.py","old_string":"original text","new_string":"replacement text"} — edit existing file (small changes only)
 - insert_code: {"path":"file.py","insert_after":"marker line","content":"new code"} — insert after marker
 - run_tests: {} — run project tests

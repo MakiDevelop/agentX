@@ -31,6 +31,8 @@ YELLOW_TOOLS = {
     "docker_compose_down",
     "docker_compose_up",
     "memory_write",
+    "git_stage",
+    "git_unstage",
 }
 
 RED_COMMAND_PATTERNS = (

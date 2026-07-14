@@ -37,10 +37,12 @@ from agentx.cli_runtime_handlers import (
     handle_search,
     handle_sessions,
     handle_status,
+    handle_stage,
     handle_task_readonly,
     handle_test,
     handle_tools,
     handle_transcript,
+    handle_unstage,
     handle_workflows,
 )
 from agentx.protocol import ToolResult
@@ -513,6 +515,59 @@ def test_handle_git_failure_prefix() -> None:
     handle_git("/git", tools=tools, transcript=transcript, emit=emit)
 
     assert lines == ["工具執行失敗：not a repo"]
+
+
+def test_handle_stage_dispatches_paths_and_parse_error() -> None:
+    tools = FakeTools(ToolResult(tool="git_stage", ok=True, content="$ git add -- a.py"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_stage('/stage "a file.py" src/b.py', tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("git_stage", {"paths": ["a file.py", "src/b.py"]})]
+    assert lines == ["$ git add -- a.py"]
+    assert transcript.events == [
+        (
+            "tool",
+            {
+                "command": "/stage",
+                "paths": ["a file.py", "src/b.py"],
+                "ok": True,
+                "content": "$ git add -- a.py",
+            },
+        )
+    ]
+
+    bad_transcript = FakeTranscript()
+    bad_lines, bad_emit = _capture()
+    handle_stage('/stage "unterminated', tools=tools, transcript=bad_transcript, emit=bad_emit)
+
+    assert bad_lines == ["stage failed: No closing quotation"]
+    assert bad_transcript.events == [
+        ("tool", {"command": "/stage", "ok": False, "content": "No closing quotation"})
+    ]
+
+
+def test_handle_unstage_dispatches_paths_and_failure_prefix() -> None:
+    tools = FakeTools(ToolResult(tool="git_unstage", ok=False, content="broad git path"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_unstage("/unstage .", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("git_unstage", {"paths": ["."]})]
+    assert lines == ["unstage failed: broad git path"]
+    assert transcript.events == [
+        (
+            "tool",
+            {
+                "command": "/unstage",
+                "paths": ["."],
+                "ok": False,
+                "content": "broad git path",
+            },
+        )
+    ]
 
 
 def test_handle_diff_without_path_uses_empty_args() -> None:
