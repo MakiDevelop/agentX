@@ -14,6 +14,7 @@ SKIPPED_DIRS = {
     ".pytest_cache",
     ".ruff_cache",
     ".venv",
+    ".amh",
     ".agentx",
     "__pycache__",
     "node_modules",

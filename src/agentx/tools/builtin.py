@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -333,6 +334,110 @@ class FindFilesTool(_WorkspaceTool):
                 return suggestions
 
         return suggestions
+
+
+_WHERE_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "built",
+    "defined",
+    "do",
+    "does",
+    "handled",
+    "how",
+    "implemented",
+    "in",
+    "is",
+    "of",
+    "on",
+    "the",
+    "to",
+    "where",
+}
+
+
+class LocateTopicTool(FindFilesTool):
+    name = "locate_topic"
+    description = "依 topic 定位最可能的檔案位置；會清理問句、合併多詞命中並輸出 ranked /read 建議"
+    risk = Risk.GREEN
+    signature = 'topic, path=".", limit=8, read_limit=5'
+
+    def run(self, args: dict[str, Any]) -> str:
+        topic = str(args.get("topic", "")).strip()
+        terms = _topic_terms(topic)
+        if not terms:
+            raise ValueError("topic is required")
+
+        path = args.get("path", ".")
+        limit = max(1, min(int(args.get("limit", 8)), 20))
+        read_limit = max(1, min(int(args.get("read_limit", 5)), 10))
+        root = resolve_inside_workspace(self.workspace, path)
+        if not root.exists():
+            raise FileNotFoundError(path)
+
+        scores: dict[str, dict[str, Any]] = {}
+        for term in terms:
+            for match in self._path_matches(root, term, 80):
+                entry = scores.setdefault(match, {"score": 0, "terms": set(), "reasons": set()})
+                entry["terms"].add(term)
+                path_text = match.casefold()
+                stem = Path(match).stem.casefold()
+                if stem == term:
+                    entry["score"] += 50
+                    entry["reasons"].add(f"stem:{term}")
+                elif term in path_text:
+                    entry["score"] += 30
+                    entry["reasons"].add(f"path:{term}")
+
+            per_file_hits: dict[str, int] = {}
+            for line in self._content_matches(root, term, 120):
+                match_path = line.split(":", 1)[0]
+                per_file_hits[match_path] = min(per_file_hits.get(match_path, 0) + 1, 3)
+            for match, hit_count in per_file_hits.items():
+                entry = scores.setdefault(match, {"score": 0, "terms": set(), "reasons": set()})
+                entry["terms"].add(term)
+                entry["score"] += hit_count * 10
+                entry["reasons"].add(f"content:{term}")
+
+        if not scores:
+            return f"No locations for {topic!r} (terms: {', '.join(terms)}). Try /find or /grep."
+
+        for match, entry in scores.items():
+            if match.startswith("src/"):
+                entry["score"] += 15
+                entry["reasons"].add("src")
+            elif match.startswith("tests/"):
+                entry["score"] += 10
+                entry["reasons"].add("tests")
+            if len(entry["terms"]) >= 2:
+                entry["score"] += 20
+                entry["reasons"].add("multi-term")
+
+        ranked = sorted(
+            scores.items(),
+            key=lambda item: (-int(item[1]["score"]), item[0]),
+        )[:limit]
+
+        sections: list[str] = ["## Topic terms"]
+        sections.append(f"- {', '.join(terms)}")
+        sections.append("## Likely locations")
+        for match, entry in ranked:
+            reasons = ",".join(sorted(entry["reasons"]))
+            sections.append(f"- {match} score={entry['score']} reasons={reasons}")
+
+        sections.append("## Suggested /read")
+        for match, _ in ranked[:read_limit]:
+            sections.append(f"- /read {match}")
+
+        return "\n".join(sections)
+
+
+def _topic_terms(topic: str) -> list[str]:
+    words = re.findall(r"[\w-]+", topic.casefold())
+    terms = [word for word in words if len(word) >= 2 and word not in _WHERE_STOPWORDS]
+    return list(dict.fromkeys(terms[:6]))
 
 
 class GitStatusTool(_WorkspaceTool):
@@ -882,6 +987,7 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
         InsertCodeTool(workspace),
         SearchTextTool(workspace),
         FindFilesTool(workspace),
+        LocateTopicTool(workspace),
         GitStatusTool(workspace),
         GitBranchTool(workspace),
         GitLogTool(workspace),

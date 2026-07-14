@@ -80,6 +80,84 @@ def test_find_files_respects_path_and_result_limits(tmp_path: Path) -> None:
     assert result.content.count("/read ") == 2
 
 
+def test_locate_topic_ranks_path_stem_entry_point(tmp_path: Path) -> None:
+    src = tmp_path / "src" / "agentx"
+    src.mkdir(parents=True)
+    (src / "approval.py").write_text("def approve_request():\n    pass\n", encoding="utf-8")
+    (src / "random.py").write_text("approval approval approval\n", encoding="utf-8")
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    result = registry.run("locate_topic", {"topic": "approval"})
+
+    assert result.ok
+    locations = result.content.split("## Likely locations\n", 1)[1]
+    assert locations.splitlines()[0].startswith("- src/agentx/approval.py ")
+    assert "- /read src/agentx/approval.py" in result.content
+
+
+def test_locate_topic_prefers_multi_term_matches(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "approval.py").write_text("approval only\n", encoding="utf-8")
+    (src / "policy.py").write_text("approval policy mode\n", encoding="utf-8")
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    result = registry.run("locate_topic", {"topic": "approval policy"})
+
+    assert result.ok
+    locations = result.content.split("## Likely locations\n", 1)[1]
+    assert locations.splitlines()[0].startswith("- src/policy.py ")
+    assert "multi-term" in locations.splitlines()[0]
+
+
+def test_locate_topic_strips_question_noise_and_handles_no_results(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "handoff.md").write_text("handoff notes\n", encoding="utf-8")
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    result = registry.run("locate_topic", {"topic": "where is handoff built"})
+
+    assert result.ok
+    assert "## Topic terms\n- handoff" in result.content
+    assert "where" not in result.content.split("## Topic terms\n", 1)[1].splitlines()[0]
+
+    missing = registry.run("locate_topic", {"topic": "nonexistent concept xyz"})
+    assert missing.ok
+    assert "No locations for" in missing.content
+
+
+def test_locate_topic_rejects_empty_topic_and_limits_output(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    for index in range(6):
+        (src / f"needle_{index}.py").write_text("needle\n", encoding="utf-8")
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    empty = registry.run("locate_topic", {"topic": "where is the"})
+    assert not empty.ok
+    assert "topic is required" in empty.content
+
+    result = registry.run("locate_topic", {"topic": "needle", "limit": 3, "read_limit": 2})
+    assert result.ok
+    assert result.content.count(" score=") == 3
+    assert result.content.count("/read ") == 2
+
+
+def test_locate_topic_skips_local_memory_store(tmp_path: Path) -> None:
+    (tmp_path / ".amh").mkdir()
+    (tmp_path / ".amh" / "handoff.json").write_text("handoff\n", encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "handoff.py").write_text("handoff\n", encoding="utf-8")
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    result = registry.run("locate_topic", {"topic": "handoff"})
+
+    assert result.ok
+    assert ".amh/handoff.json" not in result.content
+    assert "src/handoff.py" in result.content
+
+
 def test_run_command_prints_final_command_and_args(tmp_path: Path) -> None:
     # Note: test runs in a tmp_path that is not a git repo, so git status returns non-zero
     # with an error message (in Chinese in this env). The tool still succeeds in *executing*

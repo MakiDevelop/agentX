@@ -1,7 +1,7 @@
 """Coverage for runtime slash handlers used by run_shell() nested handlers.
 
 These tests exercise ``agentx.cli_runtime_handlers`` — the real interactive
-logic for /plan, /execute, /mode, /files, /read, /find, /grep, /search, /git, /diff,
+logic for /plan, /execute, /mode, /files, /read, /find, /where, /grep, /search, /git, /diff,
 low-risk git handlers /stage, /unstage, /push, tool-backed /memory, /fetch, /run, /test,
 low-risk inspection
 handlers /status, /sessions, /jobs, /task readonly, and pure info/display
@@ -45,6 +45,7 @@ from agentx.cli_runtime_handlers import (
     handle_tools,
     handle_transcript,
     handle_unstage,
+    handle_where,
     handle_workflows,
 )
 from agentx.protocol import ToolResult
@@ -450,6 +451,36 @@ def test_handle_find_failure_prefix() -> None:
     handle_find("/find ", tools=tools, transcript=transcript, emit=emit)
 
     assert lines == ["檢索失敗：keyword is required"]
+
+
+def test_handle_where_dispatches_topic_and_failure_prefix() -> None:
+    tools = FakeTools(ToolResult(tool="locate_topic", ok=True, content="## Likely locations"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_where("/where approval policy", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("locate_topic", {"topic": "approval policy"})]
+    assert lines == ["## Likely locations"]
+    assert transcript.events == [
+        (
+            "tool",
+            {
+                "command": "/where",
+                "topic": "approval policy",
+                "ok": True,
+                "content": "## Likely locations",
+            },
+        )
+    ]
+
+    fail_tools = FakeTools(ToolResult(tool="locate_topic", ok=False, content="topic is required"))
+    fail_transcript = FakeTranscript()
+    fail_lines, fail_emit = _capture()
+    handle_where("/where", tools=fail_tools, transcript=fail_transcript, emit=fail_emit)
+
+    assert fail_lines == ["定位失敗：topic is required"]
+    assert fail_transcript.events[0][1]["topic"] == ""
 
 
 def test_handle_grep_uses_search_text_with_optional_path() -> None:

@@ -31,7 +31,7 @@ Current status:
 - [x] `/find KEYWORD` implemented as a deterministic GREEN tool/slash command:
   filename/path substring matches + fixed-string content matches + capped `/read` suggestions.
 - [x] `/grep KEYWORD [PATH]` implemented as a thin slash wrapper over `search_text(pattern, path)`.
-- [ ] `/where TOPIC` remains pending; keep deterministic first and avoid model-only guessing.
+- [x] `/where TOPIC` implemented as deterministic topic cleanup + ranked likely locations; no model-only guessing.
 
 Proposed commands:
 
