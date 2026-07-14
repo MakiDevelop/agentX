@@ -263,6 +263,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only catalog",
     },
     {
+        "command": "agentx tool-plan",
+        "usage": "agentx tool-plan TOOL --args-json JSON --json",
+        "description": "Classify an agentX tool call, aliases, risk, approval posture, and basic arg blockers without executing it.",
+        "examples": [
+            "agentx tool-plan read_file --args-json '{\"path\":\"README.md\"}' --json",
+            "agentx tool-plan search_replace --args-json '{\"path\":\"README.md\",\"edits\":[{\"oldText\":\"old\",\"newText\":\"new\"}]}' --json",
+        ],
+        "schemas": ["agentx.tool_plan.v1"],
+        "jsonl_event": "tool_plan",
+        "risk": "GREEN - read-only tool-call policy inspection",
+    },
+    {
         "command": "agentx infra",
         "usage": "agentx infra [all|quick|project|resource|home|vps|resource-bundle] --json",
         "description": "Read Maki's project/resource/home-AI/VPS maps as read-only context for runtime preflight.",

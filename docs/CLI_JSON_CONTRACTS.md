@@ -47,6 +47,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx doctor --json` | `agentx.doctor.v1` | `doctor` |
 | `agentx commands --json` | `agentx.command_catalog.v1` | `commands` |
 | `agentx tools --json` | `agentx.tool_catalog.v1` | `tools` |
+| `agentx tool-plan --json` | `agentx.tool_plan.v1` | `tool_plan` |
 | `agentx workflows --json` | `agentx.workflow_catalog.v1` | `workflows` |
 | `agentx version --json` | no `schema` key | `version` |
 | `agentx backends --json` | no `schema` key | `backends` |
@@ -740,6 +741,7 @@ Required stable keys:
 | `schema` | string | `agentx.tool_catalog.v1`. |
 | `query` | string or null | Filter query. |
 | `count` | integer | Number of returned tools. |
+| `by_risk` | object | Counts for GREEN, YELLOW, and RED tools in the returned list. |
 | `tools` | array of object | Tool metadata. |
 
 Each tool object includes:
@@ -749,7 +751,43 @@ Each tool object includes:
 | `name` | string |
 | `description` | string |
 | `risk` | string |
-| `keywords` | array of string |
+| `signature` | string |
+| `aliases` | array of string |
+
+## Tool Plan Payload
+
+`agentx tool-plan TOOL --args-json JSON --json` emits `agentx.tool_plan.v1`.
+
+This is a read-only tool-call preflight for runners. It resolves tool aliases,
+parses args JSON, reports risk and approval posture, and performs basic known
+arg checks for write paths, git staging paths, run command allowlists, and
+docker compose availability. It never executes the tool.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.tool_plan.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `generated_at` | string | Local ISO timestamp. |
+| `requested_tool` | string | Tool name or alias requested by the caller. |
+| `canonical_tool` | string or null | Primary registered tool name after alias resolution. |
+| `exists` | boolean | Whether the tool exists. |
+| `enabled` | boolean | Whether the tool is enabled in this environment. |
+| `ok` | boolean | True when the tool exists, is enabled, is not RED, args parse, and known arg checks pass. |
+| `risk` | string | Tool risk: `GREEN`, `YELLOW`, `RED`, or `UNKNOWN`. |
+| `approval_required` | boolean | True for YELLOW tools. |
+| `args` | object | Parsed tool arguments. |
+| `signature` | string | Tool signature metadata from the catalog. |
+| `description` | string | Tool description metadata from the catalog. |
+| `aliases` | array of string | Registered aliases for the canonical tool. |
+| `blockers` | array of string | Machine-readable blockers such as `unknown_tool`, `invalid_args_json`, `unsafe_write_path`, or `run_command_requires_green_allowlist`. |
+| `warnings` | array of string | Non-blocking diagnostics. |
+| `next_commands` | array of string | Suggested follow-up actions. |
+| `detail` | string | Empty string or a human-readable diagnostic. |
+
+`--fail-on-blocker` still prints the payload first. It exits `1` when
+`blockers` is non-empty; otherwise it exits `0`.
 
 ## Workflow Catalog Payload
 

@@ -71,6 +71,7 @@ uv run agentx shell
 ```
 
 Shell 內可用 `/tools git` 或 `/tools YELLOW` 聚焦查看工具；外部 wrapper 可用 `agentx tools --json` 取得同一份 tool catalog 與 GREEN/YELLOW/RED metadata，需要聚焦時可用 `agentx tools git --json` 或 `agentx tools YELLOW --json`。
+外部 runner 若已有一個 tool call draft，可用 `agentx tool-plan TOOL --args-json JSON --json` 先確認 canonical tool、risk、approval posture 與基礎 args blocker；它不會執行工具。
 
 用 `/help workflow` 或 `/help /infra` 查單一命令的 usage、examples、risk 與 related commands。
 核心 slash command 都有 examples 與 related commands，適合用來快速探索下一步。

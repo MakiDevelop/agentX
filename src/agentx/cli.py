@@ -75,6 +75,9 @@ from agentx.tools import (
     ensure_safe_write_path,
     patch_write_paths,
     resolve_inside_workspace,
+    tool_aliases,
+    tool_is_enabled,
+    tool_signature,
 )
 from agentx.transcript import (
     Transcript,
@@ -784,6 +787,163 @@ def print_command_plan_payload(
         print_raw("next:")
         for command_item in next_commands:
             print_raw(f"- {command_item}")
+
+
+def _parse_tool_args(args_json: str | None) -> tuple[dict[str, object], list[str], str]:
+    raw = (args_json or "{}").strip()
+    if not raw:
+        return {}, [], ""
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return {}, ["invalid_args_json"], str(exc)
+    if not isinstance(parsed, dict):
+        return {}, ["tool_args_must_be_object"], "tool args JSON must decode to an object"
+    return parsed, [], ""
+
+
+def _coerce_path_list(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    return []
+
+
+def _tool_plan_arg_blockers(settings: Settings, canonical_tool: str, args: dict[str, object]) -> list[str]:
+    blockers: list[str] = []
+    if canonical_tool in {"write_file", "edit_file", "insert_code"}:
+        path_value = args.get("path")
+        if not isinstance(path_value, str) or not path_value.strip():
+            return ["missing_path"]
+        if canonical_tool == "write_file" and not isinstance(args.get("content"), str):
+            blockers.append("missing_content")
+        if canonical_tool == "edit_file":
+            edits = args.get("edits")
+            if not isinstance(edits, list) or not edits:
+                blockers.append("missing_edits")
+        if canonical_tool == "insert_code":
+            if not isinstance(args.get("insert_after"), str) or not str(args.get("insert_after") or "").strip():
+                blockers.append("missing_insert_after")
+            if not isinstance(args.get("content"), str):
+                blockers.append("missing_content")
+        try:
+            target = resolve_inside_workspace(settings.workspace, path_value)
+            ensure_safe_write_path(settings.workspace, target)
+        except ValueError:
+            blockers.append("unsafe_write_path")
+    elif canonical_tool in {"git_stage", "git_unstage"}:
+        paths = _coerce_path_list(args.get("paths"))
+        if not paths:
+            return ["missing_paths"]
+        for path in paths:
+            if path in {"", "."} or any(ch in path for ch in "*?[]"):
+                blockers.append("unsafe_git_path")
+                break
+            try:
+                resolve_inside_workspace(settings.workspace, path)
+            except ValueError:
+                blockers.append("unsafe_git_path")
+                break
+    elif canonical_tool in {"run_command", "run_build_command"}:
+        command = args.get("command")
+        if not isinstance(command, str) or not command.strip():
+            return ["missing_command"]
+        command_plan = command_plan_payload(settings, command)
+        if command_plan.get("blockers"):
+            blockers.extend(str(item) for item in command_plan["blockers"])  # type: ignore[index]
+        if canonical_tool == "run_command" and command_plan.get("matched_policy") != "allowed_command":
+            blockers.append("run_command_requires_green_allowlist")
+        if canonical_tool == "run_build_command" and command_plan.get("matched_policy") != "build_command":
+            blockers.append("run_build_command_requires_build_allowlist")
+    elif canonical_tool.startswith("docker_compose_"):
+        action = canonical_tool.removeprefix("docker_compose_")
+        try:
+            docker_compose_command(
+                settings.workspace,
+                action,
+                compose_file=str(args["compose_file"]) if args.get("compose_file") is not None else None,
+                service=str(args["service"]) if args.get("service") is not None else None,
+                tail=int(args.get("tail", 100)),
+            )
+        except (FileNotFoundError, ValueError):
+            blockers.append("docker_compose_unavailable")
+    return blockers
+
+
+def tool_plan_payload(settings: Settings, tool_name: str, args_json: str | None = None) -> dict[str, object]:
+    registry = ToolRegistry(builtin_tools(settings.workspace, NullMemoryClient()))
+    args, blockers, detail = _parse_tool_args(args_json)
+    requested_tool = tool_name.strip()
+    tool = registry.get(requested_tool) if requested_tool else None
+    canonical_tool = getattr(tool, "name", None) if tool is not None else None
+    risk = getattr(tool, "risk", None)
+    enabled = tool_is_enabled(tool) if tool is not None else False
+
+    payload: dict[str, object] = {
+        "schema": "agentx.tool_plan.v1",
+        "workspace": str(settings.workspace),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "requested_tool": requested_tool,
+        "canonical_tool": canonical_tool,
+        "exists": tool is not None,
+        "enabled": enabled,
+        "ok": False,
+        "risk": risk.value if risk is not None else "UNKNOWN",
+        "approval_required": risk == Risk.YELLOW if risk is not None else False,
+        "args": args,
+        "signature": tool_signature(tool) if tool is not None else "",
+        "description": str(getattr(tool, "description", "")) if tool is not None else "",
+        "aliases": tool_aliases(tool) if tool is not None else [],
+        "blockers": blockers,
+        "warnings": [],
+        "next_commands": [],
+        "detail": detail,
+    }
+
+    if not requested_tool:
+        blockers.append("missing_tool")
+    elif tool is None:
+        blockers.append("unknown_tool")
+        payload["next_commands"] = ["agentx tools --json"]
+    elif not enabled:
+        blockers.append("tool_disabled")
+    elif risk == Risk.RED:
+        blockers.append("red_tool_blocked")
+    elif not blockers and canonical_tool is not None:
+        blockers.extend(_tool_plan_arg_blockers(settings, canonical_tool, args))
+
+    if not blockers and tool is not None:
+        payload["ok"] = True
+        if risk == Risk.YELLOW:
+            payload["next_commands"] = ["Confirm YELLOW approval before execution"]
+        else:
+            payload["next_commands"] = ["Tool call is preflight-clean; execute only through agentX tool policy"]
+    return payload
+
+
+def tool_plan_exit_code(payload: dict[str, object], *, fail_on_blocker: bool = False) -> int:
+    return 1 if fail_on_blocker and payload.get("blockers") else 0
+
+
+def print_tool_plan_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output or jsonl_output:
+        output_format = "jsonl" if jsonl_output else "json"
+        print_structured_payload(payload, output_format=output_format, event="tool_plan")
+        return
+    status = "ok" if payload.get("ok") else "blocked"
+    print_raw(f"{status}: {payload.get('requested_tool')} -> {payload.get('canonical_tool')}")
+    print_raw(f"risk: {payload.get('risk')}")
+    blockers = payload.get("blockers") or []
+    if blockers:
+        print_raw("blockers:")
+        for blocker in blockers:
+            print_raw(f"- {blocker}")
 
 
 def print_raw(text: object) -> None:
@@ -5461,6 +5621,23 @@ def command_plan_command(
     structured_format = structured_output_format(json_output, output_format)
     print_command_plan_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(command_plan_exit_code(payload, fail_on_blocker=fail_on_blocker))
+
+
+@app.command("tool-plan")
+def tool_plan_command(
+    tool: str = typer.Argument(..., help="Tool name or alias to classify without executing."),
+    args_json: str = typer.Option("{}", "--args-json", "--args", help="Tool args as a JSON object string."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for path/compose checks."),
+    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 after printing the payload when blockers are present."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Classify an agentX tool call and args without executing it."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = tool_plan_payload(settings, tool, args_json)
+    structured_format = structured_output_format(json_output, output_format)
+    print_tool_plan_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(tool_plan_exit_code(payload, fail_on_blocker=fail_on_blocker))
 
 
 @app.command("config")
