@@ -72,6 +72,19 @@ after a successful inspection even when the inspected payload represents a
 failed headless run. With it, the command prints the requested takeover data and
 then exits with the payload `exit_code` clamped to the shell range `0..255`.
 
+For automation that needs a stable artifact path instead of stdout parsing:
+
+```bash
+agentx -p "..." --agent --result-output .agentx/results/run.json --quiet
+agentx -p "..." --agent --output-format jsonl --result-output .agentx/results/run.jsonl
+agentx ask "..." --result-output .agentx/results/ask.json --quiet
+```
+
+`--result-output` writes inside the active workspace only, refuses to overwrite
+an existing file, and creates parent directories as needed. With plain stdout the
+artifact is JSON. With `--output-format jsonl` the artifact is the same single
+`result` event envelope that can be passed to `agentx handoff-inspect`.
+
 ## `log_summary`
 
 Required keys:

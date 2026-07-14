@@ -1236,13 +1236,26 @@ def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
     return json.dumps(headless_payload(result, exit_code), ensure_ascii=False)
 
 
+def headless_payload_text(
+    result: HeadlessRunResult,
+    exit_code: int,
+    *,
+    output_format: str = "json",
+) -> str:
+    return structured_payload_text(
+        headless_payload(result, exit_code),
+        output_format=output_format,
+        event="result",
+    )
+
+
 def print_headless_payload(
     result: HeadlessRunResult,
     exit_code: int,
     *,
     output_format: str = "json",
 ) -> None:
-    print_structured_payload(headless_payload(result, exit_code), output_format=output_format, event="result")
+    print_json_output(headless_payload_text(result, exit_code, output_format=output_format))
 
 
 def headless_exception_result(exc: Exception, *, session_path: str | None = None) -> HeadlessRunResult:
@@ -1580,6 +1593,7 @@ def build_headless_dry_run_payload(
     save_session: bool = False,
     resume_session: str | None = None,
     session_output: Path | None = None,
+    result_output: Path | None = None,
     no_memory: bool = False,
 ) -> dict[str, object]:
     settings = Settings(workspace=workspace_override)
@@ -1624,6 +1638,7 @@ def build_headless_dry_run_payload(
         "save_session": save_session or session_output is not None,
         "resume_session": resume_session,
         "session_output": str(session_output) if session_output else None,
+        "result_output": str(result_output) if result_output else None,
         "prompt_chars": len(prompt),
     }
 
@@ -1649,6 +1664,7 @@ def format_headless_dry_run(payload: dict[str, object]) -> str:
             f"save_session: {payload['save_session']}",
             f"resume_session: {payload['resume_session']}",
             f"session_output: {payload['session_output']}",
+            f"result_output: {payload['result_output']}",
             f"prompt_chars: {payload['prompt_chars']}",
         ]
     )
@@ -1788,6 +1804,34 @@ def resolve_headless_session_output(workspace: Path, value: str | None) -> Path 
     return target
 
 
+def resolve_headless_result_output(workspace: Path, value: str | None) -> Path | None:
+    if value is None:
+        return None
+    target = resolve_inside_workspace(workspace, value)
+    if target.exists():
+        raise typer.BadParameter(f"result output already exists: {value}")
+    if target.name in {"", ".", ".."}:
+        raise typer.BadParameter(f"invalid result output path: {value}")
+    return target
+
+
+def write_headless_result_output(
+    path: Path | None,
+    result: HeadlessRunResult,
+    exit_code: int,
+    *,
+    output_format: str,
+) -> None:
+    if path is None:
+        return
+    artifact_format = "jsonl" if output_format == "jsonl" else "json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        headless_payload_text(result, exit_code, output_format=artifact_format) + "\n",
+        encoding="utf-8",
+    )
+
+
 def structured_headless_exit_code(
     termination: str | None,
     failing_tools: list[str] | set[str] | tuple[str, ...] | None = None,
@@ -1895,6 +1939,7 @@ def main(
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
     session_output: str | None = typer.Option(None, "--session-output", help="Write the headless session JSONL artifact to a specific workspace path."),
+    result_output: str | None = typer.Option(None, "--result-output", help="Write the headless result JSON/JSONL payload to a specific workspace path."),
     no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
 ) -> None:
     """Run local Ollama agent workflows."""
@@ -1912,6 +1957,7 @@ def main(
     workspace_override = resolve_headless_workspace(workspace)
     settings_for_prompt = Settings(workspace=workspace_override)
     session_output_path = resolve_headless_session_output(settings_for_prompt.workspace, session_output)
+    result_output_path = resolve_headless_result_output(settings_for_prompt.workspace, result_output)
     if list_models:
         payload = model_list_payload(
             workspace_override=workspace_override,
@@ -1949,6 +1995,7 @@ def main(
             save_session=save_session,
             resume_session=resume_session,
             session_output=session_output_path,
+            result_output=result_output_path,
             no_memory=no_memory,
         )
         print_headless_dry_run(payload, json_output=structured_output, jsonl_output=jsonl_output, quiet=quiet)
@@ -1989,8 +2036,10 @@ def main(
             failing_tools=output.failing_tools,
         )
         if structured_output:
+            write_headless_result_output(result_output_path, output, exit_code, output_format=structured_format)
             print_headless_payload(output, exit_code, output_format=structured_format)
             raise typer.Exit(code=exit_code)
+        write_headless_result_output(result_output_path, output, exit_code, output_format=structured_format)
         if not quiet:
             print_raw(output.output)
         raise typer.Exit(
@@ -1998,15 +2047,19 @@ def main(
         )
     if structured_output:
         fallback_result = HeadlessRunResult(output=output)
+        fallback_exit_code = headless_exit_code(output)
+        write_headless_result_output(result_output_path, fallback_result, fallback_exit_code, output_format=structured_format)
         print_headless_payload(
             fallback_result,
-            headless_exit_code(output),
+            fallback_exit_code,
             output_format=structured_format,
         )
-        raise typer.Exit(code=headless_exit_code(output))
+        raise typer.Exit(code=fallback_exit_code)
+    fallback_exit_code = headless_exit_code(output)
+    write_headless_result_output(result_output_path, HeadlessRunResult(output=output), fallback_exit_code, output_format=structured_format)
     if not quiet:
         print_raw(output)
-    raise typer.Exit(code=headless_exit_code(output))
+    raise typer.Exit(code=fallback_exit_code)
 
 
 def build_runtime(
@@ -2416,13 +2469,16 @@ def ask(
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
     session_output: str | None = typer.Option(None, "--session-output", help="Write the headless session JSONL artifact to a specific workspace path."),
+    result_output: str | None = typer.Option(None, "--result-output", help="Write the headless result JSON/JSONL payload to a specific workspace path."),
     no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
 ) -> None:
     structured_format = structured_output_format(json_output, output_format)
     structured_output = structured_format != "plain"
     jsonl_output = structured_format == "jsonl"
     workspace_override = resolve_headless_workspace(workspace)
-    session_output_path = resolve_headless_session_output(Settings(workspace=workspace_override).workspace, session_output)
+    settings_for_prompt = Settings(workspace=workspace_override)
+    session_output_path = resolve_headless_session_output(settings_for_prompt.workspace, session_output)
+    result_output_path = resolve_headless_result_output(settings_for_prompt.workspace, result_output)
     if dry_run:
         payload = build_headless_dry_run_payload(
             prompt,
@@ -2440,6 +2496,7 @@ def ask(
             save_session=save_session,
             resume_session=resume_session,
             session_output=session_output_path,
+            result_output=result_output_path,
             no_memory=no_memory,
         )
         print_headless_dry_run(payload, json_output=structured_output, jsonl_output=jsonl_output, quiet=quiet)
@@ -2478,22 +2535,28 @@ def ask(
             failing_tools=output.failing_tools,
         )
         if structured_output:
+            write_headless_result_output(result_output_path, output, exit_code, output_format=structured_format)
             print_headless_payload(output, exit_code, output_format=structured_format)
             raise typer.Exit(code=exit_code)
+        write_headless_result_output(result_output_path, output, exit_code, output_format=structured_format)
         if not quiet:
             print_raw(output.output)
         raise typer.Exit(code=exit_code)
     if structured_output:
         fallback_result = HeadlessRunResult(output=output)
+        fallback_exit_code = headless_exit_code(output)
+        write_headless_result_output(result_output_path, fallback_result, fallback_exit_code, output_format=structured_format)
         print_headless_payload(
             fallback_result,
-            headless_exit_code(output),
+            fallback_exit_code,
             output_format=structured_format,
         )
-        raise typer.Exit(code=headless_exit_code(output))
+        raise typer.Exit(code=fallback_exit_code)
+    fallback_exit_code = headless_exit_code(output)
+    write_headless_result_output(result_output_path, HeadlessRunResult(output=output), fallback_exit_code, output_format=structured_format)
     if not quiet:
         print_raw(output)
-    raise typer.Exit(code=headless_exit_code(output))
+    raise typer.Exit(code=fallback_exit_code)
 
 
 @app.command("backends")
