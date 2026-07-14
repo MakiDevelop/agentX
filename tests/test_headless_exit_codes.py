@@ -187,6 +187,47 @@ def test_backends_command_json(monkeypatch) -> None:  # noqa: ANN001
     assert data == {"backends": ["llama_cpp", "ollama"]}
 
 
+def test_version_payload_reads_package_version(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setattr(cli, "package_version", lambda name: "9.8.7")
+
+    payload = cli.version_payload()
+
+    assert payload["agentx"] == "9.8.7"
+    assert payload["python"]
+
+
+def test_version_option_plain(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "version_payload", lambda: {"agentx": "9.8.7", "python": "3.13.0"})
+
+    result = runner.invoke(cli.app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.output == "agentx 9.8.7\npython 3.13.0\n"
+
+
+def test_version_option_json(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "version_payload", lambda: {"agentx": "9.8.7", "python": "3.13.0"})
+
+    result = runner.invoke(cli.app, ["--version", "--output-format", "json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert data == {"agentx": "9.8.7", "python": "3.13.0"}
+
+
+def test_version_command_json(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "version_payload", lambda: {"agentx": "9.8.7", "python": "3.13.0"})
+
+    result = runner.invoke(cli.app, ["version", "--json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert data == {"agentx": "9.8.7", "python": "3.13.0"}
+
+
 def test_load_headless_prompt_reads_workspace_file(tmp_path: Path) -> None:
     prompt = tmp_path / "briefing.md"
     prompt.write_text("DO THE THING", encoding="utf-8")

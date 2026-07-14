@@ -100,6 +100,8 @@ agentx -p "幫我看 repo" --agent --approval auto-approve
 agentx -p "幫我看 repo" --agent --quiet
 agentx --list-backends
 agentx backends --json
+agentx --version
+agentx version --json
 ```
 
 外部傳入 prompt，類似 `claude -p`：

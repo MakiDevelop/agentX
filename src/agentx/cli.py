@@ -8,6 +8,7 @@ import threading
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
+from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -1012,6 +1013,27 @@ def print_backend_list(*, json_output: bool = False) -> None:
     print_raw("\n".join(backends))
 
 
+def version_payload() -> dict[str, str]:
+    try:
+        agentx_version = package_version("agentx")
+    except PackageNotFoundError:
+        from agentx import __version__
+
+        agentx_version = __version__
+    return {
+        "agentx": agentx_version,
+        "python": sys.version.split()[0],
+    }
+
+
+def print_version(*, json_output: bool = False) -> None:
+    payload = version_payload()
+    if json_output:
+        print_json_output(json.dumps(payload, ensure_ascii=False))
+        return
+    print_raw(f"agentx {payload['agentx']}\npython {payload['python']}")
+
+
 def resolve_headless_workspace(workspace: str | None) -> Path | None:
     if workspace is None:
         return None
@@ -1158,6 +1180,7 @@ def main(
     orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
     list_backends: bool = typer.Option(False, "--list-backends", help="List registered LLM backend keys and exit."),
+    show_version: bool = typer.Option(False, "--version", help="Show agentX and Python versions and exit."),
     workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Run this headless task against a specific workspace directory."),
     approval: str | None = typer.Option(None, "--approval", help="Override approval policy for this headless run: ask, auto, off, strict, auto-approve, or deny."),
     backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
@@ -1176,6 +1199,9 @@ def main(
         return
     if list_backends:
         print_backend_list(json_output=wants_json_output(json_output, output_format))
+        raise typer.Exit(code=0)
+    if show_version:
+        print_version(json_output=wants_json_output(json_output, output_format))
         raise typer.Exit(code=0)
     workspace_override = resolve_headless_workspace(workspace)
     settings_for_prompt = Settings(workspace=workspace_override)
@@ -1658,6 +1684,15 @@ def backends(
 ) -> None:
     """List registered LLM backend keys."""
     print_backend_list(json_output=wants_json_output(json_output, output_format))
+
+
+@app.command("version")
+def version_command(
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain or json."),
+) -> None:
+    """Show agentX and Python versions."""
+    print_version(json_output=wants_json_output(json_output, output_format))
 
 
 @app.command()
