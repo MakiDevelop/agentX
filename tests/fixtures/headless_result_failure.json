@@ -1,0 +1,95 @@
+{
+  "event": "result",
+  "data": {
+    "output": "stopped",
+    "exit_code": 1,
+    "termination": "final_failed",
+    "failing_tools": [
+      "run_tests"
+    ],
+    "stats": {
+      "message_count": 3,
+      "task_counts": {
+        "in_progress": 1
+      }
+    },
+    "log_summary": {
+      "termination": "final_failed",
+      "tool_outcomes": {
+        "read_file": true,
+        "run_tests": false
+      },
+      "successful_tools": [
+        "read_file"
+      ],
+      "failing_tools": [
+        "run_tests"
+      ],
+      "recent_errors": [
+        {
+          "type": "execution_error",
+          "tool": "run_tests",
+          "message": "pytest failed",
+          "attempt_count": 1
+        }
+      ],
+      "recovery_suggestions": [
+        {
+          "action": "verify_assumption",
+          "confidence": 0.75,
+          "description": "read files",
+          "rationale": "state stale"
+        }
+      ],
+      "pending_verifies": [
+        "src/a.py"
+      ],
+      "handoff_summary": {
+        "status": "final_failed",
+        "needs_handoff": true,
+        "failing_tools": [
+          "run_tests"
+        ],
+        "pending_verifies": [
+          "src/a.py"
+        ],
+        "task_counts": {
+          "in_progress": 1
+        },
+        "last_error": {
+          "type": "execution_error",
+          "tool": "run_tests",
+          "message": "pytest failed",
+          "attempt_count": 1
+        },
+        "recovery_actions": [
+          "verify_assumption"
+        ],
+        "primary_recovery": {
+          "action": "verify_assumption",
+          "confidence": 0.75,
+          "description": "read files",
+          "rationale": "state stale"
+        },
+        "recovery_checklist": [
+          "Inspect and verify pending edited paths before new edits.",
+          "Review failing tool output for: run_tests.",
+          "Start from last_error tool=run_tests type=execution_error.",
+          "Read the relevant source and test files before editing.",
+          "Run the smallest targeted verification that can prove or disprove the assumption."
+        ],
+        "next_steps": [
+          "Verify pending edited paths before making more changes.",
+          "Inspect or rerun failing tool(s): run_tests.",
+          "Apply recovery action: verify_assumption.",
+          "Do not treat the final answer as done; resolve failing tools or pending verifies first.",
+          "Resume with the provided resume_command."
+        ],
+        "session_path": "/repo/.agentx/sessions/contract.session.jsonl",
+        "resume_session": "contract.session.jsonl",
+        "resume_command": "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json"
+      }
+    },
+    "session_path": "/repo/.agentx/sessions/contract.session.jsonl"
+  }
+}

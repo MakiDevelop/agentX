@@ -50,6 +50,11 @@ Optional keys:
 Other events currently include `dry_run`, `version`, `backends`, and `models`.
 Consumers should branch on `event` and read the payload from `data`.
 
+A failure takeover fixture is kept at
+`tests/fixtures/headless_result_failure.json`. Runner integrations can use it as
+a stable example for extracting `data.log_summary.handoff_summary.resume_command`
+and `data.log_summary.handoff_summary.recovery_checklist`.
+
 ## `log_summary`
 
 Required keys:

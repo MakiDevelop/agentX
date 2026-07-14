@@ -231,6 +231,26 @@ def test_headless_payload_contract_required_keys() -> None:
     assert handoff["resume_command"].endswith("--resume-session contract.session.jsonl --json")
 
 
+def test_headless_payload_contract_fixture_supports_runner_takeover() -> None:
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    event = json.loads(fixture.read_text(encoding="utf-8"))
+
+    assert event["event"] == "result"
+    payload = event["data"]
+    handoff = payload["log_summary"]["handoff_summary"]
+
+    assert payload["exit_code"] == 1
+    assert payload["termination"] == "final_failed"
+    assert handoff["needs_handoff"] is True
+    assert handoff["resume_command"] == (
+        "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json"
+    )
+    assert handoff["recovery_actions"] == ["verify_assumption"]
+    assert handoff["recovery_checklist"][-1] == (
+        "Run the smallest targeted verification that can prove or disprove the assumption."
+    )
+
+
 def test_headless_payload_keeps_resume_fields_null_without_session_path() -> None:
     payload = cli.headless_payload(
         cli.HeadlessRunResult(
