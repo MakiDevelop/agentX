@@ -1135,6 +1135,7 @@ def main(
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan thoroughly first, then seamlessly continue into execution in the same run (recommended for complex tasks)."),
     orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
+    model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
     max_steps: int | None = typer.Option(None, "--max-steps", help="Override max agent loop steps for -p."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for headless automation."),
     output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain or json."),
@@ -1161,6 +1162,7 @@ def main(
         plan_mode=plan,
         plan_then_execute=plan_then_execute,
         orchestrate=orchestrate,
+        model_override=model,
         return_metadata=True,
         suppress_trace=structured_output,
         save_session=save_session,
@@ -1244,6 +1246,7 @@ def run_print_prompt(
     plan_mode: bool = False,
     plan_then_execute: bool = False,
     orchestrate: bool = False,
+    model_override: str | None = None,
     return_metadata: bool = False,
     suppress_trace: bool = False,
     save_session: bool = False,
@@ -1251,6 +1254,8 @@ def run_print_prompt(
     max_steps: int | None = None,
 ) -> str | HeadlessRunResult:
     settings = Settings()
+    if model_override:
+        settings = settings.with_updates(model=model_override)
     if max_steps is not None:
         settings = settings.with_updates(max_steps=max_steps)
     project_config = load_project_config(settings.workspace)
@@ -1526,6 +1531,7 @@ def write_handoff(
 def ask(
     prompt: str = typer.Argument(..., help="Task or question for agentX."),
     namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
+    model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan first, then execute in the same headless run."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for automation."),
@@ -1539,6 +1545,7 @@ def ask(
         namespace=namespace,
         agent_mode=True,
         plan_then_execute=plan_then_execute,
+        model_override=model,
         return_metadata=True,
         suppress_trace=structured_output,
         save_session=save_session,

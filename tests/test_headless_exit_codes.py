@@ -366,7 +366,24 @@ def test_print_prompt_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN0
     assert captured["resume_session"] == "latest"
     assert captured["suppress_trace"] is True
     assert captured["max_steps"] is None
+    assert captured["model_override"] is None
     assert data["session_path"] == "/tmp/s.session.jsonl"
+
+
+def test_print_prompt_forwards_model_override(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--model", "gpt-oss:20b"])
+
+    assert result.exit_code == 0
+    assert captured["model_override"] == "gpt-oss:20b"
 
 
 def test_print_prompt_forwards_max_steps(monkeypatch) -> None:  # noqa: ANN001
@@ -437,6 +454,48 @@ def test_run_print_prompt_plan_then_execute_runs_two_phases(monkeypatch) -> None
     assert "PLAN_RESULT" in calls[1][0]
 
 
+def test_run_print_prompt_uses_model_override(monkeypatch) -> None:  # noqa: ANN001
+    seen_models: list[str] = []
+
+    class FakeAgentLoop:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            self.session = SimpleNamespace(
+                message_count=1,
+                context_tokens_estimate=10,
+                error_history=[],
+                compaction_count=0,
+                model_turn_count=0,
+                tool_call_count=0,
+                reflection_count=0,
+                pending_verifies=set(),
+                tasks=[],
+                last_termination="final_success",
+                last_failing_tools=set(),
+            )
+
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+            return "ok"
+
+    def fake_build_runtime(settings, *args, **kwargs):  # noqa: ANN001
+        seen_models.append(settings.model)
+        return object(), object(), object()
+
+    monkeypatch.setattr(cli, "build_runtime", fake_build_runtime)
+    monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
+
+    result = cli.run_print_prompt(
+        "demo",
+        namespace="project:test",
+        agent_mode=True,
+        model_override="gpt-oss:20b",
+        return_metadata=True,
+        suppress_trace=True,
+    )
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert seen_models == ["gpt-oss:20b"]
+
+
 def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN001
     runner = CliRunner()
     captured: dict[str, object] = {}
@@ -463,6 +522,7 @@ def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch)
     assert captured["resume_session"] == "latest"
     assert captured["max_steps"] == 3
     assert captured["plan_then_execute"] is False
+    assert captured["model_override"] is None
     assert data["session_path"] == "/tmp/s.session.jsonl"
 
 
@@ -480,6 +540,22 @@ def test_ask_forwards_plan_then_execute(monkeypatch) -> None:  # noqa: ANN001
 
     assert result.exit_code == 0
     assert captured["plan_then_execute"] is True
+
+
+def test_ask_forwards_model_override(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["ask", "demo", "--model", "gpt-oss:20b"])
+
+    assert result.exit_code == 0
+    assert captured["model_override"] == "gpt-oss:20b"
 
 
 def test_ask_output_format_json(monkeypatch) -> None:  # noqa: ANN001
