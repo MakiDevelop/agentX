@@ -2067,6 +2067,85 @@ def review_exit_code(payload: dict[str, object], *, fail_on_blocker: bool = Fals
     return 0 if payload.get("ok") is True else 1
 
 
+def commit_plan_payload(
+    settings: Settings,
+    *,
+    message: str | None = None,
+    timeout: int = 120,
+    run_verify: bool = True,
+) -> dict[str, object]:
+    plan = build_commit_plan(settings.workspace)
+    review = review_payload(settings, timeout=timeout, run_verify=run_verify)
+    commit_message = (message or "").strip()
+    blockers = [str(item) for item in review.get("blockers", [])]
+    warnings = [str(item) for item in review.get("warnings", [])]
+    if not commit_message:
+        blockers.append("missing_commit_message")
+    review_commit_ready = review.get("commit_ready") is True
+    ready_to_commit = not blockers and review_commit_ready and bool(plan.files)
+    next_commands = ["agentx diff --json"]
+    if not commit_message:
+        next_commands.append("agentx commit-plan --message '中文 commit 訊息' --json")
+    if ready_to_commit:
+        next_commands.append(f"/commit {commit_message}")
+    elif blockers:
+        next_commands.append("fix blockers, then rerun agentx commit-plan --message '中文 commit 訊息' --json")
+    elif not review_commit_ready:
+        next_commands.append("agentx review --json --fail-on-blocker")
+
+    return {
+        "schema": "agentx.commit_plan.v1",
+        "workspace": str(settings.workspace),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "ok": not blockers,
+        "ready_to_commit": ready_to_commit,
+        "commit_message": commit_message or None,
+        "blockers": blockers,
+        "warnings": warnings,
+        "status": plan.status,
+        "diff_stat": plan.diff_stat,
+        "files_to_stage": plan.files,
+        "file_count": len(plan.files),
+        "review": review,
+        "next_commands": next_commands,
+    }
+
+
+def print_commit_plan_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="commit_plan",
+        )
+        return
+
+    table = Table(title="agentX commit plan", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    table.add_row("workspace", str(payload["workspace"]))
+    table.add_row("ok", str(payload["ok"]))
+    table.add_row("ready_to_commit", str(payload["ready_to_commit"]))
+    table.add_row("commit_message", str(payload.get("commit_message") or "-"))
+    table.add_row("files", str(payload["file_count"]))
+    table.add_row("blockers", ", ".join(str(item) for item in payload["blockers"]) or "-")
+    table.add_row("warnings", ", ".join(str(item) for item in payload["warnings"]) or "-")
+    console.print(table)
+    for path in payload["files_to_stage"]:  # type: ignore[index]
+        console.print(f"- {path}")
+
+
+def commit_plan_exit_code(payload: dict[str, object], *, fail_on_blocker: bool = False) -> int:
+    if not fail_on_blocker:
+        return 0
+    return 0 if payload.get("ok") is True else 1
+
+
 def print_verify_payload(
     payload: dict[str, object],
     *,
@@ -2130,6 +2209,7 @@ def inspect_payload(
         "next_commands": [
             "agentx diff --json",
             "agentx review --json --fail-on-blocker",
+            "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker",
             "agentx verify --json --fail-on-error",
             "agentx tasks active --json",
             "agentx approvals latest --denied --json --fail-on-denied",
@@ -4853,6 +4933,29 @@ def review_command(
     structured_format = structured_output_format(json_output, output_format)
     print_review_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=review_exit_code(payload, fail_on_blocker=fail_on_blocker))
+
+
+@app.command("commit-plan")
+def commit_plan_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for commit planning."),
+    message: str | None = typer.Option(None, "--message", "-m", help="Proposed commit message; required for ready_to_commit=true."),
+    timeout: int = typer.Option(120, "--timeout", min=1, help="Per-verification-command timeout in seconds."),
+    skip_verify: bool = typer.Option(False, "--skip-verify", help="Skip verification commands and only summarize commit posture."),
+    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when blockers prevent commit readiness."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Print a read-only commit plan without staging, committing, or pushing."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = commit_plan_payload(
+        settings,
+        message=message,
+        timeout=timeout,
+        run_verify=not skip_verify,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_commit_plan_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=commit_plan_exit_code(payload, fail_on_blocker=fail_on_blocker))
 
 
 @app.command("inspect")

@@ -35,6 +35,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx traces --json` | `agentx.traces.v1` | `traces` |
 | `agentx diff --json` | `agentx.diff.v1` | `diff` |
 | `agentx review --json` | `agentx.review.v1` | `review` |
+| `agentx commit-plan --json` | `agentx.commit_plan.v1` | `commit_plan` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
@@ -168,6 +169,34 @@ Required stable keys:
 | `warnings` | array of string | Non-blocking warnings such as `verify_skipped` or `has_untracked_files`. |
 | `diff` | object | Embedded `agentx.diff.v1`. |
 | `verify` | object or null | Embedded `agentx.verify.v1`, or null when `--skip-verify` was used. |
+| `next_commands` | array of string | Suggested follow-up commands for humans or runners. |
+
+## Commit Plan Payload
+
+`agentx commit-plan --message TEXT --json` emits `agentx.commit_plan.v1`.
+
+This is a read-only commit planning payload for runners that want to present or
+validate a future commit before mutating the git index. It does not stage,
+commit, or push. It uses the same file list source as the interactive `/commit`
+flow and embeds `agentx.review.v1` for the current review gate.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.commit_plan.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `generated_at` | string | Local ISO timestamp. |
+| `ok` | boolean | True when no blockers are present. |
+| `ready_to_commit` | boolean | True when review passes, a commit message is present, and files exist. |
+| `commit_message` | string or null | Proposed commit message. |
+| `blockers` | array of string | Machine-readable blockers such as `missing_commit_message`, `verify_failed`, or `no_changes`. |
+| `warnings` | array of string | Non-blocking warnings inherited from review. |
+| `status` | string | `git status --short --branch` output. |
+| `diff_stat` | string | `git diff --stat` output. |
+| `files_to_stage` | array of string | Explicit workspace-relative paths that `/commit` would stage one by one. |
+| `file_count` | integer | Number of files in `files_to_stage`. |
+| `review` | object | Embedded `agentx.review.v1`. |
 | `next_commands` | array of string | Suggested follow-up commands for humans or runners. |
 
 ## Artifacts Payload

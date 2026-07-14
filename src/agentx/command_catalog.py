@@ -155,6 +155,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local git inspection and existing verification commands",
     },
     {
+        "command": "agentx commit-plan",
+        "usage": "agentx commit-plan --message TEXT --json",
+        "description": "Preview the files, message, review gate, and blockers for a future commit without staging.",
+        "examples": ["agentx commit-plan --message '新增 review gate' --json", "agentx commit-plan -m '更新文件' --skip-verify --output-format jsonl"],
+        "schemas": ["agentx.commit_plan.v1"],
+        "jsonl_event": "commit_plan",
+        "risk": "GREEN - read-only local git inspection and existing verification commands",
+    },
+    {
         "command": "agentx tasks",
         "usage": "agentx tasks [STATUS] --json",
         "description": "List project task state from .agentx/tasks.json.",
