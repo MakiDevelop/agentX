@@ -134,6 +134,37 @@ def test_wants_json_output_rejects_unknown_format() -> None:
         raise AssertionError("unknown output format should fail")
 
 
+def test_load_headless_prompt_reads_workspace_file(tmp_path: Path) -> None:
+    prompt = tmp_path / "briefing.md"
+    prompt.write_text("DO THE THING", encoding="utf-8")
+
+    assert cli.load_headless_prompt(None, "briefing.md", tmp_path) == "DO THE THING"
+
+
+def test_load_headless_prompt_rejects_ambiguous_sources(tmp_path: Path) -> None:
+    prompt = tmp_path / "briefing.md"
+    prompt.write_text("DO THE THING", encoding="utf-8")
+
+    try:
+        cli.load_headless_prompt("inline", "briefing.md", tmp_path)
+    except Exception as exc:
+        assert "either -p/--print or --prompt-file" in str(exc)
+    else:
+        raise AssertionError("ambiguous prompt sources should fail")
+
+
+def test_load_headless_prompt_blocks_workspace_escape(tmp_path: Path) -> None:
+    outside = tmp_path.parent / "outside-briefing.md"
+    outside.write_text("NOPE", encoding="utf-8")
+
+    try:
+        cli.load_headless_prompt(None, str(outside), tmp_path)
+    except Exception as exc:
+        assert "escapes workspace" in str(exc)
+    else:
+        raise AssertionError("prompt file outside workspace should fail")
+
+
 def test_resolve_session_store_path_latest_and_name(tmp_path: Path) -> None:
     sessions = tmp_path / ".agentx" / "sessions"
     sessions.mkdir(parents=True)
@@ -238,6 +269,32 @@ def test_print_prompt_output_format_json_uses_structured_metadata(monkeypatch) -
     assert data["output"] == "ok"
     assert data["termination"] == "final_success"
     assert captured["suppress_trace"] is True
+
+
+def test_print_prompt_uses_prompt_file(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    prompt = tmp_path / "briefing.md"
+    prompt.write_text("PROMPT FROM FILE", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured["args"] = args
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        ["--prompt-file", "briefing.md", "--agent", "--output-format", "json"],
+        env={"AGENTX_WORKSPACE": str(tmp_path)},
+    )
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert captured["args"][0] == "PROMPT FROM FILE"
+    assert captured["agent_mode"] is True
+    assert data["output"] == "ok"
 
 
 def test_print_prompt_rejects_unknown_output_format(monkeypatch) -> None:  # noqa: ANN001

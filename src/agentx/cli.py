@@ -49,7 +49,13 @@ from agentx.tasks import (
     migrate_single_task_if_needed,
     save_tasks,
 )
-from agentx.tools import DOCKER_COMPOSE_ACTIONS, ToolRegistry, builtin_tools, docker_compose_command
+from agentx.tools import (
+    DOCKER_COMPOSE_ACTIONS,
+    ToolRegistry,
+    builtin_tools,
+    docker_compose_command,
+    resolve_inside_workspace,
+)
 from agentx.transcript import (
     Transcript,
     find_transcript,
@@ -993,6 +999,22 @@ def wants_json_output(json_output: bool, output_format: str | None) -> bool:
     return json_output or normalized == "json"
 
 
+def load_headless_prompt(
+    print_prompt: str | None,
+    prompt_file: str | None,
+    workspace: Path,
+) -> str | None:
+    if print_prompt is not None and prompt_file is not None:
+        raise typer.BadParameter("use either -p/--print or --prompt-file, not both")
+    if prompt_file is None:
+        return print_prompt
+
+    target = resolve_inside_workspace(workspace, prompt_file)
+    if not target.is_file():
+        raise typer.BadParameter(f"prompt file not found: {prompt_file}")
+    return target.read_text(encoding="utf-8", errors="replace")
+
+
 def resolve_session_store_path(workspace: Path, value: str) -> Path:
     sessions_dir = (workspace / ".agentx" / "sessions").resolve()
     if value.strip() == "latest":
@@ -1099,6 +1121,7 @@ def run_init(settings: Settings, tools: ToolRegistry, namespace: str) -> str:
 def main(
     ctx: typer.Context,
     print_prompt: str | None = typer.Option(None, "-p", "--print", help="Print one response and exit."),
+    prompt_file: str | None = typer.Option(None, "--prompt-file", help="Read the headless prompt from a workspace file."),
     agent: bool = typer.Option(False, "--agent", help="Use agent/tool mode with -p."),
     plan: bool = typer.Option(False, "--plan", help="Start in pure planning mode for -p (only produce high-quality plan + reflection, no tools)."),
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan thoroughly first, then seamlessly continue into execution in the same run (recommended for complex tasks)."),
@@ -1111,13 +1134,15 @@ def main(
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
 ) -> None:
     """Run local Ollama agent workflows."""
-    if print_prompt is None:
-        return
     if ctx.invoked_subcommand is not None:
+        return
+    settings_for_prompt = Settings()
+    prompt = load_headless_prompt(print_prompt, prompt_file, settings_for_prompt.workspace)
+    if prompt is None:
         return
     structured_output = wants_json_output(json_output, output_format)
     output = run_print_prompt(
-        print_prompt,
+        prompt,
         namespace=namespace,
         agent_mode=agent,
         plan_mode=plan,

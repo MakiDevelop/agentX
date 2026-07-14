@@ -98,6 +98,7 @@ AGENTX_MODEL=gemma4:31b ax
 ```bash
 agentx -p "只回一句話：你是什麼？"
 axp "只回一句話：你是什麼？"
+agentx --prompt-file briefing.md --agent --output-format json
 ```
 
 需要 agent 工具模式：
