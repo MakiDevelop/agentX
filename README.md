@@ -93,6 +93,7 @@ AGENTX_WORKSPACE="$PWD" uv --directory /Users/maki/GitHub/agentX run agentx shel
 AGENTX_MODEL=gemma4:31b ax
 agentx -p "幫我看 repo" --agent --model gpt-oss:20b
 agentx -p "幫我看 repo" --agent --backend llama_cpp --model local-model
+agentx -p "幫我看 repo" --agent --timeout 180
 ```
 
 外部傳入 prompt，類似 `claude -p`：

@@ -1137,6 +1137,7 @@ def main(
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
     backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
+    timeout: float | None = typer.Option(None, "--timeout", help="Override LLM request timeout seconds for this headless run."),
     max_steps: int | None = typer.Option(None, "--max-steps", help="Override max agent loop steps for -p."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for headless automation."),
     output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain or json."),
@@ -1165,6 +1166,7 @@ def main(
         orchestrate=orchestrate,
         backend_override=backend,
         model_override=model,
+        timeout_override=timeout,
         return_metadata=True,
         suppress_trace=structured_output,
         save_session=save_session,
@@ -1251,6 +1253,7 @@ def run_print_prompt(
     orchestrate: bool = False,
     backend_override: str | None = None,
     model_override: str | None = None,
+    timeout_override: float | None = None,
     return_metadata: bool = False,
     suppress_trace: bool = False,
     save_session: bool = False,
@@ -1260,6 +1263,8 @@ def run_print_prompt(
     settings = Settings()
     if model_override:
         settings = settings.with_updates(model=model_override)
+    if timeout_override is not None:
+        settings = settings.with_updates(ollama_timeout=timeout_override)
     if max_steps is not None:
         settings = settings.with_updates(max_steps=max_steps)
     project_config = load_project_config(settings.workspace)
@@ -1541,6 +1546,7 @@ def ask(
     namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
     backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
+    timeout: float | None = typer.Option(None, "--timeout", help="Override LLM request timeout seconds."),
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan first, then execute in the same headless run."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for automation."),
@@ -1556,6 +1562,7 @@ def ask(
         plan_then_execute=plan_then_execute,
         backend_override=backend,
         model_override=model,
+        timeout_override=timeout,
         return_metadata=True,
         suppress_trace=structured_output,
         save_session=save_session,
