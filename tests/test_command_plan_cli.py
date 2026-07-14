@@ -118,7 +118,7 @@ def test_command_plan_payload_marks_agentx_prompt_file_metadata(tmp_path) -> Non
 def test_command_plan_payload_marks_agentx_equals_options(tmp_path) -> None:  # noqa: ANN001
     payload = command_plan_payload(
         Settings(workspace=tmp_path),
-        "agentx --prompt-file=briefing.md --output-format=jsonl --resume-session=latest "
+        "agentx --prompt-file=briefing.md --agent --output-format=jsonl --resume-session=latest "
         "--artifact-dir=.agentx/runs/latest --workspace=.",
     )
 
@@ -130,6 +130,37 @@ def test_command_plan_payload_marks_agentx_equals_options(tmp_path) -> None:  # 
     assert payload["tool_args"]["workspace_override"] is True  # type: ignore[index]
     assert payload["tool_args"]["output_format"] == "jsonl"  # type: ignore[index]
     assert payload["next_commands"] == ["agentx inspect --json", "agentx artifacts --json"]
+
+
+def test_command_plan_payload_blocks_agentx_artifact_output_conflicts(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path),
+        "agentx -p x --agent --artifact-dir .agentx/runs/latest --result-output result.json --json",
+    )
+
+    assert payload["ok"] is False
+    assert payload["allowed"] is False
+    assert payload["matched_policy"] == "agentx_headless"
+    assert "headless_artifact_dir_conflicts_with_output_options" in payload["blockers"]
+
+
+def test_command_plan_payload_blocks_agentx_artifact_requires_agent(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx -p x --artifact-dir .agentx/runs/latest --json")
+
+    assert payload["ok"] is False
+    assert payload["allowed"] is False
+    assert "headless_artifact_dir_requires_agent" in payload["blockers"]
+
+
+def test_command_plan_payload_blocks_agentx_session_resume_conflict(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path),
+        "agentx --prompt-file briefing.md --session-output run.session.jsonl --resume-session latest",
+    )
+
+    assert payload["ok"] is False
+    assert payload["allowed"] is False
+    assert "headless_session_output_conflicts_with_resume_session" in payload["blockers"]
 
 
 def test_command_plan_json_outputs_payload() -> None:

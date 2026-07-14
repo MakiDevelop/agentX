@@ -79,6 +79,7 @@
 - [x] `agentx patch-check PATCH --json` 可輸出 read-only patch preflight（`git apply --check -`、touched files、safe path blockers、JSONL event `patch_check`），讓外部 runner 在 `/apply` 前先擋 workspace escape / protected path / malformed patch。
 - [x] `agentx command-plan COMMAND --json` 可輸出 read-only command policy preflight（allowlist / build approval / docker compose / destructive blockers），讓外部 runner 不執行命令也能知道風險、tool args、approval posture 與 blocker。
 - [x] `agentx command-plan` 對 headless `agentx -p` / `--prompt-file` 會回報 agent mode、prompt source、artifact/session/output-format/quiet/resume 等 runner posture metadata。
+- [x] `agentx command-plan` 會提前擋 headless artifact option 衝突（`--artifact-dir` vs 個別 output、artifact/handoff briefing 缺 `--agent`、session-output vs resume-session）。
 - [x] `agentx tool-plan TOOL --args-json JSON --json` 可輸出 read-only tool-call preflight（alias resolution、risk、approval_required、known arg blockers），讓外部 runner 在真正 tool call 前先做機器可讀安全判斷。
 - [x] `agentx capabilities --json` 會提供 `recommended_entrypoints` 與 `by_schema`，讓外部 runner 第一次接入時能直接找到 discovery/preflight/next/gate/verify 入口與 schema 對應 command。
 - [x] `agentx capabilities --json` 會列出 `handoff-inspect` / `handoff-resume`，讓 command-plan 能辨識 artifact resume 流程中的接手命令。

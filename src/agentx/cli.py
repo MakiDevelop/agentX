@@ -700,6 +700,29 @@ def _agentx_headless_tool_args(argv: list[str]) -> dict[str, object]:
     }
 
 
+def _agentx_headless_blockers(tool_args: dict[str, object]) -> list[str]:
+    blockers: list[str] = []
+    if tool_args.get("artifact_dir"):
+        conflicting_outputs = [
+            name
+            for name, key in [
+                ("--session-output", "session_output"),
+                ("--result-output", "result_output"),
+                ("--handoff-briefing-output", "handoff_briefing_output"),
+            ]
+            if tool_args.get(key)
+        ]
+        if conflicting_outputs:
+            blockers.append("headless_artifact_dir_conflicts_with_output_options")
+        if not tool_args.get("agent_mode"):
+            blockers.append("headless_artifact_dir_requires_agent")
+    if tool_args.get("handoff_briefing_output") and not tool_args.get("agent_mode"):
+        blockers.append("headless_handoff_briefing_output_requires_agent")
+    if tool_args.get("session_output") and tool_args.get("resume_session"):
+        blockers.append("headless_session_output_conflicts_with_resume_session")
+    return blockers
+
+
 def _has_option(argv: list[str], option: str) -> bool:
     return option in argv or any(token.startswith(f"{option}=") for token in argv)
 
@@ -724,6 +747,7 @@ def _agentx_command_plan(argv: list[str]) -> dict[str, object] | None:
         argv[1] in {"-p", "--prompt", "--prompt-file"} or argv[1].startswith(("--prompt=", "--prompt-file="))
     ):
         tool_args = _agentx_headless_tool_args(argv)
+        blockers = _agentx_headless_blockers(tool_args)
         return {
             "matched": True,
             "risk": "YELLOW" if "--agent" in argv else "GREEN",
@@ -732,7 +756,7 @@ def _agentx_command_plan(argv: list[str]) -> dict[str, object] | None:
             "tool": None,
             "tool_args": tool_args,
             "resolved_argv": argv,
-            "blockers": [],
+            "blockers": blockers,
             "warnings": [],
             "next_commands": [
                 "agentx inspect --json",
