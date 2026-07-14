@@ -290,8 +290,8 @@ agentX 遇到任何家庭 AI 設施、VPS、SSH、deploy、service restart、cro
 | SSH alias、IP、port、常用入口 | `/infra quick` | 查高頻 runtime facts |
 | domain / service / repo 對應 | `/infra project` | 避免把 domain 當 repo 名 |
 | machine / service / access plane | `/infra resource` | 確認服務實際落點 |
-| Mac mini、mini2、DGX、RTX3090、NAS、S20、PDSNET | `/infra home` 或 `/infra 家庭AI設施` | 家庭 AI 算力與常駐服務路由 |
-| n1k、2ch、ranran、chiba.tw、blog、paul、kerker | `/infra vps` 或 `/infra VPS地圖` | 外網主機與多服務 VPS 消歧義 |
+| Mac mini、mini2、DGX、RTX3090、NAS、S20、PDSNET | `/infra home`、`/infra 家庭AI地圖`、`/infra 家庭AI設施`、`/infra 設施地圖` | 家庭 AI 算力與常駐服務路由 |
+| n1k、2ch、ranran、chiba.tw、blog、paul、kerker | `/infra vps`、`/infra VPS地圖`、`/infra 外網主機` | 外網主機與多服務 VPS 消歧義 |
 
 當 Maki 要求「資源地圖」「家庭 AI 設施地圖」「VPS 地圖」時，agentX 的交付物應包含：
 - repo 內可讀索引：`docs/RESOURCE_MAPS.md`，說明 source、alias、路由、停止條件。

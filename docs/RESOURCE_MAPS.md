@@ -27,6 +27,22 @@ Snapshot status:
 - This document is a routing snapshot and agentX usage contract, not the SSOT.
   When acting on infrastructure, read `/infra ...` or the source files again.
 
+## Lookup Index
+
+Use these lookups as the first move when Maki names a resource, machine, domain,
+or deployment target:
+
+| User wording | agentX lookup | Expected answer shape |
+|--------------|---------------|-----------------------|
+| `資源地圖`, `resource map` | `/infra resource` | machine, service, access plane, boundary |
+| `專案地圖`, `project map` | `/infra project` | domain/service to repo ownership |
+| `家庭AI地圖`, `家庭AI設施`, `設施地圖`, `home ai map` | `/infra home` | node role, workload route, stop condition |
+| `VPS地圖`, `外網主機`, `vps map` | `/infra vps` | public host, service, repo association, caution |
+| mixed or unclear resource | `/infra all` | quick ref + project map + resource map context |
+
+The lookup result is evidence for planning. It is not permission to perform SSH,
+deploy, restart, delete, memory writes, or production changes.
+
 ## Agent-Facing Deliverables
 
 When Maki asks agentX to "make the resource map", "家庭 AI 設施地圖", or

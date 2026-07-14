@@ -115,12 +115,20 @@ def test_build_infrastructure_context_vps_can_fallback_to_quick_ref_heading(tmp_
     ("alias", "expected_marker"),
     [
         ("家庭AI設施", "HOME_MARKER"),
+        ("家庭AI地圖", "HOME_MARKER"),
+        ("家庭AI中心地圖", "HOME_MARKER"),
+        ("設施地圖", "HOME_MARKER"),
+        ("home ai map", "HOME_MARKER"),
         ("家庭 AI 設施地圖", "HOME_MARKER"),
         ("VPS地圖", "VPS_MARKER"),
+        ("vps map", "VPS_MARKER"),
         ("外網主機", "VPS_MARKER"),
         ("資源地圖", "RESOURCE_MARKER"),
+        ("resource map", "RESOURCE_MARKER"),
         ("專案地圖", "PROJECT_MARKER"),
+        ("project map", "PROJECT_MARKER"),
         ("基礎設施速查", "QUICK_MARKER"),
+        ("quick ref", "QUICK_MARKER"),
     ],
 )
 def test_build_infrastructure_context_accepts_chinese_aliases(
