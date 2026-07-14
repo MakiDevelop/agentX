@@ -45,6 +45,7 @@ uv run agentx shell
 外部 wrapper 可用 `agentx config --json` 取得目前 workspace、model、memory backend、approval、persona 等解析後設定；token 只會顯示 set/missing。
 初次接入 repo 時可用 `agentx init --json` 取得 `agentx.init.v1` project profile；預設只讀，加 `--write-memory` 才寫入 Memory Hall。
 需要接續工作時可用 `agentx sessions --json` 取得 `agentx.sessions.v1` transcript overview，外部 runner 可依最新 session、approval denied counts 或 transcript path 決定下一步。
+需要審計 YELLOW 操作時，用 `agentx approvals latest --json` 取得 `agentx.approvals.v1`；CI 或上游 agent 可加 `--denied --fail-on-denied`，在輸出 payload 後用 exit code 擋下被拒絕的 approval receipts。
 需要判斷當前 workspace 姿態時，用 `agentx status --json` 取得 version、runtime、git dirty/ahead/behind 與 task counts；這是本機 read-only 狀態檢查，不探測網路服務。
 需要健康檢查時，用 `agentx doctor --json` 取得 `agentx.doctor.v1`；CI 或上游 agent 可用 `agentx doctor --static --json --fail-on-error` 只跑本機 `uv`、git、task migration 檢查，失敗時用 exit code 擋下流程。
 這些 inspect/catalog/status 類 payload 的欄位契約整理在 `docs/CLI_JSON_CONTRACTS.md`。
@@ -97,7 +98,7 @@ Memory Hall 是跨 session 延續工作的入口：
 ```
 
 自動 handoff 會包含固定區塊：完成、待辦、阻塞、下一輪建議，方便下一個 agent 或下一輪自己接手。
-`/sessions` 會顯示每輪 transcript 的 approval receipt counts，方便快速看出是否有 YELLOW tool 被拒絕；`/transcript approvals latest --denied` 或 `/transcript approvals SESSION --denied` 可以列出本輪、最近上一輪或指定 session 的 approval receipts，並只看拒絕項。
+`/sessions` 會顯示每輪 transcript 的 approval receipt counts，方便快速看出是否有 YELLOW tool 被拒絕；`/transcript approvals latest --denied` 或 `/transcript approvals SESSION --denied` 可以列出本輪、最近上一輪或指定 session 的 approval receipts，並只看拒絕項。外部 runner 則用 `agentx approvals latest --denied --json --fail-on-denied` 做同一件事。
 
 ## 5. Safety And Approval
 

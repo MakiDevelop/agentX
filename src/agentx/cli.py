@@ -71,7 +71,9 @@ from agentx.tools import (
 )
 from agentx.transcript import (
     Transcript,
+    approval_receipts,
     find_transcript,
+    format_approval_receipts,
     list_transcripts,
     resume_loaded_message,
     summarize_transcript,
@@ -706,6 +708,82 @@ def sessions_payload(settings: Settings, *, limit: int = 10) -> dict[str, object
         "count": len(sessions),
         "sessions": sessions,
     }
+
+
+def approvals_payload(
+    settings: Settings,
+    *,
+    session: str = "latest",
+    limit: int = 20,
+    denied_only: bool = False,
+) -> dict[str, object]:
+    """Return approval receipts from a saved transcript for headless audit."""
+    path = find_transcript(settings.workspace, session)
+    if path is None:
+        return {
+            "schema": "agentx.approvals.v1",
+            "workspace": str(settings.workspace),
+            "session": session,
+            "ok": False,
+            "path": None,
+            "denied_only": denied_only,
+            "limit": limit,
+            "count": 0,
+            "denied_count": 0,
+            "receipts": [],
+            "detail": f"transcript not found: {session}",
+        }
+
+    receipts = approval_receipts(path, limit=limit, denied_only=denied_only)
+    denied_count = sum(1 for receipt in receipts if receipt.get("allowed") is False)
+    return {
+        "schema": "agentx.approvals.v1",
+        "workspace": str(settings.workspace),
+        "session": session,
+        "ok": True,
+        "path": str(path),
+        "denied_only": denied_only,
+        "limit": limit,
+        "count": len(receipts),
+        "denied_count": denied_count,
+        "receipts": receipts,
+        "detail": "",
+    }
+
+
+def approvals_exit_code(payload: dict[str, object], *, fail_on_denied: bool = False) -> int:
+    if not fail_on_denied:
+        return 0
+    return 1 if int(payload.get("denied_count", 0)) > 0 else 0
+
+
+def print_approvals_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="approvals",
+        )
+        return
+
+    if not payload.get("ok"):
+        print_raw(str(payload.get("detail", "transcript not found")))
+        return
+
+    path = Path(str(payload["path"]))
+    print_raw(
+        f"source: {path}\n"
+        + format_approval_receipts(
+            path,
+            limit=int(payload["limit"]),
+            denied_only=bool(payload["denied_only"]),
+        )
+    )
 
 
 def print_sessions_payload(
@@ -3622,6 +3700,24 @@ def sessions_command(
     payload = sessions_payload(settings, limit=limit)
     structured_format = structured_output_format(json_output, output_format)
     print_sessions_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("approvals")
+def approvals_command(
+    session: str = typer.Argument("latest", help="Transcript name, file name, or latest."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for session discovery."),
+    denied_only: bool = typer.Option(False, "--denied", help="Only return denied approval receipts."),
+    limit: int = typer.Option(20, "--limit", min=1, help="Maximum number of approval receipts to return."),
+    fail_on_denied: bool = typer.Option(False, "--fail-on-denied", help="Exit 1 when returned receipts include a denied approval."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """List approval receipts from saved transcripts for audit automation."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = approvals_payload(settings, session=session, limit=limit, denied_only=denied_only)
+    structured_format = structured_output_format(json_output, output_format)
+    print_approvals_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=approvals_exit_code(payload, fail_on_denied=fail_on_denied))
 
 
 @app.command("status")

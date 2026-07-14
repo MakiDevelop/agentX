@@ -28,6 +28,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx config --json` | `agentx.config.v1` | `config` |
 | `agentx init --json` | `agentx.init.v1` | `init` |
 | `agentx sessions --json` | `agentx.sessions.v1` | `sessions` |
+| `agentx approvals --json` | `agentx.approvals.v1` | `approvals` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
 | `agentx doctor --json` | `agentx.doctor.v1` | `doctor` |
 | `agentx commands --json` | `agentx.command_catalog.v1` | `commands` |
@@ -174,6 +175,43 @@ Each session object includes:
 | `approval` | string | Human-readable approval summary. |
 | `last` | string | Last compact event summary. |
 | `path` | string | Transcript JSONL path. |
+
+## Approvals Payload
+
+`agentx approvals [SESSION] --json` emits `agentx.approvals.v1`.
+
+`SESSION` defaults to `latest` and can be a transcript stem or file name. Use
+`--denied` to return only denied approval receipts. Use `--fail-on-denied` to
+print the payload first and exit `1` when the returned receipt set contains any
+denied approval.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.approvals.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `session` | string | Requested transcript selector. |
+| `ok` | boolean | Whether the transcript was found. |
+| `path` | string or null | Transcript JSONL path when found. |
+| `denied_only` | boolean | Whether `--denied` filtering was applied. |
+| `limit` | integer | Maximum number of receipts requested. |
+| `count` | integer | Number of returned receipts. |
+| `denied_count` | integer | Number of returned receipts with `allowed=false`. |
+| `receipts` | array of object | Raw approval events from the transcript, newest slice preserving event fields. |
+| `detail` | string | Empty on success; diagnostic text when `ok=false`. |
+
+Each receipt preserves the transcript approval event fields, including:
+
+| Key | Type |
+|-----|------|
+| `ts` | string |
+| `event` | string, always `approval` |
+| `tool` | string |
+| `risk` | string |
+| `approval_mode` | string |
+| `source` | string |
+| `allowed` | boolean |
 
 ## Doctor Payload
 
