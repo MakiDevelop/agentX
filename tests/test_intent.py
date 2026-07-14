@@ -24,8 +24,31 @@ def test_analyze_intent_flags_remote_and_production_work() -> None:
     assert "- Ask Maki before execution: yes" in brief
     assert "/where vps" in brief
     assert "/where 重啟服務" in brief
+    assert "## Runtime State Pre-flight" in brief
+    assert "- Machine: unknown - resolve from /infra before acting" in brief
+    assert "- Source: /infra vps plus current repo docs; do not infer missing fields" in brief
+    assert "## Post-check Plan" in brief
     assert "read /infra first" in brief
     assert "without explicit approval" in brief
+
+
+def test_analyze_intent_prefills_runtime_state_when_target_is_named() -> None:
+    brief = analyze_intent("用 docker compose 部署 dx-chatbot 到 chiba.tw production")
+
+    assert "## Runtime State Pre-flight" in brief
+    assert "- Machine: chiba.tw" in brief
+    assert "- Service: dx-chatbot" in brief
+    assert "- Run Mode: Docker Compose" in brief
+    assert "- Source: /infra vps plus current repo docs; do not infer missing fields" in brief
+
+
+def test_analyze_intent_prefers_home_infra_for_home_ai_targets() -> None:
+    brief = analyze_intent("ssh 到 DGX Spark 重啟 Ollama")
+
+    assert "## Runtime State Pre-flight" in brief
+    assert "- Machine: DGX Spark" in brief
+    assert "- Service: Ollama" in brief
+    assert "- Source: /infra home plus current repo docs; do not infer missing fields" in brief
 
 
 def test_analyze_intent_flags_destructive_work_as_red() -> None:
@@ -33,6 +56,7 @@ def test_analyze_intent_flags_destructive_work_as_red() -> None:
 
     assert "- Risk: RED" in brief
     assert "- Ask Maki before execution: yes" in brief
+    assert "## Runtime State Pre-flight" not in brief
 
 
 def test_analyze_intent_requires_text() -> None:
@@ -67,7 +91,7 @@ def test_plan_task_checklist_includes_high_risk_guardrail() -> None:
 
     assert "- Risk: HIGH" in plan
     assert "取得 Maki 明確確認後才處理高風險操作" in plan
-    assert "讀取 /infra 並確認 runtime state" in plan
+    assert "讀取 /infra 並填寫 runtime state pre-flight" in plan
     assert "This plan is read-only" in plan
 
 

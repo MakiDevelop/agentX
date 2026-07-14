@@ -33,6 +33,59 @@ _VERB_HINTS = {
     "document": ("文件", "README", "docs", "說明", "document"),
 }
 
+_RUNTIME_TARGET_HINTS = {
+    "n1k.tw": "n1k.tw",
+    "n1k": "n1k.tw",
+    "2ch.tw": "2ch.tw",
+    "2ch": "2ch.tw",
+    "ranran.tw": "ranran.tw",
+    "ranran": "ranran.tw",
+    "chiba.tw": "chiba.tw",
+    "chiba": "chiba.tw",
+    "mac mini m4-2": "Mac mini M4-2",
+    "mini2": "Mac mini M4-2",
+    "mac mini m4": "Mac mini M4",
+    "mini": "Mac mini M4",
+    "dgx spark": "DGX Spark",
+    "dgx": "DGX Spark",
+    "rtx 3090": "RTX 3090 PC",
+    "rtx3090": "RTX 3090 PC",
+    "nas": "NAS DS2415+",
+    "s20 ultra": "S20 Ultra",
+    "pdsnet-z13": "PDSNET-Z13",
+}
+
+_SERVICE_HINTS = {
+    "n8n": "n8n-workflows",
+    "agent-control-plane": "agent-control-plane",
+    "2ch-core": "2ch-core",
+    "geo-checker": "geo-checker",
+    "dx-chatbot": "dx-chatbot",
+    "dx.chiba.tw": "dx-chiba",
+    "ai.chiba.tw": "dx-chiba",
+    "memhall": "memhall",
+    "memory-hall": "memhall",
+    "ollama": "Ollama",
+    "comfyui": "ComfyUI",
+    "stable diffusion": "ComfyUI",
+    "flux": "ComfyUI",
+    "mk-brain": "mk-brain",
+    "embed": "embed_server",
+}
+
+_RUN_MODE_HINTS = {
+    "docker compose": "Docker Compose",
+    "docker-compose": "Docker Compose",
+    "docker": "Docker",
+    "cloud run": "Cloud Run",
+    "launchd": "launchd",
+    "cron": "cron",
+    "systemd": "systemd",
+}
+
+_HOME_INFRA_HINTS = ("家庭", "home ai", "home-ai", "mac mini", "mini2", "dgx", "rtx", "nas", "s20", "pdsnet")
+_VPS_INFRA_HINTS = ("vps", "外網", "n1k", "2ch", "ranran", "chiba.tw", "dx.chiba", "ai.chiba")
+
 _STOPWORDS = {
     "the",
     "and",
@@ -93,6 +146,8 @@ def analyze_intent(request: str, *, max_terms: int = 6) -> str:
         ]
     )
     if risk.level in {"HIGH", "RED"}:
+        if risk.reason in {"production", "remote"}:
+            lines.extend(["", *_runtime_state_preflight(text, risk)])
         lines.extend(
             [
                 "",
@@ -158,8 +213,56 @@ def plan_task_items(request: str, *, max_terms: int = 4) -> list[str]:
     if risk.level in {"HIGH", "RED"}:
         tasks.insert(1, "取得 Maki 明確確認後才處理高風險操作")
         if risk.reason in {"production", "remote"}:
-            tasks.insert(2, "讀取 /infra 並確認 runtime state")
+            tasks.insert(2, "讀取 /infra 並填寫 runtime state pre-flight")
     return tasks
+
+
+def _runtime_state_preflight(text: str, risk: IntentRisk) -> list[str]:
+    lowered = text.lower()
+    map_hint = _infra_map_hint(lowered)
+    machine = _first_hint(lowered, _RUNTIME_TARGET_HINTS) or "unknown - resolve from /infra before acting"
+    service = _first_hint(lowered, _SERVICE_HINTS) or "unknown - identify concrete service/repo/container/job"
+    run_mode = _first_hint(lowered, _RUN_MODE_HINTS) or "unknown - verify from repo docs, process manager, or infra map"
+    constraint = _runtime_constraint(risk)
+
+    return [
+        "## Runtime State Pre-flight",
+        f"- Machine: {machine}",
+        f"- Service: {service}",
+        f"- Run Mode: {run_mode}",
+        f"- Constraint: {constraint}",
+        f"- Risk: {risk.level} — {risk.reason}",
+        f"- Source: /infra {map_hint} plus current repo docs; do not infer missing fields",
+        "",
+        "## Post-check Plan",
+        "- Confirm the target service/process/container is the intended one.",
+        "- Check health endpoint, logs, or process status after the operation.",
+        "- Verify the user-facing URL or CLI behavior tied to the change.",
+        "- Capture rollback or recovery notes before any production action.",
+    ]
+
+
+def _infra_map_hint(lowered: str) -> str:
+    if any(hint in lowered for hint in _HOME_INFRA_HINTS):
+        return "home"
+    if any(hint in lowered for hint in _VPS_INFRA_HINTS):
+        return "vps"
+    return "all"
+
+
+def _first_hint(lowered: str, hints: dict[str, str]) -> str | None:
+    for needle, value in hints.items():
+        if needle in lowered:
+            return value
+    return None
+
+
+def _runtime_constraint(risk: IntentRisk) -> str:
+    if risk.reason == "production":
+        return "production path; requires explicit Maki approval before external write/restart/deploy"
+    if risk.reason == "remote":
+        return "remote host; read-only inspection until machine/service/run mode are confirmed"
+    return "high-risk action; explicit approval required before execution"
 
 
 def _classify_risk(text: str) -> IntentRisk:

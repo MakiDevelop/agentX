@@ -353,7 +353,7 @@ class InfrastructureContextTool:
 
 class AnalyzeIntentTool:
     name = "analyze_intent"
-    description = "把自然語言需求整理成目標、風險、建議讀檔與驗證計畫（read-only）"
+    description = "把自然語言需求整理成目標、風險、runtime state pre-flight 與驗證計畫（read-only）"
     risk = Risk.GREEN
     signature = "text"
 

@@ -88,7 +88,7 @@ def _base_tools_section() -> str:
 - find_files: {"keyword":"topic","path":"."} — find relevant files by path/name and content, with /read suggestions
 - locate_topic: {"topic":"approval policy","path":"."} — rank likely files for a topic, with /read suggestions
 - infrastructure_context: {"map":"all|quick|project|resource|home|vps"} — read Maki's project/resource maps; home and vps extract the dedicated resource-map sections as read-only context before infra planning; Chinese aliases like 家庭AI設施, VPS地圖, 外網主機 are accepted; this does not enable SSH/deploy
-- analyze_intent: {"text":"user request"} — convert a vague request into a deterministic goal/risk/inspection/verification brief before execution
+- analyze_intent: {"text":"user request"} — convert a vague request into a deterministic goal/risk/inspection/verification brief before execution; SSH/deploy/VPS requests include a runtime state pre-flight template
 - plan_task: {"text":"user request"} — produce a read-only checklist and suggested /task add commands for a request; does not mutate tasks. Use slash /plan-task --apply TEXT only when the user wants to write the checklist into the task list.
 - search_text: {"pattern":"keyword","path":"."} — search in files
 - git_status: {} — show git status
