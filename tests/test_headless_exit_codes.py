@@ -251,6 +251,66 @@ def test_headless_payload_contract_fixture_supports_runner_takeover() -> None:
     )
 
 
+def test_handoff_inspect_payload_extracts_takeover_fields() -> None:
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    payload = cli.load_headless_payload_file(fixture)
+    inspected = cli.inspect_headless_handoff_payload(payload)
+
+    assert inspected["status"] == "final_failed"
+    assert inspected["needs_handoff"] is True
+    assert inspected["resume_session"] == "contract.session.jsonl"
+    assert inspected["resume_command"] == (
+        "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json"
+    )
+    assert inspected["recovery_actions"] == ["verify_assumption"]
+    assert inspected["recovery_checklist"][-1] == (
+        "Run the smallest targeted verification that can prove or disprove the assumption."
+    )
+
+
+def test_handoff_inspect_command_plain_output() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli.app, ["handoff-inspect", "tests/fixtures/headless_result_failure.json"])
+
+    assert result.exit_code == 0
+    assert "status: final_failed" in result.output
+    assert "resume_command: agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json" in result.output
+    assert "- Run the smallest targeted verification" in result.output
+
+
+def test_handoff_inspect_command_jsonl_output() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        ["handoff-inspect", "tests/fixtures/headless_result_failure.json", "--output-format", "jsonl"],
+    )
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event["event"] == "handoff_inspect"
+    assert event["data"]["resume_session"] == "contract.session.jsonl"
+    assert event["data"]["recovery_actions"] == ["verify_assumption"]
+
+
+def test_handoff_inspect_reads_jsonl_input(tmp_path: Path) -> None:
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    event = json.loads(fixture.read_text(encoding="utf-8"))
+    target = tmp_path / "result.jsonl"
+    target.write_text(
+        "\n".join([
+            json.dumps({"event": "dry_run", "data": {"ok": True}}),
+            json.dumps(event),
+        ]),
+        encoding="utf-8",
+    )
+
+    payload = cli.load_headless_payload_file(target)
+    inspected = cli.inspect_headless_handoff_payload(payload)
+
+    assert inspected["status"] == "final_failed"
+    assert inspected["resume_session"] == "contract.session.jsonl"
+
+
 def test_headless_payload_keeps_resume_fields_null_without_session_path() -> None:
     payload = cli.headless_payload(
         cli.HeadlessRunResult(

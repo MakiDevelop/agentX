@@ -55,6 +55,13 @@ A failure takeover fixture is kept at
 a stable example for extracting `data.log_summary.handoff_summary.resume_command`
 and `data.log_summary.handoff_summary.recovery_checklist`.
 
+For a local inspection helper:
+
+```bash
+agentx handoff-inspect tests/fixtures/headless_result_failure.json
+agentx handoff-inspect tests/fixtures/headless_result_failure.json --output-format jsonl
+```
+
 ## `log_summary`
 
 Required keys:

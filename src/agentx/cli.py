@@ -1383,6 +1383,85 @@ def print_structured_payload(payload: object, *, output_format: str = "json", ev
     print_json_output(structured_payload_text(payload, output_format=output_format, event=event))
 
 
+def load_headless_payload_file(path: Path) -> dict[str, object]:
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        raise typer.BadParameter("payload file is empty")
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = None
+        for line in reversed([item.strip() for item in text.splitlines() if item.strip()]):
+            try:
+                candidate = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(candidate, dict):
+                parsed = candidate
+                break
+        if parsed is None:
+            raise typer.BadParameter("payload file must contain JSON or JSONL objects") from None
+
+    if not isinstance(parsed, dict):
+        raise typer.BadParameter("payload root must be a JSON object")
+    data = parsed.get("data") if parsed.get("event") else parsed
+    if not isinstance(data, dict):
+        raise typer.BadParameter("payload data must be a JSON object")
+    return data
+
+
+def inspect_headless_handoff_payload(payload: dict[str, object]) -> dict[str, object]:
+    log_summary = payload.get("log_summary")
+    if not isinstance(log_summary, dict):
+        raise typer.BadParameter("payload missing log_summary object")
+    handoff = log_summary.get("handoff_summary")
+    if not isinstance(handoff, dict):
+        raise typer.BadParameter("payload missing log_summary.handoff_summary object")
+
+    return {
+        "status": handoff.get("status"),
+        "needs_handoff": bool(handoff.get("needs_handoff", False)),
+        "termination": payload.get("termination"),
+        "exit_code": payload.get("exit_code"),
+        "session_path": handoff.get("session_path") or payload.get("session_path"),
+        "resume_session": handoff.get("resume_session"),
+        "resume_command": handoff.get("resume_command"),
+        "failing_tools": list(handoff.get("failing_tools") or []),
+        "pending_verifies": list(handoff.get("pending_verifies") or []),
+        "recovery_actions": list(handoff.get("recovery_actions") or []),
+        "primary_recovery": handoff.get("primary_recovery"),
+        "recovery_checklist": list(handoff.get("recovery_checklist") or []),
+        "next_steps": list(handoff.get("next_steps") or []),
+    }
+
+
+def format_handoff_inspect_plain(payload: dict[str, object]) -> str:
+    lines = [
+        f"status: {payload.get('status')}",
+        f"needs_handoff: {str(payload.get('needs_handoff')).lower()}",
+        f"termination: {payload.get('termination')}",
+        f"exit_code: {payload.get('exit_code')}",
+        f"session_path: {payload.get('session_path')}",
+        f"resume_session: {payload.get('resume_session')}",
+        f"resume_command: {payload.get('resume_command')}",
+    ]
+    for title, key in [
+        ("failing_tools", "failing_tools"),
+        ("pending_verifies", "pending_verifies"),
+        ("recovery_actions", "recovery_actions"),
+        ("recovery_checklist", "recovery_checklist"),
+        ("next_steps", "next_steps"),
+    ]:
+        lines.append(f"{title}:")
+        values = payload.get(key)
+        if isinstance(values, list) and values:
+            lines.extend(f"- {value}" for value in values)
+        else:
+            lines.append("- (none)")
+    return "\n".join(lines)
+
+
 def backend_list_payload() -> list[str]:
     register_builtin_backends()
     return list_registered_backends()
@@ -2400,6 +2479,23 @@ def version_command(
     """Show agentX and Python versions."""
     structured_format = structured_output_format(json_output, output_format)
     print_version(json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("handoff-inspect")
+def handoff_inspect(
+    path: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True, help="Headless JSON/JSONL payload file to inspect."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Inspect a headless payload and print takeover fields."""
+    structured_format = structured_output_format(json_output, output_format)
+    payload = inspect_headless_handoff_payload(load_headless_payload_file(path))
+    if structured_format != "plain":
+        print_structured_payload(payload, output_format=structured_format, event="handoff_inspect")
+        return
+    sys.stdout.write(format_handoff_inspect_plain(payload))
+    sys.stdout.write("\n")
+    sys.stdout.flush()
 
 
 @app.command()
