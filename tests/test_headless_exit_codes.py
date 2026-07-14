@@ -406,6 +406,7 @@ def test_print_prompt_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN0
     assert captured["suppress_trace"] is True
     assert captured["max_steps"] is None
     assert captured["workspace_override"] is None
+    assert captured["approval_override"] is None
     assert captured["backend_override"] is None
     assert captured["base_url_override"] is None
     assert captured["model_override"] is None
@@ -459,6 +460,22 @@ def test_print_prompt_forwards_workspace_override(tmp_path: Path, monkeypatch) -
 
     assert result.exit_code == 0
     assert captured["workspace_override"] == tmp_path.resolve()
+
+
+def test_print_prompt_forwards_approval_override(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--approval", "auto-approve"])
+
+    assert result.exit_code == 0
+    assert captured["approval_override"] == "auto-approve"
 
 
 def test_print_prompt_forwards_model_override(monkeypatch) -> None:  # noqa: ANN001
@@ -735,6 +752,72 @@ def test_run_print_prompt_uses_timeout_override(monkeypatch) -> None:  # noqa: A
     assert seen_timeouts == [180.0]
 
 
+def test_run_print_prompt_approval_override_wins_over_project_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    from agentx.approval import ApprovalPolicy
+    from agentx.project_config import set_project_config
+
+    seen_modes: list[str | None] = []
+    set_project_config(tmp_path, "approval", "deny")
+
+    class FakeAgentLoop:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            self.session = SimpleNamespace(
+                message_count=1,
+                context_tokens_estimate=10,
+                error_history=[],
+                compaction_count=0,
+                model_turn_count=0,
+                tool_call_count=0,
+                reflection_count=0,
+                pending_verifies=set(),
+                tasks=[],
+                last_termination="final_success",
+                last_failing_tools=set(),
+            )
+
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+            return "ok"
+
+    def fake_build_runtime(settings, *args, approval_policy=None, **kwargs):  # noqa: ANN001
+        assert isinstance(approval_policy, ApprovalPolicy)
+        seen_modes.append(approval_policy.mode.value)
+        return object(), object(), object()
+
+    monkeypatch.setattr(cli, "build_runtime", fake_build_runtime)
+    monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
+
+    result = cli.run_print_prompt(
+        "demo",
+        namespace="project:test",
+        agent_mode=True,
+        workspace_override=tmp_path,
+        approval_override="auto-approve",
+        return_metadata=True,
+        suppress_trace=True,
+    )
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert seen_modes == ["auto"]
+
+
+def test_run_print_prompt_rejects_invalid_approval_override() -> None:
+    result = cli.run_print_prompt(
+        "demo",
+        namespace="project:test",
+        agent_mode=True,
+        approval_override="yes",
+        return_metadata=True,
+        suppress_trace=True,
+    )
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert result.termination == "invalid_action"
+    assert "approval must be one of" in result.output
+
+
 def test_run_print_prompt_forwards_backend_override_to_runtime(monkeypatch) -> None:  # noqa: ANN001
     seen_backends: list[str | None] = []
 
@@ -856,6 +939,7 @@ def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch)
     assert captured["max_steps"] == 3
     assert captured["plan_then_execute"] is False
     assert captured["workspace_override"] is None
+    assert captured["approval_override"] is None
     assert captured["backend_override"] is None
     assert captured["base_url_override"] is None
     assert captured["model_override"] is None
@@ -925,6 +1009,22 @@ def test_ask_forwards_workspace_override(tmp_path: Path, monkeypatch) -> None:  
 
     assert result.exit_code == 0
     assert captured["workspace_override"] == tmp_path.resolve()
+
+
+def test_ask_forwards_approval_override(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["ask", "demo", "--approval", "off"])
+
+    assert result.exit_code == 0
+    assert captured["approval_override"] == "off"
 
 
 def test_ask_forwards_model_override(monkeypatch) -> None:  # noqa: ANN001

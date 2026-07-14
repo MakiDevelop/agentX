@@ -1145,6 +1145,7 @@ def main(
     orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
     workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Run this headless task against a specific workspace directory."),
+    approval: str | None = typer.Option(None, "--approval", help="Override approval policy for this headless run: ask, auto, off, strict, auto-approve, or deny."),
     backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
     base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL for this headless run."),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
@@ -1177,6 +1178,7 @@ def main(
         plan_then_execute=plan_then_execute,
         orchestrate=orchestrate,
         workspace_override=workspace_override,
+        approval_override=approval,
         backend_override=backend,
         base_url_override=base_url,
         model_override=model,
@@ -1266,6 +1268,7 @@ def run_print_prompt(
     plan_then_execute: bool = False,
     orchestrate: bool = False,
     workspace_override: Path | None = None,
+    approval_override: str | None = None,
     backend_override: str | None = None,
     base_url_override: str | None = None,
     model_override: str | None = None,
@@ -1291,9 +1294,16 @@ def run_print_prompt(
     # Phase A (MT22): 自動從舊單一任務遷移到多任務清單
     migrate_single_task_if_needed(settings.workspace)
 
+    approval_value = approval_override or project_config.approval
     approval_policy = None
-    if project_config.approval:
-        mode = normalize_approval_mode(project_config.approval)
+    if approval_value:
+        try:
+            mode = normalize_approval_mode(approval_value)
+        except ValueError:
+            output = "invalid response: approval must be one of: ask, auto, off, strict, auto-approve, deny"
+            if return_metadata:
+                return HeadlessRunResult(output=output, termination="invalid_action")
+            return output
         approval_policy = ApprovalPolicy(mode)
     ollama, memory, tools = build_runtime(
         settings,
@@ -1563,6 +1573,7 @@ def ask(
     prompt: str = typer.Argument(..., help="Task or question for agentX."),
     namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
     workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Run this headless task against a specific workspace directory."),
+    approval: str | None = typer.Option(None, "--approval", help="Override approval policy for this headless run: ask, auto, off, strict, auto-approve, or deny."),
     backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
     base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL for this headless run."),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
@@ -1582,6 +1593,7 @@ def ask(
         agent_mode=True,
         plan_then_execute=plan_then_execute,
         workspace_override=workspace_override,
+        approval_override=approval,
         backend_override=backend,
         base_url_override=base_url,
         model_override=model,

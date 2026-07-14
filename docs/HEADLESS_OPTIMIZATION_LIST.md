@@ -55,6 +55,7 @@
 
 **Progress Update (Headless JSON Observability, 2026-07)**：
 - [x] `--workspace PATH` / `--cwd PATH` 可在單次 headless run 指定目標 repo；prompt-file、`.agentx/config.toml`、session save/resume 都以該 workspace 為準。
+- [x] `--approval ask|auto|off|strict|auto-approve|deny` 可在單次 headless run 覆蓋 YELLOW 工具 approval policy，不用改 `.agentx/config.toml`。
 - [x] `agentx --prompt-file briefing.md --agent ...` 可從 workspace 檔案讀取長 prompt，適合多代理 briefing / script automation；與 `-p` 互斥並阻擋 workspace escape。
 - [x] `cat briefing.md | agentx --stdin --agent ...` 可從 stdin 讀取 prompt；與 `-p` / `--prompt-file` 互斥。
 - [x] `--backend BACKEND` 可在單次 headless run 覆蓋 LLM backend（例如 `llama_cpp`），不用改 `AGENTX_BACKEND`。
