@@ -161,6 +161,48 @@ def test_build_infrastructure_context_accepts_chinese_aliases(
     assert f"Map alias: {alias.lower()}" in context
 
 
+@pytest.mark.parametrize(
+    "alias",
+    [
+        "資源地圖+家庭AI設施/VPS地圖",
+        "資源地圖+家庭AI設施／VPS地圖",
+        "資源地圖 + 家庭 AI 設施 / VPS 地圖",
+        "資源地圖 + 家庭 AI 設施 ／ VPS 地圖",
+    ],
+)
+def test_build_infrastructure_context_accepts_combined_resource_aliases(
+    tmp_path: Path,
+    alias: str,
+) -> None:
+    infra = tmp_path / "infrastructure"
+    infra.mkdir()
+    (infra / "infrastructure-quick-ref.md").write_text("QUICK_MARKER", encoding="utf-8")
+    (infra / "project-map.md").write_text("PROJECT_MARKER", encoding="utf-8")
+    (infra / "resource-map.md").write_text(
+        "\n".join(
+            [
+                "# RESOURCE_MARKER",
+                "",
+                "## 家庭 AI 中心",
+                "HOME_MARKER",
+                "",
+                "## 外網主機 / VPS",
+                "VPS_MARKER",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    context = build_infrastructure_context(alias, home=tmp_path)
+
+    assert "Map alias:" in context
+    assert "QUICK_MARKER" in context
+    assert "PROJECT_MARKER" in context
+    assert "RESOURCE_MARKER" in context
+    assert "HOME_MARKER" in context
+    assert "VPS_MARKER" in context
+
+
 def test_build_infrastructure_context_rejects_unknown_map(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="unknown infrastructure map"):
         build_infrastructure_context("unknown", home=tmp_path)

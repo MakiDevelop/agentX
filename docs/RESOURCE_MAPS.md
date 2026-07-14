@@ -38,6 +38,7 @@ or deployment target:
 | `專案地圖`, `project map` | `/infra project` | domain/service to repo ownership |
 | `家庭AI地圖`, `家庭AI設施`, `設施地圖`, `home ai map` | `/infra home` | node role, workload route, stop condition |
 | `VPS地圖`, `外網主機`, `vps map` | `/infra vps` | public host, service, repo association, caution |
+| `資源地圖+家庭AI設施/VPS地圖`, `資源地圖+家庭AI設施／VPS地圖` | `/infra all` | quick ref + project ownership + resource/home/VPS context |
 | mixed or unclear resource | `/infra all` | quick ref + project map + resource map context |
 
 The lookup result is evidence for planning. It is not permission to perform SSH,
@@ -238,6 +239,8 @@ Current aliases intentionally include:
 /infra vps
 /infra VPS地圖
 /infra 外網主機
+/infra 資源地圖+家庭AI設施/VPS地圖
+/infra 資源地圖+家庭AI設施／VPS地圖
 ```
 
 The tool is intentionally read-only. Reading a map does not grant permission to
