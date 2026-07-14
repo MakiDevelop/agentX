@@ -125,12 +125,13 @@ def test_headless_json_payload_includes_optional_phases() -> None:
 
 
 def test_headless_exception_result_is_structured() -> None:
-    result = cli.headless_exception_result(RuntimeError("boom"))
+    result = cli.headless_exception_result(RuntimeError("boom"), session_path="/tmp/run.session.jsonl")
     payload = json.loads(cli.headless_json_payload(result, cli.headless_exit_code(result.output, termination=result.termination)))
 
     assert payload["termination"] == "runtime_error"
     assert payload["exit_code"] == 2
     assert payload["output"] == "runtime error: RuntimeError: boom"
+    assert payload["session_path"] == "/tmp/run.session.jsonl"
     assert payload["log_summary"]["recent_errors"] == [
         {
             "type": "runtime_error",
@@ -401,7 +402,37 @@ def test_build_headless_dry_run_payload_applies_overrides(tmp_path: Path, monkey
     assert payload["no_memory"] is True
     assert payload["save_session"] is True
     assert payload["resume_session"] == "latest"
+    assert payload["session_output"] is None
     assert payload["prompt_chars"] == 5
+
+
+def test_build_headless_dry_run_payload_session_output_implies_save(tmp_path: Path) -> None:
+    target = tmp_path / "artifacts" / "run.session.jsonl"
+
+    payload = cli.build_headless_dry_run_payload(
+        "hello",
+        workspace_override=tmp_path,
+        agent_mode=True,
+        session_output=target,
+    )
+
+    assert payload["save_session"] is True
+    assert payload["session_output"] == str(target)
+
+
+def test_build_headless_dry_run_payload_rejects_session_output_with_resume(tmp_path: Path) -> None:
+    try:
+        cli.build_headless_dry_run_payload(
+            "hello",
+            workspace_override=tmp_path,
+            agent_mode=True,
+            resume_session="latest",
+            session_output=tmp_path / "run.session.jsonl",
+        )
+    except Exception as exc:
+        assert "cannot be combined" in str(exc)
+    else:
+        raise AssertionError("session output with resume should fail")
 
 
 def test_print_prompt_dry_run_json_does_not_call_runner(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
@@ -491,6 +522,33 @@ def test_resolve_session_store_path_rejects_outside_workspace(tmp_path: Path) ->
         assert "Saved headless session not found" in str(exc)
     else:
         raise AssertionError("outside session path should be rejected")
+
+
+def test_resolve_headless_session_output_rejects_escape_and_existing_file(tmp_path: Path) -> None:
+    outside = tmp_path.parent / "outside.session.jsonl"
+    existing = tmp_path / "existing.session.jsonl"
+    existing.write_text("existing", encoding="utf-8")
+
+    try:
+        cli.resolve_headless_session_output(tmp_path, str(outside))
+    except Exception as exc:
+        assert "escapes workspace" in str(exc)
+    else:
+        raise AssertionError("outside session output should fail")
+
+    try:
+        cli.resolve_headless_session_output(tmp_path, "existing.session.jsonl")
+    except Exception as exc:
+        assert "already exists" in str(exc)
+    else:
+        raise AssertionError("existing session output should fail")
+
+
+def test_resolve_headless_session_output_accepts_workspace_path(tmp_path: Path) -> None:
+    assert (
+        cli.resolve_headless_session_output(tmp_path, "artifacts/run.session.jsonl")
+        == tmp_path / "artifacts" / "run.session.jsonl"
+    )
 
 
 def test_headless_run_stats_summarizes_session_state() -> None:
@@ -771,6 +829,7 @@ def test_print_prompt_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN0
     assert result.exit_code == 0
     assert captured["save_session"] is True
     assert captured["resume_session"] == "latest"
+    assert captured["session_output_path"] is None
     assert captured["no_memory"] is True
     assert captured["suppress_trace"] is True
     assert captured["max_steps"] is None
@@ -781,6 +840,27 @@ def test_print_prompt_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN0
     assert captured["model_override"] is None
     assert captured["timeout_override"] is None
     assert data["session_path"] == "/tmp/s.session.jsonl"
+
+
+def test_print_prompt_forwards_session_output(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success", session_path=str(Path.cwd() / "artifacts/run.session.jsonl"))
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        ["-p", "demo", "--agent", "--session-output", "artifacts/run.session.jsonl", "--json"],
+    )
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert captured["session_output_path"] == Path.cwd() / "artifacts" / "run.session.jsonl"
+    assert data["session_path"].endswith("artifacts/run.session.jsonl")
 
 
 def test_print_prompt_forwards_backend_override(monkeypatch) -> None:  # noqa: ANN001
@@ -1271,6 +1351,102 @@ def test_run_print_prompt_forwards_no_memory_to_runtime(monkeypatch) -> None:  #
     assert seen_no_memory == [True]
 
 
+def test_run_print_prompt_writes_explicit_session_output(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    from helpers import make_settings
+
+    class FakeAgentLoop:
+        def __init__(self, *args, settings=None, **kwargs) -> None:  # noqa: ANN002, ANN003
+            from agentx.loop import AgentSession
+            from agentx.tools import ToolRegistry
+
+            self.session = AgentSession(
+                settings=settings or make_settings(tmp_path, learning_enabled=False),
+                ollama=SimpleNamespace(chat=lambda *args, **kwargs: '{"type":"final","content":"done"}'),
+                tools=ToolRegistry([]),
+                memory=None,
+            )
+
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+            return "ok"
+
+    target = tmp_path / "artifacts" / "run.session.jsonl"
+    monkeypatch.setattr(cli, "build_runtime", lambda *args, **kwargs: (object(), object(), object()))
+    monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
+
+    result = cli.run_print_prompt(
+        "demo",
+        namespace="project:test",
+        agent_mode=True,
+        workspace_override=tmp_path,
+        session_output_path=target,
+        return_metadata=True,
+        suppress_trace=True,
+    )
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert result.session_path == str(target)
+    assert target.exists()
+    assert "session_start" in target.read_text(encoding="utf-8")
+
+
+def test_run_print_prompt_runtime_error_preserves_explicit_session_output(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    from helpers import make_settings
+
+    class FakeAgentLoop:
+        def __init__(self, *args, settings=None, **kwargs) -> None:  # noqa: ANN002, ANN003
+            from agentx.loop import AgentSession
+            from agentx.tools import ToolRegistry
+
+            self.session = AgentSession(
+                settings=settings or make_settings(tmp_path, learning_enabled=False),
+                ollama=SimpleNamespace(chat=lambda *args, **kwargs: '{"type":"final","content":"done"}'),
+                tools=ToolRegistry([]),
+                memory=None,
+            )
+
+        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None) -> str:
+            raise TimeoutError("model timed out")
+
+    target = tmp_path / "artifacts" / "run.session.jsonl"
+    monkeypatch.setattr(cli, "build_runtime", lambda *args, **kwargs: (object(), object(), object()))
+    monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
+
+    result = cli.run_print_prompt(
+        "demo",
+        namespace="project:test",
+        agent_mode=True,
+        workspace_override=tmp_path,
+        session_output_path=target,
+        return_metadata=True,
+        suppress_trace=True,
+    )
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert result.termination == "runtime_error"
+    assert result.session_path == str(target)
+    assert target.exists()
+
+
+def test_run_print_prompt_rejects_session_output_with_resume(tmp_path: Path) -> None:
+    result = cli.run_print_prompt(
+        "demo",
+        namespace="project:test",
+        agent_mode=True,
+        workspace_override=tmp_path,
+        resume_session="latest",
+        session_output_path=tmp_path / "run.session.jsonl",
+        return_metadata=True,
+        suppress_trace=True,
+    )
+
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert result.termination == "invalid_action"
+    assert "cannot be combined" in result.output
+
+
 def test_build_runtime_backend_override_wins_over_env(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
     from helpers import make_settings
 
@@ -1360,6 +1536,7 @@ def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch)
     assert captured["suppress_trace"] is True
     assert captured["save_session"] is True
     assert captured["resume_session"] == "latest"
+    assert captured["session_output_path"] is None
     assert captured["no_memory"] is True
     assert captured["max_steps"] == 3
     assert captured["plan_then_execute"] is False
@@ -1370,6 +1547,24 @@ def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch)
     assert captured["model_override"] is None
     assert captured["timeout_override"] is None
     assert data["session_path"] == "/tmp/s.session.jsonl"
+
+
+def test_ask_forwards_session_output(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success", session_path=str(Path.cwd() / "artifacts/ask.session.jsonl"))
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["ask", "demo", "--session-output", "artifacts/ask.session.jsonl", "--json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert captured["session_output_path"] == Path.cwd() / "artifacts" / "ask.session.jsonl"
+    assert data["session_path"].endswith("artifacts/ask.session.jsonl")
 
 
 def test_ask_forwards_plan_then_execute(monkeypatch) -> None:  # noqa: ANN001

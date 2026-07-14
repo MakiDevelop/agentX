@@ -34,6 +34,28 @@ def test_session_store_create_writes_header(tmp_path: Path) -> None:
     assert "session_start" in store.entries[0].content
 
 
+def test_session_store_create_at_writes_specific_file(tmp_path: Path) -> None:
+    target = tmp_path / "artifacts" / "run.session.jsonl"
+
+    store = SessionStore.create_at(target, model="test-model", namespace="ns")
+
+    assert store.path == target
+    assert target.exists()
+    assert store.entries[0].metadata["model"] == "test-model"
+
+
+def test_session_store_create_at_rejects_existing_file(tmp_path: Path) -> None:
+    target = tmp_path / "run.session.jsonl"
+    target.write_text("existing", encoding="utf-8")
+
+    try:
+        SessionStore.create_at(target)
+    except FileExistsError as exc:
+        assert "already exists" in str(exc)
+    else:
+        raise AssertionError("existing explicit session output should fail")
+
+
 def test_session_store_append_and_replay(tmp_path: Path) -> None:
     store = SessionStore.create(tmp_path)
     store.append("user", "question 1")

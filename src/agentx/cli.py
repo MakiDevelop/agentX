@@ -1022,11 +1022,12 @@ def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
-def headless_exception_result(exc: Exception) -> HeadlessRunResult:
+def headless_exception_result(exc: Exception, *, session_path: str | None = None) -> HeadlessRunResult:
     message = f"{type(exc).__name__}: {exc}"
     return HeadlessRunResult(
         output=f"runtime error: {message}",
         termination="runtime_error",
+        session_path=session_path,
         log_summary={
             "termination": "runtime_error",
             "tool_outcomes": {},
@@ -1103,6 +1104,7 @@ def build_headless_dry_run_payload(
     max_steps: int | None = None,
     save_session: bool = False,
     resume_session: str | None = None,
+    session_output: Path | None = None,
     no_memory: bool = False,
 ) -> dict[str, object]:
     settings = Settings(workspace=workspace_override)
@@ -1114,6 +1116,8 @@ def build_headless_dry_run_payload(
         settings = settings.with_updates(ollama_timeout=timeout_override)
     if max_steps is not None:
         settings = settings.with_updates(max_steps=max_steps)
+    if session_output is not None and resume_session:
+        raise typer.BadParameter("--session-output cannot be combined with --resume-session")
 
     project_config = load_project_config(settings.workspace)
     approval_value = approval_override or project_config.approval
@@ -1141,8 +1145,9 @@ def build_headless_dry_run_payload(
         "max_steps": settings.max_steps,
         "no_memory": no_memory,
         "approval": approval_mode,
-        "save_session": save_session,
+        "save_session": save_session or session_output is not None,
         "resume_session": resume_session,
+        "session_output": str(session_output) if session_output else None,
         "prompt_chars": len(prompt),
     }
 
@@ -1166,6 +1171,7 @@ def format_headless_dry_run(payload: dict[str, object]) -> str:
             f"orchestrate: {payload['orchestrate']}",
             f"save_session: {payload['save_session']}",
             f"resume_session: {payload['resume_session']}",
+            f"session_output: {payload['session_output']}",
             f"prompt_chars: {payload['prompt_chars']}",
         ]
     )
@@ -1285,6 +1291,17 @@ def resolve_session_store_path(workspace: Path, value: str) -> Path:
     raise FileNotFoundError(f"Saved headless session not found in {sessions_dir}: {value}")
 
 
+def resolve_headless_session_output(workspace: Path, value: str | None) -> Path | None:
+    if value is None:
+        return None
+    target = resolve_inside_workspace(workspace, value)
+    if target.exists():
+        raise typer.BadParameter(f"session output already exists: {value}")
+    if target.name in {"", ".", ".."}:
+        raise typer.BadParameter(f"invalid session output path: {value}")
+    return target
+
+
 def structured_headless_exit_code(
     termination: str | None,
     failing_tools: list[str] | set[str] | tuple[str, ...] | None = None,
@@ -1388,6 +1405,7 @@ def main(
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate headless options and print the normalized run configuration without calling the model."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
+    session_output: str | None = typer.Option(None, "--session-output", help="Write the headless session JSONL artifact to a specific workspace path."),
     no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
 ) -> None:
     """Run local Ollama agent workflows."""
@@ -1400,6 +1418,8 @@ def main(
         print_version(json_output=wants_json_output(json_output, output_format))
         raise typer.Exit(code=0)
     workspace_override = resolve_headless_workspace(workspace)
+    settings_for_prompt = Settings(workspace=workspace_override)
+    session_output_path = resolve_headless_session_output(settings_for_prompt.workspace, session_output)
     if list_models:
         payload = model_list_payload(
             workspace_override=workspace_override,
@@ -1410,7 +1430,6 @@ def main(
         )
         print_model_list(payload, json_output=wants_json_output(json_output, output_format))
         raise typer.Exit(code=0)
-    settings_for_prompt = Settings(workspace=workspace_override)
     prompt = load_headless_prompt(
         print_prompt,
         prompt_file,
@@ -1437,6 +1456,7 @@ def main(
             max_steps=max_steps,
             save_session=save_session,
             resume_session=resume_session,
+            session_output=session_output_path,
             no_memory=no_memory,
         )
         print_headless_dry_run(payload, json_output=structured_output, quiet=quiet)
@@ -1459,6 +1479,7 @@ def main(
             suppress_trace=structured_output,
             save_session=save_session,
             resume_session=resume_session,
+            session_output_path=session_output_path,
             max_steps=max_steps,
             no_memory=no_memory,
         )
@@ -1557,6 +1578,7 @@ def run_print_prompt(
     suppress_trace: bool = False,
     save_session: bool = False,
     resume_session: str | None = None,
+    session_output_path: Path | None = None,
     max_steps: int | None = None,
     no_memory: bool = False,
 ) -> str | HeadlessRunResult:
@@ -1598,6 +1620,16 @@ def run_print_prompt(
 
     if resume_session and not agent_mode:
         output = "invalid response: --resume-session requires --agent"
+        if return_metadata:
+            return HeadlessRunResult(output=output, termination="invalid_action")
+        return output
+    if session_output_path and not agent_mode:
+        output = "invalid response: --session-output requires --agent"
+        if return_metadata:
+            return HeadlessRunResult(output=output, termination="invalid_action")
+        return output
+    if session_output_path and resume_session:
+        output = "invalid response: --session-output cannot be combined with --resume-session"
         if return_metadata:
             return HeadlessRunResult(output=output, termination="invalid_action")
         return output
@@ -1666,27 +1698,38 @@ def run_print_prompt(
                 memory=memory,
             )
             session_path = None
-        if save_session and not getattr(agent_loop.session, "_session_store", None):
-            agent_loop.session.enable_persistence(settings.workspace)
+        if (save_session or session_output_path is not None) and not getattr(agent_loop.session, "_session_store", None):
+            agent_loop.session.enable_persistence(settings.workspace, path=session_output_path)
             session_path = agent_loop.session._session_store.path if agent_loop.session._session_store else session_path
-        if plan_then_execute:
-            plan_output = agent_loop.run(plan_prompt, namespace=namespace, plan_only=True)
-            execute_prompt = (
-                "你已經完成上一步 headless planning。現在切換到 EXECUTE MODE。\n"
-                "請依照已產出的方案執行使用者任務；必要時使用工具，小步實作並驗證。\n"
-                "不要重新輸出完整計畫，直接從下一個可驗證行動開始。\n\n"
-                f"上一階段計畫：\n{plan_output}\n\n"
-                f"使用者原始任務：{prompt}"
-            )
-            execute_output = agent_loop.run(execute_prompt, namespace=namespace, plan_only=False)
-            output = f"## Plan\n{plan_output}\n\n## Execution\n{execute_output}"
-            phases = (
-                {"name": "plan", "output": plan_output},
-                {"name": "execution", "output": execute_output},
-            )
-        else:
-            output = agent_loop.run(agent_prompt, namespace=namespace, plan_only=plan_mode)
-            phases = ()
+        try:
+            if plan_then_execute:
+                plan_output = agent_loop.run(plan_prompt, namespace=namespace, plan_only=True)
+                execute_prompt = (
+                    "你已經完成上一步 headless planning。現在切換到 EXECUTE MODE。\n"
+                    "請依照已產出的方案執行使用者任務；必要時使用工具，小步實作並驗證。\n"
+                    "不要重新輸出完整計畫，直接從下一個可驗證行動開始。\n\n"
+                    f"上一階段計畫：\n{plan_output}\n\n"
+                    f"使用者原始任務：{prompt}"
+                )
+                execute_output = agent_loop.run(execute_prompt, namespace=namespace, plan_only=False)
+                output = f"## Plan\n{plan_output}\n\n## Execution\n{execute_output}"
+                phases = (
+                    {"name": "plan", "output": plan_output},
+                    {"name": "execution", "output": execute_output},
+                )
+            else:
+                output = agent_loop.run(agent_prompt, namespace=namespace, plan_only=plan_mode)
+                phases = ()
+        except Exception as exc:
+            active_store = getattr(agent_loop.session, "_session_store", None)
+            if active_store is not None:
+                session_path = active_store.path
+            if return_metadata:
+                return headless_exception_result(
+                    exc,
+                    session_path=str(session_path) if session_path else None,
+                )
+            return f"runtime error: {type(exc).__name__}: {exc}"
         active_store = getattr(agent_loop.session, "_session_store", None)
         if active_store is not None:
             session_path = active_store.path
@@ -1869,10 +1912,12 @@ def ask(
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate options and print the normalized run configuration without calling the model."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
+    session_output: str | None = typer.Option(None, "--session-output", help="Write the headless session JSONL artifact to a specific workspace path."),
     no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
 ) -> None:
     structured_output = wants_json_output(json_output, output_format)
     workspace_override = resolve_headless_workspace(workspace)
+    session_output_path = resolve_headless_session_output(Settings(workspace=workspace_override).workspace, session_output)
     if dry_run:
         payload = build_headless_dry_run_payload(
             prompt,
@@ -1888,6 +1933,7 @@ def ask(
             max_steps=max_steps,
             save_session=save_session,
             resume_session=resume_session,
+            session_output=session_output_path,
             no_memory=no_memory,
         )
         print_headless_dry_run(payload, json_output=structured_output, quiet=quiet)
@@ -1908,6 +1954,7 @@ def ask(
             suppress_trace=structured_output,
             save_session=save_session,
             resume_session=resume_session,
+            session_output_path=session_output_path,
             max_steps=max_steps,
             no_memory=no_memory,
         )

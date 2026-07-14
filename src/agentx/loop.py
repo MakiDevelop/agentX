@@ -274,9 +274,13 @@ class AgentSession:
             },
         ]
 
-    def enable_persistence(self, workspace: Path | None = None) -> None:
+    def enable_persistence(self, workspace: Path | None = None, path: Path | None = None) -> None:
         ws = workspace or self.settings.workspace
-        self._session_store = SessionStore.create(ws, self.settings.model, self.namespace)
+        self._session_store = (
+            SessionStore.create_at(path, self.settings.model, self.namespace)
+            if path is not None
+            else SessionStore.create(ws, self.settings.model, self.namespace)
+        )
         for msg in self.messages:
             self._session_store.append(msg["role"], msg["content"])
         # Snapshot current important state at enable time

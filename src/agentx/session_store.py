@@ -143,6 +143,13 @@ class SessionStore:
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         uid = uuid.uuid4().hex[:6]
         path = directory / f"{stamp}-{uid}.session.jsonl"
+        return cls.create_at(path, model=model, namespace=namespace)
+
+    @classmethod
+    def create_at(cls, path: Path, model: str = "", namespace: str = "") -> SessionStore:
+        if path.exists():
+            raise FileExistsError(f"Session file already exists: {path}")
+        path.parent.mkdir(parents=True, exist_ok=True)
         store = cls(path)
         store.append(
             "system",
