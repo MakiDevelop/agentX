@@ -75,6 +75,8 @@ agentx handoff-inspect tests/fixtures/headless_result_failure.json --field recov
 agentx -p "..." --agent --output-format jsonl | agentx handoff-inspect - --field resume_command --next-prompt "照上一輪繼續" --use-payload-exit-code
 agentx handoff-resume .agentx/runs/latest
 agentx handoff-resume .agentx/runs/latest --resume-output-format jsonl
+agentx handoff-resume .agentx/runs/latest --dry-run
+agentx handoff-resume .agentx/runs/latest --execute
 agentx handoff-resume tests/fixtures/headless_result_failure.json --next-prompt "照上一輪繼續"
 ```
 
@@ -100,6 +102,8 @@ output mode. Use `jsonl` when the next runner expects event envelopes.
 is an artifact bundle directory, it reads `result.json` or `result.jsonl` and
 uses `handoff.md` as the default `--prompt-file` when present. If `SOURCE` is a
 payload file, it behaves like `handoff-inspect --field resume_command`.
+`--dry-run` prints the final command and argv without running it; `--execute`
+explicitly runs the generated command and exits with the child process status.
 
 For automation that needs a stable artifact path instead of stdout parsing:
 

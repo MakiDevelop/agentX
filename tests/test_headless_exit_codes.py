@@ -1039,6 +1039,85 @@ def test_handoff_resume_jsonl_output(tmp_path: Path) -> None:
     assert event["event"] == "handoff_resume"
     assert event["data"]["field"] == "resume_command"
     assert event["data"]["value"].startswith("agentx --prompt-file ")
+    assert event["data"]["argv"][0] == "agentx"
+
+
+def test_handoff_resume_dry_run_prints_command_preview(tmp_path: Path) -> None:
+    runner = CliRunner()
+    bundle = tmp_path / "run"
+    bundle.mkdir()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    (bundle / "result.json").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+    (bundle / "handoff.md").write_text("# next\n", encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["handoff-resume", str(bundle), "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "final command:" in result.output
+    assert "args:" in result.output
+    assert "0: agentx" in result.output
+    assert "1: --prompt-file" in result.output
+    assert "handoff.md" in result.output
+
+
+def test_handoff_resume_dry_run_jsonl_output(tmp_path: Path) -> None:
+    runner = CliRunner()
+    bundle = tmp_path / "run"
+    bundle.mkdir()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    (bundle / "result.json").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+    (bundle / "handoff.md").write_text("# next\n", encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["handoff-resume", str(bundle), "--dry-run", "--output-format", "jsonl"])
+    event = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert event["event"] == "handoff_resume_dry_run"
+    assert event["data"]["argv"][0] == "agentx"
+    assert str(bundle / "handoff.md") in event["data"]["argv"]
+
+
+def test_handoff_resume_execute_runs_generated_argv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = CliRunner()
+    bundle = tmp_path / "run"
+    bundle.mkdir()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    (bundle / "result.json").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+    (bundle / "handoff.md").write_text("# next\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def fake_run(argv, check):  # noqa: ANN001
+        calls.append(argv)
+        assert check is False
+        return SimpleNamespace(returncode=7)
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["handoff-resume", str(bundle), "--execute"])
+
+    assert result.exit_code == 7
+    assert calls == [[
+        "agentx",
+        "--prompt-file",
+        str(bundle / "handoff.md"),
+        "--agent",
+        "--resume-session",
+        "contract.session.jsonl",
+        "--json",
+    ]]
+
+
+def test_handoff_resume_dry_run_and_execute_are_mutually_exclusive(tmp_path: Path) -> None:
+    runner = CliRunner()
+    bundle = tmp_path / "run"
+    bundle.mkdir()
+    fixture = Path("tests/fixtures/headless_result_failure.json")
+    (bundle / "result.json").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["handoff-resume", str(bundle), "--dry-run", "--execute"])
+
+    assert result.exit_code != 0
+    assert "use only one resume action" in result.output
 
 
 def test_handoff_resume_rejects_bundle_with_both_result_formats(tmp_path: Path) -> None:

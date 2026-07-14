@@ -4,6 +4,7 @@ import os
 import queue
 import re
 import shlex
+import subprocess
 import sys
 import threading
 import json
@@ -1672,6 +1673,24 @@ def format_handoff_inspect_field_plain(field_payload: dict[str, object]) -> str:
     return str(value)
 
 
+def handoff_resume_command_payload(payload: dict[str, object]) -> dict[str, object]:
+    command = payload.get("resume_command")
+    if command is None:
+        command_text = ""
+        argv: list[str] = []
+    else:
+        command_text = str(command)
+        try:
+            argv = shlex.split(command_text)
+        except ValueError as exc:
+            raise typer.BadParameter(f"resume command is not shell-parseable: {exc}") from exc
+    return {
+        "field": "resume_command",
+        "value": command_text,
+        "argv": argv,
+    }
+
+
 def handoff_inspect_exit_code(payload: dict[str, object], *, use_payload_exit_code: bool) -> int:
     if not use_payload_exit_code:
         return 0
@@ -3001,6 +3020,8 @@ def handoff_resume(
         "--require-schema-version",
         help=f"Exit 1 unless schema_version is {HEADLESS_PAYLOAD_SCHEMA_VERSION}.",
     ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print the command and argv that would be executed."),
+    execute: bool = typer.Option(False, "--execute", help="Execute the generated resume command."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
@@ -3008,6 +3029,8 @@ def handoff_resume(
     structured_format = structured_output_format(json_output, output_format)
     if next_prompt and next_prompt_file:
         raise typer.BadParameter("use only one continuation source: --next-prompt or --next-prompt-file")
+    if dry_run and execute:
+        raise typer.BadParameter("use only one resume action: --dry-run or --execute")
 
     raw_payload, default_prompt_file = load_handoff_resume_payload_source(source)
     payload = inspect_headless_handoff_payload(raw_payload)
@@ -3024,7 +3047,29 @@ def handoff_resume(
     if require_schema_version and not handoff_schema_version_matches(payload):
         exit_code = 1
 
-    field_payload = handoff_inspect_field_payload(payload, "resume_command")
+    field_payload = handoff_resume_command_payload(payload)
+    if dry_run:
+        if structured_format != "plain":
+            print_structured_payload(field_payload, output_format=structured_format, event="handoff_resume_dry_run")
+            raise typer.Exit(code=exit_code)
+        print_command_preview([str(item) for item in field_payload["argv"]])
+        raise typer.Exit(code=exit_code)
+
+    if execute:
+        if exit_code != 0:
+            if structured_format != "plain":
+                print_structured_payload(field_payload, output_format=structured_format, event="handoff_resume")
+            else:
+                sys.stdout.write(format_handoff_inspect_field_plain(field_payload))
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+            raise typer.Exit(code=exit_code)
+        argv = field_payload["argv"]
+        if not isinstance(argv, list) or not argv:
+            raise typer.BadParameter("resume command is empty")
+        completed = subprocess.run([str(item) for item in argv], check=False)
+        raise typer.Exit(code=int(completed.returncode))
+
     if structured_format != "plain":
         print_structured_payload(field_payload, output_format=structured_format, event="handoff_resume")
         raise typer.Exit(code=exit_code)
