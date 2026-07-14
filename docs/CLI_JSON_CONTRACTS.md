@@ -27,6 +27,7 @@ Consumers should branch on `event` and read the payload from `data`.
 |---------|-------------|-------------|
 | `agentx config --json` | `agentx.config.v1` | `config` |
 | `agentx init --json` | `agentx.init.v1` | `init` |
+| `agentx sessions --json` | `agentx.sessions.v1` | `sessions` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
 | `agentx doctor --json` | `agentx.doctor.v1` | `doctor` |
 | `agentx commands --json` | `agentx.command_catalog.v1` | `commands` |
@@ -146,6 +147,34 @@ Required stable keys:
 | `by_status` | object with `pending`, `in_progress`, `done`, `blocked` |
 | `active` | array of compact task objects |
 
+## Sessions Payload
+
+`agentx sessions --json` emits `agentx.sessions.v1`.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.sessions.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `count` | integer | Number of returned sessions. |
+| `sessions` | array of object | Transcript overviews, newest first. |
+
+Each session object includes:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `name` | string | Transcript stem usable with `/resume NAME`. |
+| `started` | string | Session start timestamp or fallback name. |
+| `model` | string | Model recorded at session start, or `-`. |
+| `namespace` | string | Namespace recorded at session start, or `-`. |
+| `turns` | integer | User + assistant turn count. |
+| `approval_count` | integer | Number of approval receipts. |
+| `approval_denied_count` | integer | Number of denied approval receipts. |
+| `approval` | string | Human-readable approval summary. |
+| `last` | string | Last compact event summary. |
+| `path` | string | Transcript JSONL path. |
+
 ## Doctor Payload
 
 `agentx doctor --json` emits `agentx.doctor.v1`.
@@ -246,6 +275,7 @@ Contract coverage lives in:
 
 - `tests/test_config_cli.py`
 - `tests/test_init_cli.py`
+- `tests/test_sessions_cli.py`
 - `tests/test_status_cli.py`
 - `tests/test_doctor_cli.py`
 - `tests/test_command_catalog_cli.py`
@@ -255,5 +285,5 @@ Contract coverage lives in:
 Run:
 
 ```bash
-uv run pytest -q tests/test_config_cli.py tests/test_init_cli.py tests/test_status_cli.py tests/test_doctor_cli.py tests/test_command_catalog_cli.py tests/test_tool_catalog_cli.py tests/test_workflows_cli.py
+uv run pytest -q tests/test_config_cli.py tests/test_init_cli.py tests/test_sessions_cli.py tests/test_status_cli.py tests/test_doctor_cli.py tests/test_command_catalog_cli.py tests/test_tool_catalog_cli.py tests/test_workflows_cli.py
 ```

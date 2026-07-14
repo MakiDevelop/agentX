@@ -108,6 +108,7 @@ agentx --list-backends
 agentx --list-models --json
 agentx backends --json
 agentx init --json
+agentx sessions --json
 agentx config --json
 agentx status --json
 agentx doctor --static --json
@@ -167,6 +168,7 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `stats` 目前包含 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies 與 task counts。
 `log_summary` 會提供精簡可機讀執行摘要：termination、tool outcomes、successful/failing tools、recent errors、recovery suggestions、pending verifies 與 deterministic `handoff_summary`。
 `agentx init --json` 會輸出 `agentx.init.v1` project profile；預設 read-only，加 `--write-memory` 才會寫入 Memory Hall。
+`agentx sessions --json` 會輸出 `agentx.sessions.v1` transcript overview，方便外部 runner 找最近 session、approval denials 與 resume 目標。
 `agentx status --json` 會輸出 `agentx.status.v1`，整合 version、resolved runtime、git dirty/ahead/behind 與 task counts；它只做本機 read-only 檢查，不探測網路服務。
 `agentx doctor --json` 會輸出 `agentx.doctor.v1` health checks；CI 或 wrapper 可用 `agentx doctor --static --json` 只檢查本機 `uv`、git、task migration，避開 Ollama / memory live probes。加上 `--fail-on-error` 時，任一 check 失敗會在輸出 payload 後以 exit 1 結束。
 `agentx workflows --json` 會輸出 `agentx.workflow_catalog.v1`，讓 wrapper 能讀取 headless、audit、commit 等可執行 recipe；也可用 `agentx workflows headless --json` 查單一路徑。

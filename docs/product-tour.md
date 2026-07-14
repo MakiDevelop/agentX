@@ -44,6 +44,7 @@ uv run agentx shell
 
 外部 wrapper 可用 `agentx config --json` 取得目前 workspace、model、memory backend、approval、persona 等解析後設定；token 只會顯示 set/missing。
 初次接入 repo 時可用 `agentx init --json` 取得 `agentx.init.v1` project profile；預設只讀，加 `--write-memory` 才寫入 Memory Hall。
+需要接續工作時可用 `agentx sessions --json` 取得 `agentx.sessions.v1` transcript overview，外部 runner 可依最新 session、approval denied counts 或 transcript path 決定下一步。
 需要判斷當前 workspace 姿態時，用 `agentx status --json` 取得 version、runtime、git dirty/ahead/behind 與 task counts；這是本機 read-only 狀態檢查，不探測網路服務。
 需要健康檢查時，用 `agentx doctor --json` 取得 `agentx.doctor.v1`；CI 或上游 agent 可用 `agentx doctor --static --json --fail-on-error` 只跑本機 `uv`、git、task migration 檢查，失敗時用 exit code 擋下流程。
 這些 inspect/catalog/status 類 payload 的欄位契約整理在 `docs/CLI_JSON_CONTRACTS.md`。

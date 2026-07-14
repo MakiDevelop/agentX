@@ -675,6 +675,7 @@ def apply_plan_task(workspace: Path, request: str) -> str:
 
 
 def print_sessions(settings: Settings) -> None:
+    payload = sessions_payload(settings)
     table = Table(title="agentX sessions", show_header=True, header_style="bold")
     table.add_column("Name", style="cyan")
     table.add_column("Start")
@@ -683,8 +684,7 @@ def print_sessions(settings: Settings) -> None:
     table.add_column("Turns", justify="right")
     table.add_column("Approval", justify="right")
     table.add_column("Last")
-    for path in list_transcripts(settings.workspace):
-        overview = transcript_overview(path)
+    for overview in payload["sessions"]:  # type: ignore[index]
         table.add_row(
             str(overview["name"]),
             str(overview["started"]),
@@ -696,6 +696,51 @@ def print_sessions(settings: Settings) -> None:
         )
     console.print(table)
     console.print("[dim]使用 /resume latest 或 /resume SESSION_NAME 載入上一輪摘要。[/dim]")
+
+
+def sessions_payload(settings: Settings, *, limit: int = 10) -> dict[str, object]:
+    sessions = [transcript_overview(path) for path in list_transcripts(settings.workspace, limit=limit)]
+    return {
+        "schema": "agentx.sessions.v1",
+        "workspace": str(settings.workspace),
+        "count": len(sessions),
+        "sessions": sessions,
+    }
+
+
+def print_sessions_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="sessions",
+        )
+        return
+
+    table = Table(title="agentX sessions", show_header=True, header_style="bold")
+    table.add_column("Name", style="cyan")
+    table.add_column("Start")
+    table.add_column("Model")
+    table.add_column("Namespace")
+    table.add_column("Turns", justify="right")
+    table.add_column("Approval", justify="right")
+    table.add_column("Last")
+    for overview in payload["sessions"]:  # type: ignore[index]
+        table.add_row(
+            str(overview["name"]),
+            str(overview["started"]),
+            str(overview["model"]),
+            str(overview["namespace"]),
+            str(overview["turns"]),
+            str(overview["approval"]),
+            str(overview["last"]),
+        )
+    console.print(table)
 
 
 def print_tool_result(result_text: str) -> None:
@@ -3563,6 +3608,20 @@ def init_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_init_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("sessions")
+def sessions_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for session discovery."),
+    limit: int = typer.Option(10, "--limit", min=1, help="Maximum number of sessions to return."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """List saved session transcripts."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = sessions_payload(settings, limit=limit)
+    structured_format = structured_output_format(json_output, output_format)
+    print_sessions_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("status")
