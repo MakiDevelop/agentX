@@ -691,6 +691,7 @@ def _agentx_headless_tool_args(argv: list[str]) -> dict[str, object]:
         "agent_mode": "--agent" in argv,
         "prompt_source": prompt_source,
         "prompt_source_count": len(prompt_sources),
+        "prompt_file": _option_value(argv, "--prompt-file"),
         "workspace_override": _has_option(argv, "--workspace") or _has_option(argv, "--cwd"),
         "artifact_dir": _option_value(argv, "--artifact-dir"),
         "result_output": _option_value(argv, "--result-output"),
@@ -707,6 +708,8 @@ def _agentx_headless_blockers(settings: Settings, tool_args: dict[str, object]) 
     blockers: list[str] = []
     if int(tool_args.get("prompt_source_count", 0) or 0) > 1:
         blockers.append("headless_prompt_sources_conflict")
+    if _headless_prompt_file_escapes_workspace(settings.workspace, tool_args):
+        blockers.append("headless_prompt_file_escapes_workspace")
     if _headless_output_paths_conflict(tool_args):
         blockers.append("headless_output_paths_conflict")
     if _headless_paths_escape_workspace(settings.workspace, tool_args):
@@ -730,6 +733,17 @@ def _agentx_headless_blockers(settings: Settings, tool_args: dict[str, object]) 
     if tool_args.get("session_output") and tool_args.get("resume_session"):
         blockers.append("headless_session_output_conflicts_with_resume_session")
     return blockers
+
+
+def _headless_prompt_file_escapes_workspace(workspace: Path, tool_args: dict[str, object]) -> bool:
+    value = tool_args.get("prompt_file")
+    if not value:
+        return False
+    try:
+        resolve_inside_workspace(workspace, str(value))
+    except ValueError:
+        return True
+    return False
 
 
 def _headless_paths_escape_workspace(workspace: Path, tool_args: dict[str, object]) -> bool:

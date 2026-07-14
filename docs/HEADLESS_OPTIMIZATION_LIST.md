@@ -80,6 +80,7 @@
 - [x] `agentx command-plan COMMAND --json` 可輸出 read-only command policy preflight（allowlist / build approval / docker compose / destructive blockers），讓外部 runner 不執行命令也能知道風險、tool args、approval posture 與 blocker。
 - [x] `agentx command-plan` 對 headless `agentx -p` / `--prompt-file` 會回報 agent mode、prompt source、artifact/session/output-format/quiet/resume 等 runner posture metadata。
 - [x] `agentx command-plan` 會提前擋 headless prompt source 衝突（`-p` / `--prompt-file` / `--stdin` 多選）。
+- [x] `agentx command-plan` 會提前擋 headless `--prompt-file` 逃出 workspace。
 - [x] `agentx command-plan` 會提前擋 headless artifact option 衝突（`--artifact-dir` vs 個別 output、artifact/handoff briefing 缺 `--agent`、session-output vs resume-session）。
 - [x] `agentx command-plan` 會提前擋 headless output path 衝突（session/result/handoff briefing 指到同一個 artifact path）。
 - [x] `agentx command-plan` 會提前擋 headless output path / artifact-dir 逃出 workspace。
