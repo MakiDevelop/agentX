@@ -40,7 +40,7 @@ from agentx.command_catalog import (
     slash_command_suggestions,
 )
 from agentx.context_compactor import LLMContextCompactor
-from agentx.doctor import run_doctor
+from agentx.doctor import run_doctor, run_static_doctor
 from agentx.git_workflow import build_commit_plan, commit_and_push
 from agentx.intent import plan_task_items
 from agentx.jobs import PromptJobQueue
@@ -1085,6 +1085,70 @@ def print_status_payload(
         f"changes={git.get('changes_count')}",
     )
     table.add_row("tasks", f"count={tasks.get('count')} by_status={json.dumps(task_counts, ensure_ascii=False)}")
+    console.print(table)
+
+
+def doctor_payload_from_checks(
+    checks: list[tuple[str, bool, str]],
+    *,
+    settings: Settings,
+    live_probes: bool,
+) -> dict[str, object]:
+    normalized = [
+        {
+            "name": name,
+            "ok": ok,
+            "detail": detail,
+        }
+        for name, ok, detail in checks
+    ]
+    return {
+        "schema": "agentx.doctor.v1",
+        "workspace": str(settings.workspace),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "live_probes": live_probes,
+        "ok": all(item["ok"] for item in normalized),
+        "checks": normalized,
+    }
+
+
+def doctor_payload(
+    settings: Settings,
+    *,
+    memory: MemoryHallClient | NullMemoryClient | None = None,
+    ollama: OllamaClient | None = None,
+    live_probes: bool = True,
+) -> dict[str, object]:
+    if live_probes:
+        if memory is None or ollama is None:
+            raise ValueError("live doctor probes require memory and ollama clients")
+        checks = run_doctor(settings, memory, ollama)
+    else:
+        checks = run_static_doctor(settings)
+    return doctor_payload_from_checks(checks, settings=settings, live_probes=live_probes)
+
+
+def print_doctor_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="doctor",
+        )
+        return
+
+    table = Table(title="agentX doctor", show_header=True, header_style="bold")
+    table.add_column("Check", style="cyan")
+    table.add_column("OK")
+    table.add_column("Detail")
+    for item in payload["checks"]:  # type: ignore[index]
+        check = dict(item)
+        table.add_row(str(check["name"]), "yes" if check["ok"] else "no", str(check["detail"]))
     console.print(table)
 
 
@@ -3357,6 +3421,43 @@ def status_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_status_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("doctor")
+def doctor_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for doctor checks."),
+    static: bool = typer.Option(False, "--static", help="Run only local static checks; skip Ollama and memory probes."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Run agentX health checks for humans or automation."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    if static:
+        payload = doctor_payload(settings, live_probes=False)
+    else:
+        ollama = OllamaClient(
+            base_url=settings.ollama_url,
+            model=settings.model,
+            timeout=settings.ollama_timeout,
+        )
+        try:
+            if (settings.memory_backend or "memhall").lower() == "amh":
+                from agentx.memory_hall import AmhClient
+
+                memory: MemoryHallClient | NullMemoryClient = AmhClient(
+                    store=settings.memory_amh_store,
+                    store_path=settings.memory_amh_path,
+                )
+            else:
+                memory = MemoryHallClient(
+                    base_url=settings.memory_hall_url,
+                    token=settings.memory_hall_token,
+                )
+            payload = doctor_payload(settings, memory=memory, ollama=ollama, live_probes=True)
+        finally:
+            ollama.close()
+    structured_format = structured_output_format(json_output, output_format)
+    print_doctor_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("models")

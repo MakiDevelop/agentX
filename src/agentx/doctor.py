@@ -23,6 +23,15 @@ def run_doctor(settings: Settings, memory: MemoryHallClient, ollama: OllamaClien
     return checks
 
 
+def run_static_doctor(settings: Settings) -> list[tuple[str, bool, str]]:
+    """Run local-only doctor checks without Ollama or memory probes."""
+    return [
+        _check_command("uv", ["uv", "--version"]),
+        _check_command("git", ["git", "status", "--short", "--branch"], cwd=settings.workspace),
+        _check_task_migration(settings),
+    ]
+
+
 def _check_command(name: str, command: list[str], cwd=None) -> tuple[str, bool, str]:
     try:
         result = subprocess.run(command, cwd=cwd, text=True, capture_output=True, timeout=20, check=False)
