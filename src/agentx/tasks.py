@@ -216,7 +216,9 @@ def get_task_migration_status(workspace: Path) -> dict:
     MT22 過渡期工具：回報目前任務系統的遷移狀態。
     主要用於診斷與除錯。
     """
-    has_old = has_legacy_single_task(workspace)
+    # Keep this public status API warning-free; the deprecated helper still warns
+    # when called directly by legacy code.
+    has_old = single_task_path(workspace).exists()
     has_new = tasks_path(workspace).exists()
     current_tasks = load_tasks(workspace)
 
@@ -232,18 +234,15 @@ def _backup_old_single_task_file(workspace: Path, old_path: Path) -> None:
     """MT22 備份策略（B）。
 
     將舊的單一任務檔安全地備份為帶時間戳的 .bak 檔。
-    如果備份失敗，至少會嘗試刪除舊檔，避免它繼續被誤用。
+    如果備份失敗，保留舊檔不刪除；tasks.json 已存在時守衛會避免重複遷移。
     """
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = workspace / ".agentx" / f"task.json.bak.{timestamp}"
         old_path.rename(backup_path)
     except Exception:
-        # 備份失敗時，盡力刪除舊檔（避免後續流程誤讀）
-        try:
-            old_path.unlink()
-        except Exception:
-            pass
+        # Fail open: keep user workspace state intact and let doctor report the mixed state.
+        pass
 
 
 def _normalize_legacy_date(date_str: str) -> str:

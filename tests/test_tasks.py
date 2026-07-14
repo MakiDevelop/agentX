@@ -296,6 +296,33 @@ def test_migrate_renames_old_file_to_backup(tmp_path: Path):
     assert multi[0]["description"] == "重構認證模組"
 
 
+def test_migrate_keeps_old_file_when_backup_rename_fails(tmp_path: Path, monkeypatch):
+    """備份 rename 失敗時不刪除舊 task.json，避免 silent data loss。"""
+    _write_legacy_task(tmp_path, title="保留舊檔")
+    old_path = tmp_path / ".agentx" / "task.json"
+
+    def fail_rename(self: Path, target: Path) -> Path:
+        if self == old_path:
+            raise OSError("simulated backup failure")
+        return original_rename(self, target)
+
+    original_rename = Path.rename
+    monkeypatch.setattr(Path, "rename", fail_rename)
+
+    migrated = migrate_single_task_if_needed(tmp_path)
+    assert migrated is True
+    assert old_path.exists()
+
+    multi = load_tasks(tmp_path)
+    assert len(multi) == 1
+    assert multi[0]["description"] == "保留舊檔"
+
+    status = get_task_migration_status(tmp_path)
+    assert status["has_legacy_single_task"] is True
+    assert status["has_multi_task_file"] is True
+    assert status["legacy_system_active"] is False
+
+
 def test_migrate_always_uses_timestamped_backup(tmp_path: Path):
     """無論如何，備份檔都應使用時間戳命名，避免覆蓋既有 .bak"""
     # 第一次遷移
