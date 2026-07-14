@@ -142,12 +142,13 @@ Recommended next:
 
 ### Image 5: Safety Priority + Approval Gate
 
-**Current estimate**: 80%
+**Current estimate**: 85%
 
 Done:
 
 - GREEN / YELLOW / RED risk classification exists and is visible in `/tools`, `/help`, `/doctor`, `/status`, welcome UI.
-- Approval policy supports `ask`, `auto`, `off`.
+- Approval policy supports `ask`, `auto`, `off`, plus aliases `strict`, `auto-approve`, and `deny`.
+- Transcript approval receipts distinguish YELLOW `auto_approved`, `manual_approved`, `manual_denied`, and `policy_denied` decisions.
 - RED tools are blocked.
 - Dangerous command patterns and sensitive paths are guarded.
 - Cross-absolute-path `mv` is conservatively RED.
@@ -156,17 +157,11 @@ Done:
 
 Remaining gap:
 
-- Image names approval modes as `ask`, `auto-approve`, `strict`, `deny`; current CLI uses `ask`, `auto`, `off`.
-- No `strict` / `deny` aliases yet.
-- Transcript does not clearly distinguish auto-approved vs manually approved YELLOW tools.
+- Headless result payloads do not yet expose approval receipts as first-class structured fields.
 
 Recommended next:
 
-- Add aliases without changing behavior:
-  - `auto-approve` -> `auto`
-  - `deny` -> `off`
-  - `strict` -> `ask` for now, documented as "always ask for YELLOW"; do not alter GREEN behavior unless separately designed.
-- Update `/approval`, `/config set approval`, README, and tests.
+- Consider carrying approval receipts into headless result payloads after deciding whether this is part of the public payload contract.
 - Keep RED behavior unchanged.
 
 ## Current Gap Summary
@@ -177,7 +172,7 @@ Recommended next:
 | Mode clarity | 85% | `/mode ask` alias |
 | Tool discoverability | 80-85% | `/workflows` or `/guide --full` |
 | Memory continuity | 78-82% | Handoff section formatting |
-| Safety / approval UX | 80% | Approval aliases + docs/tests |
+| Safety / approval UX | 85% | Headless approval receipts in result payload |
 | Visual polish | 55-65% | Optional TUI/web demo, not required for guarded MVP |
 
 ## Recommended Implementation Queue

@@ -1,4 +1,4 @@
-from agentx.approval import ApprovalMode, ApprovalPolicy, normalize_approval_mode
+from agentx.approval import ApprovalMode, ApprovalPolicy, approval_decision_source, normalize_approval_mode
 from agentx.safety import Risk
 
 
@@ -31,3 +31,10 @@ def test_approval_aliases_normalize_to_existing_modes() -> None:
     assert normalize_approval_mode("strict") == ApprovalMode.ASK
     assert normalize_approval_mode("auto-approve") == ApprovalMode.AUTO
     assert normalize_approval_mode("deny") == ApprovalMode.OFF
+
+
+def test_approval_decision_source_names_receipt_origin() -> None:
+    assert approval_decision_source(ApprovalMode.AUTO, True) == "auto_approved"
+    assert approval_decision_source(ApprovalMode.ASK, True) == "manual_approved"
+    assert approval_decision_source(ApprovalMode.ASK, False) == "manual_denied"
+    assert approval_decision_source(ApprovalMode.OFF, False) == "policy_denied"

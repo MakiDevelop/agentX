@@ -3302,6 +3302,68 @@ def test_build_runtime_no_memory_uses_null_memory_client(tmp_path: Path, monkeyp
     assert tools.run("memory_search", {"query": "anything", "namespace": "project:test"}).content == "[]"
 
 
+def test_build_runtime_records_yellow_approval_audit(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    from helpers import make_settings
+    from agentx.approval import ApprovalMode, ApprovalPolicy
+
+    receipts: list[dict[str, object]] = []
+    monkeypatch.setattr(cli, "register_builtin_backends", lambda: None)
+    monkeypatch.setattr(cli, "get_llm_client", lambda *args, **kwargs: object())
+
+    _, _, tools = cli.build_runtime(
+        make_settings(tmp_path),
+        approval_policy=ApprovalPolicy(ApprovalMode.AUTO),
+        approval_audit=receipts.append,
+        no_memory=True,
+    )
+
+    result = tools.run("memory_write", {"content": "receipt test", "namespace": "project:test"})
+
+    assert result.ok
+    assert receipts == [
+        {
+            "tool": "memory_write",
+            "risk": "YELLOW",
+            "approval_mode": "auto",
+            "source": "auto_approved",
+            "allowed": True,
+        }
+    ]
+
+
+def test_build_runtime_can_write_approval_audit_to_transcript(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    from helpers import make_settings
+    from agentx.approval import ApprovalMode, ApprovalPolicy
+    from agentx.transcript import Transcript
+
+    transcript = Transcript(tmp_path, model="fake", namespace="project:test")
+    monkeypatch.setattr(cli, "register_builtin_backends", lambda: None)
+    monkeypatch.setattr(cli, "get_llm_client", lambda *args, **kwargs: object())
+
+    _, _, tools = cli.build_runtime(
+        make_settings(tmp_path),
+        approval_policy=ApprovalPolicy(ApprovalMode.AUTO),
+        approval_audit=lambda receipt: transcript.write("approval", receipt),
+        no_memory=True,
+    )
+
+    tools.run("memory_write", {"content": "receipt test", "namespace": "project:test"})
+    records = [json.loads(line) for line in transcript.path.read_text(encoding="utf-8").splitlines()]
+
+    approval_records = [record for record in records if record["event"] == "approval"]
+    assert approval_records == [
+        {
+            "ts": approval_records[0]["ts"],
+            "event": "approval",
+            "tool": "memory_write",
+            "risk": "YELLOW",
+            "approval_mode": "auto",
+            "source": "auto_approved",
+            "allowed": True,
+        }
+    ]
+
+
 def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN001
     runner = CliRunner()
     captured: dict[str, object] = {}

@@ -96,4 +96,4 @@ Aliases：
 - `auto-approve` -> `auto`
 - `deny` -> `off`
 
-GREEN 操作會自動允許；YELLOW 操作依 approval policy；RED 操作永遠受保護。`/run` 與 `/docker` 會在執行前顯示 final command 和逐參數列表。
+GREEN 操作會自動允許；YELLOW 操作依 approval policy；RED 操作永遠受保護。YELLOW tool 的 approval receipt 會寫入 transcript，標示 `auto_approved`、`manual_approved`、`manual_denied` 或 `policy_denied`。`/run` 與 `/docker` 會在執行前顯示 final command 和逐參數列表。

@@ -559,6 +559,7 @@ transcript 會記錄：
 - user prompt
 - assistant answer 摘要
 - tool result 摘要
+- approval receipt（YELLOW tool 的 `auto_approved` / `manual_approved` / `manual_denied` / `policy_denied`）
 
 `.agentx/sessions/` 已加入 `.gitignore`，不會被提交。
 

@@ -26,7 +26,7 @@ from rich.text import Text
 
 from agentx import cli_runtime_handlers as _runtime_handlers
 from agentx import cli_slash_shims as _slash_shims
-from agentx.approval import ApprovalMode, ApprovalPolicy, normalize_approval_mode
+from agentx.approval import ApprovalMode, ApprovalPolicy, approval_decision_source, normalize_approval_mode
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from agentx.config import Settings
 from agentx.context_compactor import LLMContextCompactor
@@ -2382,6 +2382,7 @@ def build_runtime(
     settings: Settings,
     *,
     approval_policy: ApprovalPolicy | None = None,
+    approval_audit: Callable[[dict[str, object]], None] | None = None,
     backend_override: str | None = None,
     no_memory: bool = False,
 ) -> tuple[LLMClient, MemoryHallClient | NullMemoryClient, ToolRegistry]:
@@ -2422,7 +2423,18 @@ def build_runtime(
     def approve(tool: str, args: dict[str, object], risk: Risk) -> bool:
         if approval_policy is None:
             return False
-        return approval_policy.decide(tool, args, risk, approve_interactive)
+        allowed = approval_policy.decide(tool, args, risk, approve_interactive)
+        if approval_audit is not None:
+            approval_audit(
+                {
+                    "tool": tool,
+                    "risk": risk.value,
+                    "approval_mode": approval_policy.mode.value,
+                    "source": approval_decision_source(approval_policy.mode, allowed),
+                    "allowed": allowed,
+                }
+            )
+        return allowed
 
     tools = ToolRegistry(
         builtin_tools(settings.workspace, memory),
@@ -3128,13 +3140,21 @@ def shell(
     approval_policy = ApprovalPolicy(
         mode=normalize_approval_mode(project_config.approval) if project_config.approval else ApprovalMode.ASK
     )
-    ollama, memory, tools = build_runtime(settings, approval_policy=approval_policy)
+    transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
+
+    def audit_approval(receipt: dict[str, object]) -> None:
+        transcript.write("approval", receipt)
+
+    ollama, memory, tools = build_runtime(
+        settings,
+        approval_policy=approval_policy,
+        approval_audit=audit_approval,
+    )
 
     # MT22 後：只使用新多任務清單（legacy 分支已移除）
     current_tasks = load_tasks(settings.workspace)
     task_summary = format_task_list_summary(current_tasks)
 
-    transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
     if current_tasks:
         transcript.write("tasks", {"count": len(current_tasks), "summary": task_summary})
     compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None

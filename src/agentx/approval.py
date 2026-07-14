@@ -27,6 +27,14 @@ def normalize_approval_mode(value: str) -> ApprovalMode:
     return ApprovalMode(normalized)
 
 
+def approval_decision_source(mode: ApprovalMode, allowed: bool) -> str:
+    if mode == ApprovalMode.AUTO:
+        return "auto_approved" if allowed else "auto_denied"
+    if mode == ApprovalMode.OFF:
+        return "policy_denied"
+    return "manual_approved" if allowed else "manual_denied"
+
+
 @dataclass
 class ApprovalPolicy:
     mode: ApprovalMode = ApprovalMode.ASK
