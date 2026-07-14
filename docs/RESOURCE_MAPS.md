@@ -27,6 +27,25 @@ Snapshot status:
 - This document is a routing snapshot and agentX usage contract, not the SSOT.
   When acting on infrastructure, read `/infra ...` or the source files again.
 
+## Agent-Facing Deliverables
+
+When Maki asks agentX to "make the resource map", "家庭 AI 設施地圖", or
+"VPS 地圖", the expected deliverable is this three-layer package:
+
+| Layer | File / command | Purpose |
+|-------|----------------|---------|
+| Repo contract | `docs/RESOURCE_MAPS.md` | Stable rules, aliases, stop conditions, and current routing snapshot for agentX developers. |
+| Runtime context | `/infra home`, `/infra vps`, `/infra all` | Read-only extraction from `~/infrastructure/*` for the current machine before answering or acting. |
+| Local constitution | `AGENTX.md` resource-map gate | Always-on instruction that forces runtime state pre-flight for SSH/deploy/cross-machine work. |
+
+Acceptance criteria for this map package:
+
+- Home AI facilities and VPS hosts are separately searchable.
+- Domain-to-repo and machine-to-service ambiguity is called out before action.
+- The maps never grant permission to SSH, deploy, delete, restart, write memory,
+  or touch production by themselves.
+- Company, PopDaily, personal VPS, and home AI boundaries are explicit.
+
 ## Operating Route
 
 Use this route before any SSH, deploy, service restart, cron / launchd change,
@@ -77,10 +96,24 @@ intent from the resource map:
 | Mac mini M4 | `ssh mini-ts`; `192.168.11.122`; `100.122.171.74` | Control plane, always-on services, memhall backup | OpenClaw, Nginx, BFF, Redis, Memory Gateway, DL-Pilot, MOMO Home AI, ERIKA personal | Long GPU inference, memhall main path |
 | Mac mini M4-2 | `ssh mini2-ts`; `100.89.41.50` | memhall main, backup control plane, light jobs, embed server main | Memory Hall `:9100`, Hermes Gateway, Telegram channel, mk-brain embed_server `:8790` | Silent second primary gateway, heavy batch inference |
 | DGX Spark | `ssh dgx-ts`; `192.168.11.123`; `100.110.14.65` | Main text inference and scoring node | Ollama `:11434`, Open WebUI, vLLM, LLM chat, RAG answer, rerank, batch scoring, embedding fallback | Web-facing app primary, database state source |
-| RTX 3090 PC | `ssh rtx3090`; `192.168.11.168` | Image generation and x86 CUDA fallback | ComfyUI, Stable Diffusion / Flux, LoRA, CUDA-only PoC, image batch work | Control plane, core database, reliable state service |
+| RTX 3090 PC | `ssh rtx3090`; `192.168.11.168`; `100.120.136.40` | Image generation and x86 CUDA fallback | ComfyUI, Stable Diffusion / Flux, LoRA, CUDA-only PoC, image batch work | Control plane, core database, reliable state service |
 | NAS DS2415+ | `ssh nas-ts`; `192.168.11.112`; `100.82.57.32` | Shared storage and backup | Models, LoRA, ControlNet, datasets, generated outputs, archive | Inference, API service, app deployment |
 | S20 Ultra | `100.68.254.82` | Mobile capture and edge inbox | Capture inbox, mobile upload, temporary webhook, sensor input | Heavy inference, reliable always-on core service |
 | PDSNET-Z13 | `ssh pdsnet-z13-ts`; `100.90.226.15` | Windows 11 / external 5G / mobile GPU fallback | Windows-only PoC, CUDA compatibility checks, external 5G scenario tests | Production, database, core state, always-on service |
+
+### Home AI Quick Decisions
+
+Use this list to answer "where should this run?" before selecting a host:
+
+| If the request says... | Read first | Likely target | Confirm before action |
+|------------------------|------------|---------------|-----------------------|
+| ERIKA personal, OpenClaw, LINE Bot, BFF, Redis, Memory Gateway | `/infra home` | Mac mini M4 | process manager, port, repo name |
+| Memory Hall, AMH adapter, `:9100`, mk-brain embed `:8790` main | `/infra home` | Mac mini M4-2 | main vs backup path, AMH store mode |
+| Ollama, Open WebUI, LLM inference, rerank, RAG answer | `/infra home` | DGX Spark | model name, VRAM/load, endpoint |
+| ComfyUI, Flux, Stable Diffusion, LoRA, CUDA x86 fallback | `/infra home` | RTX 3090 PC | GPU availability, output storage |
+| models, datasets, generated assets, backup | `/infra home` | NAS DS2415+ | source/destination path, mount state |
+| mobile capture, temporary edge inbox | `/infra home` | S20 Ultra | non-SLA nature, upload path |
+| Windows-only PoC, external 5G, RTX 4090 Laptop GPU test | `/infra home` | PDSNET-Z13 | temporary scope, no production state |
 
 ### Workload Routing
 
@@ -120,6 +153,21 @@ exists to prevent domain-to-repo confusion:
 | `paul.applekuma.com` | `ssh paul`; `45.76.207.168` | Customer-facing consumption management | `paul.applekuma.com` | Existing `_legacy` flow may still matter |
 | `kerker.tw` | `ssh kerker`; `202.182.112.147` | Ghost / static display services | Check `/infra vps` before acting | Repo ownership must be confirmed |
 | `greenleaves.dig.tw` | cPanel | River tracing activity platform with payment | `greenleaves` | Payment-related; treat changes as higher risk |
+
+### VPS Quick Decisions
+
+Use this list to disambiguate domain, host, service, and repo:
+
+| If the request says... | Read first | Likely host | Likely repo / scope | Confirm before action |
+|------------------------|------------|-------------|---------------------|-----------------------|
+| n8n, workflow automation, SearXNG, control-plane experiment | `/infra vps` + `/infra project` | `n1k.tw` | `n8n-workflows`, `agent-control-plane` | systemd vs Docker, service name |
+| anonymous forum, 2ch | `/infra vps` | `2ch.tw` | `2ch-core` | Docker compose path |
+| GEO Checker, AI education, `pd.ranran.tw` | `/infra vps` + boundary check | `ranran.tw` | `geo-checker`, `abd-ids-class`, PopDaily delivery | personal vs PopDaily context |
+| short URL, business card, `dx.chiba.tw`, `ai.chiba.tw`, chatbot port `8900` | `/infra vps` + `/infra project` | `chiba.tw` | `chiba.tw`, `dx-chiba`, `dx-chatbot` | path/subdomain/port |
+| Ghost technical blog | `/infra vps` | `blog.chibakuma.com` | `blog.chibakuma.com` | Ghost service path |
+| customer consumption management, `_legacy` | `/infra vps` | `paul.applekuma.com` | `paul.applekuma.com` | legacy flow |
+| Ghost/static display on `kerker.tw` | `/infra vps` | `kerker.tw` | unconfirmed | repo ownership |
+| river tracing, payment | `/infra vps` | `greenleaves.dig.tw` | `greenleaves` | payment risk and cPanel path |
 
 Important distinctions:
 

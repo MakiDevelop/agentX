@@ -293,6 +293,12 @@ agentX 遇到任何家庭 AI 設施、VPS、SSH、deploy、service restart、cro
 | Mac mini、mini2、DGX、RTX3090、NAS、S20、PDSNET | `/infra home` 或 `/infra 家庭AI設施` | 家庭 AI 算力與常駐服務路由 |
 | n1k、2ch、ranran、chiba.tw、blog、paul、kerker | `/infra vps` 或 `/infra VPS地圖` | 外網主機與多服務 VPS 消歧義 |
 
+當 Maki 要求「資源地圖」「家庭 AI 設施地圖」「VPS 地圖」時，agentX 的交付物應包含：
+- repo 內可讀索引：`docs/RESOURCE_MAPS.md`，說明 source、alias、路由、停止條件。
+- runtime 可查入口：`/infra home`、`/infra vps`、`/infra all`，且標明 read-only。
+- 可操作前置格式：填完下方 runtime state block；欄位未知時先查 map 或停下問 Maki。
+- 邊界提醒：家庭 AI / 個人 VPS / PopDaily / 91APP 公司脈絡不可混用。
+
 動手前必須填 runtime state：
 
 ```text
