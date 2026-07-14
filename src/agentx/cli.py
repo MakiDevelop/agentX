@@ -707,6 +707,8 @@ def _agentx_headless_blockers(tool_args: dict[str, object]) -> list[str]:
     blockers: list[str] = []
     if int(tool_args.get("prompt_source_count", 0) or 0) > 1:
         blockers.append("headless_prompt_sources_conflict")
+    if _headless_output_paths_conflict(tool_args):
+        blockers.append("headless_output_paths_conflict")
     if tool_args.get("artifact_dir"):
         conflicting_outputs = [
             name
@@ -726,6 +728,19 @@ def _agentx_headless_blockers(tool_args: dict[str, object]) -> list[str]:
     if tool_args.get("session_output") and tool_args.get("resume_session"):
         blockers.append("headless_session_output_conflicts_with_resume_session")
     return blockers
+
+
+def _headless_output_paths_conflict(tool_args: dict[str, object]) -> bool:
+    seen: set[str] = set()
+    for key in ("session_output", "result_output", "handoff_briefing_output"):
+        value = tool_args.get(key)
+        if not value:
+            continue
+        normalized = str(value)
+        if normalized in seen:
+            return True
+        seen.add(normalized)
+    return False
 
 
 def _agentx_headless_prompt_sources(argv: list[str]) -> list[str]:

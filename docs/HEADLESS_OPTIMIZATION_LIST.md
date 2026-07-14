@@ -81,6 +81,7 @@
 - [x] `agentx command-plan` 對 headless `agentx -p` / `--prompt-file` 會回報 agent mode、prompt source、artifact/session/output-format/quiet/resume 等 runner posture metadata。
 - [x] `agentx command-plan` 會提前擋 headless prompt source 衝突（`-p` / `--prompt-file` / `--stdin` 多選）。
 - [x] `agentx command-plan` 會提前擋 headless artifact option 衝突（`--artifact-dir` vs 個別 output、artifact/handoff briefing 缺 `--agent`、session-output vs resume-session）。
+- [x] `agentx command-plan` 會提前擋 headless output path 衝突（session/result/handoff briefing 指到同一個 artifact path）。
 - [x] `agentx tool-plan TOOL --args-json JSON --json` 可輸出 read-only tool-call preflight（alias resolution、risk、approval_required、known arg blockers），讓外部 runner 在真正 tool call 前先做機器可讀安全判斷。
 - [x] `agentx capabilities --json` 會提供 `recommended_entrypoints` 與 `by_schema`，讓外部 runner 第一次接入時能直接找到 discovery/preflight/next/gate/verify 入口與 schema 對應 command。
 - [x] `agentx capabilities --json` 會列出 `handoff-inspect` / `handoff-resume`，讓 command-plan 能辨識 artifact resume 流程中的接手命令。

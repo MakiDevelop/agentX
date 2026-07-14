@@ -166,6 +166,28 @@ def test_command_plan_payload_blocks_agentx_session_resume_conflict(tmp_path) ->
     assert "headless_session_output_conflicts_with_resume_session" in payload["blockers"]
 
 
+def test_command_plan_payload_blocks_agentx_output_path_conflict(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path),
+        "agentx -p x --agent --result-output artifacts/run.md --handoff-briefing-output artifacts/run.md --json",
+    )
+
+    assert payload["ok"] is False
+    assert payload["allowed"] is False
+    assert "headless_output_paths_conflict" in payload["blockers"]
+
+
+def test_command_plan_payload_blocks_agentx_session_result_path_conflict(tmp_path) -> None:  # noqa: ANN001
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path),
+        "agentx -p x --agent --session-output artifacts/run.jsonl --result-output artifacts/run.jsonl --json",
+    )
+
+    assert payload["ok"] is False
+    assert payload["allowed"] is False
+    assert "headless_output_paths_conflict" in payload["blockers"]
+
+
 def test_command_plan_payload_blocks_agentx_prompt_source_conflict(tmp_path) -> None:  # noqa: ANN001
     payload = command_plan_payload(Settings(workspace=tmp_path), "agentx -p x --prompt-file briefing.md --agent --json")
 
