@@ -986,6 +986,13 @@ def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
+def wants_json_output(json_output: bool, output_format: str | None) -> bool:
+    normalized = (output_format or "plain").strip().lower()
+    if normalized not in {"plain", "json"}:
+        raise typer.BadParameter("output format must be one of: plain, json")
+    return json_output or normalized == "json"
+
+
 def resolve_session_store_path(workspace: Path, value: str) -> Path:
     sessions_dir = (workspace / ".agentx" / "sessions").resolve()
     if value.strip() == "latest":
@@ -1099,6 +1106,7 @@ def main(
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
     max_steps: int | None = typer.Option(None, "--max-steps", help="Override max agent loop steps for -p."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for headless automation."),
+    output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain or json."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
 ) -> None:
@@ -1107,6 +1115,7 @@ def main(
         return
     if ctx.invoked_subcommand is not None:
         return
+    structured_output = wants_json_output(json_output, output_format)
     output = run_print_prompt(
         print_prompt,
         namespace=namespace,
@@ -1115,7 +1124,7 @@ def main(
         plan_then_execute=plan_then_execute,
         orchestrate=orchestrate,
         return_metadata=True,
-        suppress_trace=json_output,
+        suppress_trace=structured_output,
         save_session=save_session,
         resume_session=resume_session,
         max_steps=max_steps,
@@ -1126,14 +1135,14 @@ def main(
             termination=output.termination,
             failing_tools=output.failing_tools,
         )
-        if json_output:
+        if structured_output:
             print_json_output(headless_json_payload(output, exit_code))
             raise typer.Exit(code=exit_code)
         print_raw(output.output)
         raise typer.Exit(
             code=exit_code
         )
-    if json_output:
+    if structured_output:
         fallback_result = HeadlessRunResult(output=output)
         print_json_output(headless_json_payload(fallback_result, headless_exit_code(output)))
         raise typer.Exit(code=headless_exit_code(output))
@@ -1482,16 +1491,18 @@ def ask(
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
     plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan first, then execute in the same headless run."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for automation."),
+    output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain or json."),
     save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
     resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
 ) -> None:
+    structured_output = wants_json_output(json_output, output_format)
     output = run_print_prompt(
         prompt,
         namespace=namespace,
         agent_mode=True,
         plan_then_execute=plan_then_execute,
         return_metadata=True,
-        suppress_trace=json_output,
+        suppress_trace=structured_output,
         save_session=save_session,
         resume_session=resume_session,
         max_steps=max_steps,
@@ -1502,12 +1513,12 @@ def ask(
             termination=output.termination,
             failing_tools=output.failing_tools,
         )
-        if json_output:
+        if structured_output:
             print_json_output(headless_json_payload(output, exit_code))
             raise typer.Exit(code=exit_code)
         print_raw(output.output)
         raise typer.Exit(code=exit_code)
-    if json_output:
+    if structured_output:
         fallback_result = HeadlessRunResult(output=output)
         print_json_output(
             headless_json_payload(

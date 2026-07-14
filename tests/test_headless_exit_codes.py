@@ -119,6 +119,21 @@ def test_headless_json_payload_includes_optional_phases() -> None:
     ]
 
 
+def test_wants_json_output_accepts_json_alias() -> None:
+    assert cli.wants_json_output(False, "json") is True
+    assert cli.wants_json_output(True, "plain") is True
+    assert cli.wants_json_output(False, "plain") is False
+
+
+def test_wants_json_output_rejects_unknown_format() -> None:
+    try:
+        cli.wants_json_output(False, "yaml")
+    except Exception as exc:
+        assert "plain, json" in str(exc)
+    else:
+        raise AssertionError("unknown output format should fail")
+
+
 def test_resolve_session_store_path_latest_and_name(tmp_path: Path) -> None:
     sessions = tmp_path / ".agentx" / "sessions"
     sessions.mkdir(parents=True)
@@ -204,6 +219,35 @@ def test_print_prompt_json_output_uses_structured_metadata(monkeypatch) -> None:
     assert data["termination"] == "final_failed"
     assert data["failing_tools"] == ["run_tests"]
     assert data["stats"]["error_count"] == 1
+
+
+def test_print_prompt_output_format_json_uses_structured_metadata(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--output-format", "json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert data["output"] == "ok"
+    assert data["termination"] == "final_success"
+    assert captured["suppress_trace"] is True
+
+
+def test_print_prompt_rejects_unknown_output_format(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    monkeypatch.setattr(cli, "run_print_prompt", lambda *args, **kwargs: "should not run")
+
+    result = runner.invoke(cli.app, ["-p", "demo", "--output-format", "yaml"])
+
+    assert result.exit_code != 0
+    assert "plain, json" in result.output
 
 
 def test_print_prompt_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN001
@@ -341,3 +385,21 @@ def test_ask_forwards_plan_then_execute(monkeypatch) -> None:  # noqa: ANN001
 
     assert result.exit_code == 0
     assert captured["plan_then_execute"] is True
+
+
+def test_ask_output_format_json(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(cli.app, ["ask", "demo", "--output-format", "json"])
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert data["output"] == "ok"
+    assert captured["suppress_trace"] is True

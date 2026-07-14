@@ -117,7 +117,9 @@ agentx ask "重構 headless session resume" --plan-then-execute
 
 ```bash
 agentx -p "幫我列出這個 repo 的檔案" --agent --json
+agentx -p "幫我列出這個 repo 的檔案" --agent --output-format json
 agentx ask "幫我列出這個 repo 的檔案" --json
+agentx ask "幫我列出這個 repo 的檔案" --output-format json
 ```
 
 JSON payload 會包含 `output`、`exit_code`、`termination`、`failing_tools` 與 `stats`。
