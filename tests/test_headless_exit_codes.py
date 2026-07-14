@@ -132,6 +132,105 @@ def test_headless_payload_enriches_handoff_with_resume_command() -> None:
     assert "Resume with the provided resume_command." in handoff["next_steps"]
 
 
+def test_headless_payload_contract_required_keys() -> None:
+    payload = cli.headless_payload(
+        cli.HeadlessRunResult(
+            output="stopped",
+            termination="final_failed",
+            failing_tools=("run_tests",),
+            stats={"message_count": 3, "task_counts": {"in_progress": 1}},
+            log_summary={
+                "termination": "final_failed",
+                "tool_outcomes": {"run_tests": False, "read_file": True},
+                "successful_tools": ["read_file"],
+                "failing_tools": ["run_tests"],
+                "recent_errors": [
+                    {
+                        "type": "execution_error",
+                        "tool": "run_tests",
+                        "message": "pytest failed",
+                        "attempt_count": 1,
+                    }
+                ],
+                "recovery_suggestions": [
+                    {
+                        "action": "verify_assumption",
+                        "confidence": 0.75,
+                        "description": "read files",
+                        "rationale": "state stale",
+                    }
+                ],
+                "pending_verifies": ["src/a.py"],
+                "handoff_summary": cli.headless_handoff_summary(
+                    termination="final_failed",
+                    failing_tools=["run_tests"],
+                    recent_errors=[
+                        {
+                            "type": "execution_error",
+                            "tool": "run_tests",
+                            "message": "pytest failed",
+                            "attempt_count": 1,
+                        }
+                    ],
+                    recovery_suggestions=[
+                        {
+                            "action": "verify_assumption",
+                            "confidence": 0.75,
+                            "description": "read files",
+                            "rationale": "state stale",
+                        }
+                    ],
+                    pending_verifies=["src/a.py"],
+                    stats={"task_counts": {"in_progress": 1}},
+                ),
+            },
+            session_path="/repo/.agentx/sessions/contract.session.jsonl",
+        ),
+        exit_code=1,
+    )
+
+    assert {
+        "output",
+        "exit_code",
+        "termination",
+        "failing_tools",
+        "stats",
+        "log_summary",
+        "session_path",
+    }.issubset(payload)
+
+    log_summary = payload["log_summary"]
+    assert {
+        "termination",
+        "tool_outcomes",
+        "successful_tools",
+        "failing_tools",
+        "recent_errors",
+        "recovery_suggestions",
+        "pending_verifies",
+        "handoff_summary",
+    }.issubset(log_summary)
+
+    handoff = log_summary["handoff_summary"]
+    assert {
+        "status",
+        "needs_handoff",
+        "failing_tools",
+        "pending_verifies",
+        "task_counts",
+        "last_error",
+        "recovery_actions",
+        "primary_recovery",
+        "recovery_checklist",
+        "next_steps",
+        "session_path",
+        "resume_session",
+        "resume_command",
+    }.issubset(handoff)
+    assert handoff["resume_session"] == "contract.session.jsonl"
+    assert handoff["resume_command"].endswith("--resume-session contract.session.jsonl --json")
+
+
 def test_headless_payload_keeps_resume_fields_null_without_session_path() -> None:
     payload = cli.headless_payload(
         cli.HeadlessRunResult(
