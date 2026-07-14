@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -113,6 +114,10 @@ MAP_ALIASES = {
 
 PRIMARY_MAP_KEYS = ("quick", "project", "resource")
 RESOURCE_BUNDLE_MAP_KEYS = ("resource", "home", "vps")
+SENSITIVE_LINE_RE = re.compile(
+    r"(api[-_ ]?key|client[-_ ]?secret|secret|token|password|bearer|x-api-key|AIza)",
+    re.IGNORECASE,
+)
 
 
 def _heading_level(line: str) -> int | None:
@@ -161,6 +166,16 @@ def _extract_markdown_section(content: str, headings: tuple[str, ...]) -> str | 
     return "\n".join(lines[start_index:end_index]).strip()
 
 
+def _redact_sensitive_lines(content: str) -> str:
+    redacted: list[str] = []
+    for line in content.splitlines():
+        if SENSITIVE_LINE_RE.search(line):
+            redacted.append("[redacted sensitive infrastructure line]")
+        else:
+            redacted.append(line)
+    return "\n".join(redacted)
+
+
 def build_infrastructure_context(
     map_key: str = "all",
     *,
@@ -196,6 +211,7 @@ def build_infrastructure_context(
             content = extracted or f"(section missing: {', '.join(item.section_headings)})"
         else:
             content = raw_content
+        content = _redact_sensitive_lines(content)
         content = content[:per_file_chars]
         sections.append(f"--- {item.title} ({item.path}) ---\n{content}")
 

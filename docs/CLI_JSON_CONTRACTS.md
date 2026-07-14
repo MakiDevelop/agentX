@@ -39,6 +39,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx commit-plan --json` | `agentx.commit_plan.v1` | `commit_plan` |
 | `agentx gate --json` | `agentx.gate.v1` | `gate` |
 | `agentx next --json` | `agentx.next.v1` | `next` |
+| `agentx infra --json` | `agentx.infrastructure_context.v1` | `infra` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
 | `agentx status --json` | `agentx.status.v1` | `status` |
@@ -301,6 +302,28 @@ Each recommendation object includes:
 | `command` | string |
 | `reason` | string |
 | `risk` | string |
+
+## Infrastructure Context Payload
+
+`agentx infra [all|quick|project|resource|home|vps|resource-bundle] --json`
+emits `agentx.infrastructure_context.v1`.
+
+This is a read-only context payload for runtime preflight. It loads Maki's
+canonical infrastructure maps from `~/infrastructure/*`, including extracted
+home AI facilities and VPS sections. It does not grant permission to SSH,
+deploy, restart services, delete data, write memory, or touch production.
+Sensitive key/token/secret lines are redacted before the context is returned.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.infrastructure_context.v1`. |
+| `map` | string | Requested map key or alias. |
+| `ok` | boolean | True when the map context was loaded. |
+| `read_only` | boolean | Always true; this payload is evidence only. |
+| `content` | string | Bounded markdown context from the selected map source(s). |
+| `next_commands` | array of string | Human-facing reminders for runtime state and approval gates. |
 
 ## Artifacts Payload
 

@@ -27,6 +27,8 @@ Snapshot status:
   `~/infrastructure/project-map.md`, `~/infrastructure/resource-map.md`.
 - This document is a routing snapshot and agentX usage contract, not the SSOT.
   When acting on infrastructure, read `/infra ...` or the source files again.
+- Runtime `/infra` / `agentx infra` output redacts sensitive key/token/secret
+  lines before returning context.
 
 ## Lookup Index
 
@@ -53,7 +55,7 @@ When Maki asks agentX to "make the resource map", "家庭 AI 設施地圖", or
 | Layer | File / command | Purpose |
 |-------|----------------|---------|
 | Repo contract | `docs/RESOURCE_MAPS.md` | Stable rules, aliases, stop conditions, and current routing snapshot for agentX developers. |
-| Runtime context | `/infra home`, `/infra vps`, `/infra resource-bundle`, `/infra all` | Read-only extraction from `~/infrastructure/*` for the current machine before answering or acting. |
+| Runtime context | `/infra home`, `/infra vps`, `/infra resource-bundle`, `/infra all`; `agentx infra ... --json` for headless runners | Read-only extraction from `~/infrastructure/*` for the current machine before answering or acting. |
 | Local constitution | `AGENTX.md` resource-map gate | Always-on instruction that forces runtime state pre-flight for SSH/deploy/cross-machine work. |
 
 Acceptance criteria for this map package:
@@ -228,9 +230,11 @@ The source code path is:
   extraction, and context limits.
 - `src/agentx/tools/builtin.py`: `infrastructure_context` tool registration.
 - `src/agentx/cli_runtime_handlers.py`: `/infra` slash command dispatch.
+- `src/agentx/cli.py`: `agentx infra ... --json` top-level runner command.
 - `src/agentx/intent.py`: runtime state pre-flight hints for infra-like requests.
 - `tests/test_infrastructure_context.py`: map path, alias, section extraction, and
   context cap coverage.
+- `tests/test_infra_cli.py`: top-level CLI JSON, JSONL, and plain output coverage.
 
 Current aliases intentionally include:
 

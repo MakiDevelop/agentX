@@ -44,6 +44,7 @@ from agentx.command_catalog import (
 from agentx.context_compactor import LLMContextCompactor
 from agentx.doctor import run_doctor, run_static_doctor
 from agentx.git_workflow import build_commit_plan, commit_and_push
+from agentx.infrastructure_context import build_infrastructure_context
 from agentx.intent import plan_task_items
 from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
@@ -535,6 +536,43 @@ def print_tool_catalog(
     if query:
         console.print(f"[bold]agentX tool catalog: {escape(query)}[/bold]")
     print_tools(tools, query)
+
+
+def infra_payload(
+    map_key: str = "all",
+    *,
+    per_file_chars: int = 5000,
+    max_chars: int = 14000,
+) -> dict[str, object]:
+    content = build_infrastructure_context(
+        map_key,
+        per_file_chars=per_file_chars,
+        max_chars=max_chars,
+    )
+    return {
+        "schema": "agentx.infrastructure_context.v1",
+        "map": map_key,
+        "ok": True,
+        "read_only": True,
+        "content": content,
+        "next_commands": [
+            "Fill runtime state before SSH/deploy/cross-machine actions",
+            "Use explicit Maki approval before external writes, deploy, restart, or production changes",
+        ],
+    }
+
+
+def print_infra_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output or jsonl_output:
+        output_format = "jsonl" if jsonl_output else "json"
+        print_structured_payload(payload, output_format=output_format, event="infra")
+        return
+    print_raw(str(payload["content"]))
 
 
 def print_raw(text: object) -> None:
@@ -5179,6 +5217,23 @@ def tools_command(
     registry = ToolRegistry(builtin_tools(workspace_path, NullMemoryClient()))
     structured_format = structured_output_format(json_output, output_format)
     print_tool_catalog(registry, query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("infra")
+def infra_command(
+    map_key: str = typer.Argument("all", help="Map to read: all, quick, project, resource, home, vps, or resource-bundle."),
+    per_file_chars: int = typer.Option(5000, "--per-file-chars", min=100, help="Maximum characters to read from each selected source."),
+    max_chars: int = typer.Option(14000, "--max-chars", min=500, help="Maximum characters in the final context payload."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Read Maki's project/resource/home-AI/VPS maps as read-only context."""
+    structured_format = structured_output_format(json_output, output_format)
+    try:
+        payload = infra_payload(map_key, per_file_chars=per_file_chars, max_chars=max_chars)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    print_infra_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("config")

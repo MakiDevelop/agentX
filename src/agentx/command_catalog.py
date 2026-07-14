@@ -254,6 +254,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only catalog",
     },
     {
+        "command": "agentx infra",
+        "usage": "agentx infra [all|quick|project|resource|home|vps|resource-bundle] --json",
+        "description": "Read Maki's project/resource/home-AI/VPS maps as read-only context for runtime preflight.",
+        "examples": ["agentx infra home --json", "agentx infra vps --json", "agentx infra resource-bundle --output-format jsonl"],
+        "schemas": ["agentx.infrastructure_context.v1"],
+        "jsonl_event": "infra",
+        "risk": "GREEN - read-only local infrastructure map context",
+    },
+    {
         "command": "agentx workflows",
         "usage": "agentx workflows [QUERY] --json",
         "description": "List practical workflow recipes for headless, audit, and commit flows.",

@@ -256,3 +256,28 @@ def test_build_infrastructure_context_respects_caps(tmp_path: Path) -> None:
     assert len(context) <= 1000
     assert "A" * 10 in context
     assert "A" * 11 not in context
+
+
+def test_build_infrastructure_context_redacts_sensitive_lines(tmp_path: Path) -> None:
+    infra = tmp_path / "infrastructure"
+    infra.mkdir()
+    (infra / "infrastructure-quick-ref.md").write_text(
+        "\n".join(
+            [
+                "# 基礎設施速查",
+                "normal routing line",
+                "API Key: AIzaSySECRET",
+                "LOOKER_CLIENT_SECRET = super-secret",
+                "X-API-Key: abc123",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    context = build_infrastructure_context("quick", home=tmp_path)
+
+    assert "normal routing line" in context
+    assert "AIzaSySECRET" not in context
+    assert "super-secret" not in context
+    assert "abc123" not in context
+    assert "[redacted sensitive infrastructure line]" in context

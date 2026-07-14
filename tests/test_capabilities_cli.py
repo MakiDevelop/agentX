@@ -22,6 +22,7 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert "agentx commit-plan" in commands
     assert "agentx gate" in commands
     assert "agentx next" in commands
+    assert "agentx infra" in commands
     assert commands["agentx verify"]["schemas"] == ["agentx.verify.v1"]
     assert commands["agentx artifacts"]["schemas"] == ["agentx.artifacts.v1"]
     assert commands["agentx traces"]["schemas"] == ["agentx.traces.v1"]
@@ -34,6 +35,8 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert commands["agentx gate"]["jsonl_event"] == "gate"
     assert commands["agentx next"]["schemas"] == ["agentx.next.v1"]
     assert commands["agentx next"]["jsonl_event"] == "next"
+    assert commands["agentx infra"]["schemas"] == ["agentx.infrastructure_context.v1"]
+    assert commands["agentx infra"]["jsonl_event"] == "infra"
     assert commands["agentx approvals"]["jsonl_event"] == "approvals"
     assert all(
         set(item) == {
@@ -58,6 +61,7 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     commit_plan_payload = capabilities_payload("agentx.commit_plan.v1")
     gate_payload = capabilities_payload("agentx.gate.v1")
     next_payload = capabilities_payload("agentx.next.v1")
+    infra_payload = capabilities_payload("agentx.infrastructure_context.v1")
 
     assert schema_payload["count"] == 1
     assert schema_payload["capabilities"][0]["command"] == "agentx tasks"  # type: ignore[index]
@@ -75,6 +79,8 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     assert gate_payload["capabilities"][0]["command"] == "agentx gate"  # type: ignore[index]
     assert next_payload["count"] == 1
     assert next_payload["capabilities"][0]["command"] == "agentx next"  # type: ignore[index]
+    assert infra_payload["count"] == 1
+    assert infra_payload["capabilities"][0]["command"] == "agentx infra"  # type: ignore[index]
 
 
 def test_capabilities_json_outputs_catalog() -> None:
