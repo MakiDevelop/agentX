@@ -6,6 +6,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from agentx.memory_hall import MemoryHallClient
 from agentx.protocol import Tool
 from agentx.safety import Risk
@@ -15,8 +17,10 @@ from agentx.tools._helpers import (
     SKIPPED_DIRS,
     docker_compose_command,
     ensure_safe_write_path,
+    extract_web_text,
     resolve_inside_workspace,
     run_subprocess,
+    validate_external_url,
 )
 
 
@@ -601,6 +605,72 @@ class DockerComposeLogsTool(_DockerComposeTool):
         return self._run_action(args)
 
 
+# Bounded defaults for external HTTP fetches (SSRF-hardened, read-only).
+_WEB_FETCH_DEFAULT_TIMEOUT = 10.0
+_WEB_FETCH_MAX_TIMEOUT = 60.0
+_WEB_FETCH_DEFAULT_MAX_CHARS = 20_000
+_WEB_FETCH_MAX_CHARS = 100_000
+_WEB_FETCH_DEFAULT_MAX_BYTES = 2_000_000
+_WEB_FETCH_MAX_BYTES = 5_000_000
+_WEB_FETCH_TEXT_CONTENT_TYPES = (
+    "text/",
+    "application/json",
+    "application/xml",
+    "application/xhtml+xml",
+    "application/javascript",
+    "application/x-javascript",
+)
+
+
+class WebFetchTool:
+    """GREEN read-only fetch of a single external URL, cleaned to plain text."""
+
+    name = "web_fetch"
+    description = (
+        "讀取指定外部 URL 的文字內容（僅 http/https 公網；"
+        "會阻擋 localhost/private IP；HTML 會清理成純文字）"
+    )
+    risk = Risk.GREEN
+    signature = "url, max_chars=20000, timeout=10, max_bytes=2000000"
+
+    def run(self, args: dict[str, Any]) -> str:
+        url = args["url"]
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError("url is required")
+
+        max_chars = int(args.get("max_chars", _WEB_FETCH_DEFAULT_MAX_CHARS))
+        max_chars = max(1, min(max_chars, _WEB_FETCH_MAX_CHARS))
+        timeout = float(args.get("timeout", _WEB_FETCH_DEFAULT_TIMEOUT))
+        timeout = max(1.0, min(timeout, _WEB_FETCH_MAX_TIMEOUT))
+        max_bytes = int(args.get("max_bytes", _WEB_FETCH_DEFAULT_MAX_BYTES))
+        max_bytes = max(1, min(max_bytes, _WEB_FETCH_MAX_BYTES))
+
+        # SSRF gate: must run before any network I/O.
+        validate_external_url(url)
+
+        with httpx.Client(timeout=timeout, follow_redirects=False) as client:
+            with client.stream("GET", url) as response:
+                response.raise_for_status()
+                content_type = response.headers.get("content-type", "")
+                normalized_type = content_type.split(";", 1)[0].strip().lower()
+                if normalized_type and not normalized_type.startswith(_WEB_FETCH_TEXT_CONTENT_TYPES):
+                    raise ValueError(f"unsupported content-type: {content_type}")
+                encoding = getattr(response, "encoding", None) or "utf-8"
+
+                chunks: list[bytes] = []
+                total = 0
+                for chunk in response.iter_bytes():
+                    total += len(chunk)
+                    if total > max_bytes:
+                        raise ValueError(f"response too large: exceeds {max_bytes} bytes")
+                    chunks.append(chunk)
+                body = b"".join(chunks)
+
+            text = body.decode(encoding, errors="replace")
+            text = extract_web_text(text, content_type)
+            return text[:max_chars]
+
+
 def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
     return [
         ListFilesTool(workspace),
@@ -619,6 +689,7 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
         RunBuildCommandTool(workspace),
         RunTestsTool(workspace),
         ApplyPatchTool(workspace),
+        WebFetchTool(),
         DockerComposePsTool(workspace),
         DockerComposeBuildTool(workspace),
         DockerComposeUpTool(workspace),

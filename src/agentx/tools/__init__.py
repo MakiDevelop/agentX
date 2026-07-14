@@ -32,6 +32,7 @@ from agentx.tools.builtin import (
     RunCommandTool,
     RunTestsTool,
     SearchTextTool,
+    WebFetchTool,
     WriteFileTool,
     builtin_tools,
 )
@@ -71,6 +72,7 @@ __all__ = [
     "SearchTextTool",
     "ToolRegistry",
     "WRITE_PROTECTED_PARTS",
+    "WebFetchTool",
     "WriteFileTool",
     "builtin_tools",
     "docker_compose_command",

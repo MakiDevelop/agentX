@@ -98,6 +98,370 @@ def test_web_fetch_blocks_private_network(monkeypatch) -> None:
         validate_external_url("https://example.test")
 
 
+# === Focused tests for WebFetchTool ===
+
+def test_web_fetch_is_registered(tmp_path: Path) -> None:
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    tool = registry.get("web_fetch")
+    assert tool is not None
+    assert tool.name == "web_fetch"
+    assert tool.risk.value == "GREEN"
+
+
+def test_web_fetch_success_returns_cleaned_text(tmp_path: Path, monkeypatch) -> None:
+    html = "<html><script>bad()</script><body><h1>Hello</h1><p>World</p></body></html>"
+    body = html.encode()
+
+    class FakeStreamResponse:
+        headers = {"content-type": "text/html; charset=utf-8"}
+        encoding = "utf-8"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def iter_bytes(self):
+            yield body
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            self.kwargs = kwargs
+            assert kwargs["follow_redirects"] is False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def stream(self, method: str, url: str):
+            assert method == "GET"
+            assert url == "https://example.com/page"
+            return FakeStreamResponse()
+
+    monkeypatch.setattr("agentx.tools.builtin.httpx.Client", FakeClient)
+    # Public resolve so validate_external_url does not block
+    monkeypatch.setattr(
+        "agentx.tools._helpers.socket.getaddrinfo",
+        lambda *args, **kwargs: [(None, None, None, None, ("93.184.216.34", 0))],
+    )
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run("web_fetch", {"url": "https://example.com/page"})
+
+    assert result.ok
+    assert "Hello" in result.content
+    assert "World" in result.content
+    assert "bad()" not in result.content
+    assert "Unknown tool" not in result.content
+
+
+def test_web_fetch_blocks_localhost_before_network(tmp_path: Path, monkeypatch) -> None:
+    called = {"stream": False}
+
+    class BoomClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def stream(self, method: str, url: str):
+            called["stream"] = True
+            raise AssertionError("network must not be reached for blocked URL")
+
+    monkeypatch.setattr("agentx.tools.builtin.httpx.Client", BoomClient)
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run("web_fetch", {"url": "http://localhost:3000"})
+
+    assert not result.ok
+    assert "local hosts" in result.content
+    assert called["stream"] is False
+
+
+def test_web_fetch_blocks_private_url_before_network(tmp_path: Path, monkeypatch) -> None:
+    called = {"stream": False}
+
+    class BoomClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def stream(self, method: str, url: str):
+            called["stream"] = True
+            raise AssertionError("network must not be reached for private URL")
+
+    monkeypatch.setattr("agentx.tools.builtin.httpx.Client", BoomClient)
+    monkeypatch.setattr(
+        "agentx.tools._helpers.socket.getaddrinfo",
+        lambda *args, **kwargs: [(None, None, None, None, ("10.0.0.5", 0))],
+    )
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run("web_fetch", {"url": "https://internal.example"})
+
+    assert not result.ok
+    assert "blocked non-public" in result.content
+    assert called["stream"] is False
+
+
+def test_web_fetch_http_status_error_propagates(tmp_path: Path, monkeypatch) -> None:
+    import httpx
+
+    class FakeStreamResponse:
+        headers = {"content-type": "text/html"}
+
+        def __init__(self, url: str) -> None:
+            self.url = url
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def raise_for_status(self) -> None:
+            resp = httpx.Response(403, request=httpx.Request("GET", self.url))
+            resp.raise_for_status()
+
+        def iter_bytes(self):
+            yield b""
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def stream(self, method: str, url: str):
+            assert method == "GET"
+            return FakeStreamResponse(url)
+
+    monkeypatch.setattr("agentx.tools.builtin.httpx.Client", FakeClient)
+    monkeypatch.setattr(
+        "agentx.tools._helpers.socket.getaddrinfo",
+        lambda *args, **kwargs: [(None, None, None, None, ("93.184.216.34", 0))],
+    )
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run("web_fetch", {"url": "https://example.com/secret"})
+
+    assert not result.ok
+    assert result.error_type == "HTTPStatusError"
+    assert "403" in result.content
+    assert "Forbidden" in result.content
+
+
+def test_web_fetch_respects_max_chars(tmp_path: Path, monkeypatch) -> None:
+    body = "X" * 5000
+    encoded = body.encode()
+
+    class FakeStreamResponse:
+        headers = {"content-type": "text/plain"}
+        encoding = "utf-8"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def iter_bytes(self):
+            yield encoded
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def stream(self, method: str, url: str):
+            assert method == "GET"
+            return FakeStreamResponse()
+
+    monkeypatch.setattr("agentx.tools.builtin.httpx.Client", FakeClient)
+    monkeypatch.setattr(
+        "agentx.tools._helpers.socket.getaddrinfo",
+        lambda *args, **kwargs: [(None, None, None, None, ("93.184.216.34", 0))],
+    )
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run("web_fetch", {"url": "https://example.com/big", "max_chars": 100})
+
+    assert result.ok
+    assert len(result.content) == 100
+
+
+def test_web_fetch_does_not_follow_redirects(tmp_path: Path, monkeypatch) -> None:
+    import httpx
+
+    seen: list[dict[str, object]] = []
+
+    class FakeStreamResponse:
+        headers = {"location": "http://localhost:3000/admin", "content-type": "text/html"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def raise_for_status(self) -> None:
+            resp = httpx.Response(
+                302,
+                headers=self.headers,
+                request=httpx.Request("GET", "https://example.com/redirect"),
+            )
+            resp.raise_for_status()
+
+        def iter_bytes(self):
+            yield b""
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            seen.append(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def stream(self, method: str, url: str):
+            assert method == "GET"
+            return FakeStreamResponse()
+
+    monkeypatch.setattr("agentx.tools.builtin.httpx.Client", FakeClient)
+    monkeypatch.setattr(
+        "agentx.tools._helpers.socket.getaddrinfo",
+        lambda *args, **kwargs: [(None, None, None, None, ("93.184.216.34", 0))],
+    )
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run("web_fetch", {"url": "https://example.com/redirect"})
+
+    assert not result.ok
+    assert seen[0]["follow_redirects"] is False
+    assert result.error_type == "HTTPStatusError"
+    assert "302" in result.content
+
+
+def test_web_fetch_rejects_binary_content_type(tmp_path: Path, monkeypatch) -> None:
+    class FakeStreamResponse:
+        headers = {"content-type": "application/octet-stream"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def iter_bytes(self):
+            raise AssertionError("binary body must not be read")
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def stream(self, method: str, url: str):
+            assert method == "GET"
+            return FakeStreamResponse()
+
+    monkeypatch.setattr("agentx.tools.builtin.httpx.Client", FakeClient)
+    monkeypatch.setattr(
+        "agentx.tools._helpers.socket.getaddrinfo",
+        lambda *args, **kwargs: [(None, None, None, None, ("93.184.216.34", 0))],
+    )
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run("web_fetch", {"url": "https://example.com/file.zip"})
+
+    assert not result.ok
+    assert "unsupported content-type" in result.content
+
+
+def test_web_fetch_rejects_response_over_max_bytes(tmp_path: Path, monkeypatch) -> None:
+    class FakeStreamResponse:
+        headers = {"content-type": "text/plain"}
+        encoding = "utf-8"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def iter_bytes(self):
+            yield b"abcd"
+            yield b"efgh"
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def stream(self, method: str, url: str):
+            assert method == "GET"
+            return FakeStreamResponse()
+
+    monkeypatch.setattr("agentx.tools.builtin.httpx.Client", FakeClient)
+    monkeypatch.setattr(
+        "agentx.tools._helpers.socket.getaddrinfo",
+        lambda *args, **kwargs: [(None, None, None, None, ("93.184.216.34", 0))],
+    )
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run(
+        "web_fetch",
+        {"url": "https://example.com/huge", "max_bytes": 6},
+    )
+
+    assert not result.ok
+    assert "response too large" in result.content
+
+
 # === Focused tests for InsertCodeTool (added to address Codex review Medium item) ===
 
 def test_insert_code_success(tmp_path: Path) -> None:
