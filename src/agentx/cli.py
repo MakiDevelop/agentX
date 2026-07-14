@@ -145,7 +145,7 @@ SLASH_COMMANDS = [
     ("/jobs", "顯示目前執行中與排隊中的 prompt"),
     ("/cancel [JOB_ID|all]", "取消尚未執行的 queued prompt"),
     ("/sessions", "列出最近 transcript，可搭配 /resume"),
-    ("/transcript", "顯示本輪 JSONL transcript 檔案路徑"),
+    ("/transcript [approvals]", "顯示本輪 JSONL transcript 路徑；approvals 會列出 YELLOW approval receipts"),
     ("/handoff [TEXT]", "寫入 Memory Hall 交接摘要；未提供文字時自動整理本輪紀錄"),
     ("/resume [latest|FILE]", "從 JSONL transcript 載入最近上下文摘要"),
     ("/files [PATH]", "列出 repo 檔案，預設目前 workspace"),

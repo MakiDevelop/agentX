@@ -1396,3 +1396,25 @@ def test_handle_transcript_emits_path(tmp_path: Path) -> None:
 
     assert transcript.events == [("slash_command", {"command": "/transcript"})]
     assert lines == [str(path)]
+
+
+def test_handle_transcript_approvals_emits_receipts(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    path = tmp_path / "session.jsonl"
+    path.write_text(
+        '{"ts":"2026-01-02T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}\n',
+        encoding="utf-8",
+    )
+    transcript = FakeTranscript(path=path)
+    lines, emit = _capture()
+
+    handle_transcript(
+        state,
+        "/transcript approvals",
+        transcript=transcript,
+        emit=emit,
+    )
+
+    assert transcript.events == [("slash_command", {"command": "/transcript approvals"})]
+    assert "Approval receipts: 1 most recent" in lines[0]
+    assert "memory_write allowed source=auto_approved mode=auto" in lines[0]

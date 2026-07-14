@@ -25,6 +25,8 @@ from __future__ import annotations
 import shlex
 from typing import TYPE_CHECKING, Any
 
+from agentx.transcript import format_approval_receipts
+
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableSequence
 
@@ -839,7 +841,10 @@ def handle_transcript(
     transcript: Any,
     emit: Callable[[str], None],
 ) -> None:
-    """Emit the current JSONL transcript path."""
+    """Emit current transcript details or approval receipt drill-down."""
     _ = state
     transcript.write("slash_command", {"command": prompt})
+    if prompt.strip() == "/transcript approvals":
+        emit(format_approval_receipts(transcript.path))
+        return
     emit(str(transcript.path))

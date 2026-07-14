@@ -149,7 +149,7 @@ Done:
 - GREEN / YELLOW / RED risk classification exists and is visible in `/tools`, `/help`, `/doctor`, `/status`, welcome UI.
 - Approval policy supports `ask`, `auto`, `off`, plus aliases `strict`, `auto-approve`, and `deny`.
 - Transcript and headless `log_summary.approval_receipts` distinguish YELLOW `auto_approved`, `manual_approved`, `manual_denied`, and `policy_denied` decisions.
-- `/sessions` overview surfaces approval receipt counts and denied counts.
+- `/sessions` overview surfaces approval receipt counts and denied counts; `/transcript approvals` drills into the current receipt list.
 - RED tools are blocked.
 - Dangerous command patterns and sensitive paths are guarded.
 - Cross-absolute-path `mv` is conservatively RED.
@@ -158,11 +158,11 @@ Done:
 
 Remaining gap:
 
-- Approval receipt details are still only in JSONL/payload; `/sessions` intentionally shows counts only.
+- Approval receipt drill-down is scoped to the current transcript; historical drill-down still goes through raw JSONL or `/resume` first.
 
 Recommended next:
 
-- Consider adding a dedicated `/transcript approvals` drill-down only if the count view proves insufficient.
+- Consider historical approval drill-down by session name only if current-session drill-down proves insufficient.
 - Keep RED behavior unchanged.
 
 ## Current Gap Summary
@@ -173,7 +173,7 @@ Recommended next:
 | Mode clarity | 85% | `/mode ask` alias |
 | Tool discoverability | 80-85% | `/workflows` or `/guide --full` |
 | Memory continuity | 78-82% | Handoff section formatting |
-| Safety / approval UX | 89% | Optional approval receipt drill-down |
+| Safety / approval UX | 90% | Optional historical approval drill-down |
 | Visual polish | 55-65% | Optional TUI/web demo, not required for guarded MVP |
 
 ## Recommended Implementation Queue

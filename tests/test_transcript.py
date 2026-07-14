@@ -1,7 +1,9 @@
 from pathlib import Path
 
 from agentx.transcript import (
+    approval_receipts,
     find_transcript,
+    format_approval_receipts,
     list_transcripts,
     resume_loaded_message,
     transcript_overview,
@@ -74,6 +76,34 @@ def test_transcript_overview_counts_approval_receipts(tmp_path: Path) -> None:
     assert overview["approval_denied_count"] == 1
     assert overview["approval"] == "2/1 denied"
     assert "assistant" in str(overview["last"])
+
+
+def test_format_approval_receipts_lists_recent_decisions(tmp_path: Path) -> None:
+    session = tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl"
+    session.parent.mkdir(parents=True)
+    session.write_text(
+        "\n".join([
+            '{"ts":"2026-01-02T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}',
+            '{"ts":"2026-01-02T00:00:01","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}',
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    receipts = approval_receipts(session)
+    formatted = format_approval_receipts(session)
+
+    assert len(receipts) == 2
+    assert "Approval receipts: 2 most recent" in formatted
+    assert "memory_write allowed source=auto_approved mode=auto" in formatted
+    assert "apply_patch denied source=manual_denied mode=ask" in formatted
+
+
+def test_format_approval_receipts_handles_empty_session(tmp_path: Path) -> None:
+    session = tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl"
+    session.parent.mkdir(parents=True)
+    session.write_text("", encoding="utf-8")
+
+    assert format_approval_receipts(session) == "(no approval receipts)"
 
 
 def test_resume_loaded_message_includes_source_and_size(tmp_path: Path) -> None:

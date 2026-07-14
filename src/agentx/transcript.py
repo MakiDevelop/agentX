@@ -145,6 +145,34 @@ def _format_approval_overview(total: int, denied: int) -> str:
     return f"{total}/{denied} denied"
 
 
+def approval_receipts(path: Path, limit: int = 20) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if record.get("event") == "approval":
+                records.append(record)
+    return records[-limit:]
+
+
+def format_approval_receipts(path: Path, limit: int = 20) -> str:
+    receipts = approval_receipts(path, limit=limit)
+    if not receipts:
+        return "(no approval receipts)"
+    lines = [f"Approval receipts: {len(receipts)} most recent"]
+    for receipt in receipts:
+        ts = str(receipt.get("ts", "-"))
+        tool = str(receipt.get("tool", "-"))
+        source = str(receipt.get("source", "-"))
+        mode = str(receipt.get("approval_mode", "-"))
+        allowed = "allowed" if receipt.get("allowed") is True else "denied"
+        lines.append(f"- {ts} {tool} {allowed} source={source} mode={mode}")
+    return "\n".join(lines)
+
+
 def list_transcripts(workspace: Path, limit: int = 10) -> list[Path]:
     directory = workspace / ".agentx" / "sessions"
     if not directory.exists():
