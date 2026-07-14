@@ -14,6 +14,7 @@ from agentx.tools._helpers import (
     validate_external_url,
 )
 from agentx.tools.builtin import (
+    AnalyzeIntentTool,
     ApplyPatchTool,
     DockerComposeBuildTool,
     DockerComposeDownTool,
@@ -56,6 +57,7 @@ from agentx.tools.registry import (
 
 __all__ = [
     "ALLOWED_COMMANDS",
+    "AnalyzeIntentTool",
     "ApplyPatchTool",
     "ApprovalCallback",
     "BUILD_COMMANDS",

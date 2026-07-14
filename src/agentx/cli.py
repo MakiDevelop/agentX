@@ -140,6 +140,7 @@ SLASH_COMMANDS = [
     ("/find KEYWORD", "依 keyword 搜尋檔名/路徑與內容，並建議 /read 目標"),
     ("/where TOPIC", "依 topic 定位最可能的檔案位置，輸出 ranked /read 建議"),
     ("/infra [all|quick|project|resource|home|vps]", "讀取專案地圖、家庭 AI 設施與 VPS 資源地圖（read-only）"),
+    ("/intent TEXT", "把需求整理成目標、風險、建議讀檔與驗證計畫"),
     ("/grep PATTERN [PATH]", "在指定 path 內做 rg 內容搜尋；預設整個 workspace"),
     ("/search PATTERN", "在 repo 內搜尋文字"),
     ("/fetch URL", "讀取指定外部網頁文字，會阻擋 localhost 與私有網段"),
@@ -237,7 +238,7 @@ def print_slash_help() -> None:
             "/help", "/guide", "/workflows", "/status", "/mode", "/plan", "/execute", "/clear", "/exit",
         ]),
         ("檔案與內容", [
-            "/files", "/read", "/find", "/where", "/infra", "/grep", "/search", "/attach", "/fetch",
+            "/files", "/read", "/find", "/where", "/infra", "/intent", "/grep", "/search", "/attach", "/fetch",
         ]),
         ("Git 與變更", [
             "/git", "/diff", "/stage", "/unstage", "/push", "/apply", "/commit",
@@ -1792,6 +1793,17 @@ def shell(
         )
 
     register_handler("/infra", handle_infra)
+
+    def handle_intent(state: ShellState, prompt: str):
+        """把自然語言需求整理成可執行 brief — delegates to runtime handler."""
+        _runtime_handlers.handle_intent(
+            prompt,
+            tools=tools,
+            transcript=transcript,
+            emit=print_tool_result,
+        )
+
+    register_handler("/intent", handle_intent)
 
     def handle_grep(state: ShellState, prompt: str):
         """在指定 path 內搜尋內容 — delegates to runtime handler."""

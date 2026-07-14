@@ -6,6 +6,7 @@ def test_read_only_tools_are_green() -> None:
     assert classify_tool("git_diff") == Risk.GREEN
     assert classify_tool("locate_topic") == Risk.GREEN
     assert classify_tool("infrastructure_context") == Risk.GREEN
+    assert classify_tool("analyze_intent") == Risk.GREEN
 
 
 def test_memory_write_is_yellow() -> None:

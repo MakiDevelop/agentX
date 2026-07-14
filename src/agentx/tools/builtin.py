@@ -11,6 +11,7 @@ import httpx
 
 from agentx.git_workflow import GitPushError, push_current_branch, stage_paths, unstage_paths
 from agentx.infrastructure_context import build_infrastructure_context
+from agentx.intent import analyze_intent
 from agentx.memory_hall import MemoryHallClient
 from agentx.protocol import Tool
 from agentx.safety import Risk
@@ -348,6 +349,16 @@ class InfrastructureContextTool:
             str(args.get("map", "all")),
             max_chars=int(args.get("max_chars", 14000)),
         )
+
+
+class AnalyzeIntentTool:
+    name = "analyze_intent"
+    description = "把自然語言需求整理成目標、風險、建議讀檔與驗證計畫（read-only）"
+    risk = Risk.GREEN
+    signature = "text"
+
+    def run(self, args: dict[str, Any]) -> str:
+        return analyze_intent(str(args.get("text", "")))
 
 
 _WHERE_STOPWORDS = {
@@ -1002,6 +1013,7 @@ def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:
         SearchTextTool(workspace),
         FindFilesTool(workspace),
         InfrastructureContextTool(),
+        AnalyzeIntentTool(),
         LocateTopicTool(workspace),
         GitStatusTool(workspace),
         GitBranchTool(workspace),

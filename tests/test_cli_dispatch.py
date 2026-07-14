@@ -287,6 +287,7 @@ def test_core_slash_commands_remain_declared() -> None:
         "/files",
         "/where",
         "/infra",
+        "/intent",
     }
     missing = required - declared
     assert not missing, f"core slash commands missing from SLASH_COMMANDS: {sorted(missing)}"

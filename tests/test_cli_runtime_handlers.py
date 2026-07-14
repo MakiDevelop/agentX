@@ -1,7 +1,7 @@
 """Coverage for runtime slash handlers used by run_shell() nested handlers.
 
 These tests exercise ``agentx.cli_runtime_handlers`` — the real interactive
-logic for /plan, /execute, /mode, /files, /read, /find, /where, /infra, /grep, /search, /git, /diff,
+logic for /plan, /execute, /mode, /files, /read, /find, /where, /infra, /intent, /grep, /search, /git, /diff,
 low-risk git handlers /stage, /unstage, /push, tool-backed /memory, /fetch, /run, /test,
 low-risk inspection
 handlers /status, /sessions, /jobs, /task readonly, and pure info/display
@@ -30,6 +30,7 @@ from agentx.cli_runtime_handlers import (
     handle_help,
     handle_history,
     handle_infra,
+    handle_intent,
     handle_jobs,
     handle_memory,
     handle_mode,
@@ -520,6 +521,36 @@ def test_handle_infra_dispatches_map_and_failure_prefix() -> None:
 
     assert fail_lines == ["基礎設施地圖讀取失敗：unknown map"]
     assert fail_transcript.events[0][1]["map"] == "nope"
+
+
+def test_handle_intent_dispatches_text_and_failure_prefix() -> None:
+    tools = FakeTools(ToolResult(tool="analyze_intent", ok=True, content="## Intent Brief"))
+    transcript = FakeTranscript()
+    lines, emit = _capture()
+
+    handle_intent("/intent fix approval", tools=tools, transcript=transcript, emit=emit)
+
+    assert tools.calls == [("analyze_intent", {"text": "fix approval"})]
+    assert lines == ["## Intent Brief"]
+    assert transcript.events == [
+        (
+            "tool",
+            {
+                "command": "/intent",
+                "text": "fix approval",
+                "ok": True,
+                "content": "## Intent Brief",
+            },
+        )
+    ]
+
+    fail_tools = FakeTools(ToolResult(tool="analyze_intent", ok=False, content="intent text is required"))
+    fail_transcript = FakeTranscript()
+    fail_lines, fail_emit = _capture()
+    handle_intent("/intent", tools=fail_tools, transcript=fail_transcript, emit=fail_emit)
+
+    assert fail_lines == ["需求分析失敗：intent text is required"]
+    assert fail_transcript.events[0][1]["text"] == ""
 
 
 def test_handle_grep_uses_search_text_with_optional_path() -> None:

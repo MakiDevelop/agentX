@@ -2,7 +2,7 @@
 
 These implement the real interactive-shell logic for a small set of
 commands (``/plan``, ``/execute``, ``/mode``, plus read-only tool-backed
-``/files``, ``/read``, ``/find``, ``/where``, ``/infra``, ``/grep``, ``/search``, ``/git``, ``/diff``,
+``/files``, ``/read``, ``/find``, ``/where``, ``/infra``, ``/intent``, ``/grep``, ``/search``, ``/git``, ``/diff``,
 YELLOW git handlers ``/stage``, ``/unstage`` and ``/push``, low-risk
 tool-backed ``/memory``, ``/fetch``, ``/run``, ``/test``, low-risk
 inspection handlers ``/status``, ``/sessions``, ``/jobs``, the read-only
@@ -268,6 +268,28 @@ def handle_infra(
         emit=emit,
         fail_prefix="基礎設施地圖讀取失敗：",
         transcript_extra={"map": map_key},
+        transcript_limit=_TOOL_TRANSCRIPT_LIMIT_LONG,
+    )
+
+
+def handle_intent(
+    prompt: str,
+    *,
+    tools: Any,
+    transcript: Any,
+    emit: Callable[[str], None],
+) -> None:
+    """Turn a natural-language request into a deterministic execution brief."""
+    text = prompt.removeprefix("/intent").strip()
+    _run_tool_slash(
+        command="/intent",
+        tool_name="analyze_intent",
+        tool_args={"text": text},
+        tools=tools,
+        transcript=transcript,
+        emit=emit,
+        fail_prefix="需求分析失敗：",
+        transcript_extra={"text": text},
         transcript_limit=_TOOL_TRANSCRIPT_LIMIT_LONG,
     )
 

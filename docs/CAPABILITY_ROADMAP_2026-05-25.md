@@ -93,9 +93,9 @@ Goal: help users turn vague requests into a concrete, verifiable task plan witho
 
 Proposed commands:
 
-- `/intent TEXT`
+- [x] `/intent TEXT`
   - Output: interpreted goal, constraints, risk, files to inspect, verification plan.
-- `/plan-task TEXT`
+- [ ] `/plan-task TEXT`
   - Convert a user request into `/task` checklist entries.
 
 Runtime behavior:
@@ -109,9 +109,10 @@ Runtime behavior:
 
 Acceptance:
 
-- Tests cover simple request, ambiguous request, high-risk request, and conversion to task checklist.
-- The feature improves execution, not just explanation quality.
-- No automatic production, destructive, or remote action is triggered by intent classification.
+- `/intent` tests cover simple request, remote/production risk, destructive risk, missing text, runtime dispatch, registry wiring, and GREEN safety classification.
+- The feature improves execution by producing deterministic goal/risk/inspection/verification briefs before tool work.
+- No automatic production, destructive, remote, or task mutation action is triggered by intent classification.
+- Remaining P2 follow-up: `/plan-task TEXT` can convert an approved brief into `/task` checklist entries.
 
 ## Recommended Commit Order
 

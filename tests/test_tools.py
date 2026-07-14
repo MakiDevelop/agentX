@@ -43,6 +43,17 @@ def test_infrastructure_context_tool_reads_resource_map(tmp_path: Path, monkeypa
     assert "read-only references" in result.content
 
 
+def test_analyze_intent_tool_returns_execution_brief(tmp_path: Path) -> None:
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    result = registry.run("analyze_intent", {"text": "修復 approval policy 測試"})
+
+    assert result.ok
+    assert "## Intent Brief" in result.content
+    assert "- Likely action: fix" in result.content
+    assert "/where approval" in result.content
+
+
 def test_find_files_path_match_without_content_match(tmp_path: Path) -> None:
     (tmp_path / "approval_policy.md").write_text("unrelated", encoding="utf-8")
     registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
