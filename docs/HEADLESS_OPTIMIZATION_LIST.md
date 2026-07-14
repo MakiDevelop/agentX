@@ -52,6 +52,11 @@
 - `stats` 目前提供 message count、粗估 context tokens、error count、compaction count、pending verifies、task counts。
 - 一般文字輸出保持相容；JSON 模式會抑制 trace，避免污染 stdout。
 
+**Progress Update (Headless Session Resume, 2026-07)**：
+- [x] `agentx -p ... --agent --save-session` 可保存 `.session.jsonl`。
+- [x] `agentx -p ... --agent --resume-session latest|NAME` 可從目前 workspace 的 `.agentx/sessions/*.session.jsonl` 恢復後繼續執行。
+- [x] JSON payload 回報 `session_path`，方便 script 串接下一輪。
+
 **記錄位置**：
 - Git：`docs/HEADLESS_OPTIMIZATION_LIST.md`（戰術清單）
 - Git：`docs/OPTIMIZATION_ROADMAP.md`（2026-05 起正式實作順序與決策，由 Claude 全權決定順序後建立）

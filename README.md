@@ -116,6 +116,15 @@ agentx ask "幫我列出這個 repo 的檔案" --json
 JSON payload 會包含 `output`、`exit_code`、`termination`、`failing_tools` 與 `stats`。
 `stats` 目前包含 message count、粗估 context tokens、error count、compaction count、pending verifies 與 task counts。
 
+長任務需要跨 headless run 接續時，可保存並恢復 agent session：
+
+```bash
+agentx -p "先讀 repo 並整理下一步" --agent --save-session --json
+agentx -p "照上一輪下一步繼續" --agent --resume-session latest --save-session --json
+```
+
+`--resume-session` 只會讀取目前 workspace 的 `.agentx/sessions/*.session.jsonl`；JSON payload 的 `session_path` 會回報實際保存或恢復的 session 檔。
+
 Headless exit code：
 
 - `0`：成功或一般回答

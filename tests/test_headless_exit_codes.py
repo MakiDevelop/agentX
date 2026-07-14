@@ -1,9 +1,11 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
 from agentx import cli
+from agentx.session_store import SessionStore
 
 
 def test_headless_exit_code_success() -> None:
@@ -91,6 +93,33 @@ def test_headless_json_payload_includes_stats() -> None:
     assert data["termination"] == "final_success"
     assert data["failing_tools"] == []
     assert data["stats"]["message_count"] == 3
+    assert data["session_path"] is None
+
+
+def test_resolve_session_store_path_latest_and_name(tmp_path: Path) -> None:
+    sessions = tmp_path / ".agentx" / "sessions"
+    sessions.mkdir(parents=True)
+    first = SessionStore(sessions / "20260101-000000-a.session.jsonl")
+    first.append("system", "session_start")
+    second = SessionStore(sessions / "20260102-000000-b.session.jsonl")
+    second.append("system", "session_start")
+
+    assert cli.resolve_session_store_path(tmp_path, "latest") == second.path
+    assert cli.resolve_session_store_path(tmp_path, second.path.name) == second.path
+    assert cli.resolve_session_store_path(tmp_path, second.path.stem) == second.path
+    assert first.path != second.path
+
+
+def test_resolve_session_store_path_rejects_outside_workspace(tmp_path: Path) -> None:
+    outside = tmp_path.parent / "outside.session.jsonl"
+    outside.write_text("{}", encoding="utf-8")
+
+    try:
+        cli.resolve_session_store_path(tmp_path, str(outside))
+    except FileNotFoundError as exc:
+        assert "Saved headless session not found" in str(exc)
+    else:
+        raise AssertionError("outside session path should be rejected")
 
 
 def test_headless_run_stats_summarizes_session_state() -> None:
@@ -146,3 +175,26 @@ def test_print_prompt_json_output_uses_structured_metadata(monkeypatch) -> None:
     assert data["termination"] == "final_failed"
     assert data["failing_tools"] == ["run_tests"]
     assert data["stats"]["error_count"] == 1
+
+
+def test_print_prompt_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return cli.HeadlessRunResult(output="ok", termination="final_success", session_path="/tmp/s.session.jsonl")
+
+    monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
+
+    result = runner.invoke(
+        cli.app,
+        ["-p", "demo", "--agent", "--save-session", "--resume-session", "latest", "--json"],
+    )
+    data = json.loads(result.output)
+
+    assert result.exit_code == 0
+    assert captured["save_session"] is True
+    assert captured["resume_session"] == "latest"
+    assert captured["suppress_trace"] is True
+    assert data["session_path"] == "/tmp/s.session.jsonl"

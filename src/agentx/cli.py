@@ -947,6 +947,7 @@ class HeadlessRunResult:
     termination: str = "unknown"
     failing_tools: tuple[str, ...] = ()
     stats: dict[str, object] = field(default_factory=dict)
+    session_path: str | None = None
 
 
 def headless_run_stats(session: AgentSession) -> dict[str, object]:
@@ -974,8 +975,35 @@ def headless_json_payload(result: HeadlessRunResult, exit_code: int) -> str:
         "termination": result.termination,
         "failing_tools": list(result.failing_tools),
         "stats": result.stats,
+        "session_path": result.session_path,
     }
     return json.dumps(payload, ensure_ascii=False)
+
+
+def resolve_session_store_path(workspace: Path, value: str) -> Path:
+    sessions_dir = (workspace / ".agentx" / "sessions").resolve()
+    if value.strip() == "latest":
+        candidates = sorted(sessions_dir.glob("*.session.jsonl")) if sessions_dir.exists() else []
+        if not candidates:
+            raise FileNotFoundError("No saved headless session found.")
+        return candidates[-1]
+
+    raw = Path(value)
+    candidates: list[Path]
+    if raw.is_absolute():
+        candidates = [raw]
+    else:
+        candidates = [
+            sessions_dir / raw,
+            sessions_dir / f"{raw}.session.jsonl",
+            sessions_dir / f"{raw}.jsonl",
+        ]
+
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if sessions_dir in resolved.parents and resolved.is_file():
+            return resolved
+    raise FileNotFoundError(f"Saved headless session not found in {sessions_dir}: {value}")
 
 
 def structured_headless_exit_code(
@@ -1064,6 +1092,8 @@ def main(
     orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for headless automation."),
+    save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
+    resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
 ) -> None:
     """Run local Ollama agent workflows."""
     if print_prompt is None:
@@ -1079,6 +1109,8 @@ def main(
         orchestrate=orchestrate,
         return_metadata=True,
         suppress_trace=json_output,
+        save_session=save_session,
+        resume_session=resume_session,
     )
     if isinstance(output, HeadlessRunResult):
         exit_code = headless_exit_code(
@@ -1159,6 +1191,8 @@ def run_print_prompt(
     orchestrate: bool = False,
     return_metadata: bool = False,
     suppress_trace: bool = False,
+    save_session: bool = False,
+    resume_session: str | None = None,
 ) -> str | HeadlessRunResult:
     settings = Settings()
     project_config = load_project_config(settings.workspace)
@@ -1175,6 +1209,12 @@ def run_print_prompt(
     attachment_context, _ = build_attachment_context(prompt, settings.workspace)
     if attachment_context:
         prompt = f"{prompt}\n\n{attachment_context}"
+
+    if resume_session and not agent_mode:
+        output = "invalid response: --resume-session requires --agent"
+        if return_metadata:
+            return HeadlessRunResult(output=output, termination="invalid_action")
+        return output
 
     if orchestrate:
         from agentx.orchestrator import Orchestrator
@@ -1225,23 +1265,53 @@ def run_print_prompt(
                 ) + prompt
 
         compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None
-        agent_loop = AgentLoop(
-            settings=settings,
-            ollama=ollama,
-            tools=tools,
-            namespace=namespace,
-            system_prompt=system_prompt,
-            compactor=compactor,
-            trace=None if suppress_trace else print_trace,
-        )
+        if resume_session:
+            try:
+                session_path = resolve_session_store_path(settings.workspace, resume_session)
+            except FileNotFoundError as exc:
+                output = f"invalid response: {exc}"
+                if return_metadata:
+                    return HeadlessRunResult(output=output, termination="invalid_action")
+                return output
+            agent_session = AgentSession.from_session_store(
+                session_path,
+                settings=settings,
+                ollama=ollama,
+                tools=tools,
+                namespace=namespace,
+                compactor=compactor,
+                memory=memory,
+                trace=None if suppress_trace else print_trace,
+            )
+            agent_loop = AgentLoop.__new__(AgentLoop)
+            agent_loop.session = agent_session
+        else:
+            agent_loop = AgentLoop(
+                settings=settings,
+                ollama=ollama,
+                tools=tools,
+                namespace=namespace,
+                system_prompt=system_prompt,
+                compactor=compactor,
+                trace=None if suppress_trace else print_trace,
+                memory=memory,
+            )
+            session_path = None
+        if save_session and not getattr(agent_loop.session, "_session_store", None):
+            agent_loop.session.enable_persistence(settings.workspace)
+            session_path = agent_loop.session._session_store.path if agent_loop.session._session_store else session_path
         effective_plan_only = plan_mode or plan_then_execute
         output = agent_loop.run(agent_prompt, namespace=namespace, plan_only=effective_plan_only)
+        active_store = getattr(agent_loop.session, "_session_store", None)
+        if active_store is not None:
+            session_path = active_store.path
         if return_metadata:
             return HeadlessRunResult(
                 output=output,
                 termination=agent_loop.session.last_termination,
                 failing_tools=tuple(sorted(agent_loop.session.last_failing_tools)),
                 stats=headless_run_stats(agent_loop.session),
+                session_path=str(session_path) if session_path else None,
             )
         return output
     output = ollama.chat(
