@@ -67,6 +67,12 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
         {"command": "uv run ruff check .", "argv": ["uv", "run", "ruff", "check", "."]},
         {"command": "uv run pytest -q", "argv": ["uv", "run", "pytest", "-q"]},
     ]
+    assert [item["command"] for item in payload["verify_command_plans"]] == [  # type: ignore[index]
+        "uv run ruff check .",
+        "uv run pytest -q",
+    ]
+    assert all(item["schema"] == "agentx.command_plan.v1" for item in payload["verify_command_plans"])  # type: ignore[index]
+    assert all(item["allowed"] is True for item in payload["verify_command_plans"])  # type: ignore[index]
     assert "agentx diff --json" in payload["next_commands"]
     assert "agentx gate --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx review --json --fail-on-blocker" in payload["next_commands"]
@@ -86,6 +92,8 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["status"]["git"]["ok"] is True
     assert payload["diff"]["schema"] == "agentx.diff.v1"
     assert payload["verify_commands"][0]["command"] == "uv run ruff check ."
+    assert payload["verify_command_plans"][0]["schema"] == "agentx.command_plan.v1"
+    assert payload["verify_command_plans"][0]["command"] == "uv run ruff check ."
     assert payload["next_commands"][0] == "agentx diff --json"
     assert "agentx gate --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx review --json --fail-on-blocker" in payload["next_commands"]
@@ -112,3 +120,4 @@ def test_inspect_plain_outputs_summary(tmp_path) -> None:  # noqa: ANN001
     assert "workspace" in result.output
     assert "diff" in result.output
     assert "verify_commands" in result.output
+    assert "verify_command_plans" in result.output

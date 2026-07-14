@@ -3060,6 +3060,10 @@ def inspect_payload(
         {"command": shlex.join(command), "argv": command}
         for command in default_verify_commands(settings.workspace)
     ]
+    verify_command_plans = [
+        command_plan_payload(settings, str(item["command"]))
+        for item in verify_commands
+    ]
     return {
         "schema": "agentx.inspect.v1",
         "workspace": str(settings.workspace),
@@ -3078,6 +3082,7 @@ def inspect_payload(
         "diff": diff_payload(settings),
         "capabilities": capabilities_payload(),
         "verify_commands": verify_commands,
+        "verify_command_plans": verify_command_plans,
         "next_commands": [
             "agentx diff --json",
             "agentx gate --json --fail-on-blocker",
@@ -3144,6 +3149,15 @@ def print_inspect_payload(
     table.add_row(
         "verify_commands",
         ", ".join(str(item["command"]) for item in payload["verify_commands"]) or "-",
+    )
+    table.add_row(
+        "verify_command_plans",
+        ", ".join(
+            f"{item.get('command')}:{item.get('risk')}"
+            for item in payload.get("verify_command_plans", [])  # type: ignore[union-attr]
+            if isinstance(item, dict)
+        )
+        or "-",
     )
     console.print(table)
 

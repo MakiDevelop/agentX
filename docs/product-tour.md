@@ -43,7 +43,7 @@ uv run agentx shell
 ## 3. Tools And Workflows
 
 外部 runner 第一次接 agentX 時可用 `agentx capabilities --json` 取得 `agentx.capabilities.v1`，一次知道 top-level automation commands、stable schemas、JSONL events 與風險。
-需要一次拿 runner preflight bundle 時，用 `agentx inspect --json` 取得 `agentx.inspect.v1`；它只讀本機狀態，包含 status、active tasks、sessions、latest approvals、latest traces、diff、capabilities 與 verify command 清單，不跑測試或 live probes。
+需要一次拿 runner preflight bundle 時，用 `agentx inspect --json` 取得 `agentx.inspect.v1`；它只讀本機狀態，包含 status、active tasks、sessions、latest approvals、latest traces、diff、capabilities、verify command 清單與 command-plan 預檢，不跑測試或 live probes。
 需要 review/commit 前先看機器可讀變更摘要時，用 `agentx diff --json` 取得 `agentx.diff.v1`；`--staged` 看 index，`--patch` 才附 patch text。
 需要套 patch 前做安全預檢時，用 `agentx patch-check PATCH --json` 取得 `agentx.patch_check.v1`；它會跑 `git apply --check -`、列出 touched files，並檢查 workspace escape / protected path，但不套用 patch。
 需要執行命令前先做政策預檢時，用 `agentx command-plan COMMAND --json` 取得 `agentx.command_plan.v1`；它只判斷 allowlist、YELLOW approval 與 destructive blockers，不執行命令。

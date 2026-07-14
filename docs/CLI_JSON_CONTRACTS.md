@@ -107,6 +107,7 @@ Required stable keys:
 | `diff` | object | Embedded `agentx.diff.v1` for current worktree diff, without patch text. |
 | `capabilities` | object | Embedded `agentx.capabilities.v1`. |
 | `verify_commands` | array of object | Detected verification argv lists without executing them. |
+| `verify_command_plans` | array of object | Embedded `agentx.command_plan.v1` preflights for each detected verification command. |
 | `next_commands` | array of string | Suggested follow-up commands for runners. |
 
 ## Diff Payload
