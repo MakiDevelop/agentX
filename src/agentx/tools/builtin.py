@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import re
 import subprocess
 import tempfile
@@ -22,6 +21,7 @@ from agentx.tools._helpers import (
     docker_compose_command,
     ensure_safe_write_path,
     extract_web_text,
+    patch_write_paths,
     resolve_inside_workspace,
     run_subprocess,
     validate_external_url,
@@ -793,7 +793,7 @@ class ApplyPatchTool(_WorkspaceTool):
             # 1. String parse of the raw patch text (catches declared intent early)
             # 2. git apply --name-only (uses git's own robust parser for quoting,
             #    spaces, " b/" in names, renames, copies, binary patches, etc.)
-            paths: set[str] = _patch_write_paths(patch)
+            paths: set[str] = patch_write_paths(patch)
 
             name_only = subprocess.run(
                 ["git", "apply", "--name-only", str(patch_path)],
@@ -831,42 +831,6 @@ class ApplyPatchTool(_WorkspaceTool):
                 patch_path.unlink(missing_ok=True)
             except Exception:
                 pass
-
-
-def _patch_write_paths(patch: str) -> set[str]:
-    paths: set[str] = set()
-    for line in patch.splitlines():
-        if line.startswith("diff --git a/"):
-            old, _, new = line.removeprefix("diff --git ").rpartition(" b/")
-            _add_patch_path(paths, old, strip=1)
-            if new:
-                _add_patch_path(paths, f"b/{new}", strip=1)
-            continue
-        if line.startswith(("--- ", "+++ ")):
-            _add_patch_path(paths, line[4:], strip=1)
-        elif line.startswith(("rename from ", "rename to ")):
-            _add_patch_path(paths, line.removeprefix("rename from ").removeprefix("rename to "), strip=0)
-        elif line.startswith(("copy from ", "copy to ")):
-            _add_patch_path(paths, line.removeprefix("copy from ").removeprefix("copy to "), strip=0)
-    return paths
-
-
-def _add_patch_path(paths: set[str], raw: str, *, strip: int) -> None:
-    path = _patch_path(raw, strip=strip)
-    if path and path != "/dev/null":
-        paths.add(path)
-
-
-def _patch_path(raw: str, *, strip: int) -> str | None:
-    token = raw.split("\t", 1)[0].strip()
-    if token.startswith('"'):
-        token = ast.literal_eval(token)
-    if token == "/dev/null":
-        return token
-    parts = token.split("/")
-    if len(parts) <= strip:
-        return None
-    return "/".join(parts[strip:])
 
 
 class _DockerComposeTool(_WorkspaceTool):

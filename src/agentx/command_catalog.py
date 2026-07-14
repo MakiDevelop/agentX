@@ -146,6 +146,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local git inspection",
     },
     {
+        "command": "agentx patch-check",
+        "usage": "agentx patch-check PATCH --json",
+        "description": "Validate a workspace patch file with git apply --check and safe path inspection without applying it.",
+        "examples": ["agentx patch-check patches/fix.patch --json", "agentx patch-check fix.patch --json --fail-on-blocker"],
+        "schemas": ["agentx.patch_check.v1"],
+        "jsonl_event": "patch_check",
+        "risk": "GREEN - read-only local patch inspection",
+    },
+    {
         "command": "agentx review",
         "usage": "agentx review --json",
         "description": "Run a deterministic review gate: diff summary plus verification posture.",

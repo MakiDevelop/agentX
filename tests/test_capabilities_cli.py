@@ -17,6 +17,7 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert "agentx artifacts" in commands
     assert "agentx traces" in commands
     assert "agentx diff" in commands
+    assert "agentx patch-check" in commands
     assert "agentx review" in commands
     assert "agentx commit-plan" in commands
     assert "agentx gate" in commands
@@ -24,6 +25,8 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert commands["agentx artifacts"]["schemas"] == ["agentx.artifacts.v1"]
     assert commands["agentx traces"]["schemas"] == ["agentx.traces.v1"]
     assert commands["agentx diff"]["schemas"] == ["agentx.diff.v1"]
+    assert commands["agentx patch-check"]["schemas"] == ["agentx.patch_check.v1"]
+    assert commands["agentx patch-check"]["jsonl_event"] == "patch_check"
     assert commands["agentx review"]["schemas"] == ["agentx.review.v1"]
     assert commands["agentx commit-plan"]["schemas"] == ["agentx.commit_plan.v1"]
     assert commands["agentx gate"]["schemas"] == ["agentx.gate.v1"]
@@ -47,6 +50,7 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     schema_payload = capabilities_payload("agentx.tasks.v1")
     keyword_payload = capabilities_payload("denied")
     diff_payload = capabilities_payload("agentx.diff.v1")
+    patch_check_payload = capabilities_payload("agentx.patch_check.v1")
     review_payload = capabilities_payload("agentx.review.v1")
     commit_plan_payload = capabilities_payload("agentx.commit_plan.v1")
     gate_payload = capabilities_payload("agentx.gate.v1")
@@ -57,6 +61,8 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     assert keyword_payload["capabilities"][0]["command"] == "agentx approvals"  # type: ignore[index]
     assert diff_payload["count"] == 1
     assert diff_payload["capabilities"][0]["command"] == "agentx diff"  # type: ignore[index]
+    assert patch_check_payload["count"] == 1
+    assert patch_check_payload["capabilities"][0]["command"] == "agentx patch-check"  # type: ignore[index]
     assert review_payload["count"] == 1
     assert review_payload["capabilities"][0]["command"] == "agentx review"  # type: ignore[index]
     assert commit_plan_payload["count"] == 1

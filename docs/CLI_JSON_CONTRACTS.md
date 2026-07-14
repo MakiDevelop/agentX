@@ -34,6 +34,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx approvals --json` | `agentx.approvals.v1` | `approvals` |
 | `agentx traces --json` | `agentx.traces.v1` | `traces` |
 | `agentx diff --json` | `agentx.diff.v1` | `diff` |
+| `agentx patch-check --json` | `agentx.patch_check.v1` | `patch_check` |
 | `agentx review --json` | `agentx.review.v1` | `review` |
 | `agentx commit-plan --json` | `agentx.commit_plan.v1` | `commit_plan` |
 | `agentx gate --json` | `agentx.gate.v1` | `gate` |
@@ -146,6 +147,35 @@ Each file object includes:
 | `added` | integer or null | Inserted lines; null for binary files. |
 | `deleted` | integer or null | Deleted lines; null for binary files. |
 | `binary` | boolean | Whether the diff entry is binary. |
+
+## Patch Check Payload
+
+`agentx patch-check PATCH --json` emits `agentx.patch_check.v1`.
+
+This is a read-only patch preflight for external runners. It reads a
+workspace-relative patch file, runs `git apply --check -`, extracts touched
+paths, validates those paths against workspace escape and protected-location
+rules, and reports blockers before the interactive `/apply` flow mutates the
+worktree. It does not apply the patch, stage files, commit, push, or write a
+temporary patch into the workspace.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.patch_check.v1`. |
+| `workspace` | string | Resolved workspace path. |
+| `generated_at` | string | Local ISO timestamp. |
+| `patch_file` | string | Workspace-relative patch file path, or the rejected input when it escaped. |
+| `ok` | boolean | True when no blockers are present. |
+| `blockers` | array of string | Machine-readable blockers such as `patch_file_not_found`, `patch_file_escapes_workspace`, `git_apply_check_failed`, or `unsafe_patch_paths`. |
+| `warnings` | array of string | Non-blocking warnings such as `no_touched_paths_detected`. |
+| `apply_check` | object | `git apply --check -` command, ok flag, exit code, stdout, and stderr. |
+| `safe_paths_ok` | boolean | True when every detected patch target passed write-path safety checks. |
+| `file_count` | integer | Number of detected touched files. |
+| `files` | array of object | Per-file path, added/deleted stats when available, binary flag, safe flag, detail, and source list. |
+| `next_commands` | array of string | Suggested follow-up commands. Successful checks include `/apply PATCH`. |
+| `detail` | string | Combined diagnostic text for blockers. |
 
 ## Review Payload
 

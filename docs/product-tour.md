@@ -45,6 +45,7 @@ uv run agentx shell
 外部 runner 第一次接 agentX 時可用 `agentx capabilities --json` 取得 `agentx.capabilities.v1`，一次知道 top-level automation commands、stable schemas、JSONL events 與風險。
 需要一次拿 runner preflight bundle 時，用 `agentx inspect --json` 取得 `agentx.inspect.v1`；它只讀本機狀態，包含 status、active tasks、sessions、latest approvals、latest traces、diff、capabilities 與 verify command 清單，不跑測試或 live probes。
 需要 review/commit 前先看機器可讀變更摘要時，用 `agentx diff --json` 取得 `agentx.diff.v1`；`--staged` 看 index，`--patch` 才附 patch text。
+需要套 patch 前做安全預檢時，用 `agentx patch-check PATCH --json` 取得 `agentx.patch_check.v1`；它會跑 `git apply --check -`、列出 touched files，並檢查 workspace escape / protected path，但不套用 patch。
 需要 deterministic review gate 時，用 `agentx review --json` 取得 `agentx.review.v1`；它會聚合 diff + verify 並輸出 `commit_ready`、blockers、warnings 與 next commands，`--fail-on-blocker` 可供 CI/wrapper 擋流程。
 需要 commit 前的機器可讀計畫時，用 `agentx commit-plan --message TEXT --json` 取得 `agentx.commit_plan.v1`；它列出將逐檔 stage 的檔案、review gate 與 blockers，但不會 stage、commit 或 push。
 需要單一 runner gate 時，用 `agentx gate --json` 取得 `agentx.gate.v1`；它聚合 review、doctor static 與 latest approvals audit，讓 Codex/Grok wrapper 不必自行拼多個 JSON。

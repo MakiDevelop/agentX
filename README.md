@@ -113,6 +113,8 @@ agentx inspect --json
 agentx inspect --output-format jsonl
 agentx diff --json
 agentx diff src/agentx/cli.py --staged --output-format jsonl
+agentx patch-check patches/fix.patch --json
+agentx patch-check patches/fix.patch --json --fail-on-blocker
 agentx review --json
 agentx review --json --fail-on-blocker
 agentx commit-plan --message "新增功能" --json
@@ -188,6 +190,7 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `agentx capabilities --json` 會輸出 `agentx.capabilities.v1`，列出 top-level automation commands、schemas、JSONL events 與風險，讓外部 runner 不必解析 README。
 `agentx inspect --json` 會輸出 `agentx.inspect.v1` read-only preflight bundle，彙整 status、active tasks、sessions、latest approvals、latest traces、diff、capabilities 與可跑的 verify commands，但不執行測試或 live probes。
 `agentx diff --json` 會輸出 `agentx.diff.v1` git diff 摘要，包含檔案狀態、insertions/deletions、untracked files、stat；加 `--staged` 可看 index，加 `--patch` 才會附 patch text。
+`agentx patch-check PATCH --json` 會輸出 `agentx.patch_check.v1` patch preflight，讀取 workspace 內 patch 檔、列出 touched files、跑 `git apply --check -`，並檢查 patch 目標不會逃出 workspace 或落在 `.git` / `.agentx` 等受保護位置；它不會套用 patch。
 `agentx review --json` 會輸出 `agentx.review.v1` deterministic review gate，聚合 diff + verify，給出 `commit_ready`、blockers、warnings 與 next commands；加 `--fail-on-blocker` 可讓 CI/wrapper 在未達 commit 條件時 exit 1。
 `agentx commit-plan --message TEXT --json` 會輸出 `agentx.commit_plan.v1` read-only commit plan，列出將逐檔 stage 的檔案、commit message、review gate 與 blockers；它不 stage、不 commit、不 push。
 `agentx gate --json` 會輸出 `agentx.gate.v1` aggregate runner gate，聚合 review、doctor static 與 latest approvals audit；它用 denied approval、doctor failure、review blocker 擋流程，`--fail-on-blocker` 可供 CI/wrapper 使用。
@@ -201,7 +204,7 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `agentx status --json` 會輸出 `agentx.status.v1`，整合 version、resolved runtime、git dirty/ahead/behind 與 task counts；它只做本機 read-only 檢查，不探測網路服務。
 `agentx doctor --json` 會輸出 `agentx.doctor.v1` health checks；CI 或 wrapper 可用 `agentx doctor --static --json` 只檢查本機 `uv`、git、task migration，避開 Ollama / memory live probes。加上 `--fail-on-error` 時，任一 check 失敗會在輸出 payload 後以 exit 1 結束。
 `agentx workflows --json` 會輸出 `agentx.workflow_catalog.v1`，讓 wrapper 能讀取 headless、audit、commit 等可執行 recipe；也可用 `agentx workflows headless --json` 查單一路徑。
-`--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、capabilities、inspect、diff、review、commit-plan、gate、config、sessions、artifacts、approvals、traces、tasks、verify、status、doctor、commands、workflows、tools、models 會分別使用 `dry_run`、`version`、`backends`、`capabilities`、`inspect`、`diff`、`review`、`commit_plan`、`gate`、`config`、`sessions`、`artifacts`、`approvals`、`traces`、`tasks`、`verify`、`status`、`doctor`、`commands`、`workflows`、`tools`、`models` event。
+`--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、capabilities、inspect、diff、patch-check、review、commit-plan、gate、config、sessions、artifacts、approvals、traces、tasks、verify、status、doctor、commands、workflows、tools、models 會分別使用 `dry_run`、`version`、`backends`、`capabilities`、`inspect`、`diff`、`patch_check`、`review`、`commit_plan`、`gate`、`config`、`sessions`、`artifacts`、`approvals`、`traces`、`tasks`、`verify`、`status`、`doctor`、`commands`、`workflows`、`tools`、`models` event。
 `--result-output PATH` 可把同一份 result payload 寫成 workspace 內 artifact，plain stdout 時預設寫 JSON，`--output-format jsonl` 時寫 JSONL event；路徑拒絕 workspace escape 與覆蓋既有檔案。需要 artifact 格式和 stdout 格式分開時，可用 `--result-output-format auto|json|jsonl`。
 `--handoff-briefing-output PATH` 可在同一輪 headless run 結束時直接寫出 Markdown 接手檔；路徑同樣限制在 workspace 內、拒絕覆寫，且不可與 `--session-output` / `--result-output` 指到同一檔案。
 `--artifact-dir DIR` 是 runner-friendly preset，會在 workspace 內一次產生 `session.session.jsonl`、`result.json`（或 `result.jsonl`）與 `handoff.md`；它和個別 artifact output option 互斥，且會拒絕覆寫標準檔名。

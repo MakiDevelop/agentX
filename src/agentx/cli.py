@@ -69,6 +69,8 @@ from agentx.tools import (
     ToolRegistry,
     builtin_tools,
     docker_compose_command,
+    ensure_safe_write_path,
+    patch_write_paths,
     resolve_inside_workspace,
 )
 from agentx.transcript import (
@@ -1748,6 +1750,225 @@ def diff_payload(
         "patch_truncated": patch_truncated,
         "detail": "\n".join(details),
     }
+
+
+def _git_apply_read(
+    workspace: Path,
+    args: list[str],
+    *,
+    patch: str,
+    timeout: int = 20,
+) -> tuple[int, str, str]:
+    completed = subprocess.run(
+        ["git", "apply", *args, "-"],
+        cwd=workspace,
+        input=patch,
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+    )
+    return completed.returncode, completed.stdout, completed.stderr
+
+
+def _patch_check_relative_path(workspace: Path, patch_file: str) -> tuple[Path | None, str, str]:
+    try:
+        target = resolve_inside_workspace(workspace, patch_file)
+    except ValueError as exc:
+        return None, patch_file, str(exc)
+    try:
+        relative = str(target.relative_to(workspace))
+    except ValueError:
+        relative = patch_file
+    return target, relative, ""
+
+
+def patch_check_payload(
+    settings: Settings,
+    *,
+    patch_file: str,
+    timeout: int = 20,
+) -> dict[str, object]:
+    workspace = settings.workspace
+    patch_path, relative_patch, path_error = _patch_check_relative_path(workspace, patch_file)
+    blockers: list[str] = []
+    warnings: list[str] = []
+    details: list[str] = []
+    patch_text = ""
+
+    if path_error:
+        blockers.append("patch_file_escapes_workspace")
+        details.append(path_error)
+    elif patch_path is None or not patch_path.is_file():
+        blockers.append("patch_file_not_found")
+        details.append(f"patch file not found: {patch_file}")
+    else:
+        patch_text = patch_path.read_text(encoding="utf-8", errors="replace")
+        if not patch_text.strip():
+            blockers.append("empty_patch")
+
+    parsed_paths = patch_write_paths(patch_text) if patch_text else set()
+    name_only_paths: set[str] = set()
+    numstat: dict[str, dict[str, object]] = {}
+    apply_check = {
+        "command": "git apply --check -",
+        "ok": False,
+        "exit_code": None,
+        "stdout": "",
+        "stderr": "",
+    }
+
+    if patch_text:
+        try:
+            check_code, check_stdout, check_stderr = _git_apply_read(
+                workspace,
+                ["--check"],
+                patch=patch_text,
+                timeout=timeout,
+            )
+            apply_check = {
+                "command": "git apply --check -",
+                "ok": check_code == 0,
+                "exit_code": check_code,
+                "stdout": check_stdout,
+                "stderr": check_stderr,
+            }
+            if check_code != 0:
+                blockers.append("git_apply_check_failed")
+                details.append((check_stderr or check_stdout).strip())
+        except subprocess.TimeoutExpired:
+            blockers.append("git_apply_check_timeout")
+            apply_check = {
+                "command": "git apply --check -",
+                "ok": False,
+                "exit_code": 124,
+                "stdout": "",
+                "stderr": f"timeout after {timeout}s",
+            }
+            details.append(f"git apply --check timed out after {timeout}s")
+
+        for args, collector in (
+            (["--name-only"], name_only_paths),
+        ):
+            try:
+                code, stdout, _stderr = _git_apply_read(workspace, args, patch=patch_text, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                warnings.append("git_apply_name_only_timeout")
+                continue
+            if code == 0:
+                for line in stdout.splitlines():
+                    path = line.strip()
+                    if path and path != "/dev/null":
+                        collector.add(path)
+
+        try:
+            numstat_code, numstat_stdout, _numstat_stderr = _git_apply_read(
+                workspace,
+                ["--numstat"],
+                patch=patch_text,
+                timeout=timeout,
+            )
+            if numstat_code == 0:
+                numstat = _parse_diff_numstat(numstat_stdout)
+        except subprocess.TimeoutExpired:
+            warnings.append("git_apply_numstat_timeout")
+
+    touched_paths = sorted(path for path in {*parsed_paths, *name_only_paths} if path and path != "/dev/null")
+    files: list[dict[str, object]] = []
+    unsafe_paths: list[str] = []
+    for path in touched_paths:
+        stats = numstat.get(path, {})
+        safe = True
+        safe_detail = ""
+        try:
+            ensure_safe_write_path(workspace, resolve_inside_workspace(workspace, path))
+        except ValueError as exc:
+            safe = False
+            safe_detail = str(exc)
+            unsafe_paths.append(path)
+        files.append(
+            {
+                "path": path,
+                "added": stats.get("added"),
+                "deleted": stats.get("deleted"),
+                "binary": bool(stats.get("binary", False)),
+                "safe": safe,
+                "detail": safe_detail,
+                "source": sorted(
+                    source
+                    for source, paths in (("parsed", parsed_paths), ("git", name_only_paths))
+                    if path in paths
+                ),
+            }
+        )
+    if unsafe_paths:
+        blockers.append("unsafe_patch_paths")
+        details.extend(f"{path}: unsafe patch target" for path in unsafe_paths)
+    if patch_text and not touched_paths:
+        warnings.append("no_touched_paths_detected")
+
+    ok = not blockers
+    next_commands = ["agentx diff --json"]
+    if ok:
+        next_commands.append(f"/apply {relative_patch}")
+    else:
+        next_commands.append("fix patch blockers, then rerun agentx patch-check PATCH --json")
+
+    return {
+        "schema": "agentx.patch_check.v1",
+        "workspace": str(workspace),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "patch_file": relative_patch,
+        "ok": ok,
+        "blockers": blockers,
+        "warnings": warnings,
+        "apply_check": apply_check,
+        "safe_paths_ok": not unsafe_paths,
+        "file_count": len(files),
+        "files": files,
+        "next_commands": next_commands,
+        "detail": "\n".join(detail for detail in details if detail),
+    }
+
+
+def patch_check_exit_code(payload: dict[str, object], *, fail_on_blocker: bool = False) -> int:
+    if not fail_on_blocker:
+        return 0
+    return 0 if payload.get("ok") is True else 1
+
+
+def print_patch_check_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="patch_check",
+        )
+        return
+
+    table = Table(title="agentX patch check", show_header=True, header_style="bold")
+    table.add_column("Safe", style="cyan")
+    table.add_column("Path")
+    table.add_column("+", justify="right")
+    table.add_column("-", justify="right")
+    for item in payload["files"]:  # type: ignore[index]
+        row = dict(item)
+        table.add_row(
+            "yes" if row.get("safe") is True else "no",
+            str(row.get("path", "")),
+            "-" if row.get("added") is None else str(row.get("added")),
+            "-" if row.get("deleted") is None else str(row.get("deleted")),
+        )
+    console.print(table)
+    console.print(
+        f"[dim]ok={payload['ok']} files={payload['file_count']} "
+        f"blockers={','.join(str(item) for item in payload['blockers']) or '-'}[/dim]"
+    )
 
 
 def print_diff_payload(
@@ -4985,6 +5206,23 @@ def diff_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_diff_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("patch-check")
+def patch_check_command(
+    patch_file: str = typer.Argument(..., help="Workspace-relative patch file to validate."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for patch inspection."),
+    timeout: int = typer.Option(20, "--timeout", min=1, help="git apply check timeout in seconds."),
+    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when patch blockers are present."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Validate a workspace patch file without applying it."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = patch_check_payload(settings, patch_file=patch_file, timeout=timeout)
+    structured_format = structured_output_format(json_output, output_format)
+    print_patch_check_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=patch_check_exit_code(payload, fail_on_blocker=fail_on_blocker))
 
 
 @app.command("tasks")
