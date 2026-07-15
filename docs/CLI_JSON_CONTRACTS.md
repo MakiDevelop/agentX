@@ -410,6 +410,11 @@ Recommendation priority is intentionally conservative:
 5. Idle inspect.
 6. AMH handoff and ACE council workflow-run previews.
 
+When the latest workflow-run artifact is ready to resume, the artifact
+recommendation command includes `workflow-resume --result-output auto --dry-run`
+so the next runner step can continue the artifact chain without inventing an
+output path. Workflow artifacts with blockers still route to `workflow-inspect`.
+
 Required stable keys:
 
 | Key | Type | Meaning |

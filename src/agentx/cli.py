@@ -4268,7 +4268,7 @@ def next_payload(
         command = (
             f"agentx workflow-inspect {shlex.quote(artifact_path)} --json"
             if workflow_has_issue
-            else f"agentx workflow-resume {shlex.quote(artifact_path)} --dry-run --json"
+            else f"agentx workflow-resume {shlex.quote(artifact_path)} --result-output auto --dry-run --json"
         )
         recommendations.append(
             {
