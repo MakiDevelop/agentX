@@ -3,7 +3,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from agentx.cli import app, reliability_decision_payload, reliability_profile_payload, reliability_suite_payload
+from agentx.cli import app, objective_gate_payload, reliability_decision_payload, reliability_profile_payload, reliability_suite_payload
 from agentx.config import Settings
 from agentx.provider_registry import register_llm_backend
 
@@ -265,6 +265,59 @@ def test_reliability_decision_cli_writes_artifact(tmp_path: Path) -> None:
     assert written["schema"] == "agentx.reliability_decision.v1"
     assert written["accepted"] is True
     assert written["wrote"] is True
+
+
+def test_objective_gate_blocks_without_decision(tmp_path: Path) -> None:
+    payload = objective_gate_payload(Settings(workspace=tmp_path))
+
+    assert payload["schema"] == "agentx.objective_gate.v1"
+    assert payload["ok"] is False
+    assert payload["completion_ready"] is False
+    assert payload["decision_found"] is False
+    assert payload["decision_valid"] is False
+    assert payload["missing_commands"] == []
+    assert payload["blockers"] == ["reliability_decision_missing"]
+
+
+def test_objective_gate_passes_with_valid_decision(tmp_path: Path) -> None:
+    suite = reliability_suite_payload(Settings(workspace=tmp_path), run_id="objective-gate-suite")
+    evidence = tmp_path / "suite.json"
+    evidence.write_text(json.dumps(suite), encoding="utf-8")
+    reliability_decision_payload(
+        Settings(workspace=tmp_path),
+        profile="recorded-v1",
+        decision="ratified",
+        evidence_source=str(evidence),
+        write=True,
+    )
+
+    payload = objective_gate_payload(Settings(workspace=tmp_path))
+
+    assert payload["ok"] is True
+    assert payload["completion_ready"] is True
+    assert payload["decision_found"] is True
+    assert payload["decision_valid"] is True
+    assert payload["blockers"] == []
+    assert payload["decision"]["accepted"] is True  # type: ignore[index]
+
+
+def test_objective_gate_cli_jsonl_outputs_event(tmp_path: Path) -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "objective-gate",
+            "--workspace",
+            str(tmp_path),
+            "--output-format",
+            "jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    assert envelope["event"] == "objective_gate"
+    assert envelope["data"]["schema"] == "agentx.objective_gate.v1"
+    assert envelope["data"]["blockers"] == ["reliability_decision_missing"]
 
 
 def test_reliability_profile_payload_is_read_only_by_default(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001

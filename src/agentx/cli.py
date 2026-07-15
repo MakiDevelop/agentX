@@ -6588,6 +6588,105 @@ def print_reliability_decision_payload(
     console.print(table)
 
 
+OBJECTIVE_REQUIRED_COMMANDS = [
+    "agentx gate",
+    "agentx memory-status",
+    "agentx memory-read",
+    "agentx memory-write",
+    "agentx ace-init",
+    "agentx ace-briefing",
+    "agentx ace-answer",
+    "agentx ace-status",
+    "agentx reliability-suite",
+    "agentx reliability-profile",
+    "agentx reliability-decision",
+]
+
+
+def objective_gate_payload(
+    settings: Settings,
+    *,
+    decision: str | None = None,
+) -> dict[str, object]:
+    decision_path = resolve_inside_workspace(settings.workspace, decision or ".agentx/reliability/decision.json")
+    capabilities = capabilities_payload()
+    commands = {
+        str(item.get("command"))
+        for item in capabilities.get("capabilities", [])
+        if isinstance(item, dict)
+    }
+    missing_commands = [command for command in OBJECTIVE_REQUIRED_COMMANDS if command not in commands]
+    blockers = [f"missing_command:{command}" for command in missing_commands]
+
+    decision_payload: dict[str, object] | None = None
+    decision_valid = False
+    if not decision_path.is_file():
+        blockers.append("reliability_decision_missing")
+    else:
+        try:
+            parsed = load_headless_payload_file(decision_path)
+            if parsed.get("schema") == "agentx.reliability_decision.v1":
+                decision_payload = parsed
+                decision_valid = (
+                    parsed.get("accepted") is True
+                    and parsed.get("evidence_valid") is True
+                    and parsed.get("ok") is True
+                    and parsed.get("decision") in {"ratified", "accepted"}
+                )
+                if not decision_valid:
+                    blockers.append("reliability_decision_not_accepted")
+            else:
+                blockers.append("reliability_decision_schema_invalid")
+        except Exception as exc:  # noqa: BLE001
+            blockers.append(f"reliability_decision_load_failed:{type(exc).__name__}")
+
+    ok = not blockers
+    return {
+        "schema": "agentx.objective_gate.v1",
+        "workspace": str(settings.workspace),
+        "objective": "將agentX優化到接近Codex CLI, Grok CLI，並加入使用AMH與ACE的能力",
+        "ok": ok,
+        "completion_ready": ok,
+        "required_commands": list(OBJECTIVE_REQUIRED_COMMANDS),
+        "missing_commands": missing_commands,
+        "decision_path": str(decision_path),
+        "decision_relative_path": relative_workspace_path(settings.workspace, decision_path),
+        "decision_found": decision_path.is_file(),
+        "decision_valid": decision_valid,
+        "decision": decision_payload,
+        "blockers": blockers,
+        "recommended_command": (
+            "agentx inspect --json"
+            if ok
+            else "agentx reliability-decision --profile recorded-v1 --decision ratified --evidence <suite.json> --write --json"
+        ),
+        "recommended_kind": "inspect" if ok else "write_reliability_decision",
+        "recommended_risk": "GREEN" if ok else "YELLOW",
+    }
+
+
+def print_objective_gate_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="objective_gate",
+        )
+        return
+    table = Table(title="agentX objective gate", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    for key in ("ok", "completion_ready", "decision_found", "decision_valid", "missing_commands", "blockers", "recommended_command"):
+        value = payload.get(key)
+        table.add_row(key, json.dumps(value, ensure_ascii=False) if isinstance(value, list) else str(value))
+    console.print(table)
+
+
 def print_model_list(payload: dict[str, object], *, json_output: bool = False, jsonl_output: bool = False) -> None:
     if json_output:
         print_structured_payload(
@@ -8788,6 +8887,22 @@ def reliability_decision_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_reliability_decision_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=1 if fail_on_blocker and payload.get("blockers") else 0)
+
+
+@app.command("objective-gate")
+def objective_gate_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory."),
+    decision: str | None = typer.Option(None, "--decision", help="Decision artifact path inside workspace. Default: .agentx/reliability/decision.json"),
+    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when completion blockers are present."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Read-only completion gate for the active agentX objective."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = objective_gate_payload(settings, decision=decision)
+    structured_format = structured_output_format(json_output, output_format)
+    print_objective_gate_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=1 if fail_on_blocker and payload.get("blockers") else 0)
 
 

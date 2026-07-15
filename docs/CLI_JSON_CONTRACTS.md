@@ -62,6 +62,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx reliability-suite --json` | `agentx.reliability_suite.v1` | `reliability_suite` |
 | `agentx reliability-profile --json` | `agentx.reliability_profile.v1` | `reliability_profile` |
 | `agentx reliability-decision --json` | `agentx.reliability_decision.v1` | `reliability_decision` |
+| `agentx objective-gate --json` | `agentx.objective_gate.v1` | `objective_gate` |
 | `agentx tools --json` | `agentx.tool_catalog.v1` | `tools` |
 | `agentx tool-plan --json` | `agentx.tool_plan.v1` | `tool_plan` |
 | `agentx workflows --json` | `agentx.workflow_catalog.v1` | `workflows` |
@@ -1379,6 +1380,36 @@ Required stable keys:
 | `wrote` | boolean | True when an artifact was written. |
 | `blockers` | array of string | Machine-readable blockers. |
 | `ok` | boolean | True when no blockers are present. |
+| `recommended_command` | string | Suggested follow-up command. |
+| `recommended_kind` | string | Suggested follow-up kind. |
+| `recommended_risk` | string | Risk label for the follow-up. |
+
+## Objective Gate Payload
+
+`agentx objective-gate --json` emits `agentx.objective_gate.v1`.
+
+This read-only command checks whether the active Codex/Grok-like AMH/ACE
+objective has the required CLI surfaces and a valid reliability decision
+artifact. It does not run tests or write files. Use `--fail-on-blocker` to make
+blockers produce exit code 1.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.objective_gate.v1`. |
+| `workspace` | string | Workspace inspected. |
+| `objective` | string | Objective being gated. |
+| `ok` | boolean | True when no blockers are present. |
+| `completion_ready` | boolean | Same as `ok`; intended for completion audits. |
+| `required_commands` | array of string | CLI surfaces required by the objective gate. |
+| `missing_commands` | array of string | Required command surfaces not found in capabilities. |
+| `decision_path` | string | Decision artifact path inspected. |
+| `decision_relative_path` | string | Workspace-relative decision artifact path. |
+| `decision_found` | boolean | True when the decision artifact exists. |
+| `decision_valid` | boolean | True when the decision artifact is accepted/ratified and evidence-valid. |
+| `decision` | object or null | Parsed decision artifact. |
+| `blockers` | array of string | Machine-readable blockers. |
 | `recommended_command` | string | Suggested follow-up command. |
 | `recommended_kind` | string | Suggested follow-up kind. |
 | `recommended_risk` | string | Risk label for the follow-up. |

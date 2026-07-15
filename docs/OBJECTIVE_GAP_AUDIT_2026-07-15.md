@@ -21,6 +21,7 @@ Authoritative status page: `docs/OBJECTIVE_STATUS.md`.
 - `agentx reliability-profile --json` includes pinned backend/model/base URL details for later live benchmark evidence; `--live-probe` explicitly verifies model availability.
 - `agentx reliability-suite --suite-kind live --json` can run the same fixture threshold against a pinned backend/model and emit observed `live-v1` target-bar evidence.
 - `agentx reliability-decision --json` can preview or write a reliability decision artifact, requiring matching threshold-passing evidence for `ratified` / `accepted` decisions.
+- `agentx objective-gate --json` can read-only check required command surfaces and the reliability decision artifact for completion readiness.
 
 Evidence:
 - `tests/test_capabilities_cli.py`
@@ -75,7 +76,7 @@ Evidence:
 
 ### Gap 1: Live model reliability is not benchmarked
 
-agentX now has a deterministic fake-backend benchmark, a local recorded reliability suite covering edit, inspect, recover-after-failure, and artifact-resume, a pinned live profile inspection command, a live suite execution surface, and a decision artifact surface. It does not yet have an accepted/ratified decision artifact, so "Codex/Grok-like" model-facing reliability remains partially unverified.
+agentX now has a deterministic fake-backend benchmark, a local recorded reliability suite covering edit, inspect, recover-after-failure, and artifact-resume, a pinned live profile inspection command, a live suite execution surface, a decision artifact surface, and an objective gate. It does not yet have an accepted/ratified decision artifact, so "Codex/Grok-like" model-facing reliability remains partially unverified.
 
 Suggested next proof:
 - Run and accept a live backend benchmark using a pinned `agentx reliability-profile --json --live-probe` profile, or have Maki ratify the proposed `recorded-v1` threshold if live proof is deferred, then write the decision through `agentx reliability-decision --write`.
@@ -97,6 +98,7 @@ Ratify or replace the reliability target bar next:
 recorded-v1 threshold proposal
 → Maki ratification or live benchmark run via pinned reliability profile
 → reliability-decision --write
+→ objective-gate --json
 → OBJECTIVE_STATUS update
 ```
 

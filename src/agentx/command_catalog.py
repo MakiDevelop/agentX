@@ -556,6 +556,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - preview is read-only; --write writes a local .agentx/reliability decision artifact",
     },
     {
+        "command": "agentx objective-gate",
+        "usage": "agentx objective-gate --json",
+        "description": "Read-only completion gate for the active Codex/Grok-like AMH/ACE objective.",
+        "examples": ["agentx objective-gate --json", "agentx objective-gate --fail-on-blocker --json"],
+        "schemas": ["agentx.objective_gate.v1"],
+        "jsonl_event": "objective_gate",
+        "risk": "GREEN - read-only objective completion inspection",
+    },
+    {
         "command": "agentx version",
         "usage": "agentx version --json",
         "description": "Print agentX and Python runtime versions.",

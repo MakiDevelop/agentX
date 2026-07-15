@@ -65,6 +65,7 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert "agentx reliability-suite" in commands
     assert "agentx reliability-profile" in commands
     assert "agentx reliability-decision" in commands
+    assert "agentx objective-gate" in commands
     assert commands["agentx verify"]["schemas"] == ["agentx.verify.v1"]
     assert commands["agentx artifacts"]["schemas"] == ["agentx.artifacts.v1"]
     assert commands["agentx handoff-inspect"]["jsonl_event"] == "handoff_inspect"
@@ -100,6 +101,8 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert commands["agentx reliability-profile"]["jsonl_event"] == "reliability_profile"
     assert commands["agentx reliability-decision"]["schemas"] == ["agentx.reliability_decision.v1"]
     assert commands["agentx reliability-decision"]["jsonl_event"] == "reliability_decision"
+    assert commands["agentx objective-gate"]["schemas"] == ["agentx.objective_gate.v1"]
+    assert commands["agentx objective-gate"]["jsonl_event"] == "objective_gate"
     assert commands["agentx workflow-plan"]["schemas"] == ["agentx.workflow_plan.v1"]
     assert commands["agentx workflow-plan"]["jsonl_event"] == "workflow_plan"
     assert commands["agentx workflow-run"]["schemas"] == ["agentx.workflow_run.v1"]
@@ -149,6 +152,7 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     reliability_payload = capabilities_payload("agentx.reliability_suite.v1")
     reliability_profile_payload = capabilities_payload("agentx.reliability_profile.v1")
     reliability_decision_payload = capabilities_payload("agentx.reliability_decision.v1")
+    objective_gate_payload = capabilities_payload("agentx.objective_gate.v1")
 
     assert schema_payload["count"] == 1
     assert schema_payload["capabilities"][0]["command"] == "agentx tasks"  # type: ignore[index]
@@ -193,6 +197,8 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     assert reliability_profile_payload["capabilities"][0]["command"] == "agentx reliability-profile"  # type: ignore[index]
     assert reliability_decision_payload["count"] == 1
     assert reliability_decision_payload["capabilities"][0]["command"] == "agentx reliability-decision"  # type: ignore[index]
+    assert objective_gate_payload["count"] == 1
+    assert objective_gate_payload["capabilities"][0]["command"] == "agentx objective-gate"  # type: ignore[index]
 
 
 def test_capabilities_json_outputs_catalog() -> None:
