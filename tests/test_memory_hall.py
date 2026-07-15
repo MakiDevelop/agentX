@@ -6,6 +6,7 @@ from agentx.memory_hall import (
     AmhClient,
     MemoryHallClient,
     NullMemoryClient,
+    memory_status_payload,
 )
 from agentx.tools.builtin import MemoryWriteTool
 
@@ -337,3 +338,77 @@ class TestAmhClient:
             # cmd should start with amh + the write args + store flags
             assert captured["cmd"][0] == "amh"
             assert "write" in captured["cmd"]
+
+
+class TestMemoryStatusPayload:
+    def test_memory_status_payload_reports_memhall_without_secret(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda name: None)
+
+        payload = memory_status_payload(
+            workspace=tmp_path,
+            namespace="project:test",
+            memory_backend="memhall",
+            memory_hall_url="http://127.0.0.1:9100",
+            memory_hall_token="secret-token",
+        )
+
+        assert payload["schema"] == "agentx.memory_status.v1"
+        assert payload["ok"] is True
+        assert payload["memory_backend"] == "memhall"
+        assert payload["legacy_memhall"]["token"] == "set"
+        assert payload["amh"]["available"] is False
+        assert "secret-token" not in str(payload)
+
+    def test_memory_status_payload_blocks_amh_when_cli_missing(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda name: None)
+
+        payload = memory_status_payload(
+            workspace=tmp_path,
+            namespace="project:test",
+            memory_backend="amh",
+            memory_amh_store="json",
+        )
+
+        assert payload["ok"] is False
+        assert payload["blockers"] == ["amh_cli_unavailable"]
+        assert payload["amh"]["path"].endswith(".agentx/amh/memory.json")
+
+    def test_memory_status_payload_uses_amh_before_npx(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name in {"amh", "npx"} else None)
+
+        payload = memory_status_payload(
+            workspace=tmp_path,
+            namespace="project:test",
+            memory_backend="amh",
+            memory_amh_store="sqlite",
+        )
+
+        assert payload["ok"] is True
+        assert payload["amh"]["command"] == ["amh"]
+        assert payload["amh"]["using_npx_fallback"] is False
+        assert payload["amh"]["path"].endswith(".agentx/amh/memory.db")
+
+    def test_memory_status_payload_live_probe(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/amh" if name == "amh" else None)
+
+        def fake_run(cmd, capture_output=True, timeout=None, check=False):
+            class Result:
+                returncode = 0
+                stdout = b"Usage: amh"
+                stderr = b""
+
+            return Result()
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+
+        payload = memory_status_payload(
+            workspace=tmp_path,
+            namespace="project:test",
+            memory_backend="amh",
+            live_probe=True,
+        )
+
+        assert payload["ok"] is True
+        assert payload["live_probe"] is True
+        assert payload["amh"]["live_probe_result"]["ok"] is True
+        assert payload["amh"]["live_probe_result"]["command"] == "amh --help"

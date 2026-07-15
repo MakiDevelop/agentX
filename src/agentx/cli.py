@@ -50,7 +50,7 @@ from agentx.infrastructure_context import build_infrastructure_context, infrastr
 from agentx.intent import plan_task_items
 from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
-from agentx.memory_hall import MemoryHallClient, NullMemoryClient
+from agentx.memory_hall import MemoryHallClient, NullMemoryClient, memory_status_payload
 from agentx.ollama import OllamaCancelledError, OllamaClient
 from agentx.provider_registry import get_llm_client, list_registered_backends, LLMClient, register_builtin_backends
 from agentx.persona import list_personas, normalize_persona
@@ -2354,6 +2354,38 @@ def print_config_payload(
         if key == "schema":
             continue
         table.add_row(key, json.dumps(value, ensure_ascii=False) if isinstance(value, dict) else str(value))
+    console.print(table)
+
+
+def print_memory_status_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="memory_status",
+        )
+        return
+    amh = dict(payload.get("amh", {}))  # type: ignore[arg-type]
+    legacy = dict(payload.get("legacy_memhall", {}))  # type: ignore[arg-type]
+    table = Table(title="agentX memory status", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    table.add_row("ok", str(payload.get("ok")))
+    table.add_row("backend", str(payload.get("memory_backend")))
+    table.add_row("namespace", str(payload.get("namespace")))
+    table.add_row("amh_available", str(amh.get("available")))
+    table.add_row("amh_command", " ".join(amh.get("command", []) or []) or "-")
+    table.add_row("amh_store", str(amh.get("store")))
+    table.add_row("amh_path", str(amh.get("path") or "-"))
+    table.add_row("memhall_url", str(legacy.get("url") or "-"))
+    table.add_row("memhall_token", str(legacy.get("token") or "missing"))
+    table.add_row("blockers", ",".join(str(item) for item in payload.get("blockers", [])) or "-")
+    table.add_row("recommended", str(payload.get("recommended_command") or "-"))
     console.print(table)
 
 
@@ -6536,6 +6568,35 @@ def config_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_config_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("memory-status")
+def memory_status_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for config resolution."),
+    namespace: str | None = typer.Option(None, "--namespace", help="Override namespace shown in the payload."),
+    live_probe: bool = typer.Option(False, "--live-probe", help="Run a local AMH CLI availability probe."),
+    timeout: float = typer.Option(10.0, "--timeout", min=1.0, help="Live probe timeout in seconds."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Show read-only Memory Hall / AMH backend status for runners."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    project_config = load_project_config(settings.workspace)
+    resolved_namespace = namespace or project_config.namespace or "project:agentX"
+    payload = memory_status_payload(
+        workspace=settings.workspace,
+        namespace=resolved_namespace,
+        memory_backend=settings.memory_backend,
+        memory_amh_store=settings.memory_amh_store,
+        memory_amh_path=settings.memory_amh_path,
+        memory_hall_url=settings.memory_hall_url,
+        memory_hall_token=settings.memory_hall_token,
+        live_probe=live_probe,
+        timeout=timeout,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_memory_status_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 
 @app.command("init")

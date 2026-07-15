@@ -320,6 +320,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local infrastructure map context",
     },
     {
+        "command": "agentx memory-status",
+        "usage": "agentx memory-status --json",
+        "description": "Inspect read-only Memory Hall / AMH backend posture for runners without writing memory.",
+        "examples": [
+            "agentx memory-status --json",
+            "agentx memory-status --live-probe --output-format jsonl",
+        ],
+        "schemas": ["agentx.memory_status.v1"],
+        "jsonl_event": "memory_status",
+        "risk": "GREEN - read-only memory backend status inspection",
+    },
+    {
         "command": "agentx instructions",
         "usage": "agentx instructions --json",
         "description": "Inspect repo-local AGENTX.md / AGENTS.md / CLAUDE.md instruction files in bootstrap priority order.",

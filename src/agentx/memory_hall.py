@@ -10,6 +10,8 @@ from typing import Any
 
 import httpx
 
+AMH_STATUS_SCHEMA = "agentx.memory_status.v1"
+
 # === ACA (Agent Civilization Architecture) constants ===
 # See docs from agent-memory-hall: Agent_Civilization_Architecture.md + Anti_Ouroboros_Evidence.md
 # agentX aims for L1 (Memory) + L2 (Trust) conformance when writing organizational memory.
@@ -575,3 +577,98 @@ class AmhClient:
     def list_entries(self, namespace: str, entry_type: str | None = None, tags: list[str] | None = None, limit: int = 50) -> list[dict[str, Any]]:
         out = self._run_amh("read", "--ns", namespace, "--limit", str(limit))
         return [{"content": line} for line in out.splitlines()[:limit]]
+
+
+def memory_status_payload(
+    *,
+    workspace: Path,
+    namespace: str,
+    memory_backend: str,
+    memory_amh_store: str | None = None,
+    memory_amh_path: str | None = None,
+    memory_hall_url: str | None = None,
+    memory_hall_token: str | None = None,
+    live_probe: bool = False,
+    timeout: float = 10.0,
+) -> dict[str, Any]:
+    backend = (memory_backend or "memhall").lower()
+    store = memory_amh_store or "json"
+    amh_path = memory_amh_path
+    if backend == "amh" and amh_path is None and store in {"json", "sqlite"}:
+        ext = "json" if store == "json" else "db"
+        amh_path = str((workspace / ".agentx" / "amh" / f"memory.{ext}").resolve())
+
+    amh_bin = shutil.which("amh")
+    npx_bin = shutil.which("npx")
+    amh_command = ["amh"] if amh_bin else ["npx", "@chibakuma/agent-memory-hall"] if npx_bin else []
+    amh_available = bool(amh_command)
+    live_probe_result: dict[str, Any] | None = None
+    warnings: list[str] = []
+    blockers: list[str] = []
+
+    if backend == "amh" and not amh_available:
+        blockers.append("amh_cli_unavailable")
+    if backend not in {"amh", "memhall"}:
+        warnings.append("unknown_memory_backend")
+
+    if live_probe and amh_available:
+        completed = subprocess.run(
+            [*amh_command, "--help"],
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+        live_probe_result = {
+            "command": " ".join([*amh_command, "--help"]),
+            "exit_code": completed.returncode,
+            "ok": completed.returncode == 0,
+            "stdout_excerpt": completed.stdout.decode(errors="replace")[:1000],
+            "stderr_excerpt": completed.stderr.decode(errors="replace")[:1000],
+        }
+        if completed.returncode != 0:
+            blockers.append("amh_cli_probe_failed")
+    elif live_probe and not amh_available:
+        live_probe_result = {
+            "command": None,
+            "exit_code": None,
+            "ok": False,
+            "stdout_excerpt": "",
+            "stderr_excerpt": "amh and npx are unavailable",
+        }
+
+    ok = not blockers
+    return {
+        "schema": AMH_STATUS_SCHEMA,
+        "ok": ok,
+        "workspace": str(workspace.resolve()),
+        "namespace": namespace,
+        "memory_backend": backend,
+        "live_probe": live_probe,
+        "blockers": blockers,
+        "warnings": warnings,
+        "legacy_memhall": {
+            "url": memory_hall_url,
+            "token": "set" if memory_hall_token else "missing",
+        },
+        "amh": {
+            "available": amh_available,
+            "command": amh_command,
+            "binary": amh_bin,
+            "npx_binary": npx_bin,
+            "using_npx_fallback": not bool(amh_bin) and bool(npx_bin),
+            "store": store,
+            "path": amh_path,
+            "path_exists": bool(Path(amh_path).exists()) if amh_path and store in {"json", "sqlite"} else None,
+            "live_probe_result": live_probe_result,
+        },
+        "recommended_command": "agentx inspect --json"
+        if ok
+        else "install AMH CLI or set memory_backend=memhall, then rerun agentx memory-status --json",
+        "recommended_kind": "inspect" if ok else "fix_memory_status_blockers",
+        "recommended_risk": "GREEN" if ok else "UNKNOWN",
+        "next_commands": [
+            "agentx inspect --json"
+            if ok
+            else "install AMH CLI or set memory_backend=memhall, then rerun agentx memory-status --json"
+        ],
+    }

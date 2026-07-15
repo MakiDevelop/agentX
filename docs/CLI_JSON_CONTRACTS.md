@@ -28,6 +28,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx capabilities --json` | `agentx.capabilities.v1` | `capabilities` |
 | `agentx instructions --json` | `agentx.local_instructions.v1` | `instructions` |
 | `agentx config --json` | `agentx.config.v1` | `config` |
+| `agentx memory-status --json` | `agentx.memory_status.v1` | `memory_status` |
 | `agentx inspect --json` | `agentx.inspect.v1` | `inspect` |
 | `agentx init --json` | `agentx.init.v1` | `init` |
 | `agentx sessions --json` | `agentx.sessions.v1` | `sessions` |
@@ -710,6 +711,34 @@ Required stable keys:
 | `approval` | string | Canonical approval mode. |
 | `learning_enabled` | boolean | Whether self-learning proposals are enabled. |
 | `project_config` | object | Raw project config values before runtime defaults. |
+
+## Memory Status Payload
+
+`agentx memory-status --json` emits `agentx.memory_status.v1`.
+
+This command is read-only. It reports Memory Hall / AMH backend posture for
+runners, including backend selection, namespace, AMH CLI availability,
+store/path configuration, and token status. It never prints token values.
+`--live-probe` runs a local AMH CLI availability probe.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.memory_status.v1`. |
+| `ok` | boolean | False when the selected AMH backend is unusable, for example missing local CLI. |
+| `workspace` | string | Resolved workspace path. |
+| `namespace` | string | Resolved Memory Hall namespace. |
+| `memory_backend` | string | Selected backend, usually `memhall` or `amh`. |
+| `live_probe` | boolean | Whether `--live-probe` was requested. |
+| `blockers` | array of string | Machine-readable blockers such as `amh_cli_unavailable` or `amh_cli_probe_failed`. |
+| `warnings` | array of string | Non-blocking diagnostics such as `unknown_memory_backend`. |
+| `legacy_memhall` | object | Legacy memhall URL and token status (`set` / `missing`). |
+| `amh` | object | AMH command availability, binary paths, store, path, path existence for file stores, and optional `live_probe_result`. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | Suggested follow-up kind. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `next_commands` | array of string | Suggested follow-up commands. |
 
 ## Traces Payload
 
