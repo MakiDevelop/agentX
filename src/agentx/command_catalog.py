@@ -572,6 +572,34 @@ RUNNER_RECOMMENDED_ENTRYPOINTS: list[dict[str, object]] = [
 ]
 
 
+RUNNER_SMOKE_WORKFLOWS: list[dict[str, object]] = [
+    {
+        "name": "amh_memory_workflow_chain",
+        "workflow": "memory",
+        "risk": "GREEN - dry-run only; does not write AMH",
+        "seed_command": "agentx workflow-run memory --input 完成與待辦='完成 AMH 交接' --result-output .agentx/runs/workflow-memory.json --json",
+        "artifact": ".agentx/runs/workflow-memory.json",
+        "expected_chain_status": "ready",
+        "next_command": "agentx next --json",
+        "resume_command": "agentx workflow-resume .agentx/runs/workflow-memory.json --result-output auto --dry-run --json",
+        "gate_command": "agentx gate --skip-verify --skip-approvals --json",
+        "covered_by": "tests/test_workflows_cli.py::test_memory_workflow_runner_smoke_links_artifact_next_resume_and_gate",
+    },
+    {
+        "name": "ace_council_workflow_chain",
+        "workflow": "ace",
+        "risk": "GREEN - dry-run only; does not create ACE files",
+        "seed_command": "agentx workflow-run ace --input SESSION=2026-07-15-agentx --input GOAL='Add ACE workflow' --input ANSWER='No blocker' --input SUMMARY='Gemini found no blocker' --result-output .agentx/runs/workflow-ace.json --json",
+        "artifact": ".agentx/runs/workflow-ace.json",
+        "expected_chain_status": "ready",
+        "next_command": "agentx next --json",
+        "resume_command": "agentx workflow-resume .agentx/runs/workflow-ace.json --result-output auto --dry-run --json",
+        "gate_command": "agentx gate --skip-verify --skip-approvals --json",
+        "covered_by": "tests/test_workflows_cli.py::test_ace_workflow_runner_smoke_links_artifact_next_resume_and_gate",
+    },
+]
+
+
 def command_catalog_payload() -> dict[str, object]:
     return filtered_command_catalog_payload()
 
@@ -647,6 +675,7 @@ def capabilities_payload(query: str | None = None) -> dict[str, object]:
         "query": query or "",
         "count": len(capabilities),
         "recommended_entrypoints": RUNNER_RECOMMENDED_ENTRYPOINTS,
+        "runner_smokes": RUNNER_SMOKE_WORKFLOWS,
         "by_schema": _capabilities_by_schema(capabilities),
         "capabilities": capabilities,
     }

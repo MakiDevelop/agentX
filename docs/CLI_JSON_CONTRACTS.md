@@ -86,6 +86,7 @@ Required stable keys:
 | `query` | string | Filter query, or empty string. |
 | `count` | integer | Number of returned capabilities. |
 | `recommended_entrypoints` | array of object | Suggested runner entrypoints for discovery, workspace preflight, infrastructure preflight, next-step planning, gates, and verification. |
+| `runner_smokes` | array of object | Known dry-run runner smoke workflows for AMH and ACE artifact-chain validation. |
 | `by_schema` | object | Map from schema name to the command, usage, and JSONL event that emits it, scoped to the returned capabilities. |
 | `capabilities` | array of object | Top-level CLI capability entries. |
 
@@ -100,6 +101,21 @@ Each capability object includes:
 | `schemas` | array of string |
 | `jsonl_event` | string |
 | `risk` | string |
+
+Each `runner_smokes` object includes:
+
+| Key | Type |
+|-----|------|
+| `name` | string |
+| `workflow` | string |
+| `risk` | string |
+| `seed_command` | string |
+| `artifact` | string |
+| `expected_chain_status` | string |
+| `next_command` | string |
+| `resume_command` | string |
+| `gate_command` | string |
+| `covered_by` | string |
 
 ## Local Instructions Payload
 

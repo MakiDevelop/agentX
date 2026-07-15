@@ -3,7 +3,7 @@ import json
 from typer.testing import CliRunner
 
 from agentx.cli import app
-from agentx.command_catalog import CLI_CAPABILITIES, RUNNER_RECOMMENDED_ENTRYPOINTS, capabilities_payload
+from agentx.command_catalog import CLI_CAPABILITIES, RUNNER_RECOMMENDED_ENTRYPOINTS, RUNNER_SMOKE_WORKFLOWS, capabilities_payload
 
 
 def test_capabilities_payload_lists_top_level_cli_commands() -> None:
@@ -13,7 +13,9 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert payload["query"] == ""
     assert payload["count"] == len(CLI_CAPABILITIES)
     assert payload["recommended_entrypoints"] == RUNNER_RECOMMENDED_ENTRYPOINTS
+    assert payload["runner_smokes"] == RUNNER_SMOKE_WORKFLOWS
     entrypoints = {item["name"]: item for item in payload["recommended_entrypoints"]}  # type: ignore[index]
+    smokes = {item["name"]: item for item in payload["runner_smokes"]}  # type: ignore[index]
     assert entrypoints["infra_preflight"] == {
         "name": "infra_preflight",
         "command": "agentx infra resource-bundle --json",
@@ -32,6 +34,12 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
         "schema": "agentx.workflow_catalog.v1",
         "reason": "discover the ACE manifest, briefing, answer, and status workflow for multi-agent coordination",
     }
+    assert smokes["amh_memory_workflow_chain"]["workflow"] == "memory"
+    assert smokes["amh_memory_workflow_chain"]["expected_chain_status"] == "ready"
+    assert "does not write AMH" in smokes["amh_memory_workflow_chain"]["risk"]
+    assert smokes["ace_council_workflow_chain"]["workflow"] == "ace"
+    assert smokes["ace_council_workflow_chain"]["expected_chain_status"] == "ready"
+    assert "does not create ACE files" in smokes["ace_council_workflow_chain"]["risk"]
     commands = {item["command"]: item for item in payload["capabilities"]}  # type: ignore[index]
     assert "agentx verify" in commands
     assert "agentx artifacts" in commands

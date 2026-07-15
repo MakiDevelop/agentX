@@ -217,7 +217,7 @@ agentx ask "幫我列出這個 repo 的檔案" --artifact-dir .agentx/runs/ask-l
 JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`、`failing_tools` 與 `stats`。
 `stats` 目前包含 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies 與 task counts。
 `log_summary` 會提供精簡可機讀執行摘要：termination、tool outcomes、successful/failing tools、recent errors、recovery suggestions、pending verifies 與 deterministic `handoff_summary`。
-`agentx capabilities --json` 會輸出 `agentx.capabilities.v1`，列出 top-level automation commands、schemas、JSONL events、風險、`recommended_entrypoints` 與 `by_schema` 索引，讓外部 runner 不必解析 README。
+`agentx capabilities --json` 會輸出 `agentx.capabilities.v1`，列出 top-level automation commands、schemas、JSONL events、風險、`recommended_entrypoints`、AMH/ACE `runner_smokes` 與 `by_schema` 索引，讓外部 runner 不必解析 README。
 `agentx instructions --json` 會輸出 `agentx.local_instructions.v1`，read-only 檢查 repo-local `AGENTX.md` / `AGENTS.md` / `CLAUDE.md`，並依 bootstrap priority 回傳 selected file、檔案摘要與合併 context。
 `agentx inspect --json` 會輸出 `agentx.inspect.v1` read-only preflight bundle，彙整 status、active tasks、sessions、latest approvals、latest traces、diff、capabilities、repo-local instructions、memory status、artifacts、next recommendations、AMH/ACE workflow-run previews、可跑的 verify commands 與對應 `command-plan`，並提供 top-level `recommended_command` / `signals` 讓 runner 不必深入解析 nested payload；它不執行測試或 live probes。
 `agentx diff --json` 會輸出 `agentx.diff.v1` git diff 摘要，包含檔案狀態、insertions/deletions、untracked files、stat；加 `--staged` 可看 index，加 `--patch` 才會附 patch text。
