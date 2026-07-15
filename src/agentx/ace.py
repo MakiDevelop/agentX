@@ -8,6 +8,7 @@ from pathlib import Path
 ACE_SCHEMA = "agentx.ace_session.v1"
 ACE_APPEND_SCHEMA = "agentx.ace_append.v1"
 ACE_BRIEFING_SCHEMA = "agentx.ace_briefing.v1"
+ACE_ANSWER_SCHEMA = "agentx.ace_answer.v1"
 DEFAULT_ACE_ROOT = Path.home() / "Documents" / "agent-council"
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
 AGENT_SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$")
@@ -406,5 +407,150 @@ def ace_briefing_payload(
             else "agentx next --json"
             if ok
             else "fix ACE briefing blockers, then rerun agentx ace-briefing SESSION --agent AGENT --json"
+        ],
+    }
+
+
+def render_ace_answer(
+    *,
+    session_id: str,
+    agent: str,
+    summary: str,
+    answer: str,
+) -> str:
+    timestamp = datetime.now().isoformat(timespec="seconds")
+    return "\n".join(
+        [
+            f"# ACE Answer: {agent}",
+            "",
+            f"- Session: {session_id}",
+            f"- Agent: {agent}",
+            f"- Created: {timestamp}",
+            "",
+            "## Summary",
+            "",
+            summary.strip() or "No summary provided.",
+            "",
+            "## Raw Answer",
+            "",
+            answer.strip(),
+            "",
+        ]
+    )
+
+
+def ace_answer_payload(
+    *,
+    session_id: str,
+    agent: str,
+    answer: str,
+    summary: str = "",
+    section: str = "finding",
+    root: str | Path | None = None,
+    output: str | None = None,
+) -> dict[str, object]:
+    blockers: list[str] = []
+    warnings: list[str] = []
+    session_dir: Path | None = None
+    manifest_path: Path | None = None
+    answer_path: Path | None = None
+    answer_doc = ""
+    manifest = ""
+    entry = ""
+    raw_section = section.strip().lower()
+    heading = ""
+
+    try:
+        normalized_id = validate_ace_session_id(session_id)
+        session_dir, manifest_path = ace_session_paths(normalized_id, root=root)
+    except ValueError as exc:
+        normalized_id = session_id.strip()
+        blockers.append(str(exc))
+
+    try:
+        agent_slug = validate_ace_agent_slug(agent)
+    except ValueError as exc:
+        agent_slug = agent.strip()
+        blockers.append(str(exc))
+
+    try:
+        raw_section, heading = resolve_ace_append_section(section)
+    except ValueError as exc:
+        blockers.append(str(exc))
+
+    if not answer.strip():
+        blockers.append("answer_required")
+
+    if manifest_path is not None:
+        if not manifest_path.exists():
+            blockers.append("manifest_not_found")
+        else:
+            manifest = manifest_path.read_text(encoding="utf-8")
+
+    if session_dir is not None and not blockers:
+        timestamp_slug = datetime.now().strftime("%Y%m%d-%H%M%S")
+        output_name = output.strip() if output else f"answer-{agent_slug}-{timestamp_slug}.md"
+        if "/" in output_name or "\\" in output_name or output_name in {"", ".", ".."}:
+            blockers.append("output_must_be_session_relative_filename")
+        else:
+            answer_path = (session_dir / output_name).resolve()
+            if session_dir != answer_path.parent:
+                blockers.append("output_escapes_session_dir")
+
+    if not blockers:
+        summary_text = summary.strip() or answer.strip().splitlines()[0][:160]
+        answer_doc = render_ace_answer(
+            session_id=normalized_id,
+            agent=agent_slug,
+            summary=summary_text,
+            answer=answer,
+        )
+        if answer_path is None:
+            blockers.append("answer_path_unresolved")
+        elif answer_path.exists():
+            blockers.append("answer_already_exists")
+        else:
+            entry = format_ace_append_entry(
+                section,
+                f"{agent_slug} answer: {summary_text} (answer: {answer_path.name})",
+                agent=agent_slug,
+            )
+            try:
+                updated_manifest = append_to_manifest_section(manifest, heading, entry)
+            except ValueError as exc:
+                blockers.append(str(exc))
+            else:
+                answer_path.write_text(answer_doc, encoding="utf-8")
+                if manifest_path is not None:
+                    manifest_path.write_text(updated_manifest, encoding="utf-8")
+                manifest = updated_manifest
+
+    ok = not blockers
+    return {
+        "schema": ACE_ANSWER_SCHEMA,
+        "ok": ok,
+        "session_id": normalized_id,
+        "agent": agent_slug,
+        "root": str(resolve_ace_root(root)),
+        "session_dir": str(session_dir) if session_dir else None,
+        "manifest_path": str(manifest_path) if manifest_path else None,
+        "answer_path": str(answer_path) if answer_path else None,
+        "answer_exists": bool(answer_path.exists()) if answer_path else False,
+        "section": raw_section,
+        "heading": heading,
+        "entry": entry,
+        "blockers": blockers,
+        "warnings": warnings,
+        "answer_document": answer_doc,
+        "manifest": manifest if ok else "",
+        "recommended_command": "agentx next --json"
+        if ok
+        else "fix ACE answer blockers, then rerun agentx ace-answer SESSION --agent AGENT --answer TEXT --json",
+        "recommended_kind": "next" if ok else "fix_ace_answer_blockers",
+        "recommended_risk": "GREEN" if ok else "UNKNOWN",
+        "next_commands": [
+            "agentx next --json"
+            if ok
+            else "fix ACE answer blockers, then rerun agentx ace-answer SESSION --agent AGENT --answer TEXT --json"
         ],
     }

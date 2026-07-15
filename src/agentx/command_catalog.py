@@ -356,6 +356,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN by default; YELLOW with --write because it creates local ACE briefing files",
     },
     {
+        "command": "agentx ace-answer",
+        "usage": "agentx ace-answer SESSION --agent AGENT --answer TEXT --json",
+        "description": "Record one external agent answer file and append its summary to the ACE manifest.",
+        "examples": [
+            "agentx ace-answer 2026-07-15-agentx-ace --agent gemini --answer 'No blocker found' --summary 'Gemini found no blocker' --json",
+            "agentx ace-answer 2026-07-15-agentx-ace --agent grok --section decision --answer 'Use option A' --json",
+        ],
+        "schemas": ["agentx.ace_answer.v1"],
+        "jsonl_event": "ace_answer",
+        "risk": "YELLOW - writes local ACE answer and manifest files",
+    },
+    {
         "command": "agentx workflows",
         "usage": "agentx workflows [QUERY] --json",
         "description": "List practical workflow recipes for headless, audit, and commit flows.",

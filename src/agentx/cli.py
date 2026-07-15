@@ -27,7 +27,7 @@ from rich.text import Text
 
 from agentx import cli_runtime_handlers as _runtime_handlers
 from agentx import cli_slash_shims as _slash_shims
-from agentx.ace import ace_append_payload, ace_briefing_payload, ace_init_payload
+from agentx.ace import ace_answer_payload, ace_append_payload, ace_briefing_payload, ace_init_payload
 from agentx.approval import ApprovalMode, ApprovalPolicy, approval_decision_source, normalize_approval_mode
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from agentx.config import Settings
@@ -686,6 +686,27 @@ def print_ace_briefing_payload(
     else:
         console.print(
             "[red]ACE briefing blocked: "
+            f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
+        )
+    console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
+
+
+def print_ace_answer_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output or jsonl_output:
+        output_format = "jsonl" if jsonl_output else "json"
+        print_structured_payload(payload, output_format=output_format, event="ace_answer")
+        return
+    if payload.get("ok"):
+        console.print(f"[green]ACE answer recorded: {payload.get('agent')}[/green]")
+        console.print(f"[dim]answer={payload.get('answer_path') or '-'}[/dim]")
+    else:
+        console.print(
+            "[red]ACE answer blocked: "
             f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
         )
     console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
@@ -6343,6 +6364,33 @@ def ace_briefing_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_ace_briefing_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=0 if payload.get("ok") else 1)
+
+
+@app.command("ace-answer")
+def ace_answer_command(
+    session_id: str = typer.Argument(..., help="ACE session id."),
+    agent: str = typer.Option(..., "--agent", help="Agent slug for the answer author."),
+    answer: str = typer.Option(..., "--answer", help="Raw answer text to preserve append-only."),
+    summary: str = typer.Option("", "--summary", help="Short summary to append to the manifest."),
+    section: str = typer.Option("finding", "--section", help="Manifest section to append summary to."),
+    output: str | None = typer.Option(None, "--output", help="Answer filename inside the ACE session directory."),
+    root: str | None = typer.Option(None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Record one external agent answer and append its summary to the ACE manifest."""
+    payload = ace_answer_payload(
+        session_id=session_id,
+        agent=agent,
+        answer=answer,
+        summary=summary,
+        section=section,
+        root=root,
+        output=output,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_ace_answer_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 

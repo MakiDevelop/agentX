@@ -46,6 +46,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx ace-init --json` | `agentx.ace_session.v1` | `ace_init` |
 | `agentx ace-append --json` | `agentx.ace_append.v1` | `ace_append` |
 | `agentx ace-briefing --json` | `agentx.ace_briefing.v1` | `ace_briefing` |
+| `agentx ace-answer --json` | `agentx.ace_answer.v1` | `ace_answer` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx task-update --json` | `agentx.task_update.v1` | `task_update` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
@@ -526,6 +527,40 @@ Required stable keys:
 | `briefing` | string | Rendered briefing markdown. |
 | `recommended_command` | string | First suggested follow-up command for simple runners. |
 | `recommended_kind` | string | `ace_briefing_write`, `next`, or `fix_ace_briefing_blockers`. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `next_commands` | array of string | Suggested follow-up commands. |
+
+## ACE Answer Payload
+
+`agentx ace-answer SESSION --agent AGENT --answer TEXT --json` emits
+`agentx.ace_answer.v1`.
+
+This command records one external agent answer as a new markdown file in the ACE
+session directory and appends a summary pointer back to `_manifest.md`. It is
+append-only by default: existing answer filenames are rejected.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.ace_answer.v1`. |
+| `ok` | boolean | True when the answer file and manifest update succeeded. |
+| `session_id` | string | Validated session id / directory name. |
+| `agent` | string | Validated answer author slug. |
+| `root` | string | Resolved ACE root directory. |
+| `session_dir` | string or null | Resolved session directory. |
+| `manifest_path` | string or null | Resolved `_manifest.md` path. |
+| `answer_path` | string or null | Resolved answer file path. |
+| `answer_exists` | boolean | Whether the answer file exists after the operation. |
+| `section` | string | Normalized manifest section that received the summary. |
+| `heading` | string | Manifest heading that received the summary. |
+| `entry` | string | Timestamped summary bullet appended to the manifest. |
+| `blockers` | array of string | Machine-readable blockers such as `answer_required`, `answer_already_exists`, `manifest_not_found`, or unsafe output errors. |
+| `warnings` | array of string | Non-blocking diagnostics. |
+| `answer_document` | string | Rendered answer markdown. |
+| `manifest` | string | Updated manifest content when ok. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | `next` when ok, otherwise `fix_ace_answer_blockers`. |
 | `recommended_risk` | string | Risk label for the recommended follow-up. |
 | `next_commands` | array of string | Suggested follow-up commands. |
 

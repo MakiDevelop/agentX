@@ -2,7 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
-from agentx.ace import ace_append_payload, ace_briefing_payload, ace_init_payload
+from agentx.ace import ace_answer_payload, ace_append_payload, ace_briefing_payload, ace_init_payload
 from agentx.cli import app
 
 
@@ -341,3 +341,119 @@ def test_ace_briefing_blocks_output_path_escape(tmp_path) -> None:  # noqa: ANN0
     payload = json.loads(result.output)
     assert payload["ok"] is False
     assert payload["blockers"] == ["output_must_be_session_relative_filename"]
+
+
+def test_ace_answer_payload_writes_answer_and_updates_manifest(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+
+    payload = ace_answer_payload(
+        session_id="session-1",
+        agent="gemini",
+        answer="No blocker found.\nProceed with option A.",
+        summary="Gemini found no blocker",
+        root=tmp_path,
+        output="answer-gemini.md",
+    )
+
+    answer = tmp_path / "session-1" / "answer-gemini.md"
+    manifest = tmp_path / "session-1" / "_manifest.md"
+    assert payload["schema"] == "agentx.ace_answer.v1"
+    assert payload["ok"] is True
+    assert payload["answer_exists"] is True
+    assert answer.exists()
+    assert "# ACE Answer: gemini" in answer.read_text(encoding="utf-8")
+    manifest_text = manifest.read_text(encoding="utf-8")
+    assert "gemini answer: Gemini found no blocker" in manifest_text
+    assert "answer-gemini.md" in manifest_text
+
+
+def test_ace_answer_cli_outputs_jsonl_event(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "ace-answer",
+            "session-1",
+            "--agent",
+            "grok",
+            "--answer",
+            "Implementer answer",
+            "--summary",
+            "Grok can implement",
+            "--root",
+            str(tmp_path),
+            "--output-format",
+            "jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    assert envelope["event"] == "ace_answer"
+    assert envelope["data"]["schema"] == "agentx.ace_answer.v1"
+    assert envelope["data"]["agent"] == "grok"
+    assert envelope["data"]["ok"] is True
+
+
+def test_ace_answer_blocks_empty_answer(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+
+    payload = ace_answer_payload(
+        session_id="session-1",
+        agent="gemini",
+        answer="  ",
+        root=tmp_path,
+    )
+
+    assert payload["ok"] is False
+    assert "answer_required" in payload["blockers"]
+
+
+def test_ace_answer_blocks_existing_output(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+    existing = tmp_path / "session-1" / "answer-gemini.md"
+    existing.write_text("existing", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "ace-answer",
+            "session-1",
+            "--agent",
+            "gemini",
+            "--answer",
+            "New answer",
+            "--output",
+            "answer-gemini.md",
+            "--root",
+            str(tmp_path),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["blockers"] == ["answer_already_exists"]
+    assert existing.read_text(encoding="utf-8") == "existing"
