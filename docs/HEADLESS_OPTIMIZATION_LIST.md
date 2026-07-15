@@ -110,6 +110,7 @@
 - [x] `agentx workflows ace --json` 會提供 ACE council recipe（init preview → init write → briefing → answer → status），讓 runner 能發現多代理協作標準流程。
 - [x] `agentx capabilities --json` 的 `recommended_entrypoints` 會列出 `memory_handoff` 與 `ace_council`，讓外部 runner 第一次 discovery 就能找到 AMH/ACE workflow。
 - [x] `agentx workflow-plan NAME --json` 會把單一 workflow 展開成 ordered command plans、placeholder `inputs_required`、`side_effect_gates` 與 blockers，讓 runner 能先 gate 再執行。
+- [x] `agentx workflow-plan NAME --input KEY=VALUE --json` 會套用 placeholder substitution 並輸出 `ready_commands`，讓 runner 能拿到可執行命令但仍不執行 side effects。
 - [x] `agentx inspect --json` 會內嵌 `verify_command_plans`，把每個預設 verify command 轉成 `agentx.command_plan.v1`，讓 runner 一次取得可執行檢查與 command policy posture。
 - [x] `agentx inspect --json` 會內嵌 `instructions`（`agentx.local_instructions.v1`）與 top-level instruction signals，讓 runner 一次取得 repo-local AGENTX/AGENTS/CLAUDE 規則狀態。
 - [x] `agentx inspect --json` 會內嵌 `memory_status`（`agentx.memory_status.v1`，`live_probe=false`）與 top-level memory signals，讓 runner 一次取得 Memory Hall / AMH posture。

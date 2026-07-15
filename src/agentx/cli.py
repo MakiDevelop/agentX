@@ -293,12 +293,19 @@ WORKFLOW_PLACEHOLDERS: dict[str, str] = {
 }
 
 
-def workflow_plan_payload(query: str, *, workspace: str | Path | None = None) -> dict[str, object]:
+def workflow_plan_payload(
+    query: str,
+    *,
+    workspace: str | Path | None = None,
+    inputs: dict[str, str] | None = None,
+) -> dict[str, object]:
     normalized_query = query.strip()
     workspace_path = resolve_headless_workspace(str(workspace)) if workspace else None
+    settings = Settings(workspace=workspace_path)
     catalog = workflow_catalog_payload(normalized_query, workspace=workspace_path)
     blockers: list[str] = []
     warnings: list[str] = []
+    normalized_inputs = _normalize_workflow_inputs(inputs or {})
 
     workflows = list(catalog["workflows"])  # type: ignore[arg-type]
     if not normalized_query:
@@ -311,7 +318,9 @@ def workflow_plan_payload(query: str, *, workspace: str | Path | None = None) ->
     selected = dict(workflows[0]) if len(workflows) == 1 else None
     steps: list[dict[str, object]] = []
     commands: list[str] = []
+    ready_commands: list[str] = []
     inputs_required: list[dict[str, object]] = []
+    inputs_applied: list[dict[str, object]] = []
     side_effect_gates: list[dict[str, object]] = []
     command_blockers: list[dict[str, object]] = []
 
@@ -320,20 +329,35 @@ def workflow_plan_payload(query: str, *, workspace: str | Path | None = None) ->
             step = dict(raw_step)
             step["index"] = index
             command = str(step["command"])
+            ready_command, applied = _apply_workflow_inputs(command, normalized_inputs)
+            if applied:
+                step["ready_command"] = ready_command
+                inputs_applied.extend(
+                    {
+                        "step_index": index,
+                        "placeholder": placeholder,
+                        "value": value,
+                        "command": ready_command,
+                    }
+                    for placeholder, value in applied
+                )
             if step.get("runnable"):
                 commands.append(command)
-            placeholders = _workflow_step_placeholders(index, command)
+                ready_commands.append(ready_command)
+            placeholders = _workflow_step_placeholders(index, ready_command)
             if placeholders:
                 step["inputs_required"] = placeholders
                 inputs_required.extend(placeholders)
-            command_plan = step.get("command_plan")
+            command_plan = command_plan_payload(settings, ready_command) if step.get("kind") == "agentx_cli" else step.get("command_plan")
+            if step.get("kind") == "agentx_cli":
+                step["command_plan"] = command_plan
             if isinstance(command_plan, dict):
                 plan_blockers = [str(item) for item in command_plan.get("blockers", [])]
                 if plan_blockers:
                     command_blockers.append(
                         {
                             "step_index": index,
-                            "command": command,
+                            "command": ready_command,
                             "blockers": plan_blockers,
                         }
                     )
@@ -341,7 +365,7 @@ def workflow_plan_payload(query: str, *, workspace: str | Path | None = None) ->
                     side_effect_gates.append(
                         {
                             "step_index": index,
-                            "command": command,
+                            "command": ready_command,
                             "risk": str(command_plan.get("risk") or "UNKNOWN"),
                             "approval_required": bool(command_plan.get("approval_required")),
                             "matched_policy": command_plan.get("matched_policy"),
@@ -364,16 +388,62 @@ def workflow_plan_payload(query: str, *, workspace: str | Path | None = None) ->
         "workflow": selected,
         "steps": steps,
         "commands": commands,
+        "ready_commands": ready_commands,
+        "inputs": normalized_inputs,
+        "inputs_applied": inputs_applied,
         "inputs_required": inputs_required,
         "side_effect_gates": side_effect_gates,
         "command_blockers": command_blockers,
         "blockers": blockers,
         "warnings": warnings,
-        "recommended_command": commands[0] if ok and commands else f"agentx workflows {normalized_query or 'NAME'} --json",
+        "recommended_command": ready_commands[0] if ok and ready_commands else f"agentx workflows {normalized_query or 'NAME'} --json",
         "recommended_kind": "execute_first_step" if ok and commands else "fill_workflow_inputs",
         "recommended_risk": "GREEN" if ok and not side_effect_gates else "YELLOW" if ok else "UNKNOWN",
-        "next_commands": commands if ok else [f"agentx workflows {normalized_query or 'NAME'} --json"],
+        "next_commands": ready_commands if ok else [f"agentx workflows {normalized_query or 'NAME'} --json"],
     }
+
+
+def _normalize_workflow_inputs(inputs: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for key, value in inputs.items():
+        placeholder = key.strip()
+        if not placeholder:
+            continue
+        normalized[placeholder] = value.strip()
+    return normalized
+
+
+def parse_workflow_inputs(items: list[str]) -> tuple[dict[str, str], list[str]]:
+    inputs: dict[str, str] = {}
+    blockers: list[str] = []
+    for item in items:
+        if "=" not in item:
+            blockers.append(f"invalid_input:{item}")
+            continue
+        key, value = item.split("=", 1)
+        key = key.strip()
+        if not key:
+            blockers.append(f"invalid_input:{item}")
+            continue
+        inputs[key] = value.strip()
+    return inputs, blockers
+
+
+def _apply_workflow_inputs(command: str, inputs: dict[str, str]) -> tuple[str, list[tuple[str, str]]]:
+    ready_command = command
+    applied: list[tuple[str, str]] = []
+    for placeholder in sorted(WORKFLOW_PLACEHOLDERS, key=len, reverse=True):
+        if placeholder not in ready_command or placeholder not in inputs:
+            continue
+        quoted_value = shlex.quote(inputs[placeholder])
+        if f'"{placeholder}"' in ready_command:
+            ready_command = ready_command.replace(f'"{placeholder}"', quoted_value)
+        elif f"'{placeholder}'" in ready_command:
+            ready_command = ready_command.replace(f"'{placeholder}'", quoted_value)
+        else:
+            ready_command = ready_command.replace(placeholder, quoted_value)
+        applied.append((placeholder, inputs[placeholder]))
+    return ready_command, applied
 
 
 def _workflow_step_placeholders(step_index: int, command: str) -> list[dict[str, object]]:
@@ -6603,13 +6673,20 @@ def workflows_command(
 def workflow_plan_command(
     query: str = typer.Argument(..., help="Workflow name or alias, e.g. memory, ace, headless."),
     workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for command policy resolution."),
+    input_items: list[str] = typer.Option(None, "--input", help="Placeholder substitution as KEY=VALUE. May be repeated."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
     fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when the workflow plan has blockers."),
 ) -> None:
     """Build a runnable workflow plan without executing any step."""
     structured_format = structured_output_format(json_output, output_format)
-    payload = workflow_plan_payload(query, workspace=workspace)
+    parsed_inputs, input_blockers = parse_workflow_inputs(input_items or [])
+    payload = workflow_plan_payload(query, workspace=workspace, inputs=parsed_inputs)
+    if input_blockers:
+        payload["ok"] = False
+        payload["blockers"] = [*payload.get("blockers", []), *input_blockers]
+        payload["recommended_kind"] = "fix_workflow_inputs"
+        payload["recommended_risk"] = "UNKNOWN"
     print_workflow_plan_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=1 if fail_on_blocker and payload.get("blockers") else 0)
 

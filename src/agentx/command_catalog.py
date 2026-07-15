@@ -438,10 +438,11 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
     },
     {
         "command": "agentx workflow-plan",
-        "usage": "agentx workflow-plan NAME --json",
-        "description": "Expand one workflow into ordered command plans, required inputs, blockers, and side-effect gates without executing it.",
+        "usage": "agentx workflow-plan NAME --input KEY=VALUE --json",
+        "description": "Expand one workflow into ordered command plans, substituted ready commands, required inputs, blockers, and side-effect gates without executing it.",
         "examples": [
             "agentx workflow-plan memory --json",
+            "agentx workflow-plan memory --input 完成與待辦='完成 AMH 交接' --json",
             "agentx workflow-plan ace --json --fail-on-blocker",
         ],
         "schemas": ["agentx.workflow_plan.v1"],

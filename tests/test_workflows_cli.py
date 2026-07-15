@@ -143,6 +143,43 @@ def test_workflow_plan_payload_reports_ace_placeholders(tmp_path) -> None:  # no
     assert payload["side_effect_gates"][1]["risk"] == "YELLOW"  # type: ignore[index]
 
 
+def test_workflow_plan_payload_applies_memory_inputs(tmp_path) -> None:  # noqa: ANN001
+    payload = workflow_plan_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"})
+
+    assert payload["ok"] is True
+    assert payload["blockers"] == []
+    assert payload["inputs_required"] == []
+    assert payload["inputs"] == {"完成與待辦": "完成 AMH 交接"}
+    assert payload["ready_commands"] == [
+        'agentx memory-read "handoff" --json',
+        "agentx memory-write '完成 AMH 交接' --type handoff --json",
+        "agentx memory-write '完成 AMH 交接' --type handoff --write --json",
+    ]
+    assert payload["next_commands"] == payload["ready_commands"]
+    assert payload["recommended_command"] == 'agentx memory-read "handoff" --json'
+    assert payload["recommended_risk"] == "YELLOW"
+    assert payload["side_effect_gates"][-1]["command"] == "agentx memory-write '完成 AMH 交接' --type handoff --write --json"  # type: ignore[index]
+
+
+def test_workflow_plan_payload_applies_ace_inputs(tmp_path) -> None:  # noqa: ANN001
+    payload = workflow_plan_payload(
+        "ace",
+        workspace=tmp_path,
+        inputs={
+            "SESSION": "2026-07-15-agentx",
+            "GOAL": "Add ACE workflow",
+            "ANSWER": "No blocker",
+            "SUMMARY": "Gemini found no blocker",
+        },
+    )
+
+    assert payload["ok"] is True
+    assert payload["inputs_required"] == []
+    assert payload["ready_commands"][0] == "agentx ace-init 2026-07-15-agentx --goal 'Add ACE workflow' --json"  # type: ignore[index]
+    assert payload["ready_commands"][-1] == "agentx ace-status 2026-07-15-agentx --json"  # type: ignore[index]
+    assert payload["side_effect_gates"][1]["command"] == "agentx ace-init 2026-07-15-agentx --goal 'Add ACE workflow' --write --json"  # type: ignore[index]
+
+
 def test_workflow_plan_payload_blocks_missing_workflow(tmp_path) -> None:  # noqa: ANN001
     payload = workflow_plan_payload("missing", workspace=tmp_path)
 
@@ -192,6 +229,34 @@ def test_workflow_plan_json_outputs_payload() -> None:
     assert payload["query"] == "memory"
     assert payload["workflow"]["goal"] == "記憶交接"
     assert "missing_inputs" in payload["blockers"]
+
+
+def test_workflow_plan_json_accepts_input_substitution() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-plan",
+            "memory",
+            "--input",
+            "完成與待辦=完成 AMH 交接",
+            "--json",
+            "--fail-on-blocker",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["inputs_required"] == []
+    assert payload["ready_commands"][1] == "agentx memory-write '完成 AMH 交接' --type handoff --json"
+
+
+def test_workflow_plan_invalid_input_can_fail_on_blocker() -> None:
+    result = CliRunner().invoke(app, ["workflow-plan", "memory", "--input", "bad", "--json", "--fail-on-blocker"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert "invalid_input:bad" in payload["blockers"]
 
 
 def test_workflow_plan_jsonl_outputs_event_envelope() -> None:

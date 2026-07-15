@@ -1229,7 +1229,9 @@ runners can inspect policy posture before executing a top-level command.
 
 This command expands a single workflow recipe into an execution plan without
 running any step. It is intended for external runners that need to collect
-placeholder values and approval gates before executing a recipe.
+placeholder values and approval gates before executing a recipe. Repeated
+`--input KEY=VALUE` options substitute placeholders and populate
+`ready_commands`.
 
 Required stable keys:
 
@@ -1240,7 +1242,10 @@ Required stable keys:
 | `ok` | boolean | True only when the workflow exists and has no missing inputs or command-plan blockers. |
 | `workflow` | object or null | Selected workflow catalog object. |
 | `steps` | array of object | Ordered steps, each with `index`; runnable `agentx` steps include command plans. |
-| `commands` | array of string | Runnable commands in execution order. |
+| `commands` | array of string | Original runnable commands in execution order. |
+| `ready_commands` | array of string | Runnable commands after placeholder substitution. |
+| `inputs` | object | Placeholder values provided by the caller. |
+| `inputs_applied` | array of object | Per-step substitutions applied to commands. |
 | `inputs_required` | array of object | Placeholder inputs that must be filled before execution. |
 | `side_effect_gates` | array of object | Steps with YELLOW/RED risk or approval requirements. |
 | `command_blockers` | array of object | Per-step command-plan blockers. |
