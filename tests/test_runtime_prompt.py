@@ -13,6 +13,11 @@ def test_chat_prompt_describes_agentx_runtime_without_generic_denial():
     assert "Do not say you have no local environment access" in prompt
     assert "/fetch" in prompt
     assert "Do not claim broad web browsing or search" in prompt
+    assert "AMH means Agent Memory Hall / local long-term memory, not web search" in prompt
+    assert "/memory QUERY" in prompt
+    assert "agentx memory-read QUERY --json" in prompt
+    assert "agentx memory-status --json" in prompt
+    assert "not /search, /fetch, or web browsing" in prompt
     assert "小Ge" in prompt
     assert "nickname does not change" in prompt
     assert "create a Docker site" in prompt
@@ -33,6 +38,9 @@ def test_agent_prompt_states_ssh_limit_and_tool_evidence_rule():
     assert "Small steps" in AGENT_SYSTEM_PROMPT or "小步驟" in AGENT_SYSTEM_PROMPT
     assert "中文 commit" in AGENT_SYSTEM_PROMPT
     assert "engineering agent" in AGENT_SYSTEM_PROMPT.lower() or "local engineering agent" in AGENT_SYSTEM_PROMPT.lower()
+    assert "AMH means Agent Memory Hall / local long-term memory, not web search" in AGENT_SYSTEM_PROMPT
+    assert "use memory_search / memory status surfaces" in AGENT_SYSTEM_PROMPT
+    assert "do not route to web search, /fetch, or repo /search" in AGENT_SYSTEM_PROMPT
 
 
 def test_tutor_persona_is_injected_into_prompts():
