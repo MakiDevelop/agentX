@@ -7,6 +7,16 @@ from typer.testing import CliRunner
 from agentx.cli import app, workflow_catalog_payload, workflow_plan_payload, workflow_run_payload
 
 
+def _clean_git_repo_ignoring_agentx(path, monkeypatch) -> None:  # noqa: ANN001
+    subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=path, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=path, check=True, capture_output=True, text=True)
+    (path / ".gitignore").write_text(".agentx/\n", encoding="utf-8")
+    subprocess.run(["git", "add", ".gitignore"], cwd=path, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=path, check=True, capture_output=True, text=True)
+    monkeypatch.chdir(path)
+
+
 def test_workflow_catalog_payload_lists_aliases() -> None:
     payload = workflow_catalog_payload()
 
@@ -429,13 +439,7 @@ def test_workflow_run_result_output_writes_json_artifact(tmp_path) -> None:  # n
 
 
 def test_memory_workflow_runner_smoke_links_artifact_next_resume_and_gate(tmp_path, monkeypatch) -> None:  # noqa: ANN001
-    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True, capture_output=True, text=True)
-    (tmp_path / ".gitignore").write_text(".agentx/\n", encoding="utf-8")
-    subprocess.run(["git", "add", ".gitignore"], cwd=tmp_path, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
-    monkeypatch.chdir(tmp_path)
+    _clean_git_repo_ignoring_agentx(tmp_path, monkeypatch)
     runner = CliRunner()
 
     run_result = runner.invoke(
@@ -495,6 +499,78 @@ def test_memory_workflow_runner_smoke_links_artifact_next_resume_and_gate(tmp_pa
     assert gate_result.exit_code == 0, gate_result.output
     gate_payload = json.loads(gate_result.output)
     assert gate_payload["schema"] == "agentx.gate.v1"
+    assert gate_payload["doctor"]["workflow_artifact_health"]["status"] == "ready"
+    assert "workflow_artifact_needs_inspect" not in gate_payload["warnings"]
+
+
+def test_ace_workflow_runner_smoke_links_artifact_next_resume_and_gate(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    _clean_git_repo_ignoring_agentx(tmp_path, monkeypatch)
+    runner = CliRunner()
+
+    run_result = runner.invoke(
+        app,
+        [
+            "workflow-run",
+            "ace",
+            "--workspace",
+            str(tmp_path),
+            "--input",
+            "SESSION=2026-07-15-agentx",
+            "--input",
+            "GOAL=Add ACE workflow",
+            "--input",
+            "ANSWER=No blocker",
+            "--input",
+            "SUMMARY=Gemini found no blocker",
+            "--result-output",
+            ".agentx/runs/workflow-ace.json",
+            "--json",
+        ],
+    )
+
+    assert run_result.exit_code == 0, run_result.output
+    run_payload = json.loads(run_result.output)
+    assert run_payload["schema"] == "agentx.workflow_run.v1"
+    assert run_payload["query"] == "ace"
+    assert run_payload["ok"] is True
+    assert run_payload["execute"] is False
+    assert (tmp_path / ".agentx" / "runs" / "workflow-ace.json").exists()
+
+    artifacts_result = runner.invoke(app, ["artifacts", "--workspace", str(tmp_path), "--json"])
+
+    assert artifacts_result.exit_code == 0, artifacts_result.output
+    artifacts_payload = json.loads(artifacts_result.output)
+    assert artifacts_payload["workflow_chain"]["status"] == "ready"
+    assert artifacts_payload["workflow_chain"]["next_result_output"] == ".agentx/runs/workflow-ace-next.json"
+
+    next_result = runner.invoke(app, ["next", "--workspace", str(tmp_path), "--json"])
+
+    assert next_result.exit_code == 0, next_result.output
+    next_payload = json.loads(next_result.output)
+    assert next_payload["recommended_kind"] == "workflow_resume"
+    assert next_payload["recommended_command"] == (
+        "agentx workflow-resume .agentx/runs/workflow-ace.json --result-output auto --dry-run --json"
+    )
+
+    resume_argv = shlex.split(next_payload["recommended_command"])
+    resume_result = runner.invoke(app, resume_argv[1:])
+
+    assert resume_result.exit_code == 0, resume_result.output
+    resume_payload = json.loads(resume_result.output)
+    assert resume_payload["schema"] == "agentx.workflow_resume.v1"
+    assert ".agentx/runs/workflow-ace-next.json" in resume_payload["argv"]
+    assert "SESSION=2026-07-15-agentx" in resume_payload["argv"]
+    assert "GOAL=Add ACE workflow" in resume_payload["argv"]
+    assert "ANSWER=No blocker" in resume_payload["argv"]
+    assert "SUMMARY=Gemini found no blocker" in resume_payload["argv"]
+
+    gate_result = runner.invoke(
+        app,
+        ["gate", "--workspace", str(tmp_path), "--skip-verify", "--skip-approvals", "--json"],
+    )
+
+    assert gate_result.exit_code == 0, gate_result.output
+    gate_payload = json.loads(gate_result.output)
     assert gate_payload["doctor"]["workflow_artifact_health"]["status"] == "ready"
     assert "workflow_artifact_needs_inspect" not in gate_payload["warnings"]
 
