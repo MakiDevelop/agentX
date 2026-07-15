@@ -464,6 +464,30 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN dry-run by default; YELLOW with --execute because it can run commands",
     },
     {
+        "command": "agentx workflow-inspect",
+        "usage": "agentx workflow-inspect PATH --json",
+        "description": "Inspect a saved workflow-run artifact and generate a rerun command with known inputs plus placeholders for missing inputs.",
+        "examples": [
+            "agentx workflow-inspect .agentx/runs/workflow-memory.json --json",
+            "agentx workflow-inspect .agentx/runs/workflow-memory.json --field resume_command",
+        ],
+        "schemas": ["agentx.workflow_artifact.v1"],
+        "jsonl_event": "workflow_inspect",
+        "risk": "GREEN - read-only local artifact inspection",
+    },
+    {
+        "command": "agentx workflow-resume",
+        "usage": "agentx workflow-resume PATH --dry-run --json",
+        "description": "Build or execute the generated workflow-run rerun command from a saved workflow-run artifact.",
+        "examples": [
+            "agentx workflow-resume .agentx/runs/workflow-memory.json --dry-run --json",
+            "agentx workflow-resume .agentx/runs/workflow-memory.json --workflow-execute --dry-run --json",
+        ],
+        "schemas": ["agentx.workflow_resume.v1"],
+        "jsonl_event": "workflow_resume",
+        "risk": "GREEN with --dry-run; YELLOW with --execute because it runs the generated command",
+    },
+    {
         "command": "agentx models",
         "usage": "agentx models --json",
         "description": "List models for the selected backend.",

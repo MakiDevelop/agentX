@@ -63,6 +63,8 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx workflows --json` | `agentx.workflow_catalog.v1` | `workflows` |
 | `agentx workflow-plan --json` | `agentx.workflow_plan.v1` | `workflow_plan` |
 | `agentx workflow-run --json` | `agentx.workflow_run.v1` | `workflow_run` |
+| `agentx workflow-inspect --json` | `agentx.workflow_artifact.v1` | `workflow_inspect` |
+| `agentx workflow-resume --json` | `agentx.workflow_resume.v1` | `workflow_resume` |
 | `agentx version --json` | no `schema` key | `version` |
 | `agentx backends --json` | no `schema` key | `backends` |
 | `agentx models --json` | backend-specific catalog payload | `models` |
@@ -1319,6 +1321,70 @@ Required stable keys:
 
 `--fail-on-blocker` prints the same payload first and exits `1` when `blockers`
 is non-empty or execution stops at a gate/failure.
+
+## Workflow Artifact Payload
+
+`agentx workflow-inspect PATH --json` emits `agentx.workflow_artifact.v1`.
+
+This command reads a saved `agentx.workflow_run.v1` JSON or JSONL artifact and
+builds a deterministic rerun command. It preserves known workflow inputs from
+the embedded plan and inserts `<PLACEHOLDER>` values for still-missing inputs.
+It is read-only and does not execute the generated command.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.workflow_artifact.v1`. |
+| `source` | string | Input artifact path or `-` for stdin. |
+| `payload_schema` | string | Original payload schema, currently `agentx.workflow_run.v1`. |
+| `query` | string | Workflow name or alias from the original run. |
+| `ok` | boolean | Original workflow-run `ok` value. |
+| `execute` | boolean | Whether the original workflow-run executed commands. |
+| `workflow_execute` | boolean | Whether the generated rerun command includes `workflow-run --execute`. |
+| `allow_yellow_gates` | boolean | Whether the generated rerun command includes `--allow-yellow-gates`. |
+| `approval_reason` | string or null | Approval reason included in the generated rerun command. |
+| `workspace` | string or null | Workspace recorded in the original artifact. |
+| `stopped_at` | object or null | Original workflow-run stop reason. |
+| `blockers` | array of string | Original workflow-run blockers. |
+| `warnings` | array of string | Original workflow-run warnings. |
+| `inputs` | object | Known workflow inputs from the embedded plan. |
+| `inputs_required` | array of object | Original plan inputs still required at run time. |
+| `missing_inputs` | array of object | Required inputs not present in `inputs`. |
+| `resume_ready` | boolean | True when the generated command has no placeholder inputs. |
+| `resume_command` | string | Shell-quoted `agentx workflow-run ...` command. |
+| `resume_argv` | array of string | Tokenized rerun command. |
+| `ready_commands` | array of string | Embedded plan ready commands, if any. |
+| `next_commands` | array of string | Original workflow-run next commands. |
+| `approval_receipt_count` | integer | Number of approval receipts in the artifact. |
+| `recommended_command` | string | Same generated rerun command for simple runners. |
+| `recommended_kind` | string | `workflow_run_resume` or `fill_workflow_inputs`. |
+| `recommended_risk` | string | `GREEN` unless the generated command includes workflow execution. |
+
+`--field FIELD` extracts one top-level field. `--fail-on-blocker` exits `1`
+when `resume_ready=false`.
+
+## Workflow Resume Payload
+
+`agentx workflow-resume PATH --dry-run --json` emits
+`agentx.workflow_resume.v1`.
+
+This command converts a workflow-run artifact into the generated rerun command.
+It is dry-run oriented by default. `--execute` runs the generated command and is
+rejected until all placeholder inputs are filled.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.workflow_resume.v1`. |
+| `source` | string | Input artifact path or `-` for stdin. |
+| `ok` | boolean | True when the generated command is ready to run. |
+| `query` | string | Workflow name or alias. |
+| `command` | string | Shell-quoted generated command. |
+| `argv` | array of string | Tokenized generated command. |
+| `blockers` | array of string | `resume_inputs_required` when placeholders remain. |
+| `missing_inputs` | array of object | Required inputs not present in the artifact. |
 
 ## Stability Tests
 

@@ -115,6 +115,7 @@
 - [x] `agentx workflow-run NAME --execute --allow-yellow-gates --approval-reason TEXT --json` 可在明確理由下執行 YELLOW workflow gate 並輸出 `approval_receipts`；RED / blocker 仍不可越過。
 - [x] `agentx workflow-run NAME --result-output PATH --json` 可把 dry-run / execute 結果保存成 workspace-safe JSON/JSONL artifact，拒絕覆蓋既有檔案或寫到 workspace 外。
 - [x] `agentx artifacts` / `agentx next` / `agentx inspect` 會發現 workflow-run 單檔 artifact，輸出 latest workflow-run query/ok/stopped signals，讓 runner 能接上上一輪 workflow 結果。
+- [x] `agentx workflow-inspect PATH --json` / `agentx workflow-resume PATH --dry-run --json` 可把 workflow-run artifact 轉成 rerun command，保留已知 input 並標示缺失 placeholder。
 - [x] `agentx next --json` / `agentx inspect --json` 會把 AMH handoff 與 ACE council `workflow-run` previews 納入 recommendations，且不覆蓋 denied approval、dirty gate、artifact handoff、active task 等高優先級建議。
 - [x] `agentx inspect --json` 會內嵌 `verify_command_plans`，把每個預設 verify command 轉成 `agentx.command_plan.v1`，讓 runner 一次取得可執行檢查與 command policy posture。
 - [x] `agentx inspect --json` 會內嵌 `instructions`（`agentx.local_instructions.v1`）與 top-level instruction signals，讓 runner 一次取得 repo-local AGENTX/AGENTS/CLAUDE 規則狀態。

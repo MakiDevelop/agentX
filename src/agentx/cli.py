@@ -1407,6 +1407,9 @@ def _agentx_cli_risk_from_argv(capability: dict[str, object], argv: list[str]) -
     if command == "agentx workflow-run":
         risk = "YELLOW" if "--execute" in argv else "GREEN"
         return risk, risk == "YELLOW"
+    if command == "agentx workflow-resume":
+        risk = "YELLOW" if "--execute" in argv else "GREEN"
+        return risk, risk == "YELLOW"
     risk = _risk_label_from_capability(capability)
     return risk, risk == "YELLOW"
 
@@ -5619,6 +5622,175 @@ def handoff_resume_command_payload(payload: dict[str, object]) -> dict[str, obje
     }
 
 
+def load_workflow_run_payload_source(source: str) -> dict[str, object]:
+    payload = load_headless_payload_source(source)
+    if payload.get("schema") != "agentx.workflow_run.v1":
+        raise typer.BadParameter("payload schema must be agentx.workflow_run.v1")
+    return payload
+
+
+def workflow_run_artifact_inputs(payload: dict[str, object]) -> dict[str, str]:
+    plan = payload.get("plan")
+    if not isinstance(plan, dict):
+        return {}
+    inputs = plan.get("inputs")
+    if not isinstance(inputs, dict):
+        return {}
+    return {str(key): str(value) for key, value in inputs.items()}
+
+
+def workflow_run_artifact_inputs_required(payload: dict[str, object]) -> list[dict[str, object]]:
+    plan = payload.get("plan")
+    if not isinstance(plan, dict):
+        return []
+    required = plan.get("inputs_required")
+    if not isinstance(required, list):
+        return []
+    return [dict(item) for item in required if isinstance(item, dict)]
+
+
+def workflow_run_artifact_resume_argv(
+    payload: dict[str, object],
+    *,
+    workflow_execute: bool = False,
+    allow_yellow_gates: bool = False,
+    approval_reason: str | None = None,
+    result_output: str | None = None,
+    resume_output_format: str = "json",
+) -> tuple[list[str], list[dict[str, object]]]:
+    query = str(payload.get("query") or "").strip()
+    if not query:
+        raise typer.BadParameter("workflow-run payload missing query")
+
+    normalized_output_format = resume_output_format.strip().lower()
+    if normalized_output_format not in {"json", "jsonl"}:
+        raise typer.BadParameter("resume output format must be one of: json, jsonl")
+
+    argv = ["agentx", "workflow-run", query]
+    workspace = str(payload.get("workspace") or "").strip()
+    if workspace:
+        argv.extend(["--workspace", workspace])
+    inputs = workflow_run_artifact_inputs(payload)
+    for key, value in sorted(inputs.items()):
+        argv.extend(["--input", f"{key}={value}"])
+
+    missing_inputs: list[dict[str, object]] = []
+    for item in workflow_run_artifact_inputs_required(payload):
+        placeholder = str(item.get("placeholder") or "").strip()
+        if not placeholder or placeholder in inputs:
+            continue
+        missing_inputs.append(item)
+        argv.extend(["--input", f"{placeholder}=<{placeholder}>"])
+
+    if workflow_execute:
+        argv.append("--execute")
+    if allow_yellow_gates:
+        argv.append("--allow-yellow-gates")
+    if approval_reason:
+        argv.extend(["--approval-reason", approval_reason])
+    if result_output:
+        argv.extend(["--result-output", result_output])
+    if normalized_output_format == "json":
+        argv.append("--json")
+    else:
+        argv.extend(["--output-format", "jsonl"])
+    return argv, missing_inputs
+
+
+def inspect_workflow_run_artifact_payload(
+    payload: dict[str, object],
+    *,
+    source: str,
+    workflow_execute: bool = False,
+    allow_yellow_gates: bool = False,
+    approval_reason: str | None = None,
+    result_output: str | None = None,
+    resume_output_format: str = "json",
+) -> dict[str, object]:
+    argv, missing_inputs = workflow_run_artifact_resume_argv(
+        payload,
+        workflow_execute=workflow_execute,
+        allow_yellow_gates=allow_yellow_gates,
+        approval_reason=approval_reason,
+        result_output=result_output,
+        resume_output_format=resume_output_format,
+    )
+    plan = payload.get("plan")
+    plan_data = dict(plan) if isinstance(plan, dict) else {}
+    stopped_at = payload.get("stopped_at")
+    blockers = payload.get("blockers")
+    warnings = payload.get("warnings")
+    approval_receipts = payload.get("approval_receipts")
+    resume_ready = not missing_inputs
+    return {
+        "schema": "agentx.workflow_artifact.v1",
+        "source": source,
+        "payload_schema": payload.get("schema"),
+        "query": payload.get("query"),
+        "ok": payload.get("ok"),
+        "execute": payload.get("execute"),
+        "workflow_execute": workflow_execute,
+        "allow_yellow_gates": allow_yellow_gates,
+        "approval_reason": approval_reason,
+        "workspace": payload.get("workspace"),
+        "stopped_at": stopped_at if isinstance(stopped_at, dict) else None,
+        "blockers": list(blockers) if isinstance(blockers, list) else [],
+        "warnings": list(warnings) if isinstance(warnings, list) else [],
+        "inputs": workflow_run_artifact_inputs(payload),
+        "inputs_required": workflow_run_artifact_inputs_required(payload),
+        "missing_inputs": missing_inputs,
+        "resume_ready": resume_ready,
+        "resume_command": shlex.join(argv),
+        "resume_argv": argv,
+        "ready_commands": list(plan_data.get("ready_commands") or []),
+        "next_commands": list(payload.get("next_commands") or []),
+        "approval_receipt_count": len(approval_receipts) if isinstance(approval_receipts, list) else 0,
+        "recommended_command": shlex.join(argv),
+        "recommended_kind": "workflow_run_resume" if resume_ready else "fill_workflow_inputs",
+        "recommended_risk": "YELLOW" if workflow_execute else "GREEN",
+    }
+
+
+def format_workflow_artifact_plain(payload: dict[str, object]) -> str:
+    lines = [
+        f"query: {payload.get('query')}",
+        f"ok: {str(payload.get('ok')).lower()}",
+        f"resume_ready: {str(payload.get('resume_ready')).lower()}",
+        f"stopped_at: {payload.get('stopped_at')}",
+        f"resume_command: {payload.get('resume_command')}",
+    ]
+    for title, key in [
+        ("blockers", "blockers"),
+        ("missing_inputs", "missing_inputs"),
+        ("next_commands", "next_commands"),
+    ]:
+        lines.append(f"{title}:")
+        values = payload.get(key)
+        if isinstance(values, list) and values:
+            lines.extend(f"- {value}" for value in values)
+        else:
+            lines.append("- (none)")
+    return "\n".join(lines)
+
+
+def workflow_resume_command_payload(payload: dict[str, object]) -> dict[str, object]:
+    command = str(payload.get("resume_command") or "")
+    try:
+        argv = shlex.split(command) if command else []
+    except ValueError as exc:
+        raise typer.BadParameter(f"workflow resume command is not shell-parseable: {exc}") from exc
+    return {
+        "schema": "agentx.workflow_resume.v1",
+        "source": payload.get("source"),
+        "ok": bool(payload.get("resume_ready")),
+        "query": payload.get("query"),
+        "command": command,
+        "argv": argv,
+        "blockers": [] if payload.get("resume_ready") else ["resume_inputs_required"],
+        "missing_inputs": payload.get("missing_inputs") if isinstance(payload.get("missing_inputs"), list) else [],
+    }
+
+
 def handoff_inspect_exit_code(payload: dict[str, object], *, use_payload_exit_code: bool) -> int:
     if not use_payload_exit_code:
         return 0
@@ -7107,6 +7279,92 @@ def workflow_run_command(
     print_workflow_run_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     blocked = bool(payload.get("blockers") or payload.get("stopped_at"))
     raise typer.Exit(code=1 if fail_on_blocker and blocked else 0)
+
+
+@app.command("workflow-inspect")
+def workflow_inspect_command(
+    source: str = typer.Argument(..., help="Workflow-run JSON/JSONL artifact file to inspect, or '-' for stdin."),
+    workflow_execute: bool = typer.Option(False, "--workflow-execute", help="Generate a resume command that includes workflow-run --execute."),
+    allow_yellow_gates: bool = typer.Option(False, "--allow-yellow-gates", help="Include --allow-yellow-gates in the generated resume command."),
+    approval_reason: str | None = typer.Option(None, "--approval-reason", help="Include an approval reason in the generated resume command."),
+    result_output: str | None = typer.Option(None, "--result-output", help="Include a fresh workflow-run --result-output path in the generated resume command."),
+    resume_output_format: str = typer.Option("json", "--resume-output-format", help="Generated resume command output format: json or jsonl."),
+    field: str | None = typer.Option(None, "--field", help="Print one field, e.g. resume_command or missing_inputs."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when resume inputs are still required."),
+) -> None:
+    """Inspect a saved workflow-run artifact and build a rerun command."""
+    payload = inspect_workflow_run_artifact_payload(
+        load_workflow_run_payload_source(source),
+        source=source,
+        workflow_execute=workflow_execute,
+        allow_yellow_gates=allow_yellow_gates,
+        approval_reason=approval_reason,
+        result_output=result_output,
+        resume_output_format=resume_output_format,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    if field:
+        field_payload = handoff_inspect_field_payload(payload, field)
+        if structured_format != "plain":
+            print_structured_payload(field_payload, output_format=structured_format, event="workflow_inspect_field")
+        else:
+            sys.stdout.write(format_handoff_inspect_field_plain(field_payload))
+        raise typer.Exit(code=1 if fail_on_blocker and not payload.get("resume_ready") else 0)
+    if structured_format != "plain":
+        print_structured_payload(payload, output_format=structured_format, event="workflow_inspect")
+    else:
+        sys.stdout.write(format_workflow_artifact_plain(payload))
+    raise typer.Exit(code=1 if fail_on_blocker and not payload.get("resume_ready") else 0)
+
+
+@app.command("workflow-resume")
+def workflow_resume_command(
+    source: str = typer.Argument(..., help="Workflow-run JSON/JSONL artifact file to resume, or '-' for stdin."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print the generated workflow-run argv instead of executing it."),
+    execute: bool = typer.Option(False, "--execute", help="Execute the generated workflow-run command."),
+    workflow_execute: bool = typer.Option(False, "--workflow-execute", help="Generate a resume command that includes workflow-run --execute."),
+    allow_yellow_gates: bool = typer.Option(False, "--allow-yellow-gates", help="Include --allow-yellow-gates in the generated workflow-run command."),
+    approval_reason: str | None = typer.Option(None, "--approval-reason", help="Include an approval reason in the generated workflow-run command."),
+    result_output: str | None = typer.Option(None, "--result-output", help="Include a fresh workflow-run --result-output path in the generated command."),
+    resume_output_format: str = typer.Option("json", "--resume-output-format", help="Generated workflow-run output format: json or jsonl."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Print or execute the rerun command from a saved workflow-run artifact."""
+    inspect_payload = inspect_workflow_run_artifact_payload(
+        load_workflow_run_payload_source(source),
+        source=source,
+        workflow_execute=workflow_execute,
+        allow_yellow_gates=allow_yellow_gates,
+        approval_reason=approval_reason,
+        result_output=result_output,
+        resume_output_format=resume_output_format,
+    )
+    payload = workflow_resume_command_payload(inspect_payload)
+    structured_format = structured_output_format(json_output, output_format)
+    if execute and dry_run:
+        raise typer.BadParameter("--execute cannot be combined with --dry-run")
+    if execute and payload.get("ok") is not True:
+        raise typer.BadParameter("workflow resume inputs are required before --execute")
+    if execute:
+        completed = subprocess.run(
+            list(payload["argv"]),  # type: ignore[arg-type]
+            cwd=Path.cwd(),
+            text=True,
+            check=False,
+        )
+        raise typer.Exit(code=completed.returncode)
+    if structured_format != "plain":
+        print_structured_payload(
+            payload,
+            output_format=structured_format,
+            event="workflow_resume_dry_run" if dry_run else "workflow_resume",
+        )
+    else:
+        sys.stdout.write(format_handoff_inspect_field_plain({"value": payload.get("command")}))
+    raise typer.Exit(code=0 if payload.get("ok") is True else 1)
 
 
 @app.command("tools")
