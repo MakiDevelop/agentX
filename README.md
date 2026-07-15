@@ -156,6 +156,7 @@ agentx infra vps --json
 agentx ace-init 2026-07-15-agentx-ace --goal "Add ACE support" --json
 agentx ace-init 2026-07-15-agentx-ace --goal "Add ACE support" --write --json
 agentx ace-append 2026-07-15-agentx-ace finding "Gemini found no blocker" --json
+agentx ace-briefing 2026-07-15-agentx-ace --agent gemini --role Reviewer --task "Review manifest findings" --json
 agentx models --backend llama_cpp --base-url http://127.0.0.1:8081
 agentx --version
 agentx version --json
@@ -225,7 +226,8 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `agentx infra --json` 會輸出 `agentx.infrastructure_context.v1`，讓外部 runner 可在 SSH/deploy/cross-machine 前 read-only 載入專案地圖、資源地圖、家庭 AI 設施與 VPS 地圖；它不授權遠端操作。
 `agentx ace-init SESSION --goal GOAL --json` 會輸出 `agentx.ace_session.v1`，預覽 ACE session `_manifest.md`；加 `--write` 才會建立 `~/Documents/agent-council/SESSION/_manifest.md`，用於多代理 file-based 協作。
 `agentx ace-append SESSION SECTION TEXT --json` 會輸出 `agentx.ace_append.v1`，把一筆 routing / sub-task / finding / decision / question 追加到既有 ACE `_manifest.md`。
-`--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、capabilities、inspect、diff、patch-check、command-plan、review、commit-plan、gate、next、tool-plan、infra、ace-init、ace-append、config、sessions、artifacts、handoff-inspect、handoff-resume、approvals、traces、tasks、task-update、verify、status、doctor、commands、workflows、tools、models 會分別使用 `dry_run`、`version`、`backends`、`capabilities`、`inspect`、`diff`、`patch_check`、`command_plan`、`review`、`commit_plan`、`gate`、`next`、`tool_plan`、`infra`、`ace_init`、`ace_append`、`config`、`sessions`、`artifacts`、`handoff_inspect`、`handoff_resume`、`approvals`、`traces`、`tasks`、`task_update`、`verify`、`status`、`doctor`、`commands`、`workflows`、`tools`、`models` event。
+`agentx ace-briefing SESSION --agent AGENT --json` 會輸出 `agentx.ace_briefing.v1`，從既有 ACE `_manifest.md` 產生單一 agent 的 scoped briefing；加 `--write` 才會寫入 session 目錄。
+`--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、capabilities、inspect、diff、patch-check、command-plan、review、commit-plan、gate、next、tool-plan、infra、ace-init、ace-append、ace-briefing、config、sessions、artifacts、handoff-inspect、handoff-resume、approvals、traces、tasks、task-update、verify、status、doctor、commands、workflows、tools、models 會分別使用 `dry_run`、`version`、`backends`、`capabilities`、`inspect`、`diff`、`patch_check`、`command_plan`、`review`、`commit_plan`、`gate`、`next`、`tool_plan`、`infra`、`ace_init`、`ace_append`、`ace_briefing`、`config`、`sessions`、`artifacts`、`handoff_inspect`、`handoff_resume`、`approvals`、`traces`、`tasks`、`task_update`、`verify`、`status`、`doctor`、`commands`、`workflows`、`tools`、`models` event。
 `--result-output PATH` 可把同一份 result payload 寫成 workspace 內 artifact，plain stdout 時預設寫 JSON，`--output-format jsonl` 時寫 JSONL event；路徑拒絕 workspace escape 與覆蓋既有檔案。需要 artifact 格式和 stdout 格式分開時，可用 `--result-output-format auto|json|jsonl`。
 `--handoff-briefing-output PATH` 可在同一輪 headless run 結束時直接寫出 Markdown 接手檔；路徑同樣限制在 workspace 內、拒絕覆寫，且不可與 `--session-output` / `--result-output` 指到同一檔案。
 `--artifact-dir DIR` 是 runner-friendly preset，會在 workspace 內一次產生 `session.session.jsonl`、`result.json`（或 `result.jsonl`）與 `handoff.md`；它和個別 artifact output option 互斥，且會拒絕覆寫標準檔名。

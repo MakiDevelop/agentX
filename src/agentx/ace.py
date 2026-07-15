@@ -7,8 +7,10 @@ from pathlib import Path
 
 ACE_SCHEMA = "agentx.ace_session.v1"
 ACE_APPEND_SCHEMA = "agentx.ace_append.v1"
+ACE_BRIEFING_SCHEMA = "agentx.ace_briefing.v1"
 DEFAULT_ACE_ROOT = Path.home() / "Documents" / "agent-council"
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
+AGENT_SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$")
 ACE_APPEND_SECTIONS = {
     "routing": "ROUTING DECISIONS",
     "sub-task": "SUB-TASKS",
@@ -41,6 +43,17 @@ def ace_session_paths(session_id: str, *, root: str | Path | None = None) -> tup
     if root_path != session_dir and root_path not in session_dir.parents:
         raise ValueError("session_dir_escapes_root")
     return session_dir, session_dir / "_manifest.md"
+
+
+def validate_ace_agent_slug(agent: str) -> str:
+    normalized = agent.strip()
+    if not normalized:
+        raise ValueError("agent_required")
+    if "/" in normalized or "\\" in normalized or normalized in {".", ".."}:
+        raise ValueError("agent_must_not_contain_path_separators")
+    if not AGENT_SLUG_RE.fullmatch(normalized):
+        raise ValueError("agent_contains_unsupported_characters")
+    return normalized
 
 
 def render_ace_manifest(
@@ -260,5 +273,138 @@ def ace_append_payload(
             "agentx next --json"
             if ok
             else "fix ACE append blockers, then rerun agentx ace-append SESSION SECTION TEXT --json"
+        ],
+    }
+
+
+def render_ace_briefing(
+    *,
+    session_id: str,
+    agent: str,
+    role: str,
+    task: str,
+    manifest: str,
+    constraints: str = "",
+) -> str:
+    return "\n".join(
+        [
+            f"# ACE Briefing: {agent}",
+            "",
+            f"- Session: {session_id}",
+            f"- Role: {role.strip() or 'Contributor'}",
+            "",
+            "## Task",
+            "",
+            task.strip() or "Read the manifest and propose the next concrete contribution.",
+            "",
+            "## Constraints",
+            "",
+            constraints.strip() or "- Treat `_manifest.md` as the shared in-flight state.",
+            "- Do not overwrite other agents' raw answers; append new findings instead.",
+            "- Return blockers, dissent, and confidence explicitly.",
+            "",
+            "## Manifest Snapshot",
+            "",
+            manifest.strip(),
+            "",
+        ]
+    )
+
+
+def ace_briefing_payload(
+    *,
+    session_id: str,
+    agent: str,
+    role: str = "Contributor",
+    task: str = "",
+    constraints: str = "",
+    root: str | Path | None = None,
+    output: str | None = None,
+    write: bool = False,
+) -> dict[str, object]:
+    blockers: list[str] = []
+    warnings: list[str] = []
+    session_dir: Path | None = None
+    manifest_path: Path | None = None
+    briefing_path: Path | None = None
+    manifest = ""
+    briefing = ""
+
+    try:
+        normalized_id = validate_ace_session_id(session_id)
+        session_dir, manifest_path = ace_session_paths(normalized_id, root=root)
+    except ValueError as exc:
+        normalized_id = session_id.strip()
+        blockers.append(str(exc))
+
+    try:
+        agent_slug = validate_ace_agent_slug(agent)
+    except ValueError as exc:
+        agent_slug = agent.strip()
+        blockers.append(str(exc))
+
+    if manifest_path is not None:
+        if not manifest_path.exists():
+            blockers.append("manifest_not_found")
+        else:
+            manifest = manifest_path.read_text(encoding="utf-8")
+
+    if session_dir is not None and not blockers:
+        output_name = output.strip() if output else f"briefing-{agent_slug}.md"
+        if "/" in output_name or "\\" in output_name or output_name in {"", ".", ".."}:
+            blockers.append("output_must_be_session_relative_filename")
+        else:
+            briefing_path = (session_dir / output_name).resolve()
+            if session_dir != briefing_path.parent:
+                blockers.append("output_escapes_session_dir")
+
+    if not blockers:
+        briefing = render_ace_briefing(
+            session_id=normalized_id,
+            agent=agent_slug,
+            role=role,
+            task=task,
+            constraints=constraints,
+            manifest=manifest,
+        )
+        if write:
+            if briefing_path is None:
+                blockers.append("briefing_path_unresolved")
+            elif briefing_path.exists():
+                blockers.append("briefing_already_exists")
+            else:
+                briefing_path.write_text(briefing, encoding="utf-8")
+        else:
+            warnings.append("dry_run_no_files_written")
+
+    ok = not blockers
+    return {
+        "schema": ACE_BRIEFING_SCHEMA,
+        "ok": ok,
+        "write": write,
+        "session_id": normalized_id,
+        "agent": agent_slug,
+        "role": role,
+        "root": str(resolve_ace_root(root)),
+        "session_dir": str(session_dir) if session_dir else None,
+        "manifest_path": str(manifest_path) if manifest_path else None,
+        "briefing_path": str(briefing_path) if briefing_path else None,
+        "briefing_exists": bool(briefing_path.exists()) if briefing_path else False,
+        "blockers": blockers,
+        "warnings": warnings,
+        "briefing": briefing,
+        "recommended_command": f"agentx ace-briefing {normalized_id} --agent {agent_slug} --write --json"
+        if ok and not write
+        else "agentx next --json"
+        if ok
+        else "fix ACE briefing blockers, then rerun agentx ace-briefing SESSION --agent AGENT --json",
+        "recommended_kind": "ace_briefing_write" if ok and not write else "next" if ok else "fix_ace_briefing_blockers",
+        "recommended_risk": "YELLOW" if ok and not write else "GREEN" if ok else "UNKNOWN",
+        "next_commands": [
+            f"agentx ace-briefing {normalized_id} --agent {agent_slug} --write --json"
+            if ok and not write
+            else "agentx next --json"
+            if ok
+            else "fix ACE briefing blockers, then rerun agentx ace-briefing SESSION --agent AGENT --json"
         ],
     }

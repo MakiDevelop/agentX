@@ -344,6 +344,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "YELLOW - writes local ACE manifest files",
     },
     {
+        "command": "agentx ace-briefing",
+        "usage": "agentx ace-briefing SESSION --agent AGENT --json",
+        "description": "Preview or write a scoped briefing file for one agent from an ACE manifest.",
+        "examples": [
+            "agentx ace-briefing 2026-07-15-agentx-ace --agent gemini --role Reviewer --task 'Review the proposal' --json",
+            "agentx ace-briefing 2026-07-15-agentx-ace --agent grok --role Implementer --write --json",
+        ],
+        "schemas": ["agentx.ace_briefing.v1"],
+        "jsonl_event": "ace_briefing",
+        "risk": "GREEN by default; YELLOW with --write because it creates local ACE briefing files",
+    },
+    {
         "command": "agentx workflows",
         "usage": "agentx workflows [QUERY] --json",
         "description": "List practical workflow recipes for headless, audit, and commit flows.",

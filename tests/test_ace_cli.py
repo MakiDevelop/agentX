@@ -2,7 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
-from agentx.ace import ace_append_payload, ace_init_payload
+from agentx.ace import ace_append_payload, ace_briefing_payload, ace_init_payload
 from agentx.cli import app
 
 
@@ -209,3 +209,135 @@ def test_ace_append_blocks_unknown_section(tmp_path) -> None:  # noqa: ANN001
     payload = json.loads(result.output)
     assert payload["ok"] is False
     assert payload["blockers"] == ["unknown_section"]
+
+
+def test_ace_briefing_payload_dry_run_includes_manifest_snapshot(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+    ace_append_payload(
+        session_id="session-1",
+        section="finding",
+        text="Gemini found no blocker",
+        root=tmp_path,
+        agent="gemini",
+    )
+
+    payload = ace_briefing_payload(
+        session_id="session-1",
+        agent="grok",
+        role="Implementer",
+        task="Implement the accepted decision",
+        root=tmp_path,
+    )
+
+    assert payload["schema"] == "agentx.ace_briefing.v1"
+    assert payload["ok"] is True
+    assert payload["write"] is False
+    assert payload["warnings"] == ["dry_run_no_files_written"]
+    assert "ACE Briefing: grok" in payload["briefing"]
+    assert "Role: Implementer" in payload["briefing"]
+    assert "Implement the accepted decision" in payload["briefing"]
+    assert "Gemini found no blocker" in payload["briefing"]
+    assert not (tmp_path / "session-1" / "briefing-grok.md").exists()
+
+
+def test_ace_briefing_payload_write_creates_default_briefing(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+
+    payload = ace_briefing_payload(
+        session_id="session-1",
+        agent="gemini",
+        role="Reviewer",
+        task="Review current findings",
+        root=tmp_path,
+        write=True,
+    )
+
+    briefing = tmp_path / "session-1" / "briefing-gemini.md"
+    assert payload["ok"] is True
+    assert payload["briefing_exists"] is True
+    assert briefing.exists()
+    text = briefing.read_text(encoding="utf-8")
+    assert "# ACE Briefing: gemini" in text
+    assert "Review current findings" in text
+
+
+def test_ace_briefing_cli_outputs_jsonl_event(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "ace-briefing",
+            "session-1",
+            "--agent",
+            "codex",
+            "--role",
+            "Architect",
+            "--root",
+            str(tmp_path),
+            "--output-format",
+            "jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    assert envelope["event"] == "ace_briefing"
+    assert envelope["data"]["schema"] == "agentx.ace_briefing.v1"
+    assert envelope["data"]["agent"] == "codex"
+    assert envelope["data"]["write"] is False
+
+
+def test_ace_briefing_blocks_missing_manifest(tmp_path) -> None:  # noqa: ANN001
+    payload = ace_briefing_payload(
+        session_id="session-1",
+        agent="gemini",
+        root=tmp_path,
+    )
+
+    assert payload["ok"] is False
+    assert payload["blockers"] == ["manifest_not_found"]
+
+
+def test_ace_briefing_blocks_output_path_escape(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "ace-briefing",
+            "session-1",
+            "--agent",
+            "gemini",
+            "--output",
+            "../bad.md",
+            "--root",
+            str(tmp_path),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["blockers"] == ["output_must_be_session_relative_filename"]

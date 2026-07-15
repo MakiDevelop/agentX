@@ -45,6 +45,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx infra --json` | `agentx.infrastructure_context.v1` | `infra` |
 | `agentx ace-init --json` | `agentx.ace_session.v1` | `ace_init` |
 | `agentx ace-append --json` | `agentx.ace_append.v1` | `ace_append` |
+| `agentx ace-briefing --json` | `agentx.ace_briefing.v1` | `ace_briefing` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx task-update --json` | `agentx.task_update.v1` | `task_update` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
@@ -492,6 +493,39 @@ Required stable keys:
 | `manifest` | string | Updated manifest content when ok, otherwise best-effort current content. |
 | `recommended_command` | string | First suggested follow-up command for simple runners. |
 | `recommended_kind` | string | `next` when ok, otherwise `fix_ace_append_blockers`. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `next_commands` | array of string | Suggested follow-up commands. |
+
+## ACE Briefing Payload
+
+`agentx ace-briefing SESSION --agent AGENT --json` emits
+`agentx.ace_briefing.v1`.
+
+This command creates a scoped briefing from an existing ACE `_manifest.md` for a
+single target agent. By default it is a dry-run and writes nothing. Add
+`--write` to create `briefing-AGENT.md` or pass `--output FILENAME` to choose a
+different filename inside the ACE session directory.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.ace_briefing.v1`. |
+| `ok` | boolean | True when the briefing preview or write succeeded. |
+| `write` | boolean | True when `--write` was requested. |
+| `session_id` | string | Validated session id / directory name. |
+| `agent` | string | Validated target agent slug. |
+| `role` | string | Role included in the briefing. |
+| `root` | string | Resolved ACE root directory. |
+| `session_dir` | string or null | Resolved session directory. |
+| `manifest_path` | string or null | Resolved `_manifest.md` path. |
+| `briefing_path` | string or null | Resolved briefing output path. |
+| `briefing_exists` | boolean | Whether the briefing file exists after the operation. |
+| `blockers` | array of string | Machine-readable blockers such as `manifest_not_found`, `briefing_already_exists`, or unsafe output errors. |
+| `warnings` | array of string | Non-blocking diagnostics such as `dry_run_no_files_written`. |
+| `briefing` | string | Rendered briefing markdown. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | `ace_briefing_write`, `next`, or `fix_ace_briefing_blockers`. |
 | `recommended_risk` | string | Risk label for the recommended follow-up. |
 | `next_commands` | array of string | Suggested follow-up commands. |
 

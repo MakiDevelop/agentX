@@ -27,7 +27,7 @@ from rich.text import Text
 
 from agentx import cli_runtime_handlers as _runtime_handlers
 from agentx import cli_slash_shims as _slash_shims
-from agentx.ace import ace_append_payload, ace_init_payload
+from agentx.ace import ace_append_payload, ace_briefing_payload, ace_init_payload
 from agentx.approval import ApprovalMode, ApprovalPolicy, approval_decision_source, normalize_approval_mode
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from agentx.config import Settings
@@ -663,6 +663,29 @@ def print_ace_append_payload(
     else:
         console.print(
             "[red]ACE append blocked: "
+            f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
+        )
+    console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
+
+
+def print_ace_briefing_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output or jsonl_output:
+        output_format = "jsonl" if jsonl_output else "json"
+        print_structured_payload(payload, output_format=output_format, event="ace_briefing")
+        return
+    if payload.get("ok"):
+        console.print(f"[green]ACE briefing ready: {payload.get('agent')}[/green]")
+        console.print(f"[dim]briefing={payload.get('briefing_path') or '-'}[/dim]")
+        if not payload.get("write"):
+            console.print("[yellow]dry-run only; add --write to create the briefing file[/yellow]")
+    else:
+        console.print(
+            "[red]ACE briefing blocked: "
             f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
         )
     console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
@@ -6291,6 +6314,35 @@ def ace_append_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_ace_append_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=0 if payload.get("ok") else 1)
+
+
+@app.command("ace-briefing")
+def ace_briefing_command(
+    session_id: str = typer.Argument(..., help="ACE session id."),
+    agent: str = typer.Option(..., "--agent", help="Agent slug, used in briefing metadata and default filename."),
+    role: str = typer.Option("Contributor", "--role", help="Role assigned to the target agent."),
+    task: str = typer.Option("", "--task", help="Concrete task for the target agent."),
+    constraints: str = typer.Option("", "--constraints", help="Extra constraints for the target agent."),
+    output: str | None = typer.Option(None, "--output", help="Briefing filename inside the ACE session directory."),
+    root: str | None = typer.Option(None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."),
+    write: bool = typer.Option(False, "--write", help="Create the briefing file inside the ACE session directory."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Create or preview a scoped briefing from an ACE manifest."""
+    payload = ace_briefing_payload(
+        session_id=session_id,
+        agent=agent,
+        role=role,
+        task=task,
+        constraints=constraints,
+        root=root,
+        output=output,
+        write=write,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_ace_briefing_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 
