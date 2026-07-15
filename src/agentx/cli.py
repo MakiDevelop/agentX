@@ -4136,6 +4136,8 @@ def gate_payload(
         warnings.append("doctor_skipped")
     elif doctor.get("ok") is not True:
         blockers.append("doctor_failed")
+    else:
+        warnings.extend(str(item) for item in doctor.get("warnings", []) if item)
 
     if approvals is None:
         warnings.append("approvals_skipped")
@@ -4739,6 +4741,7 @@ def doctor_payload_from_checks(
     *,
     settings: Settings,
     live_probes: bool,
+    workflow_artifact_health: dict[str, object] | None = None,
 ) -> dict[str, object]:
     normalized = [
         {
@@ -4748,13 +4751,51 @@ def doctor_payload_from_checks(
         }
         for name, ok, detail in checks
     ]
+    health = workflow_artifact_health or workflow_artifact_health_payload(settings)
+    health_warnings = [str(item) for item in health.get("warnings", [])] if isinstance(health, dict) else []
     return {
         "schema": "agentx.doctor.v1",
         "workspace": str(settings.workspace),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "live_probes": live_probes,
-        "ok": all(item["ok"] for item in normalized),
+        "ok": all(item["ok"] for item in normalized) and (not isinstance(health, dict) or health.get("ok") is True),
+        "warnings": health_warnings,
         "checks": normalized,
+        "workflow_artifact_health": health,
+    }
+
+
+def workflow_artifact_health_payload(settings: Settings) -> dict[str, object]:
+    artifacts = artifacts_payload(settings, root=".agentx/runs", limit=1)
+    chain = artifacts.get("workflow_chain") if isinstance(artifacts.get("workflow_chain"), dict) else None
+    if chain is None:
+        return {
+            "schema": "agentx.workflow_artifact_health.v1",
+            "ok": True,
+            "status": "no_workflow_artifact",
+            "warnings": [],
+            "latest_artifact": None,
+            "next_result_output": None,
+            "recommended_command": artifacts.get("recommended_command"),
+            "recommended_kind": artifacts.get("recommended_kind"),
+        }
+    status = str(chain.get("status") or "unknown")
+    warnings = ["workflow_artifact_needs_inspect"] if status == "needs_inspect" else []
+    return {
+        "schema": "agentx.workflow_artifact_health.v1",
+        "ok": status in {"ready", "needs_inspect"},
+        "status": status,
+        "warnings": warnings,
+        "latest_artifact": chain.get("latest_artifact"),
+        "latest_query": chain.get("latest_query"),
+        "latest_ok": chain.get("latest_ok"),
+        "latest_stopped": chain.get("latest_stopped"),
+        "blocker_count": chain.get("blocker_count"),
+        "missing_input_count": chain.get("missing_input_count"),
+        "resume_ready": chain.get("resume_ready"),
+        "next_result_output": chain.get("next_result_output"),
+        "recommended_command": chain.get("recommended_command"),
+        "recommended_kind": chain.get("recommended_kind"),
     }
 
 

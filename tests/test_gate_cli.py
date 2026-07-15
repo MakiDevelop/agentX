@@ -45,7 +45,9 @@ def _doctor(workspace: Path, *, ok: bool = True) -> dict[str, object]:
         "generated_at": "2026-01-02T00:00:00",
         "live_probes": False,
         "ok": ok,
+        "warnings": [],
         "checks": [{"name": "git", "ok": ok, "detail": "ok" if ok else "failed"}],
+        "workflow_artifact_health": {"schema": "agentx.workflow_artifact_health.v1", "status": "no_workflow_artifact"},
     }
 
 
@@ -113,6 +115,30 @@ def test_gate_payload_blocks_when_doctor_fails(tmp_path: Path, monkeypatch) -> N
     assert payload["ok"] is False
     assert payload["commit_ready"] is False
     assert payload["blockers"] == ["doctor_failed"]
+
+
+def test_gate_payload_carries_doctor_workflow_artifact_warning(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("agentx.cli.review_payload", lambda settings, timeout=120, run_verify=True: _review(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.doctor_payload",
+        lambda settings, live_probes=False: {
+            **_doctor(settings.workspace),
+            "warnings": ["workflow_artifact_needs_inspect"],
+            "workflow_artifact_health": {
+                "schema": "agentx.workflow_artifact_health.v1",
+                "status": "needs_inspect",
+                "recommended_command": "agentx workflow-inspect .agentx/runs/workflow-memory.json --json",
+            },
+        },
+    )
+    monkeypatch.setattr("agentx.cli.approvals_payload", lambda settings, session="latest", limit=20: _approvals(settings.workspace))
+
+    payload = gate_payload(Settings(workspace=tmp_path))
+
+    assert payload["ok"] is True
+    assert payload["commit_ready"] is True
+    assert payload["warnings"] == ["workflow_artifact_needs_inspect"]
+    assert payload["doctor"]["workflow_artifact_health"]["status"] == "needs_inspect"  # type: ignore[index]
 
 
 def test_gate_payload_blocks_when_approval_was_denied(tmp_path: Path, monkeypatch) -> None:

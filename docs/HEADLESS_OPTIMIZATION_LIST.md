@@ -120,6 +120,7 @@
 - [x] `agentx workflow-inspect PATH --result-output auto --json` / `agentx workflow-resume PATH --result-output auto --dry-run --json` 可自動挑選下一個 `.agentx/runs/*-next.json/jsonl` artifact path，讓 workflow recovery 可連續保存。
 - [x] `agentx next --json` / `agentx inspect --json` 對 latest workflow-run artifact 會直接推薦 `workflow-inspect` 或 `workflow-resume --result-output auto --dry-run`，讓 ready workflow artifact 續跑時自動接上下一個 `.agentx/runs/*-next.json/jsonl` artifact。
 - [x] `agentx artifacts --json` 會提供 `workflow_chain`，`agentx next --json` / `agentx inspect --json` 會提升 latest workflow chain status 與 next result output signal，讓 runner 不必自行推導 artifact chain 健康狀態。
+- [x] `agentx doctor --static --json` 會提供 `workflow_artifact_health`，`agentx gate --json` 會彙整 workflow artifact warning，讓提交 / 接手 gate 能看到 stale 或 needs-inspect 的 workflow chain。
 - [x] `agentx next --json` / `agentx inspect --json` 會把 AMH handoff 與 ACE council `workflow-run` previews 納入 recommendations，且不覆蓋 denied approval、dirty gate、artifact handoff、active task 等高優先級建議。
 - [x] `agentx inspect --json` 會內嵌 `verify_command_plans`，把每個預設 verify command 轉成 `agentx.command_plan.v1`，讓 runner 一次取得可執行檢查與 command policy posture。
 - [x] `agentx inspect --json` 會內嵌 `instructions`（`agentx.local_instructions.v1`）與 top-level instruction signals，讓 runner 一次取得 repo-local AGENTX/AGENTS/CLAUDE 規則狀態。

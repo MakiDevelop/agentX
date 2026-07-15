@@ -386,7 +386,7 @@ Required stable keys:
 | `recommended_kind` | string | Machine-readable kind for `recommended_command`, such as `commit_plan`, `gate`, or `fix_blockers`. |
 | `recommended_risk` | string | Risk label for the recommended follow-up. |
 | `blockers` | array of string | Machine-readable blockers such as `verify_failed`, `doctor_failed`, or `approval_denied`. |
-| `warnings` | array of string | Non-blocking warnings such as `verify_skipped`, `doctor_skipped`, `approvals_skipped`, or `approvals_unavailable`. |
+| `warnings` | array of string | Non-blocking warnings such as `verify_skipped`, `doctor_skipped`, `approvals_skipped`, `approvals_unavailable`, or doctor health warnings such as `workflow_artifact_needs_inspect`. |
 | `review` | object | Embedded `agentx.review.v1`. |
 | `doctor` | object or null | Embedded static `agentx.doctor.v1`, or null when `--skip-doctor` was used. |
 | `approvals` | object or null | Embedded latest `agentx.approvals.v1`, or null when `--skip-approvals` was used. |
@@ -1130,7 +1130,9 @@ Required stable keys:
 | `generated_at` | string | Local ISO timestamp. |
 | `live_probes` | boolean | False when `--static` skips Ollama and memory probes. |
 | `ok` | boolean | True only when every check is ok. |
+| `warnings` | array of string | Non-blocking health warnings, including `workflow_artifact_needs_inspect` when the latest workflow-run artifact should be inspected before continuing the chain. |
 | `checks` | array of object | Normalized health checks. |
+| `workflow_artifact_health` | object | Read-only summary of latest workflow-run artifact chain health. |
 
 Each check has:
 
@@ -1139,6 +1141,25 @@ Each check has:
 | `name` | string |
 | `ok` | boolean |
 | `detail` | string |
+
+`workflow_artifact_health` includes:
+
+| Key | Type |
+|-----|------|
+| `schema` | string: `agentx.workflow_artifact_health.v1` |
+| `ok` | boolean |
+| `status` | string: `no_workflow_artifact`, `ready`, or `needs_inspect` |
+| `warnings` | array of string |
+| `latest_artifact` | string or null |
+| `latest_query` | string or null |
+| `latest_ok` | boolean or null |
+| `latest_stopped` | object or null |
+| `blocker_count` | integer or null |
+| `missing_input_count` | integer or null |
+| `resume_ready` | boolean or null |
+| `next_result_output` | string or null |
+| `recommended_command` | string or null |
+| `recommended_kind` | string or null |
 
 `agentx doctor --fail-on-error` still prints the payload first. It exits `1`
 when `ok=false`; otherwise it exits `0`. Without `--fail-on-error`, doctor exits
