@@ -6,8 +6,17 @@ from pathlib import Path
 
 
 ACE_SCHEMA = "agentx.ace_session.v1"
+ACE_APPEND_SCHEMA = "agentx.ace_append.v1"
 DEFAULT_ACE_ROOT = Path.home() / "Documents" / "agent-council"
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
+ACE_APPEND_SECTIONS = {
+    "routing": "ROUTING DECISIONS",
+    "sub-task": "SUB-TASKS",
+    "subtask": "SUB-TASKS",
+    "finding": "CUMULATIVE FINDINGS",
+    "decision": "DECISIONS TAKEN",
+    "question": "OPEN QUESTIONS",
+}
 
 
 def validate_ace_session_id(session_id: str) -> str:
@@ -144,5 +153,112 @@ def ace_init_payload(
             else "agentx next --json"
             if ok
             else "fix ACE blockers, then rerun agentx ace-init SESSION --goal GOAL --json"
+        ],
+    }
+
+
+def resolve_ace_append_section(section: str) -> tuple[str, str]:
+    raw = section.strip().lower()
+    if not raw:
+        raise ValueError("section_required")
+    heading = ACE_APPEND_SECTIONS.get(raw)
+    if heading is None:
+        raise ValueError("unknown_section")
+    return raw, heading
+
+
+def format_ace_append_entry(section: str, text: str, *, agent: str = "agentx") -> str:
+    timestamp = datetime.now().isoformat(timespec="seconds")
+    cleaned = " ".join(text.strip().split())
+    if not cleaned:
+        raise ValueError("text_required")
+    return f"- {timestamp} [{agent}] {cleaned}"
+
+
+def append_to_manifest_section(content: str, heading: str, entry: str) -> str:
+    marker = f"## {heading}"
+    lines = content.splitlines()
+    try:
+        index = next(i for i, line in enumerate(lines) if line.strip() == marker)
+    except StopIteration as exc:
+        raise ValueError("manifest_section_missing") from exc
+
+    insert_at = index + 1
+    while insert_at < len(lines) and lines[insert_at].strip() == "":
+        insert_at += 1
+    lines.insert(insert_at, entry)
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def ace_append_payload(
+    *,
+    session_id: str,
+    section: str,
+    text: str,
+    root: str | Path | None = None,
+    agent: str = "agentx",
+) -> dict[str, object]:
+    blockers: list[str] = []
+    warnings: list[str] = []
+    session_dir: Path | None = None
+    manifest_path: Path | None = None
+    entry = ""
+    raw_section = section.strip().lower()
+    heading = ""
+
+    try:
+        normalized_id = validate_ace_session_id(session_id)
+        session_dir, manifest_path = ace_session_paths(normalized_id, root=root)
+    except ValueError as exc:
+        normalized_id = session_id.strip()
+        blockers.append(str(exc))
+
+    try:
+        raw_section, heading = resolve_ace_append_section(section)
+    except ValueError as exc:
+        blockers.append(str(exc))
+
+    try:
+        entry = format_ace_append_entry(section, text, agent=agent)
+    except ValueError as exc:
+        blockers.append(str(exc))
+
+    before = ""
+    after = ""
+    if manifest_path is not None:
+        if not manifest_path.exists():
+            blockers.append("manifest_not_found")
+        elif not blockers:
+            before = manifest_path.read_text(encoding="utf-8")
+            try:
+                after = append_to_manifest_section(before, heading, entry)
+            except ValueError as exc:
+                blockers.append(str(exc))
+            else:
+                manifest_path.write_text(after, encoding="utf-8")
+    ok = not blockers
+    return {
+        "schema": ACE_APPEND_SCHEMA,
+        "ok": ok,
+        "session_id": normalized_id,
+        "root": str(resolve_ace_root(root)),
+        "session_dir": str(session_dir) if session_dir else None,
+        "manifest_path": str(manifest_path) if manifest_path else None,
+        "section": raw_section,
+        "heading": heading,
+        "entry": entry,
+        "manifest_exists": bool(manifest_path.exists()) if manifest_path else False,
+        "blockers": blockers,
+        "warnings": warnings,
+        "manifest": after if ok else before,
+        "recommended_command": "agentx next --json"
+        if ok
+        else "fix ACE append blockers, then rerun agentx ace-append SESSION SECTION TEXT --json",
+        "recommended_kind": "next" if ok else "fix_ace_append_blockers",
+        "recommended_risk": "GREEN" if ok else "UNKNOWN",
+        "next_commands": [
+            "agentx next --json"
+            if ok
+            else "fix ACE append blockers, then rerun agentx ace-append SESSION SECTION TEXT --json"
         ],
     }

@@ -44,6 +44,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx next --json` | `agentx.next.v1` | `next` |
 | `agentx infra --json` | `agentx.infrastructure_context.v1` | `infra` |
 | `agentx ace-init --json` | `agentx.ace_session.v1` | `ace_init` |
+| `agentx ace-append --json` | `agentx.ace_append.v1` | `ace_append` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx task-update --json` | `agentx.task_update.v1` | `task_update` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
@@ -462,6 +463,37 @@ Required stable keys:
 The generated manifest includes the ACE-required sections `GOAL`,
 `ROUTING DECISIONS`, `SUB-TASKS`, `CUMULATIVE FINDINGS`, `DECISIONS TAKEN`,
 and `OPEN QUESTIONS`.
+
+## ACE Append Payload
+
+`agentx ace-append SESSION SECTION TEXT --json` emits `agentx.ace_append.v1`.
+
+This command appends one timestamped bullet to an existing ACE `_manifest.md`.
+Supported `SECTION` values are `routing`, `sub-task` / `subtask`, `finding`,
+`decision`, and `question`. It does not create a session; use `agentx ace-init
+SESSION --goal GOAL --write` first.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.ace_append.v1`. |
+| `ok` | boolean | True when the manifest was updated. |
+| `session_id` | string | Validated session id / directory name. |
+| `root` | string | Resolved ACE root directory. |
+| `session_dir` | string or null | Resolved session directory. |
+| `manifest_path` | string or null | Resolved `_manifest.md` path. |
+| `section` | string | Normalized requested section. |
+| `heading` | string | Manifest heading that received the entry. |
+| `entry` | string | Timestamped bullet appended to the manifest. |
+| `manifest_exists` | boolean | Whether `_manifest.md` exists. |
+| `blockers` | array of string | Machine-readable blockers such as `manifest_not_found`, `unknown_section`, or `manifest_section_missing`. |
+| `warnings` | array of string | Non-blocking diagnostics. |
+| `manifest` | string | Updated manifest content when ok, otherwise best-effort current content. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | `next` when ok, otherwise `fix_ace_append_blockers`. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `next_commands` | array of string | Suggested follow-up commands. |
 
 ## Artifacts Payload
 

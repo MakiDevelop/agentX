@@ -332,6 +332,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN by default; YELLOW with --write because it creates local ACE files",
     },
     {
+        "command": "agentx ace-append",
+        "usage": "agentx ace-append SESSION SECTION TEXT --json",
+        "description": "Append one timestamped entry to an ACE _manifest.md section.",
+        "examples": [
+            "agentx ace-append 2026-07-15-agentx-ace finding 'Gemini found no blocker' --json",
+            "agentx ace-append 2026-07-15-agentx-ace decision 'Use file-based ACE manifest first' --agent codex --json",
+        ],
+        "schemas": ["agentx.ace_append.v1"],
+        "jsonl_event": "ace_append",
+        "risk": "YELLOW - writes local ACE manifest files",
+    },
+    {
         "command": "agentx workflows",
         "usage": "agentx workflows [QUERY] --json",
         "description": "List practical workflow recipes for headless, audit, and commit flows.",

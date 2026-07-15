@@ -2,7 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
-from agentx.ace import ace_init_payload
+from agentx.ace import ace_append_payload, ace_init_payload
 from agentx.cli import app
 
 
@@ -114,3 +114,98 @@ def test_ace_init_cli_write_outputs_json(tmp_path) -> None:  # noqa: ANN001
     assert payload["schema"] == "agentx.ace_session.v1"
     assert payload["ok"] is True
     assert (tmp_path / "session-1" / "_manifest.md").exists()
+
+
+def test_ace_append_payload_updates_manifest_section(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+
+    payload = ace_append_payload(
+        session_id="session-1",
+        section="finding",
+        text="Gemini found no blocker",
+        root=tmp_path,
+        agent="gemini",
+    )
+
+    manifest = tmp_path / "session-1" / "_manifest.md"
+    text = manifest.read_text(encoding="utf-8")
+    assert payload["schema"] == "agentx.ace_append.v1"
+    assert payload["ok"] is True
+    assert payload["heading"] == "CUMULATIVE FINDINGS"
+    assert "[gemini] Gemini found no blocker" in text
+    assert text.index("[gemini] Gemini found no blocker") > text.index("## CUMULATIVE FINDINGS")
+    assert payload["recommended_command"] == "agentx next --json"
+
+
+def test_ace_append_cli_outputs_jsonl_event(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "ace-append",
+            "session-1",
+            "decision",
+            "Use append-only manifest updates",
+            "--root",
+            str(tmp_path),
+            "--output-format",
+            "jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    assert envelope["event"] == "ace_append"
+    assert envelope["data"]["schema"] == "agentx.ace_append.v1"
+    assert envelope["data"]["heading"] == "DECISIONS TAKEN"
+    assert "Use append-only manifest updates" in envelope["data"]["entry"]
+
+
+def test_ace_append_blocks_missing_manifest(tmp_path) -> None:  # noqa: ANN001
+    payload = ace_append_payload(
+        session_id="session-1",
+        section="finding",
+        text="No manifest yet",
+        root=tmp_path,
+    )
+
+    assert payload["ok"] is False
+    assert payload["blockers"] == ["manifest_not_found"]
+
+
+def test_ace_append_blocks_unknown_section(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "ace-append",
+            "session-1",
+            "weird",
+            "No valid target",
+            "--root",
+            str(tmp_path),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["blockers"] == ["unknown_section"]

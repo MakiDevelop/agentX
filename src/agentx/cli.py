@@ -27,7 +27,7 @@ from rich.text import Text
 
 from agentx import cli_runtime_handlers as _runtime_handlers
 from agentx import cli_slash_shims as _slash_shims
-from agentx.ace import ace_init_payload
+from agentx.ace import ace_append_payload, ace_init_payload
 from agentx.approval import ApprovalMode, ApprovalPolicy, approval_decision_source, normalize_approval_mode
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from agentx.config import Settings
@@ -642,6 +642,27 @@ def print_ace_init_payload(
     else:
         console.print(
             "[red]ACE init blocked: "
+            f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
+        )
+    console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
+
+
+def print_ace_append_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output or jsonl_output:
+        output_format = "jsonl" if jsonl_output else "json"
+        print_structured_payload(payload, output_format=output_format, event="ace_append")
+        return
+    if payload.get("ok"):
+        console.print(f"[green]ACE manifest updated: {payload.get('heading')}[/green]")
+        console.print(f"[dim]manifest={payload.get('manifest_path') or '-'}[/dim]")
+    else:
+        console.print(
+            "[red]ACE append blocked: "
             f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
         )
     console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
@@ -6247,6 +6268,29 @@ def ace_init_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_ace_init_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=0 if payload.get("ok") else 1)
+
+
+@app.command("ace-append")
+def ace_append_command(
+    session_id: str = typer.Argument(..., help="ACE session id."),
+    section: str = typer.Argument(..., help="Section: routing, sub-task, finding, decision, or question."),
+    text: str = typer.Argument(..., help="Text to append as a timestamped manifest bullet."),
+    root: str | None = typer.Option(None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."),
+    agent: str = typer.Option("agentx", "--agent", help="Agent label to include in the appended entry."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Append one entry to an ACE session manifest."""
+    payload = ace_append_payload(
+        session_id=session_id,
+        section=section,
+        text=text,
+        root=root,
+        agent=agent,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_ace_append_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 
