@@ -2061,12 +2061,14 @@ def resolve_artifacts_root(workspace: Path, value: str) -> Path:
         target = resolve_inside_workspace(workspace, value)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
-    if target.exists() and not target.is_dir():
+    if target.exists() and not (target.is_dir() or target.is_file()):
         raise typer.BadParameter(f"artifacts root is not a directory: {value}")
     return target
 
 
 def artifact_mtime(path: Path) -> float:
+    if path.is_file():
+        return path.stat().st_mtime
     candidates = [path / "result.json", path / "result.jsonl", path / "session.session.jsonl", path / "handoff.md"]
     existing = [candidate.stat().st_mtime for candidate in candidates if candidate.exists()]
     if existing:
@@ -2104,6 +2106,17 @@ def artifact_handoff_summary(result_payload: dict[str, object] | None) -> dict[s
     return dict(handoff) if isinstance(handoff, dict) else {}
 
 
+def artifact_payload_schema(payload: dict[str, object] | None) -> str | None:
+    if not payload:
+        return None
+    value = payload.get("schema") or payload.get("schema_version")
+    return str(value) if value else None
+
+
+def is_workflow_run_artifact_payload(payload: dict[str, object] | None) -> bool:
+    return artifact_payload_schema(payload) == "agentx.workflow_run.v1"
+
+
 def artifact_bundle_overview(workspace: Path, bundle: Path) -> dict[str, object]:
     result_json = bundle / "result.json"
     result_jsonl = bundle / "result.jsonl"
@@ -2122,6 +2135,7 @@ def artifact_bundle_overview(workspace: Path, bundle: Path) -> dict[str, object]
     result_payload = read_artifact_result_payload(result_path) if result_path else None
     handoff = artifact_handoff_summary(result_payload)
     return {
+        "artifact_type": "headless_bundle",
         "name": bundle.name,
         "path": str(bundle),
         "relative_path": relative_workspace_path(workspace, bundle),
@@ -2137,11 +2151,62 @@ def artifact_bundle_overview(workspace: Path, bundle: Path) -> dict[str, object]
         "has_handoff": handoff_path.is_file(),
         "handoff_path": str(handoff_path) if handoff_path.is_file() else None,
         "handoff_relative_path": relative_workspace_path(workspace, handoff_path) if handoff_path.is_file() else None,
+        "schema": artifact_payload_schema(result_payload),
         "schema_version": result_payload.get("schema_version") if result_payload else None,
         "termination": result_payload.get("termination") if result_payload else None,
         "exit_code": result_payload.get("exit_code") if result_payload else None,
         "needs_handoff": bool(handoff.get("needs_handoff", False)),
         "resume_command": handoff.get("resume_command"),
+        "workflow_query": None,
+        "workflow_ok": None,
+        "workflow_execute": None,
+        "workflow_stopped_at": None,
+        "workflow_blockers": [],
+        "approval_receipt_count": 0,
+    }
+
+
+def artifact_result_format(path: Path) -> str | None:
+    if path.suffix == ".jsonl":
+        return "jsonl"
+    if path.suffix == ".json":
+        return "json"
+    return None
+
+
+def artifact_workflow_run_overview(workspace: Path, path: Path) -> dict[str, object]:
+    payload = read_artifact_result_payload(path) or {}
+    approval_receipts = payload.get("approval_receipts")
+    blockers = payload.get("blockers")
+    return {
+        "artifact_type": "workflow_run",
+        "name": path.name,
+        "path": str(path),
+        "relative_path": relative_workspace_path(workspace, path),
+        "updated_at": artifact_mtime_text(path),
+        "has_result": True,
+        "result_path": str(path),
+        "result_relative_path": relative_workspace_path(workspace, path),
+        "result_format": artifact_result_format(path),
+        "result_conflict": False,
+        "has_session": False,
+        "session_path": None,
+        "session_relative_path": None,
+        "has_handoff": False,
+        "handoff_path": None,
+        "handoff_relative_path": None,
+        "schema": artifact_payload_schema(payload),
+        "schema_version": None,
+        "termination": None,
+        "exit_code": None,
+        "needs_handoff": False,
+        "resume_command": None,
+        "workflow_query": payload.get("query"),
+        "workflow_ok": payload.get("ok"),
+        "workflow_execute": payload.get("execute"),
+        "workflow_stopped_at": payload.get("stopped_at"),
+        "workflow_blockers": list(blockers) if isinstance(blockers, list) else [],
+        "approval_receipt_count": len(approval_receipts) if isinstance(approval_receipts, list) else 0,
     }
 
 
@@ -2152,10 +2217,32 @@ def is_artifact_bundle(path: Path) -> bool:
     )
 
 
-def list_artifact_bundles(root: Path) -> list[Path]:
+def is_workflow_run_artifact_file(path: Path) -> bool:
+    if not path.is_file() or artifact_result_format(path) is None:
+        return False
+    return is_workflow_run_artifact_payload(read_artifact_result_payload(path))
+
+
+def is_artifact_entry(path: Path) -> bool:
+    if path.is_dir():
+        return is_artifact_bundle(path)
+    return is_workflow_run_artifact_file(path)
+
+
+def artifact_entry_overview(workspace: Path, path: Path) -> dict[str, object]:
+    if path.is_file():
+        return artifact_workflow_run_overview(workspace, path)
+    return artifact_bundle_overview(workspace, path)
+
+
+def list_artifact_entries(root: Path) -> list[Path]:
+    if is_artifact_entry(root):
+        return [root]
     if is_artifact_bundle(root):
         return [root]
-    return [path for path in root.iterdir() if path.is_dir() and is_artifact_bundle(path)]
+    if not root.is_dir():
+        return []
+    return [path for path in root.iterdir() if is_artifact_entry(path)]
 
 
 def artifacts_payload(settings: Settings, *, root: str = ".agentx/runs", limit: int = 20) -> dict[str, object]:
@@ -2177,8 +2264,8 @@ def artifacts_payload(settings: Settings, *, root: str = ".agentx/runs", limit: 
             "detail": f"artifacts root not found: {root}",
         }
 
-    bundles = sorted(list_artifact_bundles(artifact_root), key=artifact_mtime, reverse=True)[:limit]
-    artifacts = [artifact_bundle_overview(settings.workspace, bundle) for bundle in bundles]
+    entries = sorted(list_artifact_entries(artifact_root), key=artifact_mtime, reverse=True)[:limit]
+    artifacts = [artifact_entry_overview(settings.workspace, entry) for entry in entries]
     latest_artifact = dict(artifacts[0]) if artifacts else None
     recommended_command, recommended_kind, recommended_risk = _artifacts_recommendation(latest_artifact)
     return {
@@ -4099,6 +4186,7 @@ def next_payload(
     artifact_items = list(artifacts.get("artifacts", [])) if artifacts.get("ok") is True else []
     latest_artifact = dict(artifact_items[0]) if artifact_items else None
     latest_needs_handoff = bool(latest_artifact and latest_artifact.get("needs_handoff") is True)
+    latest_artifact_type = str(latest_artifact.get("artifact_type")) if latest_artifact else None
 
     if denied_count > 0:
         recommendations.append(
@@ -4137,6 +4225,22 @@ def next_payload(
                 "kind": "handoff_resume",
                 "command": f"agentx handoff-resume {shlex.quote(artifact_path)} --dry-run",
                 "reason": "latest artifact reports needs_handoff=true",
+                "risk": "GREEN",
+            }
+        )
+    if (
+        not dirty
+        and latest_artifact is not None
+        and latest_artifact_type == "workflow_run"
+        and not latest_needs_handoff
+    ):
+        artifact_path = str(latest_artifact.get("relative_path") or latest_artifact.get("path") or artifacts_root)
+        recommendations.append(
+            {
+                "rank": len(recommendations) + 1,
+                "kind": "workflow_run_artifact",
+                "command": f"agentx artifacts {shlex.quote(artifact_path)} --json",
+                "reason": "latest artifact is a workflow-run result; inspect it before choosing the next workflow step",
                 "risk": "GREEN",
             }
         )
@@ -4206,7 +4310,11 @@ def next_payload(
             "active_task_ids": active_task_ids,
             "primary_active_task": primary_active_task,
             "artifact_count": artifacts.get("count", 0),
+            "latest_artifact_type": latest_artifact_type,
             "latest_artifact_needs_handoff": latest_needs_handoff,
+            "latest_workflow_run_query": latest_artifact.get("workflow_query") if latest_artifact_type == "workflow_run" else None,
+            "latest_workflow_run_ok": latest_artifact.get("workflow_ok") if latest_artifact_type == "workflow_run" else None,
+            "latest_workflow_run_stopped": bool(latest_artifact.get("workflow_stopped_at")) if latest_artifact_type == "workflow_run" else False,
             "denied_approval_count": denied_count,
             "approvals_available": approvals.get("ok") is True,
             "workflow_recommendation_count": 2,

@@ -61,6 +61,23 @@ def _write_artifact_bundle(root: Path, name: str, *, needs_handoff: bool = True,
     return bundle
 
 
+def _write_workflow_run_artifact(root: Path, name: str, *, ok: bool = False, mtime: int = 10) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    target = root / name
+    payload = {
+        "schema": "agentx.workflow_run.v1",
+        "query": "memory",
+        "ok": ok,
+        "execute": False,
+        "stopped_at": {"reason": "missing_inputs"} if not ok else None,
+        "blockers": ["missing_inputs"] if not ok else [],
+        "approval_receipts": [],
+    }
+    target.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    os.utime(target, (mtime, mtime))
+    return target
+
+
 def test_next_payload_recommends_gate_for_dirty_workspace(tmp_path: Path) -> None:
     target = _git_repo(tmp_path)
     target.write_text("one\ntwo\n", encoding="utf-8")
@@ -104,6 +121,22 @@ def test_next_payload_recommends_handoff_resume_for_latest_artifact(tmp_path: Pa
     assert payload["recommendations"][0]["kind"] == "handoff_resume"  # type: ignore[index]
     assert payload["recommended_command"] == "agentx handoff-resume .agentx/runs/latest --dry-run"
     assert payload["recommended_kind"] == "handoff_resume"
+
+
+def test_next_payload_recommends_latest_workflow_run_artifact_when_clean(tmp_path: Path) -> None:
+    _git_repo(tmp_path)
+    _write_workflow_run_artifact(tmp_path / ".agentx" / "runs", "workflow-memory.json", ok=False)
+
+    payload = next_payload(Settings(workspace=tmp_path))
+
+    assert payload["signals"]["latest_artifact_type"] == "workflow_run"  # type: ignore[index]
+    assert payload["signals"]["latest_workflow_run_query"] == "memory"  # type: ignore[index]
+    assert payload["signals"]["latest_workflow_run_ok"] is False  # type: ignore[index]
+    assert payload["signals"]["latest_workflow_run_stopped"] is True  # type: ignore[index]
+    assert payload["recommendations"][0]["kind"] == "workflow_run_artifact"  # type: ignore[index]
+    assert payload["recommendations"][0]["command"] == "agentx artifacts .agentx/runs/workflow-memory.json --json"  # type: ignore[index]
+    assert payload["recommended_kind"] == "workflow_run_artifact"
+    assert payload["recommended_risk"] == "GREEN"
 
 
 def test_next_payload_recommends_active_tasks_when_clean(tmp_path: Path) -> None:

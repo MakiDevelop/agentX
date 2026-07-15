@@ -41,6 +41,29 @@ def _write_bundle(root: Path, name: str, *, fmt: str = "json", exit_code: int = 
     return bundle
 
 
+def _write_workflow_run_artifact(root: Path, name: str, *, ok: bool = False, mtime: int = 30) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    target = root / name
+    payload = {
+        "schema": "agentx.workflow_run.v1",
+        "query": "memory",
+        "ok": ok,
+        "execute": False,
+        "stopped_at": {"reason": "side_effect_gate"} if not ok else None,
+        "blockers": [] if ok else ["missing_inputs"],
+        "approval_receipts": [],
+    }
+    if target.suffix == ".jsonl":
+        target.write_text(
+            json.dumps({"event": "workflow_run", "data": payload}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+    else:
+        target.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    os.utime(target, (mtime, mtime))
+    return target
+
+
 def test_artifacts_payload_lists_bundles_sorted_by_mtime(tmp_path: Path) -> None:
     runs = tmp_path / ".agentx" / "runs"
     _write_bundle(runs, "old", exit_code=0, mtime=10)
@@ -64,6 +87,45 @@ def test_artifacts_payload_lists_bundles_sorted_by_mtime(tmp_path: Path) -> None
     assert payload["recommended_command"] == "agentx handoff-resume .agentx/runs/new --dry-run"
     assert payload["recommended_kind"] == "handoff_resume"
     assert payload["recommended_risk"] == "GREEN"
+
+
+def test_artifacts_payload_lists_workflow_run_artifacts(tmp_path: Path) -> None:
+    runs = tmp_path / ".agentx" / "runs"
+    _write_bundle(runs, "old", exit_code=0, mtime=10)
+    target = _write_workflow_run_artifact(runs, "workflow-memory.jsonl", ok=False, mtime=30)
+
+    payload = artifacts_payload(Settings(workspace=tmp_path), limit=10)
+
+    assert payload["count"] == 2
+    artifact = payload["artifacts"][0]  # type: ignore[index]
+    assert artifact["artifact_type"] == "workflow_run"
+    assert artifact["name"] == "workflow-memory.jsonl"
+    assert artifact["relative_path"] == ".agentx/runs/workflow-memory.jsonl"
+    assert artifact["result_relative_path"] == ".agentx/runs/workflow-memory.jsonl"
+    assert artifact["result_format"] == "jsonl"
+    assert artifact["schema"] == "agentx.workflow_run.v1"
+    assert artifact["workflow_query"] == "memory"
+    assert artifact["workflow_ok"] is False
+    assert artifact["workflow_execute"] is False
+    assert artifact["workflow_stopped_at"] == {"reason": "side_effect_gate"}
+    assert artifact["workflow_blockers"] == ["missing_inputs"]
+    assert artifact["approval_receipt_count"] == 0
+    assert artifact["has_session"] is False
+    assert artifact["has_handoff"] is False
+    assert payload["latest_artifact"]["path"] == str(target)  # type: ignore[index]
+    assert payload["recommended_command"] == "agentx artifacts .agentx/runs/workflow-memory.jsonl --json"
+    assert payload["recommended_kind"] == "inspect_artifact"
+
+
+def test_artifacts_payload_accepts_single_workflow_run_file(tmp_path: Path) -> None:
+    target = _write_workflow_run_artifact(tmp_path / ".agentx" / "runs", "workflow-memory.json")
+
+    payload = artifacts_payload(Settings(workspace=tmp_path), root=".agentx/runs/workflow-memory.json")
+
+    assert payload["count"] == 1
+    assert payload["latest_artifact"]["artifact_type"] == "workflow_run"  # type: ignore[index]
+    assert payload["latest_artifact"]["relative_path"] == ".agentx/runs/workflow-memory.json"  # type: ignore[index]
+    assert payload["latest_artifact"]["path"] == str(target)  # type: ignore[index]
 
 
 def test_artifacts_payload_accepts_single_bundle_dir(tmp_path: Path) -> None:

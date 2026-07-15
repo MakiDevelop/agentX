@@ -27,6 +27,25 @@ def _write_session(path: Path) -> None:
     )
 
 
+def _write_workflow_run_artifact(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "agentx.workflow_run.v1",
+                "query": "ace",
+                "ok": True,
+                "execute": False,
+                "stopped_at": None,
+                "blockers": [],
+                "approval_receipts": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> None:  # noqa: ANN001
     monkeypatch.setenv("AGENTX_MEMORY_HALL_TOKEN", "secret-token")
     _git_init(tmp_path)
@@ -113,6 +132,7 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     _git_init(tmp_path)
     (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
     (tmp_path / "AGENTS.md").write_text("AGENTS_RULE_MARKER", encoding="utf-8")
+    _write_workflow_run_artifact(tmp_path / ".agentx" / "runs" / "workflow-ace.json")
 
     result = CliRunner().invoke(app, ["inspect", "--workspace", str(tmp_path), "--json"])
 
@@ -134,7 +154,12 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["memory_status"]["schema"] == "agentx.memory_status.v1"
     assert payload["memory_status"]["live_probe"] is False
     assert payload["artifacts"]["schema"] == "agentx.artifacts.v1"
+    assert payload["artifacts"]["latest_artifact"]["artifact_type"] == "workflow_run"
     assert payload["next"]["schema"] == "agentx.next.v1"
+    assert payload["signals"]["latest_artifact_type"] == "workflow_run"
+    assert payload["signals"]["latest_workflow_run_query"] == "ace"
+    assert payload["signals"]["latest_workflow_run_ok"] is True
+    assert payload["signals"]["latest_workflow_run_stopped"] is False
     assert payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
     next_kinds = [item["kind"] for item in payload["next"]["recommendations"]]
     assert "memory_handoff_workflow" in next_kinds

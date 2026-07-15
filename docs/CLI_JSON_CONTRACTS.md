@@ -428,7 +428,9 @@ Required stable keys:
 
 `signals` includes `dirty`, `diff_ok`, `active_task_count`,
 `active_task_ids`, `primary_active_task`, `artifact_count`,
-`latest_artifact_needs_handoff`, `denied_approval_count`,
+`latest_artifact_type`, `latest_artifact_needs_handoff`,
+`latest_workflow_run_query`, `latest_workflow_run_ok`,
+`latest_workflow_run_stopped`, `denied_approval_count`,
 `approvals_available`, and `workflow_recommendation_count`.
 `primary_active_task` is the first task from the embedded active `tasks`
 payload, or null when no active tasks exist.
@@ -642,11 +644,12 @@ Required stable keys:
 
 `agentx artifacts --json` emits `agentx.artifacts.v1`.
 
-This is a read-only catalog of saved headless artifact bundles. By default it
-scans `.agentx/runs` inside the active workspace. If the argument itself is a
-bundle directory, it returns that one bundle. A bundle is any directory with at
-least one standard artifact file: `result.json`, `result.jsonl`,
-`session.session.jsonl`, or `handoff.md`.
+This is a read-only catalog of saved runner artifacts. By default it scans
+`.agentx/runs` inside the active workspace. It returns headless artifact bundles
+and standalone `agentx.workflow_run.v1` result files. If the argument itself is
+a bundle directory or workflow-run result file, it returns that one artifact. A
+headless bundle is any directory with at least one standard artifact file:
+`result.json`, `result.jsonl`, `session.session.jsonl`, or `handoff.md`.
 
 Required stable keys:
 
@@ -657,19 +660,20 @@ Required stable keys:
 | `root` | string | Resolved artifact root or bundle directory. |
 | `root_relative_path` | string | Workspace-relative root path when possible. |
 | `ok` | boolean | Whether discovery completed. Missing roots are still `ok=true` with count 0. |
-| `limit` | integer | Maximum number of bundles requested. |
-| `count` | integer | Number of returned bundles. |
+| `limit` | integer | Maximum number of artifacts requested. |
+| `count` | integer | Number of returned artifacts. |
 | `latest_artifact` | object or null | First artifact after sorting by latest artifact mtime. |
 | `recommended_command` | string | First suggested follow-up command for simple runners. |
 | `recommended_kind` | string | `handoff_resume`, `inspect_artifact`, or `headless_bundle`. |
 | `recommended_risk` | string | Risk label for the recommended follow-up. |
-| `artifacts` | array of object | Bundle summaries sorted by latest artifact mtime descending. |
+| `artifacts` | array of object | Artifact summaries sorted by latest artifact mtime descending. |
 | `detail` | string | Empty string or a human-readable note. |
 
 Each artifact object includes:
 
 | Key | Type |
 |-----|------|
+| `artifact_type` | string: `headless_bundle` or `workflow_run` |
 | `name` | string |
 | `path` | string |
 | `relative_path` | string |
@@ -685,11 +689,18 @@ Each artifact object includes:
 | `has_handoff` | boolean |
 | `handoff_path` | string or null |
 | `handoff_relative_path` | string or null |
+| `schema` | string or null |
 | `schema_version` | string or null |
 | `termination` | string or null |
 | `exit_code` | integer or null |
 | `needs_handoff` | boolean |
 | `resume_command` | string or null |
+| `workflow_query` | string or null |
+| `workflow_ok` | boolean or null |
+| `workflow_execute` | boolean or null |
+| `workflow_stopped_at` | object or null |
+| `workflow_blockers` | array of string |
+| `approval_receipt_count` | integer |
 
 ## Config Payload
 
