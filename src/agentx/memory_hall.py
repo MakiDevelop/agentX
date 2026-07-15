@@ -448,12 +448,14 @@ class AmhClient:
             return ["amh"]
         return ["npx", "@chibakuma/agent-memory-hall"]
 
-    def _run_amh(self, *args: str, input_text: str | None = None) -> str:
+    def _run_amh(self, *args: str, input_text: str | None = None, caller_ns: str | None = None) -> str:
         cmd = self._amh_cmd + list(args)
         # Always include --store for any supported store (json, sqlite, postgres, memhall, ...)
         cmd += ["--store", self.store]
         if self.store_path:
             cmd += ["--path", self.store_path]
+        if caller_ns:
+            cmd += ["--caller-ns", caller_ns]
         result = subprocess.run(
             cmd,
             input=input_text.encode() if input_text else None,
@@ -467,7 +469,7 @@ class AmhClient:
 
     def search(self, query: str, namespace: str = "shared", limit: int = 5) -> str:
         # AMH CLI read supports ns filter; we do post-filter for query for simplicity
-        out = self._run_amh("read", "--ns", namespace, "--limit", str(limit))
+        out = self._run_amh("read", "--ns", namespace, "--limit", str(limit), caller_ns=namespace)
         # Simple text filter for query (real AMH would have better search)
         lines = []
         for line in out.splitlines():
@@ -486,8 +488,84 @@ class AmhClient:
             "--ns", namespace,
             "--type", entry_type,
             content,
+            caller_ns=namespace,
         )
         return out.strip()
+
+    def write_aca(
+        self,
+        *,
+        content: str,
+        namespace: str,
+        memory_type: str = "note",
+        source_tier: str = "llm_derived",
+        agent_id: str = "agentx",
+        summary: str | None = None,
+        tags: list[str] | None = None,
+        references: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        created_by: str | None = None,
+        valid_until: str | None = None,
+    ) -> dict[str, Any]:
+        if source_tier not in ACA_SOURCE_TIERS:
+            raise ValueError(f"source_tier must be one of {ACA_SOURCE_TIERS}, got {source_tier}")
+        if memory_type not in ACA_MEMORY_TYPES:
+            raise ValueError(f"memory_type must be one of {ACA_MEMORY_TYPES}, got {memory_type}")
+
+        amh_cli_types = {"fact", "preference", "constraint", "lesson", "risk"}
+        cli_type = memory_type if memory_type in amh_cli_types else "fact"
+        source_ref = metadata.get("source_ref") if metadata else None
+        source_ref = str(source_ref or f"agentx:{datetime.now().strftime('%Y-%m-%d')}")
+        stored_content = content
+        if cli_type != memory_type or summary or tags or references or metadata or created_by or valid_until:
+            envelope = {
+                "content": content,
+                "summary": summary,
+                "tags": tags or ["agentx", f"tier:{source_tier}"],
+                "references": references or [],
+                "metadata": {
+                    "aca_version": "0.1",
+                    "source_tier": source_tier,
+                    "requested_memory_type": memory_type,
+                    "cli_memory_type": cli_type,
+                    "created_by": created_by or agent_id,
+                    **(metadata or {}),
+                },
+            }
+            if valid_until:
+                envelope["valid_until"] = valid_until
+            stored_content = json.dumps(envelope, ensure_ascii=False)
+
+        out = self._run_amh(
+            "write",
+            "--agent", agent_id,
+            "--ns", namespace,
+            "--type", cli_type,
+            "--tier", source_tier,
+            "--source-ref", source_ref,
+            stored_content,
+            caller_ns=namespace,
+        ).strip()
+        try:
+            parsed = json.loads(out)
+        except json.JSONDecodeError:
+            parsed = {"output": out}
+        if isinstance(parsed, dict):
+            parsed.setdefault("status", "ok")
+            parsed.setdefault("output", out)
+            parsed.setdefault("memory_id", parsed.get("id") or parsed.get("memory_id") or "amh-cli")
+            parsed.setdefault("governance_applied", []).append({"rule": "aca_tier", "tier": source_tier})
+            parsed.setdefault("store", self.store)
+            parsed.setdefault("path", self.store_path)
+            return parsed
+        return {
+            "status": "ok",
+            "output": out,
+            "memory_id": "amh-cli",
+            "governance_applied": [{"rule": "aca_tier", "tier": source_tier}],
+            "store": self.store,
+            "path": self.store_path,
+        }
 
     def write_structured(
         self,
@@ -520,6 +598,7 @@ class AmhClient:
             "--ns", namespace,
             "--type", entry_type,
             text,
+            caller_ns=namespace,
         )
         # Return synthetic dict
         return {"status": "ok", "output": out.strip(), "memory_id": "amh-cli"}
@@ -577,7 +656,7 @@ class AmhClient:
         return {"memory_id": entry_id, "note": "AMH CLI get is limited"}
 
     def list_entries(self, namespace: str, entry_type: str | None = None, tags: list[str] | None = None, limit: int = 50) -> list[dict[str, Any]]:
-        out = self._run_amh("read", "--ns", namespace, "--limit", str(limit))
+        out = self._run_amh("read", "--ns", namespace, "--limit", str(limit), caller_ns=namespace)
         return [{"content": line} for line in out.splitlines()[:limit]]
 
 

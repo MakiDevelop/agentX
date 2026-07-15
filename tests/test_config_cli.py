@@ -1,9 +1,12 @@
 import json
+import shutil
 
+import pytest
 from typer.testing import CliRunner
 
 from agentx.cli import app, config_payload
 from agentx.config import Settings
+from agentx.project_config import set_project_config
 
 
 def test_config_payload_uses_safe_token_status(tmp_path, monkeypatch) -> None:  # noqa: ANN001
@@ -213,3 +216,85 @@ def test_memory_write_jsonl_outputs_event(tmp_path, monkeypatch) -> None:  # noq
     assert envelope["event"] == "memory_write"
     assert envelope["data"]["schema"] == "agentx.memory_write.v1"
     assert envelope["data"]["write"] is False
+
+
+def test_memory_amh_local_store_cli_smoke_writes_reads_and_reports_status(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    if shutil.which("amh") is None:
+        pytest.skip("AMH CLI is not installed")
+
+    monkeypatch.delenv("AGENTX_MEMORY_BACKEND", raising=False)
+    monkeypatch.delenv("AGENTX_AMH_STORE", raising=False)
+    monkeypatch.delenv("AGENTX_AMH_PATH", raising=False)
+
+    runner = CliRunner()
+    store_path = tmp_path / ".agentx" / "amh" / "memory.json"
+    namespace = "project:agentx-memory-smoke"
+    content = "isolated AMH local store smoke marker 2026-07-15"
+
+    for key, value in [
+        ("memory_backend", "amh"),
+        ("memory_amh_store", "json"),
+        ("memory_amh_path", str(store_path)),
+        ("namespace", namespace),
+    ]:
+        set_project_config(tmp_path, key, value)
+
+    write_result = runner.invoke(
+        app,
+        [
+            "memory-write",
+            content,
+            "--workspace",
+            str(tmp_path),
+            "--type",
+            "fact",
+            "--tier",
+            "human_confirmed",
+            "--write",
+            "--json",
+        ],
+    )
+    assert write_result.exit_code == 0, write_result.output
+    write_payload = json.loads(write_result.output)
+    assert write_payload["schema"] == "agentx.memory_write.v1"
+    assert write_payload["ok"] is True
+    assert write_payload["write"] is True
+    assert write_payload["namespace"] == namespace
+    assert write_payload["memory_type"] == "fact"
+    assert write_payload["tier"] == "human_confirmed"
+    assert write_payload["memory_result"]["status"] == "ok"
+    assert store_path.exists()
+
+    read_result = runner.invoke(
+        app,
+        [
+            "memory-read",
+            "local store smoke marker",
+            "--workspace",
+            str(tmp_path),
+            "--limit",
+            "5",
+            "--json",
+        ],
+    )
+    assert read_result.exit_code == 0, read_result.output
+    read_payload = json.loads(read_result.output)
+    assert read_payload["schema"] == "agentx.memory_read.v1"
+    assert read_payload["ok"] is True
+    assert read_payload["namespace"] == namespace
+    assert content in read_payload["result"]
+
+    status_result = runner.invoke(app, ["memory-status", "--workspace", str(tmp_path), "--json"])
+    assert status_result.exit_code == 0, status_result.output
+    status_payload = json.loads(status_result.output)
+    assert status_payload["schema"] == "agentx.memory_status.v1"
+    assert status_payload["ok"] is True
+    assert status_payload["memory_backend"] == "amh"
+    assert status_payload["namespace"] == namespace
+    assert status_payload["amh"]["store"] == "json"
+    assert status_payload["amh"]["path"] == str(store_path)
+    assert status_payload["amh"]["path_exists"] is True
+    assert status_payload["recommended_command"] == "agentx inspect --json"
+
+    store_text = store_path.read_text(encoding="utf-8")
+    assert content in store_text

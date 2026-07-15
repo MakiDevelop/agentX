@@ -31,9 +31,13 @@ Evidence:
 - `workflow-run memory --result-output ... --json` can save a workflow artifact.
 - `artifacts`, `next`, `workflow-resume`, `doctor`, and `gate` can continue and observe the AMH workflow artifact chain.
 - AMH dry-run runner smoke is discoverable through `capabilities.runner_smokes`.
+- Isolated AMH local-store write smoke covers `memory-write --write`, `memory-read`, and `memory-status` using a workspace-local JSON store.
+- `AmhClient` passes `--caller-ns <namespace>` for namespaced read/write/list operations, matching AMH namespace isolation.
 
 Evidence:
 - `tests/test_config_cli.py`
+- `tests/test_config_cli.py::test_memory_amh_local_store_cli_smoke_writes_reads_and_reports_status`
+- `tests/test_memory_hall.py`
 - `tests/test_workflows_cli.py::test_memory_workflow_runner_smoke_links_artifact_next_resume_and_gate`
 - `tests/test_capabilities_cli.py`
 - `src/agentx/memory_hall.py`
@@ -65,15 +69,7 @@ Suggested next proof:
 - Add a local fixture repo and an end-to-end headless smoke that runs a small safe task through `agentx -p ... --agent --artifact-dir ... --quiet`, then validates result artifact, transcript/session, diff or task state, `next`, and `gate`.
 - Keep it deterministic and not dependent on a live LLM by using a fake backend if needed.
 
-### Gap 2: Real AMH write path is guarded but not end-to-end smoked
-
-Current AMH runner smokes intentionally stay dry-run. This is correct for default safety, but it means explicit AMH write flows are not proven through a local-store runner chain. ACE write flow is now covered through an isolated temporary-root CLI smoke.
-
-Suggested next proof:
-- Add isolated local-store tests for `memory-write --write` using workspace-local AMH JSON store.
-- Keep RED/external writes out of scope; use temp dirs only.
-
-### Gap 3: Interactive shell and runner JSON surfaces may drift
+### Gap 2: Interactive shell and runner JSON surfaces may drift
 
 The objective compares agentX to CLI agents, but several capabilities exist mainly as top-level JSON commands. Some slash-command parity and interaction-flow parity still need explicit checks.
 
@@ -81,7 +77,7 @@ Suggested next proof:
 - Add parity tests or a matrix linking slash command, top-level CLI command, schema, and risk posture.
 - Start with AMH/ACE, artifacts, next, gate, and command-plan.
 
-### Gap 4: Completion criteria are spread across multiple documents
+### Gap 3: Completion criteria are spread across multiple documents
 
 The current evidence lives across README, CLI contracts, headless optimization list, roadmap, and tests. That is workable, but it makes the original objective hard to audit without re-reading many files.
 
@@ -91,16 +87,17 @@ Suggested next proof:
 
 ## Recommended Next Slice
 
-Implement an isolated AMH local-store write smoke next. It should avoid external memory backends while proving the explicit write path that default dry-run smokes intentionally skip:
+Implement a headless task benchmark next. It should prove a fresh runner can complete a representative engineering task end-to-end without depending on a live LLM:
 
 ```text
-memory-write --write
-→ memory-read
-→ memory-status
+agentx -p ... --agent --artifact-dir ...
+→ result/session artifacts
+→ next
+→ gate
 ```
 
 Acceptance criteria:
-- Uses workspace-local AMH JSON store only.
-- Does not touch the default AMH store or backend service.
-- Verifies written content can be read back, status points at the local store, and recommended commands remain runner-safe.
+- Uses a local fixture workspace only.
+- Uses deterministic fake backend or a no-network mode.
+- Verifies task result, artifact bundle, transcript/session, `next`, and `gate`.
 - Updates `docs/HEADLESS_OPTIMIZATION_LIST.md`.

@@ -220,6 +220,8 @@ class TestAmhClient:
         assert captured["cmd"][0] == "amh"
         assert "--store" in captured["cmd"]
         assert "json" in captured["cmd"]
+        assert "--caller-ns" in captured["cmd"]
+        assert "project:foo" in captured["cmd"]
         # Content appears as a CLI argument (before the --store flags which are appended later)
         assert "test content for write" in captured["cmd"]
 
@@ -337,6 +339,8 @@ class TestAmhClient:
 
             for flag in expected:
                 assert flag in captured["cmd"], f"store={store} missing flag {flag}"
+            assert "--caller-ns" in captured["cmd"]
+            assert "p:storetest" in captured["cmd"]
             # cmd should start with amh + the write args + store flags
             assert captured["cmd"][0] == "amh"
             assert "write" in captured["cmd"]
