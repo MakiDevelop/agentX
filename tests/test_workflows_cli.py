@@ -777,6 +777,51 @@ def test_workflow_resume_execute_rejects_missing_inputs(tmp_path) -> None:  # no
     assert "workflow resume inputs are required" in result.output
 
 
+def test_workflow_resume_execute_uses_artifact_workspace_and_reports_result(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    source = tmp_path / "workflow-memory.json"
+    source.write_text(
+        json.dumps(
+            workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}),
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    calls = []
+
+    def fake_run(argv, **kwargs):  # noqa: ANN001, ANN003
+        calls.append((argv, kwargs))
+        return subprocess.CompletedProcess(argv, 7, stdout="resume stdout\n", stderr="resume stderr\n")
+
+    monkeypatch.setattr("agentx.cli.subprocess.run", fake_run)
+
+    result = CliRunner().invoke(app, ["workflow-resume", str(source), "--execute", "--json"])
+
+    assert result.exit_code == 7, result.output
+    payload = json.loads(result.output)
+    assert payload["schema"] == "agentx.workflow_resume.v1"
+    assert payload["ok"] is True
+    assert payload["executed"] is True
+    assert payload["execution_cwd"] == str(tmp_path.resolve())
+    assert payload["returncode"] == 7
+    assert payload["stdout"] == "resume stdout\n"
+    assert payload["stderr"] == "resume stderr\n"
+    assert calls == [
+        (
+            [
+                "agentx",
+                "workflow-run",
+                "memory",
+                "--workspace",
+                str(tmp_path),
+                "--input",
+                "完成與待辦=完成 AMH 交接",
+                "--json",
+            ],
+            {"cwd": tmp_path.resolve(), "text": True, "check": False, "capture_output": True},
+        )
+    ]
+
+
 def test_workflows_plain_outputs_table() -> None:
     result = CliRunner().invoke(app, ["workflows"])
 

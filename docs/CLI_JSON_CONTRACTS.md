@@ -1430,7 +1430,10 @@ This command converts a workflow-run artifact into the generated rerun command.
 building the command. `--result-output auto` allocates the next available
 `.agentx/runs/*-next.json` or `.jsonl` path for the generated command. It is
 dry-run oriented by default. `--execute` runs the generated command and is
-rejected until all placeholder inputs are filled.
+rejected until all placeholder inputs are filled. When `--execute` is combined
+with JSON/JSONL output, the payload is still emitted after execution and
+includes the child process return code and captured stdout/stderr. Execution
+uses the artifact payload workspace as `cwd` when present.
 
 Required stable keys:
 
@@ -1444,6 +1447,11 @@ Required stable keys:
 | `argv` | array of string | Tokenized generated command. |
 | `blockers` | array of string | `resume_inputs_required` when placeholders remain. |
 | `missing_inputs` | array of object | Required inputs not present in the artifact. |
+| `executed` | boolean | True only when `--execute` ran the generated command. |
+| `execution_cwd` | string or null | Working directory used for the generated command. |
+| `returncode` | integer or null | Child process return code when executed. |
+| `stdout` | string | Captured child stdout when executed. |
+| `stderr` | string | Captured child stderr when executed. |
 
 ## Stability Tests
 

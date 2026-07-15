@@ -118,6 +118,7 @@
 - [x] `agentx workflow-inspect PATH --json` / `agentx workflow-resume PATH --dry-run --json` 可把 workflow-run artifact 轉成 rerun command，保留已知 input 並標示缺失 placeholder。
 - [x] `agentx workflow-inspect PATH --input KEY=VALUE --json` / `agentx workflow-resume PATH --input KEY=VALUE --dry-run --json` 可在 artifact 續跑階段補齊或覆蓋 workflow input，讓 resume command 直接變 ready。
 - [x] `agentx workflow-inspect PATH --result-output auto --json` / `agentx workflow-resume PATH --result-output auto --dry-run --json` 可自動挑選下一個 `.agentx/runs/*-next.json/jsonl` artifact path，讓 workflow recovery 可連續保存。
+- [x] `agentx workflow-resume PATH --execute --json` 會使用 artifact workspace 執行生成命令，並回傳 execution cwd、returncode、stdout/stderr，讓 runner 可機讀續跑結果。
 - [x] `agentx next --json` / `agentx inspect --json` 對 latest workflow-run artifact 會直接推薦 `workflow-inspect` 或 `workflow-resume --result-output auto --dry-run`，讓 ready workflow artifact 續跑時自動接上下一個 `.agentx/runs/*-next.json/jsonl` artifact。
 - [x] `agentx artifacts --json` 會提供 `workflow_chain`，`agentx next --json` / `agentx inspect --json` 會提升 latest workflow chain status 與 next result output signal，讓 runner 不必自行推導 artifact chain 健康狀態。
 - [x] `agentx doctor --static --json` 會提供 `workflow_artifact_health`，`agentx gate --json` 會彙整 workflow artifact warning，讓提交 / 接手 gate 能看到 stale 或 needs-inspect 的 workflow chain。

@@ -5982,7 +5982,41 @@ def workflow_resume_command_payload(payload: dict[str, object]) -> dict[str, obj
         "argv": argv,
         "blockers": [] if payload.get("resume_ready") else ["resume_inputs_required"],
         "missing_inputs": payload.get("missing_inputs") if isinstance(payload.get("missing_inputs"), list) else [],
+        "executed": False,
+        "execution_cwd": None,
+        "returncode": None,
     }
+
+
+def workflow_resume_execution_cwd(inspect_payload: dict[str, object]) -> Path:
+    workspace = str(inspect_payload.get("workspace") or "").strip()
+    if workspace:
+        return Path(workspace).expanduser().resolve()
+    source = str(inspect_payload.get("source") or "").strip()
+    if source and source != "-":
+        return Path(source).expanduser().resolve().parent
+    return Path.cwd()
+
+
+def execute_workflow_resume_payload(payload: dict[str, object], *, cwd: Path) -> dict[str, object]:
+    completed = subprocess.run(
+        list(payload["argv"]),  # type: ignore[arg-type]
+        cwd=cwd,
+        text=True,
+        check=False,
+        capture_output=True,
+    )
+    updated = dict(payload)
+    updated.update(
+        {
+            "executed": True,
+            "execution_cwd": str(cwd),
+            "returncode": completed.returncode,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+        }
+    )
+    return updated
 
 
 def handoff_inspect_exit_code(payload: dict[str, object], *, use_payload_exit_code: bool) -> int:
@@ -7551,13 +7585,15 @@ def workflow_resume_command(
     if execute and payload.get("ok") is not True:
         raise typer.BadParameter("workflow resume inputs are required before --execute")
     if execute:
-        completed = subprocess.run(
-            list(payload["argv"]),  # type: ignore[arg-type]
-            cwd=Path.cwd(),
-            text=True,
-            check=False,
-        )
-        raise typer.Exit(code=completed.returncode)
+        payload = execute_workflow_resume_payload(payload, cwd=workflow_resume_execution_cwd(inspect_payload))
+        if structured_format != "plain":
+            print_structured_payload(payload, output_format=structured_format, event="workflow_resume")
+        else:
+            if payload.get("stdout"):
+                sys.stdout.write(str(payload["stdout"]))
+            if payload.get("stderr"):
+                sys.stderr.write(str(payload["stderr"]))
+        raise typer.Exit(code=int(payload.get("returncode") or 0))
     if structured_format != "plain":
         print_structured_payload(
             payload,
