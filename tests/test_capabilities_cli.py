@@ -51,6 +51,7 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert "agentx memory-read" in commands
     assert "agentx memory-write" in commands
     assert "agentx workflow-plan" in commands
+    assert "agentx workflow-run" in commands
     assert "agentx instructions" in commands
     assert commands["agentx verify"]["schemas"] == ["agentx.verify.v1"]
     assert commands["agentx artifacts"]["schemas"] == ["agentx.artifacts.v1"]
@@ -81,6 +82,8 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert commands["agentx memory-write"]["jsonl_event"] == "memory_write"
     assert commands["agentx workflow-plan"]["schemas"] == ["agentx.workflow_plan.v1"]
     assert commands["agentx workflow-plan"]["jsonl_event"] == "workflow_plan"
+    assert commands["agentx workflow-run"]["schemas"] == ["agentx.workflow_run.v1"]
+    assert commands["agentx workflow-run"]["jsonl_event"] == "workflow_run"
     assert commands["agentx instructions"]["schemas"] == ["agentx.local_instructions.v1"]
     assert commands["agentx instructions"]["jsonl_event"] == "instructions"
     assert commands["agentx approvals"]["jsonl_event"] == "approvals"
@@ -120,6 +123,7 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     memory_read_payload = capabilities_payload("agentx.memory_read.v1")
     memory_write_payload = capabilities_payload("agentx.memory_write.v1")
     workflow_plan_payload = capabilities_payload("agentx.workflow_plan.v1")
+    workflow_run_payload = capabilities_payload("agentx.workflow_run.v1")
     instructions_payload = capabilities_payload("agentx.local_instructions.v1")
 
     assert schema_payload["count"] == 1
@@ -153,6 +157,8 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     assert memory_write_payload["capabilities"][0]["command"] == "agentx memory-write"  # type: ignore[index]
     assert workflow_plan_payload["count"] == 1
     assert workflow_plan_payload["capabilities"][0]["command"] == "agentx workflow-plan"  # type: ignore[index]
+    assert workflow_run_payload["count"] == 1
+    assert workflow_run_payload["capabilities"][0]["command"] == "agentx workflow-run"  # type: ignore[index]
     assert instructions_payload["count"] == 1
     assert instructions_payload["capabilities"][0]["command"] == "agentx instructions"  # type: ignore[index]
 

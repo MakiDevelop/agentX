@@ -403,6 +403,122 @@ def workflow_plan_payload(
     }
 
 
+def workflow_run_payload(
+    query: str,
+    *,
+    workspace: str | Path | None = None,
+    inputs: dict[str, str] | None = None,
+    execute: bool = False,
+    timeout: int = 120,
+) -> dict[str, object]:
+    workspace_path = resolve_headless_workspace(str(workspace)) if workspace else None
+    settings = Settings(workspace=workspace_path)
+    plan = workflow_plan_payload(query, workspace=settings.workspace, inputs=inputs)
+    blockers = [str(item) for item in plan.get("blockers", [])]
+    warnings: list[str] = []
+    executed_steps: list[dict[str, object]] = []
+    stopped_at: dict[str, object] | None = None
+
+    if not execute:
+        warnings.append("dry_run_no_commands_executed")
+    elif blockers:
+        stopped_at = {
+            "reason": "plan_blocked",
+            "blockers": blockers,
+        }
+    else:
+        for step in plan.get("steps", []):
+            step_data = dict(step)
+            if not step_data.get("runnable"):
+                continue
+            command = str(step_data.get("ready_command") or step_data.get("command") or "")
+            command_plan = step_data.get("command_plan")
+            if step_data.get("kind") != "agentx_cli":
+                stopped_at = {
+                    "step_index": step_data.get("index"),
+                    "command": command,
+                    "reason": "non_agentx_cli_step",
+                }
+                break
+            if not isinstance(command_plan, dict):
+                stopped_at = {
+                    "step_index": step_data.get("index"),
+                    "command": command,
+                    "reason": "missing_command_plan",
+                }
+                break
+            if command_plan.get("blockers"):
+                stopped_at = {
+                    "step_index": step_data.get("index"),
+                    "command": command,
+                    "reason": "command_plan_blocked",
+                    "blockers": command_plan.get("blockers"),
+                }
+                break
+            if command_plan.get("risk") != "GREEN" or command_plan.get("approval_required"):
+                stopped_at = {
+                    "step_index": step_data.get("index"),
+                    "command": command,
+                    "reason": "side_effect_gate",
+                    "risk": command_plan.get("risk"),
+                    "approval_required": command_plan.get("approval_required"),
+                }
+                break
+            completed = subprocess.run(
+                shlex.split(command),
+                cwd=settings.workspace,
+                text=True,
+                capture_output=True,
+                timeout=timeout,
+                check=False,
+            )
+            executed_steps.append(
+                {
+                    "step_index": step_data.get("index"),
+                    "command": command,
+                    "returncode": completed.returncode,
+                    "stdout": completed.stdout,
+                    "stderr": completed.stderr,
+                }
+            )
+            if completed.returncode != 0:
+                stopped_at = {
+                    "step_index": step_data.get("index"),
+                    "command": command,
+                    "reason": "command_failed",
+                    "returncode": completed.returncode,
+                }
+                break
+
+    ok = not blockers and stopped_at is None
+    execution_allowed = not blockers and all(
+        dict(step).get("kind") == "agentx_cli"
+        and isinstance(dict(step).get("command_plan"), dict)
+        and dict(dict(step).get("command_plan")).get("risk") == "GREEN"
+        and not dict(dict(step).get("command_plan")).get("approval_required")
+        and not dict(dict(step).get("command_plan")).get("blockers")
+        for step in plan.get("steps", [])
+        if dict(step).get("runnable")
+    )
+    return {
+        "schema": "agentx.workflow_run.v1",
+        "query": str(plan.get("query") or ""),
+        "execute": execute,
+        "ok": ok,
+        "workspace": str(settings.workspace),
+        "plan": plan,
+        "execution_allowed": execution_allowed,
+        "executed_steps": executed_steps,
+        "stopped_at": stopped_at,
+        "blockers": blockers,
+        "warnings": warnings,
+        "recommended_command": str(plan.get("next_commands", [""])[0]) if ok and plan.get("next_commands") else f"agentx workflow-plan {query} --json",
+        "recommended_kind": "execute_next_ready_command" if ok else "fix_workflow_run_blockers",
+        "recommended_risk": "GREEN" if ok and execution_allowed else "YELLOW" if ok else "UNKNOWN",
+        "next_commands": plan.get("next_commands", []),
+    }
+
+
 def _normalize_workflow_inputs(inputs: dict[str, str]) -> dict[str, str]:
     normalized: dict[str, str] = {}
     for key, value in inputs.items():
@@ -550,6 +666,46 @@ def print_workflow_plan_payload(
         for item in gates:
             gate = dict(item)
             print_raw(f"- step {gate.get('step_index')}: {gate.get('risk')} approval={gate.get('approval_required')}")
+    next_commands = payload.get("next_commands") or []
+    if next_commands:
+        print_raw("next:")
+        for command_item in next_commands:
+            print_raw(f"- {command_item}")
+
+
+def print_workflow_run_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="workflow_run",
+        )
+        return
+    mode = "execute" if payload.get("execute") else "dry-run"
+    print_raw(f"workflow-run {mode}: {payload.get('query')}")
+    if payload.get("execution_allowed"):
+        print_raw("execution_allowed: true")
+    else:
+        print_raw("execution_allowed: false")
+    stopped_at = payload.get("stopped_at")
+    if stopped_at:
+        print_raw(f"stopped_at: {stopped_at}")
+    blockers = payload.get("blockers") or []
+    if blockers:
+        print_raw("blockers:")
+        for blocker in blockers:
+            print_raw(f"- {blocker}")
+    executed_steps = payload.get("executed_steps") or []
+    if executed_steps:
+        print_raw("executed:")
+        for item in executed_steps:
+            step = dict(item)
+            print_raw(f"- step {step.get('step_index')}: rc={step.get('returncode')} {step.get('command')}")
     next_commands = payload.get("next_commands") or []
     if next_commands:
         print_raw("next:")
@@ -6689,6 +6845,31 @@ def workflow_plan_command(
         payload["recommended_risk"] = "UNKNOWN"
     print_workflow_plan_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=1 if fail_on_blocker and payload.get("blockers") else 0)
+
+
+@app.command("workflow-run")
+def workflow_run_command(
+    query: str = typer.Argument(..., help="Workflow name or alias, e.g. memory, ace, infra."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for command policy resolution and execution."),
+    input_items: list[str] = typer.Option(None, "--input", help="Placeholder substitution as KEY=VALUE. May be repeated."),
+    execute: bool = typer.Option(False, "--execute", help="Execute eligible GREEN agentx CLI steps. Omit for dry-run."),
+    timeout: int = typer.Option(120, "--timeout", min=1, help="Per-command timeout in seconds when --execute is used."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when the workflow run has blockers or stops at a gate."),
+) -> None:
+    """Dry-run or execute GREEN-only workflow steps."""
+    structured_format = structured_output_format(json_output, output_format)
+    parsed_inputs, input_blockers = parse_workflow_inputs(input_items or [])
+    payload = workflow_run_payload(query, workspace=workspace, inputs=parsed_inputs, execute=execute, timeout=timeout)
+    if input_blockers:
+        payload["ok"] = False
+        payload["blockers"] = [*payload.get("blockers", []), *input_blockers]
+        payload["recommended_kind"] = "fix_workflow_inputs"
+        payload["recommended_risk"] = "UNKNOWN"
+    print_workflow_run_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    blocked = bool(payload.get("blockers") or payload.get("stopped_at"))
+    raise typer.Exit(code=1 if fail_on_blocker and blocked else 0)
 
 
 @app.command("tools")

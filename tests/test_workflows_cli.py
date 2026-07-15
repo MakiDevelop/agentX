@@ -1,8 +1,9 @@
 import json
+import subprocess
 
 from typer.testing import CliRunner
 
-from agentx.cli import app, workflow_catalog_payload, workflow_plan_payload
+from agentx.cli import app, workflow_catalog_payload, workflow_plan_payload, workflow_run_payload
 
 
 def test_workflow_catalog_payload_lists_aliases() -> None:
@@ -189,6 +190,50 @@ def test_workflow_plan_payload_blocks_missing_workflow(tmp_path) -> None:  # noq
     assert payload["next_commands"] == ["agentx workflows missing --json"]
 
 
+def test_workflow_run_payload_dry_run_does_not_execute(tmp_path) -> None:  # noqa: ANN001
+    payload = workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"})
+
+    assert payload["schema"] == "agentx.workflow_run.v1"
+    assert payload["execute"] is False
+    assert payload["ok"] is True
+    assert payload["execution_allowed"] is False
+    assert payload["executed_steps"] == []
+    assert payload["stopped_at"] is None
+    assert payload["warnings"] == ["dry_run_no_commands_executed"]
+    assert payload["plan"]["ready_commands"][1] == "agentx memory-write '完成 AMH 交接' --type handoff --json"  # type: ignore[index]
+
+
+def test_workflow_run_payload_execute_stops_before_non_agentx_step(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    calls = []
+
+    def fake_run(argv, **kwargs):  # noqa: ANN001, ANN003
+        calls.append((argv, kwargs["cwd"]))
+        return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr("agentx.cli.subprocess.run", fake_run)
+
+    payload = workflow_run_payload("infra", workspace=tmp_path, execute=True)
+
+    assert payload["ok"] is False
+    assert payload["execution_allowed"] is False
+    assert calls == [(["agentx", "infra", "resource-bundle", "--json"], tmp_path.resolve())]
+    assert payload["executed_steps"][0]["returncode"] == 0  # type: ignore[index]
+    assert payload["stopped_at"]["reason"] == "non_agentx_cli_step"  # type: ignore[index]
+
+
+def test_workflow_run_payload_execute_stops_before_yellow_gate(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setattr(
+        "agentx.cli.subprocess.run",
+        lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stdout="ok", stderr=""),
+    )
+
+    payload = workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}, execute=True)
+
+    assert payload["ok"] is False
+    assert payload["stopped_at"]["reason"] == "side_effect_gate"  # type: ignore[index]
+    assert payload["stopped_at"]["risk"] == "YELLOW"  # type: ignore[index]
+
+
 def test_workflows_json_outputs_catalog() -> None:
     result = CliRunner().invoke(app, ["workflows", "--json"])
 
@@ -270,6 +315,36 @@ def test_workflow_plan_jsonl_outputs_event_envelope() -> None:
 
 def test_workflow_plan_fail_on_blocker_exits_nonzero() -> None:
     result = CliRunner().invoke(app, ["workflow-plan", "ace", "--json", "--fail-on-blocker"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["blockers"] == ["missing_inputs"]
+
+
+def test_workflow_run_json_outputs_dry_run_payload() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["workflow-run", "memory", "--input", "完成與待辦=完成 AMH 交接", "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema"] == "agentx.workflow_run.v1"
+    assert payload["execute"] is False
+    assert payload["plan"]["ready_commands"][1] == "agentx memory-write '完成 AMH 交接' --type handoff --json"
+
+
+def test_workflow_run_jsonl_outputs_event_envelope() -> None:
+    result = CliRunner().invoke(app, ["workflow-run", "memory", "--output-format", "jsonl"])
+
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    assert envelope["event"] == "workflow_run"
+    assert envelope["data"]["schema"] == "agentx.workflow_run.v1"
+
+
+def test_workflow_run_fail_on_blocker_exits_nonzero() -> None:
+    result = CliRunner().invoke(app, ["workflow-run", "memory", "--json", "--fail-on-blocker"])
 
     assert result.exit_code == 1
     payload = json.loads(result.output)

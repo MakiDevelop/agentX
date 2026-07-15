@@ -450,6 +450,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only workflow execution planning",
     },
     {
+        "command": "agentx workflow-run",
+        "usage": "agentx workflow-run NAME --input KEY=VALUE --json",
+        "description": "Dry-run a workflow or execute only eligible GREEN agentx CLI steps, stopping before side-effect gates.",
+        "examples": [
+            "agentx workflow-run memory --input 完成與待辦='完成 AMH 交接' --json",
+            "agentx workflow-run infra --execute --json --fail-on-blocker",
+        ],
+        "schemas": ["agentx.workflow_run.v1"],
+        "jsonl_event": "workflow_run",
+        "risk": "GREEN dry-run by default; YELLOW with --execute because it can run commands",
+    },
+    {
         "command": "agentx models",
         "usage": "agentx models --json",
         "description": "List models for the selected backend.",

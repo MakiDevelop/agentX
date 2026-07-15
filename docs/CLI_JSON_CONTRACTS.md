@@ -62,6 +62,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx tool-plan --json` | `agentx.tool_plan.v1` | `tool_plan` |
 | `agentx workflows --json` | `agentx.workflow_catalog.v1` | `workflows` |
 | `agentx workflow-plan --json` | `agentx.workflow_plan.v1` | `workflow_plan` |
+| `agentx workflow-run --json` | `agentx.workflow_run.v1` | `workflow_run` |
 | `agentx version --json` | no `schema` key | `version` |
 | `agentx backends --json` | no `schema` key | `backends` |
 | `agentx models --json` | backend-specific catalog payload | `models` |
@@ -1258,6 +1259,40 @@ Required stable keys:
 
 `--fail-on-blocker` prints the same payload first and exits `1` when `blockers`
 is non-empty.
+
+## Workflow Run Payload
+
+`agentx workflow-run NAME --json` emits `agentx.workflow_run.v1`.
+
+This command wraps `workflow-plan`. It is dry-run by default and does not
+execute commands unless `--execute` is provided. Execution is intentionally
+GREEN-only: each runnable step must be an `agentx_cli` step with a GREEN
+`command_plan`, no blockers, and no approval requirement. The run stops before
+slash-command steps, side-effect gates, command-plan blockers, or failed
+commands.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.workflow_run.v1`. |
+| `query` | string | Workflow name or alias requested. |
+| `execute` | boolean | Whether command execution was requested. |
+| `ok` | boolean | True when the plan has no blockers and the run did not stop at a gate or failed command. |
+| `workspace` | string | Workspace used for planning and execution. |
+| `plan` | object | Embedded `agentx.workflow_plan.v1` payload. |
+| `execution_allowed` | boolean | True only when every runnable step is eligible GREEN `agentx_cli`. |
+| `executed_steps` | array of object | Executed commands with return code and captured output. Empty for dry-run. |
+| `stopped_at` | object or null | Gate or failure that stopped execution. |
+| `blockers` | array of string | Top-level plan blockers. |
+| `warnings` | array of string | Non-blocking diagnostics such as `dry_run_no_commands_executed`. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | Suggested follow-up kind. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `next_commands` | array of string | Ready commands from the embedded workflow plan. |
+
+`--fail-on-blocker` prints the same payload first and exits `1` when `blockers`
+is non-empty or execution stops at a gate/failure.
 
 ## Stability Tests
 
