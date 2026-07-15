@@ -4,6 +4,8 @@
 **Objective**: 將 agentX 優化到接近 Codex CLI / Grok CLI，並加入使用 AMH 與 ACE 的能力。
 **Status**: In progress. AMH/ACE runner chain is now strongly covered; full objective is not yet proven complete.
 
+Authoritative status page: `docs/OBJECTIVE_STATUS.md`.
+
 ## Current Evidence
 
 ### Runner-facing CLI foundation
@@ -78,22 +80,22 @@ Suggested next proof:
 The current evidence lives across README, CLI contracts, headless optimization list, roadmap, and tests. That is workable, but it makes the original objective hard to audit without re-reading many files.
 
 Suggested next proof:
-- Keep this audit updated as the objective checklist.
-- Promote stable criteria into a short `docs/OBJECTIVE_STATUS.md` once Maki ratifies the target bar for "接近 Codex/Grok CLI".
+- Keep `docs/OBJECTIVE_STATUS.md` updated as the objective checklist.
+- Ratify the target bar for "接近 Codex/Grok CLI" and record the live/recorded reliability evidence there.
 
 ## Recommended Next Slice
 
-Implement an objective status document next. It should consolidate the current evidence and remaining target bar into a single ratifiable status file:
+Implement the live/recorded backend reliability suite next. It should prove the remaining model-facing reliability bar rather than only runner mechanics:
 
 ```text
-Codex/Grok-like runner requirements
-→ current evidence
-→ remaining live model reliability work
-→ completion gate
+fixture tasks
+→ recorded or selected live backend
+→ artifact/next/gate/recovery evaluation
+→ score summary
 ```
 
 Acceptance criteria:
-- References concrete tests and docs.
-- Separates proven runner mechanics from unproven live model reliability.
-- Does not mark the full objective complete until the live/recorded reliability bar is ratified and verified.
+- Runs local-only by default.
+- Reports success/failure, tool-call count, termination, artifact completeness, next/gate quality, and recovery recommendation usefulness.
+- Updates `docs/OBJECTIVE_STATUS.md`.
 - Updates `docs/HEADLESS_OPTIMIZATION_LIST.md`.

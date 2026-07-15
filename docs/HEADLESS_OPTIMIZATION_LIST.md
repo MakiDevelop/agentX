@@ -127,6 +127,7 @@
 - [x] ACE council workflow 已有 runner smoke 覆蓋 `workflow-run ace --result-output` → `artifacts.workflow_chain` → `next workflow-resume` → `workflow-resume --dry-run` → `gate doctor workflow_artifact_health` 的 dry-run 串接。
 - [x] `agentx capabilities --json` 會提供 `runner_smokes`，讓外部 runner 能直接發現 AMH/ACE dry-run artifact-chain smoke，不必解析 README 或優化清單。
 - [x] `docs/OBJECTIVE_GAP_AUDIT_2026-07-15.md` 已盤點 Codex/Grok-like runner foundation、AMH/ACE support evidence 與剩餘缺口，作為總目標尚未完成前的階段性 audit。
+- [x] `docs/OBJECTIVE_STATUS.md` 已集中總目標要求、已證據、未證明 live/recorded backend reliability 與 completion gate，避免把 deterministic smoke 誤當完整完成證明。
 - [x] ACE write path 已有 isolated CLI smoke，使用 pytest temp root 覆蓋 `ace-init --write` → `ace-briefing --write` → `ace-answer` → `ace-status`，並確認所有寫入路徑留在 temp ACE root。
 - [x] AMH write path 已有 isolated CLI smoke，使用 workspace-local JSON store 覆蓋 `memory-write --write` → `memory-read` → `memory-status`，並在 AMH client namespaced 操作加上 `--caller-ns` 以符合 namespace isolation。
 - [x] `agentx command-parity --json` 會輸出 AMH、ACE、artifacts、next、gate、command-plan 的 slash-command ↔ runner JSON surface matrix，並納入 capabilities discovery。
