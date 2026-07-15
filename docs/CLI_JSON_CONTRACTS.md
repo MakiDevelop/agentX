@@ -61,6 +61,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx tools --json` | `agentx.tool_catalog.v1` | `tools` |
 | `agentx tool-plan --json` | `agentx.tool_plan.v1` | `tool_plan` |
 | `agentx workflows --json` | `agentx.workflow_catalog.v1` | `workflows` |
+| `agentx workflow-plan --json` | `agentx.workflow_plan.v1` | `workflow_plan` |
 | `agentx version --json` | no `schema` key | `version` |
 | `agentx backends --json` | no `schema` key | `backends` |
 | `agentx models --json` | backend-specific catalog payload | `models` |
@@ -1221,6 +1222,37 @@ Each workflow object includes:
 Step `kind` is one of `slash_command`, `agentx_cli`, or `instruction`.
 `agentx_cli` steps include an embedded `agentx.command_plan.v1` payload so
 runners can inspect policy posture before executing a top-level command.
+
+## Workflow Plan Payload
+
+`agentx workflow-plan NAME --json` emits `agentx.workflow_plan.v1`.
+
+This command expands a single workflow recipe into an execution plan without
+running any step. It is intended for external runners that need to collect
+placeholder values and approval gates before executing a recipe.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.workflow_plan.v1`. |
+| `query` | string | Workflow name or alias requested. |
+| `ok` | boolean | True only when the workflow exists and has no missing inputs or command-plan blockers. |
+| `workflow` | object or null | Selected workflow catalog object. |
+| `steps` | array of object | Ordered steps, each with `index`; runnable `agentx` steps include command plans. |
+| `commands` | array of string | Runnable commands in execution order. |
+| `inputs_required` | array of object | Placeholder inputs that must be filled before execution. |
+| `side_effect_gates` | array of object | Steps with YELLOW/RED risk or approval requirements. |
+| `command_blockers` | array of object | Per-step command-plan blockers. |
+| `blockers` | array of string | Top-level blockers such as `workflow_not_found`, `missing_inputs`, or `command_plan_blockers`. |
+| `warnings` | array of string | Non-blocking diagnostics such as side-effect gate reminders. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | Suggested follow-up kind. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `next_commands` | array of string | Suggested executable commands when the plan is ready, otherwise discovery commands. |
+
+`--fail-on-blocker` prints the same payload first and exits `1` when `blockers`
+is non-empty.
 
 ## Stability Tests
 

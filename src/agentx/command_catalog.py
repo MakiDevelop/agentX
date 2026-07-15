@@ -437,6 +437,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only catalog",
     },
     {
+        "command": "agentx workflow-plan",
+        "usage": "agentx workflow-plan NAME --json",
+        "description": "Expand one workflow into ordered command plans, required inputs, blockers, and side-effect gates without executing it.",
+        "examples": [
+            "agentx workflow-plan memory --json",
+            "agentx workflow-plan ace --json --fail-on-blocker",
+        ],
+        "schemas": ["agentx.workflow_plan.v1"],
+        "jsonl_event": "workflow_plan",
+        "risk": "GREEN - read-only workflow execution planning",
+    },
+    {
         "command": "agentx models",
         "usage": "agentx models --json",
         "description": "List models for the selected backend.",

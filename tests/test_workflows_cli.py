@@ -2,7 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
-from agentx.cli import app, workflow_catalog_payload
+from agentx.cli import app, workflow_catalog_payload, workflow_plan_payload
 
 
 def test_workflow_catalog_payload_lists_aliases() -> None:
@@ -106,6 +106,52 @@ def test_workflow_catalog_payload_filters_ace_alias() -> None:
     assert payload["workflows"][0]["steps"][1]["command_plan"]["risk"] == "YELLOW"
 
 
+def test_workflow_plan_payload_reports_memory_inputs_and_gates(tmp_path) -> None:  # noqa: ANN001
+    payload = workflow_plan_payload("memory", workspace=tmp_path)
+
+    assert payload["schema"] == "agentx.workflow_plan.v1"
+    assert payload["query"] == "memory"
+    assert payload["ok"] is False
+    assert payload["workflow"]["goal"] == "記憶交接"  # type: ignore[index]
+    assert payload["commands"][0] == 'agentx memory-read "handoff" --json'  # type: ignore[index]
+    assert "missing_inputs" in payload["blockers"]  # type: ignore[operator]
+    assert payload["inputs_required"] == [  # type: ignore[index]
+        {
+            "step_index": 2,
+            "placeholder": "完成與待辦",
+            "description": "handoff content",
+            "command": 'agentx memory-write "完成與待辦" --type handoff --json',
+        },
+        {
+            "step_index": 3,
+            "placeholder": "完成與待辦",
+            "description": "handoff content",
+            "command": 'agentx memory-write "完成與待辦" --type handoff --write --json',
+        },
+    ]
+    assert payload["side_effect_gates"][-1]["risk"] == "YELLOW"  # type: ignore[index]
+    assert payload["side_effect_gates"][-1]["approval_required"] is True  # type: ignore[index]
+
+
+def test_workflow_plan_payload_reports_ace_placeholders(tmp_path) -> None:  # noqa: ANN001
+    payload = workflow_plan_payload("ace", workspace=tmp_path)
+
+    assert payload["ok"] is False
+    placeholders = {item["placeholder"] for item in payload["inputs_required"]}  # type: ignore[index]
+    assert {"SESSION", "GOAL", "ANSWER", "SUMMARY"} <= placeholders
+    assert len(payload["commands"]) == 5  # type: ignore[arg-type]
+    assert payload["side_effect_gates"][1]["risk"] == "YELLOW"  # type: ignore[index]
+
+
+def test_workflow_plan_payload_blocks_missing_workflow(tmp_path) -> None:  # noqa: ANN001
+    payload = workflow_plan_payload("missing", workspace=tmp_path)
+
+    assert payload["ok"] is False
+    assert payload["blockers"] == ["workflow_not_found"]
+    assert payload["workflow"] is None
+    assert payload["next_commands"] == ["agentx workflows missing --json"]
+
+
 def test_workflows_json_outputs_catalog() -> None:
     result = CliRunner().invoke(app, ["workflows", "--json"])
 
@@ -135,6 +181,34 @@ def test_workflows_jsonl_outputs_event_envelope() -> None:
     assert envelope["event"] == "workflows"
     assert envelope["data"]["schema"] == "agentx.workflow_catalog.v1"
     assert envelope["data"]["workflows"][0]["goal"] == "提交收尾"
+
+
+def test_workflow_plan_json_outputs_payload() -> None:
+    result = CliRunner().invoke(app, ["workflow-plan", "memory", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema"] == "agentx.workflow_plan.v1"
+    assert payload["query"] == "memory"
+    assert payload["workflow"]["goal"] == "記憶交接"
+    assert "missing_inputs" in payload["blockers"]
+
+
+def test_workflow_plan_jsonl_outputs_event_envelope() -> None:
+    result = CliRunner().invoke(app, ["workflow-plan", "ace", "--output-format", "jsonl"])
+
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    assert envelope["event"] == "workflow_plan"
+    assert envelope["data"]["schema"] == "agentx.workflow_plan.v1"
+
+
+def test_workflow_plan_fail_on_blocker_exits_nonzero() -> None:
+    result = CliRunner().invoke(app, ["workflow-plan", "ace", "--json", "--fail-on-blocker"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["blockers"] == ["missing_inputs"]
 
 
 def test_workflows_plain_outputs_table() -> None:
