@@ -1332,7 +1332,9 @@ is non-empty or execution stops at a gate/failure.
 This command reads a saved `agentx.workflow_run.v1` JSON or JSONL artifact and
 builds a deterministic rerun command. It preserves known workflow inputs from
 the embedded plan and inserts `<PLACEHOLDER>` values for still-missing inputs.
-It is read-only and does not execute the generated command.
+`--input KEY=VALUE` may be repeated to fill or override workflow inputs before
+building the rerun command. It is read-only and does not execute the generated
+command.
 
 Required stable keys:
 
@@ -1352,6 +1354,8 @@ Required stable keys:
 | `blockers` | array of string | Original workflow-run blockers. |
 | `warnings` | array of string | Original workflow-run warnings. |
 | `inputs` | object | Known workflow inputs from the embedded plan. |
+| `input_overrides` | object | Inputs supplied on the inspect/resume command line. |
+| `input_blockers` | array of string | Invalid command-line input items such as `invalid_input:bad`. |
 | `inputs_required` | array of object | Original plan inputs still required at run time. |
 | `missing_inputs` | array of object | Required inputs not present in `inputs`. |
 | `resume_ready` | boolean | True when the generated command has no placeholder inputs. |
@@ -1373,8 +1377,9 @@ when `resume_ready=false`.
 `agentx.workflow_resume.v1`.
 
 This command converts a workflow-run artifact into the generated rerun command.
-It is dry-run oriented by default. `--execute` runs the generated command and is
-rejected until all placeholder inputs are filled.
+`--input KEY=VALUE` may be repeated to fill or override workflow inputs before
+building the command. It is dry-run oriented by default. `--execute` runs the
+generated command and is rejected until all placeholder inputs are filled.
 
 Required stable keys:
 

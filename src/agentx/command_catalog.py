@@ -465,10 +465,11 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
     },
     {
         "command": "agentx workflow-inspect",
-        "usage": "agentx workflow-inspect PATH --json",
+        "usage": "agentx workflow-inspect PATH --input KEY=VALUE --json",
         "description": "Inspect a saved workflow-run artifact and generate a rerun command with known inputs plus placeholders for missing inputs.",
         "examples": [
             "agentx workflow-inspect .agentx/runs/workflow-memory.json --json",
+            "agentx workflow-inspect .agentx/runs/workflow-memory.json --input 完成與待辦='完成 AMH 交接' --json",
             "agentx workflow-inspect .agentx/runs/workflow-memory.json --field resume_command",
         ],
         "schemas": ["agentx.workflow_artifact.v1"],
@@ -477,10 +478,11 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
     },
     {
         "command": "agentx workflow-resume",
-        "usage": "agentx workflow-resume PATH --dry-run --json",
+        "usage": "agentx workflow-resume PATH --input KEY=VALUE --dry-run --json",
         "description": "Build or execute the generated workflow-run rerun command from a saved workflow-run artifact.",
         "examples": [
             "agentx workflow-resume .agentx/runs/workflow-memory.json --dry-run --json",
+            "agentx workflow-resume .agentx/runs/workflow-memory.json --input 完成與待辦='完成 AMH 交接' --dry-run --json",
             "agentx workflow-resume .agentx/runs/workflow-memory.json --workflow-execute --dry-run --json",
         ],
         "schemas": ["agentx.workflow_resume.v1"],

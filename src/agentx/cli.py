@@ -5690,6 +5690,7 @@ def workflow_run_artifact_inputs_required(payload: dict[str, object]) -> list[di
 def workflow_run_artifact_resume_argv(
     payload: dict[str, object],
     *,
+    input_overrides: dict[str, str] | None = None,
     workflow_execute: bool = False,
     allow_yellow_gates: bool = False,
     approval_reason: str | None = None,
@@ -5709,6 +5710,7 @@ def workflow_run_artifact_resume_argv(
     if workspace:
         argv.extend(["--workspace", workspace])
     inputs = workflow_run_artifact_inputs(payload)
+    inputs.update(input_overrides or {})
     for key, value in sorted(inputs.items()):
         argv.extend(["--input", f"{key}={value}"])
 
@@ -5739,6 +5741,8 @@ def inspect_workflow_run_artifact_payload(
     payload: dict[str, object],
     *,
     source: str,
+    input_overrides: dict[str, str] | None = None,
+    input_blockers: list[str] | None = None,
     workflow_execute: bool = False,
     allow_yellow_gates: bool = False,
     approval_reason: str | None = None,
@@ -5747,6 +5751,7 @@ def inspect_workflow_run_artifact_payload(
 ) -> dict[str, object]:
     argv, missing_inputs = workflow_run_artifact_resume_argv(
         payload,
+        input_overrides=input_overrides,
         workflow_execute=workflow_execute,
         allow_yellow_gates=allow_yellow_gates,
         approval_reason=approval_reason,
@@ -5759,7 +5764,8 @@ def inspect_workflow_run_artifact_payload(
     blockers = payload.get("blockers")
     warnings = payload.get("warnings")
     approval_receipts = payload.get("approval_receipts")
-    resume_ready = not missing_inputs
+    normalized_input_blockers = [str(item) for item in input_blockers or []]
+    resume_ready = not missing_inputs and not normalized_input_blockers
     return {
         "schema": "agentx.workflow_artifact.v1",
         "source": source,
@@ -5773,8 +5779,10 @@ def inspect_workflow_run_artifact_payload(
         "workspace": payload.get("workspace"),
         "stopped_at": stopped_at if isinstance(stopped_at, dict) else None,
         "blockers": list(blockers) if isinstance(blockers, list) else [],
+        "input_blockers": normalized_input_blockers,
         "warnings": list(warnings) if isinstance(warnings, list) else [],
-        "inputs": workflow_run_artifact_inputs(payload),
+        "inputs": {**workflow_run_artifact_inputs(payload), **(input_overrides or {})},
+        "input_overrides": input_overrides or {},
         "inputs_required": workflow_run_artifact_inputs_required(payload),
         "missing_inputs": missing_inputs,
         "resume_ready": resume_ready,
@@ -7322,6 +7330,7 @@ def workflow_run_command(
 @app.command("workflow-inspect")
 def workflow_inspect_command(
     source: str = typer.Argument(..., help="Workflow-run JSON/JSONL artifact file to inspect, or '-' for stdin."),
+    input_items: list[str] = typer.Option(None, "--input", help="Override or fill workflow placeholder as KEY=VALUE. May be repeated."),
     workflow_execute: bool = typer.Option(False, "--workflow-execute", help="Generate a resume command that includes workflow-run --execute."),
     allow_yellow_gates: bool = typer.Option(False, "--allow-yellow-gates", help="Include --allow-yellow-gates in the generated resume command."),
     approval_reason: str | None = typer.Option(None, "--approval-reason", help="Include an approval reason in the generated resume command."),
@@ -7333,9 +7342,12 @@ def workflow_inspect_command(
     fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when resume inputs are still required."),
 ) -> None:
     """Inspect a saved workflow-run artifact and build a rerun command."""
+    parsed_inputs, input_blockers = parse_workflow_inputs(input_items or [])
     payload = inspect_workflow_run_artifact_payload(
         load_workflow_run_payload_source(source),
         source=source,
+        input_overrides=parsed_inputs,
+        input_blockers=input_blockers,
         workflow_execute=workflow_execute,
         allow_yellow_gates=allow_yellow_gates,
         approval_reason=approval_reason,
@@ -7360,6 +7372,7 @@ def workflow_inspect_command(
 @app.command("workflow-resume")
 def workflow_resume_command(
     source: str = typer.Argument(..., help="Workflow-run JSON/JSONL artifact file to resume, or '-' for stdin."),
+    input_items: list[str] = typer.Option(None, "--input", help="Override or fill workflow placeholder as KEY=VALUE. May be repeated."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print the generated workflow-run argv instead of executing it."),
     execute: bool = typer.Option(False, "--execute", help="Execute the generated workflow-run command."),
     workflow_execute: bool = typer.Option(False, "--workflow-execute", help="Generate a resume command that includes workflow-run --execute."),
@@ -7371,9 +7384,12 @@ def workflow_resume_command(
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
 ) -> None:
     """Print or execute the rerun command from a saved workflow-run artifact."""
+    parsed_inputs, input_blockers = parse_workflow_inputs(input_items or [])
     inspect_payload = inspect_workflow_run_artifact_payload(
         load_workflow_run_payload_source(source),
         source=source,
+        input_overrides=parsed_inputs,
+        input_blockers=input_blockers,
         workflow_execute=workflow_execute,
         allow_yellow_gates=allow_yellow_gates,
         approval_reason=approval_reason,

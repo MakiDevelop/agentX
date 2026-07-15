@@ -116,6 +116,7 @@
 - [x] `agentx workflow-run NAME --result-output PATH --json` 可把 dry-run / execute 結果保存成 workspace-safe JSON/JSONL artifact，拒絕覆蓋既有檔案或寫到 workspace 外。
 - [x] `agentx artifacts` / `agentx next` / `agentx inspect` 會發現 workflow-run 單檔 artifact，輸出 latest workflow-run query/ok/stopped signals，讓 runner 能接上上一輪 workflow 結果。
 - [x] `agentx workflow-inspect PATH --json` / `agentx workflow-resume PATH --dry-run --json` 可把 workflow-run artifact 轉成 rerun command，保留已知 input 並標示缺失 placeholder。
+- [x] `agentx workflow-inspect PATH --input KEY=VALUE --json` / `agentx workflow-resume PATH --input KEY=VALUE --dry-run --json` 可在 artifact 續跑階段補齊或覆蓋 workflow input，讓 resume command 直接變 ready。
 - [x] `agentx next --json` / `agentx inspect --json` 對 latest workflow-run artifact 會直接推薦 `workflow-inspect` 或 `workflow-resume --dry-run`，不再只回 generic artifacts inspect。
 - [x] `agentx next --json` / `agentx inspect --json` 會把 AMH handoff 與 ACE council `workflow-run` previews 納入 recommendations，且不覆蓋 denied approval、dirty gate、artifact handoff、active task 等高優先級建議。
 - [x] `agentx inspect --json` 會內嵌 `verify_command_plans`，把每個預設 verify command 轉成 `agentx.command_plan.v1`，讓 runner 一次取得可執行檢查與 command policy posture。

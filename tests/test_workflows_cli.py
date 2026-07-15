@@ -555,6 +555,47 @@ def test_workflow_inspect_builds_resume_command_for_missing_inputs(tmp_path) -> 
     assert payload["resume_argv"][-1] == "--json"
 
 
+def test_workflow_inspect_input_override_fills_missing_inputs(tmp_path) -> None:  # noqa: ANN001
+    source = tmp_path / "workflow-memory.json"
+    source.write_text(json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False), encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-inspect",
+            str(source),
+            "--input",
+            "完成與待辦=完成 AMH 交接",
+            "--json",
+            "--fail-on-blocker",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["resume_ready"] is True
+    assert payload["missing_inputs"] == []
+    assert payload["input_overrides"] == {"完成與待辦": "完成 AMH 交接"}
+    assert payload["input_blockers"] == []
+    assert "完成與待辦=完成 AMH 交接" in payload["resume_argv"]
+    assert "<完成與待辦>" not in payload["resume_command"]
+
+
+def test_workflow_inspect_invalid_input_can_fail_on_blocker(tmp_path) -> None:  # noqa: ANN001
+    source = tmp_path / "workflow-memory.json"
+    source.write_text(json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False), encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["workflow-inspect", str(source), "--input", "bad", "--json", "--fail-on-blocker"],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["resume_ready"] is False
+    assert payload["input_blockers"] == ["invalid_input:bad"]
+
+
 def test_workflow_inspect_preserves_known_inputs_and_result_output(tmp_path) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.jsonl"
     run_payload = workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"})
@@ -635,6 +676,29 @@ def test_workflow_resume_dry_run_outputs_command_payload(tmp_path) -> None:  # n
     assert payload["query"] == "memory"
     assert payload["argv"][:3] == ["agentx", "workflow-run", "memory"]
     assert payload["blockers"] == []
+
+
+def test_workflow_resume_input_override_makes_dry_run_ready(tmp_path) -> None:  # noqa: ANN001
+    source = tmp_path / "workflow-memory.json"
+    source.write_text(json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False), encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-resume",
+            str(source),
+            "--input",
+            "完成與待辦=完成 AMH 交接",
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["blockers"] == []
+    assert "完成與待辦=完成 AMH 交接" in payload["argv"]
 
 
 def test_workflow_resume_execute_rejects_missing_inputs(tmp_path) -> None:  # noqa: ANN001
