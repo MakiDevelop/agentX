@@ -332,6 +332,30 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only memory backend status inspection",
     },
     {
+        "command": "agentx memory-read",
+        "usage": "agentx memory-read QUERY --json",
+        "description": "Read/search Memory Hall through the configured backend for runner handoff context.",
+        "examples": [
+            "agentx memory-read 'handoff' --namespace project:agentX --json",
+            "agentx memory-read 'ACE status' --limit 3 --output-format jsonl",
+        ],
+        "schemas": ["agentx.memory_read.v1"],
+        "jsonl_event": "memory_read",
+        "risk": "GREEN - read-only memory query",
+    },
+    {
+        "command": "agentx memory-write",
+        "usage": "agentx memory-write CONTENT --write --json",
+        "description": "Preview or explicitly write one ACA-shaped Memory Hall entry.",
+        "examples": [
+            "agentx memory-write 'handoff summary' --type handoff --json",
+            "agentx memory-write 'human-confirmed fact' --tier human_confirmed --type fact --write --json",
+        ],
+        "schemas": ["agentx.memory_write.v1"],
+        "jsonl_event": "memory_write",
+        "risk": "GREEN dry-run by default; YELLOW with --write because it writes memory",
+    },
+    {
         "command": "agentx instructions",
         "usage": "agentx instructions --json",
         "description": "Inspect repo-local AGENTX.md / AGENTS.md / CLAUDE.md instruction files in bootstrap priority order.",

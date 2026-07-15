@@ -29,6 +29,8 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx instructions --json` | `agentx.local_instructions.v1` | `instructions` |
 | `agentx config --json` | `agentx.config.v1` | `config` |
 | `agentx memory-status --json` | `agentx.memory_status.v1` | `memory_status` |
+| `agentx memory-read --json` | `agentx.memory_read.v1` | `memory_read` |
+| `agentx memory-write --json` | `agentx.memory_write.v1` | `memory_write` |
 | `agentx inspect --json` | `agentx.inspect.v1` | `inspect` |
 | `agentx init --json` | `agentx.init.v1` | `init` |
 | `agentx sessions --json` | `agentx.sessions.v1` | `sessions` |
@@ -736,6 +738,58 @@ Required stable keys:
 | `warnings` | array of string | Non-blocking diagnostics such as `unknown_memory_backend`. |
 | `legacy_memhall` | object | Legacy memhall URL and token status (`set` / `missing`). |
 | `amh` | object | AMH command availability, binary paths, store, path, path existence for file stores, and optional `live_probe_result`. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | Suggested follow-up kind. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `next_commands` | array of string | Suggested follow-up commands. |
+
+## Memory Read Payload
+
+`agentx memory-read QUERY --json` emits `agentx.memory_read.v1`.
+
+This command queries Memory Hall / AMH through the configured backend. It is
+read-only.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.memory_read.v1`. |
+| `ok` | boolean | True when backend search completed. |
+| `namespace` | string | Memory namespace queried. |
+| `query` | string | Normalized query string. |
+| `limit` | integer | Requested result limit. |
+| `blockers` | array of string | Machine-readable blockers such as `query_required`. |
+| `warnings` | array of string | Non-blocking diagnostics. |
+| `result` | string | Backend search output. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | Suggested follow-up kind. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `next_commands` | array of string | Suggested follow-up commands. |
+
+## Memory Write Payload
+
+`agentx memory-write CONTENT --json` emits `agentx.memory_write.v1`.
+
+This command is dry-run by default and does not write memory unless `--write` is
+explicitly provided. Written records use the ACA-shaped `tier` and `type`
+arguments.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.memory_write.v1`. |
+| `ok` | boolean | True when validation passed and, if requested, backend write completed. |
+| `write` | boolean | Whether this invocation actually wrote memory. |
+| `namespace` | string | Target memory namespace. |
+| `memory_type` | string | ACA memory type such as `note`, `fact`, or `handoff`. |
+| `tier` | string | ACA source tier such as `llm_derived` or `human_confirmed`. |
+| `content_preview` | string | First 500 characters of content for auditability. |
+| `content_truncated` | boolean | Whether content preview was capped. |
+| `blockers` | array of string | Machine-readable blockers such as `content_required`, `invalid_tier`, or `invalid_memory_type`. |
+| `warnings` | array of string | Non-blocking diagnostics such as `dry_run_no_memory_written`. |
+| `memory_result` | object or null | Backend write result when `--write` is used. |
 | `recommended_command` | string | First suggested follow-up command for simple runners. |
 | `recommended_kind` | string | Suggested follow-up kind. |
 | `recommended_risk` | string | Risk label for the recommended follow-up. |

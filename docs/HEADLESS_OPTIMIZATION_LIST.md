@@ -94,6 +94,8 @@
 - [x] `agentx capabilities --json` 會提供 `recommended_entrypoints` 與 `by_schema`，讓外部 runner 第一次接入時能直接找到 discovery/preflight/next/gate/verify 入口與 schema 對應 command。
 - [x] `agentx instructions --json` 可 read-only 檢查 repo-local `AGENTX.md` / `AGENTS.md` / `CLAUDE.md`，輸出與 bootstrap 相同的 priority、selected file、檔案摘要與合併 context。
 - [x] `agentx memory-status --json` 可 read-only 檢查 Memory Hall / AMH backend posture、AMH CLI 可用性、store/path 與 token set/missing；`--live-probe` 才跑本機 AMH CLI probe。
+- [x] `agentx memory-read QUERY --json` 可透過目前設定的 Memory Hall / AMH backend 做 read-only 記憶查詢。
+- [x] `agentx memory-write CONTENT --json` 預設 dry-run；只有明確 `--write` 才會以 ACA-shaped tier/type 寫入 Memory Hall。
 - [x] `agentx capabilities --json` 的 `recommended_entrypoints` 會列出 `infra_preflight`，讓 runner 在 SSH/deploy/cross-machine 前能直接發現 `agentx infra resource-bundle --json`。
 - [x] `agentx capabilities --json` 會列出 `handoff-inspect` / `handoff-resume`，讓 command-plan 能辨識 artifact resume 流程中的接手命令。
 - [x] `agentx ace-init SESSION --goal GOAL --json` 可預覽或建立 ACE session `_manifest.md`，提供多代理 file-based coordination 的最小入口；預設 dry-run，加 `--write` 才建立檔案。

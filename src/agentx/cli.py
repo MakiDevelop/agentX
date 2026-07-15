@@ -50,7 +50,7 @@ from agentx.infrastructure_context import build_infrastructure_context, infrastr
 from agentx.intent import plan_task_items
 from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
-from agentx.memory_hall import MemoryHallClient, NullMemoryClient, memory_status_payload
+from agentx.memory_hall import MemoryHallClient, NullMemoryClient, memory_read_payload, memory_status_payload, memory_write_payload
 from agentx.ollama import OllamaCancelledError, OllamaClient
 from agentx.provider_registry import get_llm_client, list_registered_backends, LLMClient, register_builtin_backends
 from agentx.persona import list_personas, normalize_persona
@@ -2387,6 +2387,53 @@ def print_memory_status_payload(
     table.add_row("blockers", ",".join(str(item) for item in payload.get("blockers", [])) or "-")
     table.add_row("recommended", str(payload.get("recommended_command") or "-"))
     console.print(table)
+
+
+def print_memory_read_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="memory_read",
+        )
+        return
+    if payload.get("ok"):
+        print_raw(str(payload.get("result", "")))
+    else:
+        console.print(
+            "[red]memory read blocked: "
+            f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
+        )
+    console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
+
+
+def print_memory_write_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="memory_write",
+        )
+        return
+    if payload.get("ok"):
+        status = "written" if payload.get("write") else "dry-run"
+        console.print(f"[green]memory write {status}: {payload.get('namespace')}[/green]")
+    else:
+        console.print(
+            "[red]memory write blocked: "
+            f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
+        )
+    console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
 
 
 def _parse_git_branch_status(branch_line: str) -> dict[str, object]:
@@ -5858,6 +5905,20 @@ def build_runtime(
     return llm_client, memory, tools
 
 
+def build_cli_memory_client(settings: Settings) -> MemoryHallClient | NullMemoryClient:
+    if (settings.memory_backend or "memhall").lower() == "amh":
+        from agentx.memory_hall import AmhClient
+
+        return AmhClient(
+            store=settings.memory_amh_store,
+            store_path=settings.memory_amh_path,
+        )
+    return MemoryHallClient(
+        base_url=settings.memory_hall_url,
+        token=settings.memory_hall_token,
+    )
+
+
 def run_print_prompt(
     prompt: str,
     namespace: str | None,
@@ -6617,6 +6678,58 @@ def memory_status_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_memory_status_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=0 if payload.get("ok") else 1)
+
+
+@app.command("memory-read")
+def memory_read_command(
+    query: str = typer.Argument(..., help="Memory query text."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for config resolution."),
+    namespace: str | None = typer.Option(None, "--namespace", help="Override Memory Hall namespace."),
+    limit: int = typer.Option(5, "--limit", min=1, help="Maximum memory results."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Read/search Memory Hall through the configured backend."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    project_config = load_project_config(settings.workspace)
+    resolved_namespace = namespace or project_config.namespace or "project:agentX"
+    payload = memory_read_payload(
+        memory=build_cli_memory_client(settings),
+        query=query,
+        namespace=resolved_namespace,
+        limit=limit,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_memory_read_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=0 if payload.get("ok") else 1)
+
+
+@app.command("memory-write")
+def memory_write_command(
+    content: str = typer.Argument(..., help="Memory content to preview or write."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for config resolution."),
+    namespace: str | None = typer.Option(None, "--namespace", help="Override Memory Hall namespace."),
+    memory_type: str = typer.Option("note", "--type", "--memory-type", help="ACA memory type."),
+    tier: str = typer.Option("llm_derived", "--tier", help="ACA source tier."),
+    write: bool = typer.Option(False, "--write", help="Actually write memory. Omit for dry-run preview."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Preview or write one ACA-shaped Memory Hall entry."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    project_config = load_project_config(settings.workspace)
+    resolved_namespace = namespace or project_config.namespace or "project:agentX"
+    payload = memory_write_payload(
+        memory=build_cli_memory_client(settings),
+        content=content,
+        namespace=resolved_namespace,
+        memory_type=memory_type,
+        tier=tier,
+        write=write,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_memory_write_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 

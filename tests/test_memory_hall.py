@@ -6,7 +6,9 @@ from agentx.memory_hall import (
     AmhClient,
     MemoryHallClient,
     NullMemoryClient,
+    memory_read_payload,
     memory_status_payload,
+    memory_write_payload,
 )
 from agentx.tools.builtin import MemoryWriteTool
 
@@ -412,3 +414,85 @@ class TestMemoryStatusPayload:
         assert payload["live_probe"] is True
         assert payload["amh"]["live_probe_result"]["ok"] is True
         assert payload["amh"]["live_probe_result"]["command"] == "amh --help"
+
+
+class TestMemoryReadWritePayload:
+    def test_memory_read_payload_searches_backend(self):
+        memory = MagicMock()
+        memory.search.return_value = "result line"
+
+        payload = memory_read_payload(
+            memory=memory,
+            query="handoff",
+            namespace="project:test",
+            limit=3,
+        )
+
+        assert payload["schema"] == "agentx.memory_read.v1"
+        assert payload["ok"] is True
+        assert payload["result"] == "result line"
+        memory.search.assert_called_once_with("handoff", namespace="project:test", limit=3)
+
+    def test_memory_read_payload_blocks_empty_query(self):
+        memory = MagicMock()
+
+        payload = memory_read_payload(memory=memory, query=" ", namespace="project:test")
+
+        assert payload["ok"] is False
+        assert payload["blockers"] == ["query_required"]
+        memory.search.assert_not_called()
+
+    def test_memory_write_payload_dry_run_does_not_write(self):
+        memory = MagicMock()
+
+        payload = memory_write_payload(
+            memory=memory,
+            content="preview this",
+            namespace="project:test",
+            memory_type="handoff",
+        )
+
+        assert payload["schema"] == "agentx.memory_write.v1"
+        assert payload["ok"] is True
+        assert payload["write"] is False
+        assert payload["warnings"] == ["dry_run_no_memory_written"]
+        assert payload["recommended_kind"] == "memory_write_execute"
+        memory.write_aca.assert_not_called()
+
+    def test_memory_write_payload_write_calls_aca_backend(self):
+        memory = MagicMock()
+        memory.write_aca.return_value = {"memory_id": "mem-1"}
+
+        payload = memory_write_payload(
+            memory=memory,
+            content="write this",
+            namespace="project:test",
+            memory_type="fact",
+            tier="human_confirmed",
+            write=True,
+        )
+
+        assert payload["ok"] is True
+        assert payload["memory_result"] == {"memory_id": "mem-1"}
+        memory.write_aca.assert_called_once_with(
+            content="write this",
+            namespace="project:test",
+            memory_type="fact",
+            source_tier="human_confirmed",
+        )
+
+    def test_memory_write_payload_blocks_invalid_type_and_tier(self):
+        memory = MagicMock()
+
+        payload = memory_write_payload(
+            memory=memory,
+            content="bad",
+            namespace="project:test",
+            memory_type="weird",
+            tier="bad",
+            write=True,
+        )
+
+        assert payload["ok"] is False
+        assert payload["blockers"] == ["invalid_tier", "invalid_memory_type"]
+        memory.write_aca.assert_not_called()

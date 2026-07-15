@@ -11,6 +11,8 @@ from typing import Any
 import httpx
 
 AMH_STATUS_SCHEMA = "agentx.memory_status.v1"
+MEMORY_READ_SCHEMA = "agentx.memory_read.v1"
+MEMORY_WRITE_SCHEMA = "agentx.memory_write.v1"
 
 # === ACA (Agent Civilization Architecture) constants ===
 # See docs from agent-memory-hall: Agent_Civilization_Architecture.md + Anti_Ouroboros_Evidence.md
@@ -670,5 +672,112 @@ def memory_status_payload(
             "agentx inspect --json"
             if ok
             else "install AMH CLI or set memory_backend=memhall, then rerun agentx memory-status --json"
+        ],
+    }
+
+
+def memory_read_payload(
+    *,
+    memory: Any,
+    query: str,
+    namespace: str,
+    limit: int = 5,
+) -> dict[str, Any]:
+    blockers: list[str] = []
+    warnings: list[str] = []
+    result = ""
+    normalized_query = query.strip()
+    if not normalized_query:
+        blockers.append("query_required")
+
+    if not blockers:
+        try:
+            result = memory.search(normalized_query, namespace=namespace, limit=limit)
+        except Exception as exc:
+            blockers.append(f"memory_read_failed:{type(exc).__name__}:{exc}")
+
+    ok = not blockers
+    return {
+        "schema": MEMORY_READ_SCHEMA,
+        "ok": ok,
+        "namespace": namespace,
+        "query": normalized_query,
+        "limit": limit,
+        "blockers": blockers,
+        "warnings": warnings,
+        "result": result,
+        "recommended_command": "agentx inspect --json"
+        if ok
+        else "fix memory read blockers, then rerun agentx memory-read QUERY --json",
+        "recommended_kind": "inspect" if ok else "fix_memory_read_blockers",
+        "recommended_risk": "GREEN" if ok else "UNKNOWN",
+        "next_commands": [
+            "agentx inspect --json"
+            if ok
+            else "fix memory read blockers, then rerun agentx memory-read QUERY --json"
+        ],
+    }
+
+
+def memory_write_payload(
+    *,
+    memory: Any,
+    content: str,
+    namespace: str,
+    memory_type: str = "note",
+    tier: str = "llm_derived",
+    write: bool = False,
+) -> dict[str, Any]:
+    blockers: list[str] = []
+    warnings: list[str] = []
+    cleaned_content = content.strip()
+    result: dict[str, Any] | None = None
+
+    if not cleaned_content:
+        blockers.append("content_required")
+    if tier not in ACA_SOURCE_TIERS:
+        blockers.append("invalid_tier")
+    if memory_type not in ACA_MEMORY_TYPES:
+        blockers.append("invalid_memory_type")
+
+    if not blockers and write:
+        try:
+            result = memory.write_aca(
+                content=cleaned_content,
+                namespace=namespace,
+                memory_type=memory_type,
+                source_tier=tier,
+            )
+        except Exception as exc:
+            blockers.append(f"memory_write_failed:{type(exc).__name__}:{exc}")
+    elif not write and not blockers:
+        warnings.append("dry_run_no_memory_written")
+
+    ok = not blockers
+    return {
+        "schema": MEMORY_WRITE_SCHEMA,
+        "ok": ok,
+        "write": write,
+        "namespace": namespace,
+        "memory_type": memory_type,
+        "tier": tier,
+        "content_preview": cleaned_content[:500],
+        "content_truncated": len(cleaned_content) > 500,
+        "blockers": blockers,
+        "warnings": warnings,
+        "memory_result": result,
+        "recommended_command": "agentx memory-write CONTENT --write --json"
+        if ok and not write
+        else "agentx inspect --json"
+        if ok
+        else "fix memory write blockers, then rerun agentx memory-write CONTENT --json",
+        "recommended_kind": "memory_write_execute" if ok and not write else "inspect" if ok else "fix_memory_write_blockers",
+        "recommended_risk": "YELLOW" if ok and not write else "GREEN" if ok else "UNKNOWN",
+        "next_commands": [
+            "agentx memory-write CONTENT --write --json"
+            if ok and not write
+            else "agentx inspect --json"
+            if ok
+            else "fix memory write blockers, then rerun agentx memory-write CONTENT --json"
         ],
     }

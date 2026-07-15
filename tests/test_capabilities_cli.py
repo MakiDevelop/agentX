@@ -36,6 +36,8 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert "agentx tool-plan" in commands
     assert "agentx infra" in commands
     assert "agentx memory-status" in commands
+    assert "agentx memory-read" in commands
+    assert "agentx memory-write" in commands
     assert "agentx instructions" in commands
     assert commands["agentx verify"]["schemas"] == ["agentx.verify.v1"]
     assert commands["agentx artifacts"]["schemas"] == ["agentx.artifacts.v1"]
@@ -60,6 +62,10 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert commands["agentx infra"]["jsonl_event"] == "infra"
     assert commands["agentx memory-status"]["schemas"] == ["agentx.memory_status.v1"]
     assert commands["agentx memory-status"]["jsonl_event"] == "memory_status"
+    assert commands["agentx memory-read"]["schemas"] == ["agentx.memory_read.v1"]
+    assert commands["agentx memory-read"]["jsonl_event"] == "memory_read"
+    assert commands["agentx memory-write"]["schemas"] == ["agentx.memory_write.v1"]
+    assert commands["agentx memory-write"]["jsonl_event"] == "memory_write"
     assert commands["agentx instructions"]["schemas"] == ["agentx.local_instructions.v1"]
     assert commands["agentx instructions"]["jsonl_event"] == "instructions"
     assert commands["agentx approvals"]["jsonl_event"] == "approvals"
@@ -96,6 +102,8 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     tool_plan_payload = capabilities_payload("agentx.tool_plan.v1")
     infra_payload = capabilities_payload("agentx.infrastructure_context.v1")
     memory_status_payload = capabilities_payload("agentx.memory_status.v1")
+    memory_read_payload = capabilities_payload("agentx.memory_read.v1")
+    memory_write_payload = capabilities_payload("agentx.memory_write.v1")
     instructions_payload = capabilities_payload("agentx.local_instructions.v1")
 
     assert schema_payload["count"] == 1
@@ -123,6 +131,10 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     assert infra_payload["capabilities"][0]["command"] == "agentx infra"  # type: ignore[index]
     assert memory_status_payload["count"] == 1
     assert memory_status_payload["capabilities"][0]["command"] == "agentx memory-status"  # type: ignore[index]
+    assert memory_read_payload["count"] == 1
+    assert memory_read_payload["capabilities"][0]["command"] == "agentx memory-read"  # type: ignore[index]
+    assert memory_write_payload["count"] == 1
+    assert memory_write_payload["capabilities"][0]["command"] == "agentx memory-write"  # type: ignore[index]
     assert instructions_payload["count"] == 1
     assert instructions_payload["capabilities"][0]["command"] == "agentx instructions"  # type: ignore[index]
 
