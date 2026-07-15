@@ -13,9 +13,11 @@
 - `agentx next --json` provides deterministic next-step routing with embedded command plans.
 - `agentx gate --json`, `review --json`, `commit-plan --json`, `verify --json`, `command-plan --json`, `tool-plan --json`, and `patch-check --json` provide runner-safe preflight surfaces.
 - Deterministic headless benchmark covers a fresh `agentx -p ... --agent --artifact-dir ... --no-memory --json` run in a local fixture repo, including real tool write, result/session/handoff bundle, `artifacts`, `next`, and `gate`.
+- `agentx command-parity --json` exposes a machine-readable slash-command to runner JSON matrix for AMH, ACE, artifacts, next, gate, and command-plan surfaces.
 
 Evidence:
 - `tests/test_capabilities_cli.py`
+- `tests/test_command_parity_cli.py`
 - `tests/test_headless_task_benchmark.py::test_headless_agent_benchmark_completes_task_artifacts_next_and_gate`
 - `tests/test_inspect_cli.py`
 - `tests/test_next_cli.py`
@@ -71,15 +73,7 @@ Suggested next proof:
 - Add a small fixture task suite that can run against selected live or recorded backends.
 - Track success/failure, tool-call count, termination, artifact completeness, and recovery recommendation quality.
 
-### Gap 2: Interactive shell and runner JSON surfaces may drift
-
-The objective compares agentX to CLI agents, but several capabilities exist mainly as top-level JSON commands. Some slash-command parity and interaction-flow parity still need explicit checks.
-
-Suggested next proof:
-- Add parity tests or a matrix linking slash command, top-level CLI command, schema, and risk posture.
-- Start with AMH/ACE, artifacts, next, gate, and command-plan.
-
-### Gap 3: Completion criteria are spread across multiple documents
+### Gap 2: Completion criteria are spread across multiple documents
 
 The current evidence lives across README, CLI contracts, headless optimization list, roadmap, and tests. That is workable, but it makes the original objective hard to audit without re-reading many files.
 
@@ -89,16 +83,17 @@ Suggested next proof:
 
 ## Recommended Next Slice
 
-Implement an AMH/ACE slash-command parity matrix next. It should reduce drift between interactive shell flows and runner JSON surfaces:
+Implement an objective status document next. It should consolidate the current evidence and remaining target bar into a single ratifiable status file:
 
 ```text
-/config or /memory shell path
-↔ memory-status/read/write JSON commands
-↔ ace-init/briefing/answer/status JSON commands
+Codex/Grok-like runner requirements
+→ current evidence
+→ remaining live model reliability work
+→ completion gate
 ```
 
 Acceptance criteria:
-- Documents command parity for AMH, ACE, artifacts, next, gate, and command-plan.
-- Adds focused tests where command mappings are machine-checkable.
-- Does not expand governance or external write behavior.
+- References concrete tests and docs.
+- Separates proven runner mechanics from unproven live model reliability.
+- Does not mark the full objective complete until the live/recorded reliability bar is ratified and verified.
 - Updates `docs/HEADLESS_OPTIMIZATION_LIST.md`.

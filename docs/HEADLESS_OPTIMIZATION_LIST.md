@@ -129,6 +129,7 @@
 - [x] `docs/OBJECTIVE_GAP_AUDIT_2026-07-15.md` 已盤點 Codex/Grok-like runner foundation、AMH/ACE support evidence 與剩餘缺口，作為總目標尚未完成前的階段性 audit。
 - [x] ACE write path 已有 isolated CLI smoke，使用 pytest temp root 覆蓋 `ace-init --write` → `ace-briefing --write` → `ace-answer` → `ace-status`，並確認所有寫入路徑留在 temp ACE root。
 - [x] AMH write path 已有 isolated CLI smoke，使用 workspace-local JSON store 覆蓋 `memory-write --write` → `memory-read` → `memory-status`，並在 AMH client namespaced 操作加上 `--caller-ns` 以符合 namespace isolation。
+- [x] `agentx command-parity --json` 會輸出 AMH、ACE、artifacts、next、gate、command-plan 的 slash-command ↔ runner JSON surface matrix，並納入 capabilities discovery。
 - [x] `agentx next --json` / `agentx inspect --json` 會把 AMH handoff 與 ACE council `workflow-run` previews 納入 recommendations，且不覆蓋 denied approval、dirty gate、artifact handoff、active task 等高優先級建議。
 - [x] `agentx inspect --json` 會內嵌 `verify_command_plans`，把每個預設 verify command 轉成 `agentx.command_plan.v1`，讓 runner 一次取得可執行檢查與 command policy posture。
 - [x] `agentx inspect --json` 會內嵌 `instructions`（`agentx.local_instructions.v1`）與 top-level instruction signals，讓 runner 一次取得 repo-local AGENTX/AGENTS/CLAUDE 規則狀態。

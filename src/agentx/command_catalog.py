@@ -510,6 +510,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only catalog",
     },
     {
+        "command": "agentx command-parity",
+        "usage": "agentx command-parity --json",
+        "description": "Inspect slash-command to runner JSON command parity for AMH, ACE, artifacts, next, gate, and command-plan surfaces.",
+        "examples": ["agentx command-parity --json", "agentx command-parity memory --output-format jsonl"],
+        "schemas": ["agentx.command_parity.v1"],
+        "jsonl_event": "command_parity",
+        "risk": "GREEN - read-only command catalog inspection",
+    },
+    {
         "command": "agentx version",
         "usage": "agentx version --json",
         "description": "Print agentX and Python runtime versions.",
@@ -517,6 +526,80 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "schemas": [],
         "jsonl_event": "version",
         "risk": "GREEN - read-only local inspection",
+    },
+]
+
+COMMAND_PARITY_MATRIX: list[dict[str, object]] = [
+    {
+        "domain": "memory",
+        "status": "mapped",
+        "slash_commands": ["/memory QUERY", "/remember TEXT", "/handoff [TEXT]", "/config set memory_backend|memory_amh_store|memory_amh_path VALUE"],
+        "runner_commands": ["agentx memory-status --json", "agentx memory-read QUERY --json", "agentx memory-write CONTENT --json"],
+        "schemas": ["agentx.memory_status.v1", "agentx.memory_read.v1", "agentx.memory_write.v1"],
+        "jsonl_events": ["memory_status", "memory_read", "memory_write"],
+        "workflow_aliases": ["memory", "amh"],
+        "risk_alignment": "read/status are GREEN; shell /remember and runner memory-write require explicit write behavior",
+        "notes": "Runner memory-write is dry-run unless --write is provided; shell /remember is explicit human input and writes through Memory Hall tools.",
+    },
+    {
+        "domain": "ace",
+        "status": "runner_only_workflow",
+        "slash_commands": ["/workflow ace", "/workflow council", "/workflows"],
+        "runner_commands": [
+            "agentx ace-init SESSION --goal GOAL --json",
+            "agentx ace-briefing SESSION --agent AGENT --json",
+            "agentx ace-answer SESSION --agent AGENT --answer TEXT --json",
+            "agentx ace-status SESSION --json",
+        ],
+        "schemas": ["agentx.ace_session.v1", "agentx.ace_briefing.v1", "agentx.ace_answer.v1", "agentx.ace_status.v1"],
+        "jsonl_events": ["ace_init", "ace_briefing", "ace_answer", "ace_status"],
+        "workflow_aliases": ["ace", "council", "multi-agent", "gemini"],
+        "risk_alignment": "ACE previews are GREEN; --write creates local ACE files and is explicit",
+        "notes": "Interactive shell discovers ACE through workflow recipes; structured ACE operations are runner-facing top-level commands.",
+    },
+    {
+        "domain": "artifacts",
+        "status": "runner_only",
+        "slash_commands": ["/workflow headless", "/workflow audit"],
+        "runner_commands": ["agentx artifacts --json", "agentx handoff-inspect PATH --json", "agentx handoff-resume DIR_OR_RESULT --dry-run"],
+        "schemas": ["agentx.artifacts.v1"],
+        "jsonl_events": ["artifacts", "handoff_inspect", "handoff_resume"],
+        "workflow_aliases": ["headless", "audit"],
+        "risk_alignment": "artifact inspection is GREEN; handoff-resume is GREEN with --dry-run and YELLOW with --execute",
+        "notes": "Shell workflows show copyable routes; runner commands provide machine-readable artifact discovery and resume planning.",
+    },
+    {
+        "domain": "next",
+        "status": "runner_only",
+        "slash_commands": ["/workflow audit", "/workflow commit"],
+        "runner_commands": ["agentx next --json", "agentx inspect --json"],
+        "schemas": ["agentx.next.v1", "agentx.inspect.v1"],
+        "jsonl_events": ["next", "inspect"],
+        "workflow_aliases": ["audit", "commit"],
+        "risk_alignment": "GREEN read-only routing",
+        "notes": "The shell has workflow recipes for human-readable next routes; runner next/inspect returns deterministic recommendations.",
+    },
+    {
+        "domain": "gate",
+        "status": "mapped",
+        "slash_commands": ["/review", "/commit [MESSAGE]", "/test"],
+        "runner_commands": ["agentx gate --json", "agentx review --json", "agentx verify --json", "agentx commit-plan --message TEXT --json"],
+        "schemas": ["agentx.gate.v1", "agentx.review.v1", "agentx.verify.v1", "agentx.commit_plan.v1"],
+        "jsonl_events": ["gate", "review", "verify", "commit_plan"],
+        "workflow_aliases": ["audit", "commit"],
+        "risk_alignment": "review/gate/commit-plan are GREEN previews; shell /commit performs YELLOW git write after checks",
+        "notes": "Runner surfaces separate preflight from mutation; shell /commit remains the interactive commit/push path.",
+    },
+    {
+        "domain": "command-plan",
+        "status": "runner_only",
+        "slash_commands": ["/run COMMAND", "/docker ...", "/apply PATCH_FILE"],
+        "runner_commands": ["agentx command-plan COMMAND --json", "agentx tool-plan TOOL --args-json JSON --json", "agentx patch-check PATCH --json"],
+        "schemas": ["agentx.command_plan.v1", "agentx.tool_plan.v1", "agentx.patch_check.v1"],
+        "jsonl_events": ["command_plan", "tool_plan", "patch_check"],
+        "workflow_aliases": [],
+        "risk_alignment": "GREEN read-only preflight for commands and tool calls; execution remains separate",
+        "notes": "Runner preflight mirrors shell execution families without executing commands.",
     },
 ]
 
@@ -678,6 +761,46 @@ def capabilities_payload(query: str | None = None) -> dict[str, object]:
         "runner_smokes": RUNNER_SMOKE_WORKFLOWS,
         "by_schema": _capabilities_by_schema(capabilities),
         "capabilities": capabilities,
+    }
+
+
+def command_parity_payload(query: str | None = None) -> dict[str, object]:
+    normalized_query = (query or "").strip().lower()
+    entries: list[dict[str, object]] = []
+    for item in COMMAND_PARITY_MATRIX:
+        if normalized_query and normalized_query not in " ".join(
+            [
+                str(item["domain"]),
+                str(item["status"]),
+                *[str(value) for value in item["slash_commands"]],  # type: ignore[index]
+                *[str(value) for value in item["runner_commands"]],  # type: ignore[index]
+                *[str(value) for value in item["schemas"]],  # type: ignore[index]
+                *[str(value) for value in item["jsonl_events"]],  # type: ignore[index]
+                *[str(value) for value in item["workflow_aliases"]],  # type: ignore[index]
+                str(item["risk_alignment"]),
+                str(item["notes"]),
+            ]
+        ).lower():
+            continue
+        entries.append(
+            {
+                "domain": str(item["domain"]),
+                "status": str(item["status"]),
+                "slash_commands": [str(value) for value in item["slash_commands"]],  # type: ignore[index]
+                "runner_commands": [str(value) for value in item["runner_commands"]],  # type: ignore[index]
+                "schemas": [str(value) for value in item["schemas"]],  # type: ignore[index]
+                "jsonl_events": [str(value) for value in item["jsonl_events"]],  # type: ignore[index]
+                "workflow_aliases": [str(value) for value in item["workflow_aliases"]],  # type: ignore[index]
+                "risk_alignment": str(item["risk_alignment"]),
+                "notes": str(item["notes"]),
+            }
+        )
+    return {
+        "schema": "agentx.command_parity.v1",
+        "query": query or "",
+        "count": len(entries),
+        "entries": entries,
+        "by_domain": {str(entry["domain"]): entry for entry in entries},
     }
 
 

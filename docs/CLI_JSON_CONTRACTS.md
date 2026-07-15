@@ -58,6 +58,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx status --json` | `agentx.status.v1` | `status` |
 | `agentx doctor --json` | `agentx.doctor.v1` | `doctor` |
 | `agentx commands --json` | `agentx.command_catalog.v1` | `commands` |
+| `agentx command-parity --json` | `agentx.command_parity.v1` | `command_parity` |
 | `agentx tools --json` | `agentx.tool_catalog.v1` | `tools` |
 | `agentx tool-plan --json` | `agentx.tool_plan.v1` | `tool_plan` |
 | `agentx workflows --json` | `agentx.workflow_catalog.v1` | `workflows` |
@@ -1204,6 +1205,38 @@ Each command object includes:
 | `examples` | array of string |
 | `related` | array of string |
 | `risk` | string |
+
+## Command Parity Payload
+
+`agentx command-parity --json` emits `agentx.command_parity.v1`.
+
+This command is read-only. It maps interactive slash-command families to
+runner-facing JSON commands so wrappers can detect drift across AMH, ACE,
+artifact, next-step, gate, and command-plan surfaces.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.command_parity.v1`. |
+| `query` | string | Filter query, or empty string. |
+| `count` | integer | Number of returned parity entries. |
+| `entries` | array of object | Ordered parity entries. |
+| `by_domain` | object | Map from domain name to parity entry. |
+
+Each entry object includes:
+
+| Key | Type |
+|-----|------|
+| `domain` | string |
+| `status` | string |
+| `slash_commands` | array of string |
+| `runner_commands` | array of string |
+| `schemas` | array of string |
+| `jsonl_events` | array of string |
+| `workflow_aliases` | array of string |
+| `risk_alignment` | string |
+| `notes` | string |
 
 ## Tool Catalog Payload
 

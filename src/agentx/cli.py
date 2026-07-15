@@ -36,6 +36,7 @@ from agentx.command_catalog import (
     COMMAND_CATALOG,
     SLASH_COMMANDS,
     capabilities_payload,
+    command_parity_payload,
     command_catalog_payload,
     filtered_command_catalog_payload,
     format_unknown_slash_command,
@@ -6148,6 +6149,40 @@ def print_capabilities(
     console.print(table)
 
 
+def print_command_parity(
+    query: str | None = None,
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    payload = command_parity_payload(query)
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="command_parity",
+        )
+        return
+
+    title = "agentX command parity"
+    if payload["query"]:
+        title = f"{title}: {payload['query']}"
+    table = Table(title=title, show_header=True, header_style="bold")
+    table.add_column("Domain", style="cyan", no_wrap=True)
+    table.add_column("Status")
+    table.add_column("Slash")
+    table.add_column("Runner")
+    for item in payload["entries"]:  # type: ignore[index]
+        entry = dict(item)
+        table.add_row(
+            str(entry["domain"]),
+            str(entry["status"]),
+            ", ".join(str(value) for value in entry["slash_commands"]),
+            ", ".join(str(value) for value in entry["runner_commands"]),
+        )
+    console.print(table)
+
+
 def build_headless_dry_run_payload(
     prompt: str,
     *,
@@ -7426,6 +7461,17 @@ def commands_command(
     """List or search slash command catalog entries."""
     structured_format = structured_output_format(json_output, output_format)
     print_command_catalog(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("command-parity")
+def command_parity_command(
+    query: str | None = typer.Argument(None, help="Optional parity domain or keyword filter, e.g. memory, ace, gate."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """List slash-command to runner JSON command parity mappings."""
+    structured_format = structured_output_format(json_output, output_format)
+    print_command_parity(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("workflows")

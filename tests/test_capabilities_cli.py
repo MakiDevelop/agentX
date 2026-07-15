@@ -61,6 +61,7 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert "agentx workflow-plan" in commands
     assert "agentx workflow-run" in commands
     assert "agentx instructions" in commands
+    assert "agentx command-parity" in commands
     assert commands["agentx verify"]["schemas"] == ["agentx.verify.v1"]
     assert commands["agentx artifacts"]["schemas"] == ["agentx.artifacts.v1"]
     assert commands["agentx handoff-inspect"]["jsonl_event"] == "handoff_inspect"
@@ -88,6 +89,8 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     assert commands["agentx memory-read"]["jsonl_event"] == "memory_read"
     assert commands["agentx memory-write"]["schemas"] == ["agentx.memory_write.v1"]
     assert commands["agentx memory-write"]["jsonl_event"] == "memory_write"
+    assert commands["agentx command-parity"]["schemas"] == ["agentx.command_parity.v1"]
+    assert commands["agentx command-parity"]["jsonl_event"] == "command_parity"
     assert commands["agentx workflow-plan"]["schemas"] == ["agentx.workflow_plan.v1"]
     assert commands["agentx workflow-plan"]["jsonl_event"] == "workflow_plan"
     assert commands["agentx workflow-run"]["schemas"] == ["agentx.workflow_run.v1"]
@@ -133,6 +136,7 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     workflow_plan_payload = capabilities_payload("agentx.workflow_plan.v1")
     workflow_run_payload = capabilities_payload("agentx.workflow_run.v1")
     instructions_payload = capabilities_payload("agentx.local_instructions.v1")
+    command_parity_payload = capabilities_payload("agentx.command_parity.v1")
 
     assert schema_payload["count"] == 1
     assert schema_payload["capabilities"][0]["command"] == "agentx tasks"  # type: ignore[index]
@@ -169,6 +173,8 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     assert workflow_run_payload["capabilities"][0]["command"] == "agentx workflow-run"  # type: ignore[index]
     assert instructions_payload["count"] == 1
     assert instructions_payload["capabilities"][0]["command"] == "agentx instructions"  # type: ignore[index]
+    assert command_parity_payload["count"] == 1
+    assert command_parity_payload["capabilities"][0]["command"] == "agentx command-parity"  # type: ignore[index]
 
 
 def test_capabilities_json_outputs_catalog() -> None:
