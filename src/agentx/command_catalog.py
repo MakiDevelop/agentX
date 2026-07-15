@@ -470,6 +470,7 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "examples": [
             "agentx workflow-inspect .agentx/runs/workflow-memory.json --json",
             "agentx workflow-inspect .agentx/runs/workflow-memory.json --input 完成與待辦='完成 AMH 交接' --json",
+            "agentx workflow-inspect .agentx/runs/workflow-memory.json --result-output auto --json",
             "agentx workflow-inspect .agentx/runs/workflow-memory.json --field resume_command",
         ],
         "schemas": ["agentx.workflow_artifact.v1"],
@@ -483,6 +484,7 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "examples": [
             "agentx workflow-resume .agentx/runs/workflow-memory.json --dry-run --json",
             "agentx workflow-resume .agentx/runs/workflow-memory.json --input 完成與待辦='完成 AMH 交接' --dry-run --json",
+            "agentx workflow-resume .agentx/runs/workflow-memory.json --result-output auto --dry-run --json",
             "agentx workflow-resume .agentx/runs/workflow-memory.json --workflow-execute --dry-run --json",
         ],
         "schemas": ["agentx.workflow_resume.v1"],

@@ -628,6 +628,46 @@ def test_workflow_inspect_preserves_known_inputs_and_result_output(tmp_path) -> 
     ]
 
 
+def test_workflow_inspect_result_output_auto_allocates_artifact_path(tmp_path) -> None:  # noqa: ANN001
+    source = tmp_path / "workflow-memory.json"
+    run_payload = workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"})
+    source.write_text(json.dumps(run_payload, ensure_ascii=False), encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-inspect",
+            str(source),
+            "--result-output",
+            "auto",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["result_output"] == ".agentx/runs/workflow-memory-next.json"
+    assert payload["result_output_mode"] == "auto"
+    assert "--result-output" in payload["resume_argv"]
+    assert ".agentx/runs/workflow-memory-next.json" in payload["resume_argv"]
+
+
+def test_workflow_inspect_result_output_auto_avoids_existing_path(tmp_path) -> None:  # noqa: ANN001
+    source = tmp_path / "workflow-memory.json"
+    run_payload = workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"})
+    source.write_text(json.dumps(run_payload, ensure_ascii=False), encoding="utf-8")
+    existing = tmp_path / ".agentx" / "runs" / "workflow-memory-next.json"
+    existing.parent.mkdir(parents=True, exist_ok=True)
+    existing.write_text("existing\n", encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["workflow-inspect", str(source), "--result-output", "auto", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["result_output"] == ".agentx/runs/workflow-memory-next-2.json"
+    assert ".agentx/runs/workflow-memory-next-2.json" in payload["resume_argv"]
+
+
 def test_workflow_inspect_field_outputs_resume_command(tmp_path) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.json"
     source.write_text(
@@ -699,6 +739,32 @@ def test_workflow_resume_input_override_makes_dry_run_ready(tmp_path) -> None:  
     assert payload["ok"] is True
     assert payload["blockers"] == []
     assert "完成與待辦=完成 AMH 交接" in payload["argv"]
+
+
+def test_workflow_resume_result_output_auto_uses_jsonl_suffix(tmp_path) -> None:  # noqa: ANN001
+    source = tmp_path / "workflow-memory.jsonl"
+    run_payload = workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"})
+    source.write_text(json.dumps({"event": "workflow_run", "data": run_payload}, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-resume",
+            str(source),
+            "--result-output",
+            "auto",
+            "--resume-output-format",
+            "jsonl",
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert "--result-output" in payload["argv"]
+    assert ".agentx/runs/workflow-memory-next.jsonl" in payload["argv"]
 
 
 def test_workflow_resume_execute_rejects_missing_inputs(tmp_path) -> None:  # noqa: ANN001

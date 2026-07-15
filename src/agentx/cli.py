@@ -5687,6 +5687,42 @@ def workflow_run_artifact_inputs_required(payload: dict[str, object]) -> list[di
     return [dict(item) for item in required if isinstance(item, dict)]
 
 
+def workflow_resume_auto_result_output(
+    payload: dict[str, object],
+    *,
+    source: str,
+    resume_output_format: str,
+) -> str:
+    suffix = "jsonl" if resume_output_format.strip().lower() == "jsonl" else "json"
+    source_name = "workflow-run" if source == "-" else Path(source).stem
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", source_name).strip("-_.") or "workflow-run"
+    workspace = Path(str(payload.get("workspace") or Path.cwd())).expanduser().resolve()
+    for index in range(1, 1000):
+        stem = f"{slug}-next" if index == 1 else f"{slug}-next-{index}"
+        relative = Path(".agentx") / "runs" / f"{stem}.{suffix}"
+        if not (workspace / relative).exists():
+            return relative.as_posix()
+    raise typer.BadParameter("unable to allocate workflow resume auto result output path")
+
+
+def resolve_workflow_resume_result_output(
+    payload: dict[str, object],
+    *,
+    source: str,
+    result_output: str | None,
+    resume_output_format: str,
+) -> tuple[str | None, str | None]:
+    if result_output is None:
+        return None, None
+    if result_output.strip().lower() == "auto":
+        return workflow_resume_auto_result_output(
+            payload,
+            source=source,
+            resume_output_format=resume_output_format,
+        ), "auto"
+    return result_output, "explicit"
+
+
 def workflow_run_artifact_resume_argv(
     payload: dict[str, object],
     *,
@@ -5749,13 +5785,19 @@ def inspect_workflow_run_artifact_payload(
     result_output: str | None = None,
     resume_output_format: str = "json",
 ) -> dict[str, object]:
+    resolved_result_output, result_output_mode = resolve_workflow_resume_result_output(
+        payload,
+        source=source,
+        result_output=result_output,
+        resume_output_format=resume_output_format,
+    )
     argv, missing_inputs = workflow_run_artifact_resume_argv(
         payload,
         input_overrides=input_overrides,
         workflow_execute=workflow_execute,
         allow_yellow_gates=allow_yellow_gates,
         approval_reason=approval_reason,
-        result_output=result_output,
+        result_output=resolved_result_output,
         resume_output_format=resume_output_format,
     )
     plan = payload.get("plan")
@@ -5776,6 +5818,8 @@ def inspect_workflow_run_artifact_payload(
         "workflow_execute": workflow_execute,
         "allow_yellow_gates": allow_yellow_gates,
         "approval_reason": approval_reason,
+        "result_output": resolved_result_output,
+        "result_output_mode": result_output_mode,
         "workspace": payload.get("workspace"),
         "stopped_at": stopped_at if isinstance(stopped_at, dict) else None,
         "blockers": list(blockers) if isinstance(blockers, list) else [],

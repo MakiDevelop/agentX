@@ -1334,7 +1334,9 @@ builds a deterministic rerun command. It preserves known workflow inputs from
 the embedded plan and inserts `<PLACEHOLDER>` values for still-missing inputs.
 `--input KEY=VALUE` may be repeated to fill or override workflow inputs before
 building the rerun command. It is read-only and does not execute the generated
-command.
+command. `--result-output auto` allocates the next available
+`.agentx/runs/*-next.json` or `.jsonl` path for the generated command without
+creating the file.
 
 Required stable keys:
 
@@ -1349,6 +1351,8 @@ Required stable keys:
 | `workflow_execute` | boolean | Whether the generated rerun command includes `workflow-run --execute`. |
 | `allow_yellow_gates` | boolean | Whether the generated rerun command includes `--allow-yellow-gates`. |
 | `approval_reason` | string or null | Approval reason included in the generated rerun command. |
+| `result_output` | string or null | Result artifact path included in the generated rerun command. |
+| `result_output_mode` | string or null | `auto`, `explicit`, or null. |
 | `workspace` | string or null | Workspace recorded in the original artifact. |
 | `stopped_at` | object or null | Original workflow-run stop reason. |
 | `blockers` | array of string | Original workflow-run blockers. |
@@ -1378,8 +1382,10 @@ when `resume_ready=false`.
 
 This command converts a workflow-run artifact into the generated rerun command.
 `--input KEY=VALUE` may be repeated to fill or override workflow inputs before
-building the command. It is dry-run oriented by default. `--execute` runs the
-generated command and is rejected until all placeholder inputs are filled.
+building the command. `--result-output auto` allocates the next available
+`.agentx/runs/*-next.json` or `.jsonl` path for the generated command. It is
+dry-run oriented by default. `--execute` runs the generated command and is
+rejected until all placeholder inputs are filled.
 
 Required stable keys:
 
