@@ -155,6 +155,8 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["memory_status"]["live_probe"] is False
     assert payload["artifacts"]["schema"] == "agentx.artifacts.v1"
     assert payload["artifacts"]["latest_artifact"]["artifact_type"] == "workflow_run"
+    assert payload["artifacts"]["workflow_chain"]["status"] == "ready"
+    assert payload["artifacts"]["workflow_chain"]["next_result_output"] == ".agentx/runs/workflow-ace-next.json"
     assert payload["next"]["schema"] == "agentx.next.v1"
     assert payload["signals"]["latest_artifact_type"] == "workflow_run"
     assert payload["signals"]["latest_workflow_run_query"] == "ace"
@@ -162,6 +164,8 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["signals"]["latest_workflow_run_stopped"] is False
     assert payload["signals"]["latest_workflow_resume_ready"] is True
     assert payload["signals"]["latest_workflow_missing_input_count"] == 0
+    assert payload["signals"]["latest_workflow_chain_status"] == "ready"
+    assert payload["signals"]["latest_workflow_next_result_output"] == ".agentx/runs/workflow-ace-next.json"
     assert payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
     next_kinds = [item["kind"] for item in payload["next"]["recommendations"]]
     assert "memory_handoff_workflow" in next_kinds

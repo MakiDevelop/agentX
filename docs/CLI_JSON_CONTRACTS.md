@@ -438,7 +438,8 @@ Required stable keys:
 `latest_artifact_type`, `latest_artifact_needs_handoff`,
 `latest_workflow_run_query`, `latest_workflow_run_ok`,
 `latest_workflow_run_stopped`, `latest_workflow_resume_ready`,
-`latest_workflow_missing_input_count`, `denied_approval_count`,
+`latest_workflow_missing_input_count`, `latest_workflow_chain_status`,
+`latest_workflow_next_result_output`, `denied_approval_count`,
 `approvals_available`, and `workflow_recommendation_count`.
 `primary_active_task` is the first task from the embedded active `tasks`
 payload, or null when no active tasks exist.
@@ -674,6 +675,7 @@ Required stable keys:
 | `recommended_command` | string | First suggested follow-up command for simple runners. |
 | `recommended_kind` | string | `handoff_resume`, `inspect_artifact`, or `headless_bundle`. |
 | `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `workflow_chain` | object or null | Latest workflow-run artifact chain status for runners, or null when the latest artifact is not a workflow-run result. |
 | `artifacts` | array of object | Artifact summaries sorted by latest artifact mtime descending. |
 | `detail` | string | Empty string or a human-readable note. |
 
@@ -710,7 +712,24 @@ Each artifact object includes:
 | `workflow_blockers` | array of string |
 | `workflow_resume_ready` | boolean or null |
 | `workflow_missing_input_count` | integer |
+| `workflow_next_result_output` | string or null |
 | `approval_receipt_count` | integer |
+
+When present, `workflow_chain` includes:
+
+| Key | Type |
+|-----|------|
+| `status` | string: `ready` or `needs_inspect` |
+| `latest_artifact` | string |
+| `latest_query` | string or null |
+| `latest_ok` | boolean or null |
+| `latest_stopped` | object or null |
+| `blocker_count` | integer |
+| `missing_input_count` | integer |
+| `resume_ready` | boolean |
+| `next_result_output` | string or null |
+| `recommended_command` | string |
+| `recommended_kind` | string |
 
 ## Config Payload
 

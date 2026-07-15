@@ -112,9 +112,45 @@ def test_artifacts_payload_lists_workflow_run_artifacts(tmp_path: Path) -> None:
     assert artifact["approval_receipt_count"] == 0
     assert artifact["has_session"] is False
     assert artifact["has_handoff"] is False
+    assert artifact["workflow_next_result_output"] is None
+    assert payload["workflow_chain"] == {  # type: ignore[index]
+        "status": "needs_inspect",
+        "latest_artifact": ".agentx/runs/workflow-memory.jsonl",
+        "latest_query": "memory",
+        "latest_ok": False,
+        "latest_stopped": {"reason": "side_effect_gate"},
+        "blocker_count": 1,
+        "missing_input_count": 0,
+        "resume_ready": True,
+        "next_result_output": None,
+        "recommended_command": "agentx workflow-inspect .agentx/runs/workflow-memory.jsonl --json",
+        "recommended_kind": "workflow_artifact_inspect",
+    }
     assert payload["latest_artifact"]["path"] == str(target)  # type: ignore[index]
     assert payload["recommended_command"] == "agentx artifacts .agentx/runs/workflow-memory.jsonl --json"
     assert payload["recommended_kind"] == "inspect_artifact"
+
+
+def test_artifacts_payload_reports_ready_workflow_chain_next_output(tmp_path: Path) -> None:
+    runs = tmp_path / ".agentx" / "runs"
+    _write_workflow_run_artifact(runs, "workflow-memory.json", ok=True, mtime=30)
+
+    payload = artifacts_payload(Settings(workspace=tmp_path), limit=10)
+
+    assert payload["latest_artifact"]["workflow_next_result_output"] == ".agentx/runs/workflow-memory-next.json"  # type: ignore[index]
+    assert payload["workflow_chain"] == {  # type: ignore[index]
+        "status": "ready",
+        "latest_artifact": ".agentx/runs/workflow-memory.json",
+        "latest_query": "memory",
+        "latest_ok": True,
+        "latest_stopped": None,
+        "blocker_count": 0,
+        "missing_input_count": 0,
+        "resume_ready": True,
+        "next_result_output": ".agentx/runs/workflow-memory-next.json",
+        "recommended_command": "agentx workflow-resume .agentx/runs/workflow-memory.json --result-output auto --dry-run --json",
+        "recommended_kind": "workflow_resume",
+    }
 
 
 def test_artifacts_payload_accepts_single_workflow_run_file(tmp_path: Path) -> None:

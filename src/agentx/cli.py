@@ -2120,6 +2120,22 @@ def is_workflow_run_artifact_payload(payload: dict[str, object] | None) -> bool:
     return artifact_payload_schema(payload) == "agentx.workflow_run.v1"
 
 
+def allocate_workflow_resume_auto_result_output(
+    workspace: Path,
+    *,
+    source_name: str,
+    resume_output_format: str,
+) -> str:
+    suffix = "jsonl" if resume_output_format.strip().lower() == "jsonl" else "json"
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", source_name).strip("-_.") or "workflow-run"
+    for index in range(1, 1000):
+        stem = f"{slug}-next" if index == 1 else f"{slug}-next-{index}"
+        relative = Path(".agentx") / "runs" / f"{stem}.{suffix}"
+        if not (workspace.resolve() / relative).exists():
+            return relative.as_posix()
+    raise typer.BadParameter("unable to allocate workflow resume auto result output path")
+
+
 def artifact_bundle_overview(workspace: Path, bundle: Path) -> dict[str, object]:
     result_json = bundle / "result.json"
     result_jsonl = bundle / "result.jsonl"
@@ -2165,6 +2181,9 @@ def artifact_bundle_overview(workspace: Path, bundle: Path) -> dict[str, object]
         "workflow_execute": None,
         "workflow_stopped_at": None,
         "workflow_blockers": [],
+        "workflow_resume_ready": None,
+        "workflow_missing_input_count": 0,
+        "workflow_next_result_output": None,
         "approval_receipt_count": 0,
     }
 
@@ -2191,6 +2210,17 @@ def artifact_workflow_run_overview(workspace: Path, path: Path) -> dict[str, obj
         and str(item.get("placeholder") or "").strip()
         and str(item.get("placeholder") or "").strip() not in plan_inputs
     ]
+    workflow_resume_ready = not missing_inputs
+    workflow_has_issue = bool(payload.get("stopped_at")) or bool(blockers) or not workflow_resume_ready
+    workflow_next_result_output = (
+        allocate_workflow_resume_auto_result_output(
+            workspace,
+            source_name=path.stem,
+            resume_output_format="json",
+        )
+        if not workflow_has_issue
+        else None
+    )
     return {
         "artifact_type": "workflow_run",
         "name": path.name,
@@ -2219,8 +2249,9 @@ def artifact_workflow_run_overview(workspace: Path, path: Path) -> dict[str, obj
         "workflow_execute": payload.get("execute"),
         "workflow_stopped_at": payload.get("stopped_at"),
         "workflow_blockers": list(blockers) if isinstance(blockers, list) else [],
-        "workflow_resume_ready": not missing_inputs,
+        "workflow_resume_ready": workflow_resume_ready,
         "workflow_missing_input_count": len(missing_inputs),
+        "workflow_next_result_output": workflow_next_result_output,
         "approval_receipt_count": len(approval_receipts) if isinstance(approval_receipts, list) else 0,
     }
 
@@ -2275,6 +2306,7 @@ def artifacts_payload(settings: Settings, *, root: str = ".agentx/runs", limit: 
             "recommended_command": "agentx -p '任務' --agent --artifact-dir .agentx/runs/latest --quiet",
             "recommended_kind": "headless_bundle",
             "recommended_risk": "YELLOW",
+            "workflow_chain": None,
             "artifacts": [],
             "detail": f"artifacts root not found: {root}",
         }
@@ -2295,6 +2327,7 @@ def artifacts_payload(settings: Settings, *, root: str = ".agentx/runs", limit: 
         "recommended_command": recommended_command,
         "recommended_kind": recommended_kind,
         "recommended_risk": recommended_risk,
+        "workflow_chain": workflow_chain_payload(latest_artifact),
         "artifacts": artifacts,
         "detail": "",
     }
@@ -2311,6 +2344,36 @@ def _artifacts_recommendation(artifact: dict[str, object] | None) -> tuple[str, 
     if artifact.get("needs_handoff") is True and artifact.get("resume_command"):
         return f"agentx handoff-resume {shlex.quote(artifact_path)} --dry-run", "handoff_resume", "GREEN"
     return f"agentx artifacts {shlex.quote(artifact_path)} --json", "inspect_artifact", "GREEN"
+
+
+def workflow_chain_payload(artifact: dict[str, object] | None) -> dict[str, object] | None:
+    if artifact is None or artifact.get("artifact_type") != "workflow_run":
+        return None
+    artifact_path = str(artifact.get("relative_path") or artifact.get("path") or ".agentx/runs")
+    blockers = list(artifact.get("workflow_blockers") or [])
+    stopped_at = artifact.get("workflow_stopped_at") if isinstance(artifact.get("workflow_stopped_at"), dict) else None
+    resume_ready = artifact.get("workflow_resume_ready") is True
+    missing_input_count = int(artifact.get("workflow_missing_input_count", 0) or 0)
+    has_issue = bool(stopped_at) or bool(blockers) or not resume_ready
+    next_result_output = str(artifact.get("workflow_next_result_output") or "") or None
+    recommended_command = (
+        f"agentx workflow-inspect {shlex.quote(artifact_path)} --json"
+        if has_issue
+        else f"agentx workflow-resume {shlex.quote(artifact_path)} --result-output auto --dry-run --json"
+    )
+    return {
+        "status": "needs_inspect" if has_issue else "ready",
+        "latest_artifact": artifact_path,
+        "latest_query": artifact.get("workflow_query"),
+        "latest_ok": artifact.get("workflow_ok"),
+        "latest_stopped": stopped_at,
+        "blocker_count": len(blockers),
+        "missing_input_count": missing_input_count,
+        "resume_ready": resume_ready,
+        "next_result_output": None if has_issue else next_result_output,
+        "recommended_command": recommended_command,
+        "recommended_kind": "workflow_artifact_inspect" if has_issue else "workflow_resume",
+    }
 
 
 def approvals_payload(
@@ -4212,6 +4275,7 @@ def next_payload(
         if latest_artifact_type == "workflow_run" and latest_artifact is not None
         else 0
     )
+    workflow_chain = artifacts.get("workflow_chain") if isinstance(artifacts.get("workflow_chain"), dict) else None
 
     if denied_count > 0:
         recommendations.append(
@@ -4356,6 +4420,8 @@ def next_payload(
             "latest_workflow_run_stopped": bool(latest_artifact.get("workflow_stopped_at")) if latest_artifact_type == "workflow_run" else False,
             "latest_workflow_resume_ready": latest_workflow_resume_ready,
             "latest_workflow_missing_input_count": latest_workflow_missing_input_count,
+            "latest_workflow_chain_status": workflow_chain.get("status") if workflow_chain else None,
+            "latest_workflow_next_result_output": workflow_chain.get("next_result_output") if workflow_chain else None,
             "denied_approval_count": denied_count,
             "approvals_available": approvals.get("ok") is True,
             "workflow_recommendation_count": 2,
@@ -5693,16 +5759,13 @@ def workflow_resume_auto_result_output(
     source: str,
     resume_output_format: str,
 ) -> str:
-    suffix = "jsonl" if resume_output_format.strip().lower() == "jsonl" else "json"
     source_name = "workflow-run" if source == "-" else Path(source).stem
-    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", source_name).strip("-_.") or "workflow-run"
     workspace = Path(str(payload.get("workspace") or Path.cwd())).expanduser().resolve()
-    for index in range(1, 1000):
-        stem = f"{slug}-next" if index == 1 else f"{slug}-next-{index}"
-        relative = Path(".agentx") / "runs" / f"{stem}.{suffix}"
-        if not (workspace / relative).exists():
-            return relative.as_posix()
-    raise typer.BadParameter("unable to allocate workflow resume auto result output path")
+    return allocate_workflow_resume_auto_result_output(
+        workspace,
+        source_name=source_name,
+        resume_output_format=resume_output_format,
+    )
 
 
 def resolve_workflow_resume_result_output(

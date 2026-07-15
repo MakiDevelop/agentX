@@ -232,7 +232,7 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `agentx memory-read QUERY --json` 會輸出 `agentx.memory_read.v1`，透過目前設定的 Memory Hall / AMH backend 查詢記憶。
 `agentx memory-write CONTENT --json` 會輸出 `agentx.memory_write.v1` 並預設 dry-run；只有加 `--write` 才會以 ACA-shaped `tier` / `type` 寫入 Memory Hall。
 `agentx sessions --json` 會輸出 `agentx.sessions.v1` transcript overview，方便外部 runner 找最近 session、approval denials 與 resume 目標。
-`agentx artifacts --json` 會輸出 `agentx.artifacts.v1` runner artifact catalog，預設掃 `.agentx/runs`，方便外部 runner 找到上一輪 headless bundle（`result.json/jsonl`、`session.session.jsonl`、`handoff.md`）或單檔 `agentx.workflow_run.v1` result artifact。
+`agentx artifacts --json` 會輸出 `agentx.artifacts.v1` runner artifact catalog，預設掃 `.agentx/runs`，方便外部 runner 找到上一輪 headless bundle（`result.json/jsonl`、`session.session.jsonl`、`handoff.md`）或單檔 `agentx.workflow_run.v1` result artifact；latest workflow-run 會另外提供 `workflow_chain`，標出 chain 狀態、下一個 auto artifact path 與推薦續跑命令。
 `agentx approvals latest --json` 會輸出 `agentx.approvals.v1` approval receipts；加 `--denied --fail-on-denied` 時，會在輸出 payload 後用 exit 1 擋下含拒絕項的 audit。
 `agentx traces latest --json` 會輸出 `agentx.traces.v1` transcript observability summary，彙整 event/tool counts、approval denials、tool failures、error-like records 與 recent events。
 `agentx tasks --json` 會輸出 `agentx.tasks.v1` 完整 task list；`agentx tasks active --json` 可只看 pending / in_progress / blocked，方便外部 runner 接續長任務。

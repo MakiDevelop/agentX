@@ -152,6 +152,8 @@ def test_next_payload_recommends_workflow_resume_for_ready_artifact(tmp_path: Pa
     assert payload["signals"]["latest_workflow_run_ok"] is True  # type: ignore[index]
     assert payload["signals"]["latest_workflow_run_stopped"] is False  # type: ignore[index]
     assert payload["signals"]["latest_workflow_resume_ready"] is True  # type: ignore[index]
+    assert payload["signals"]["latest_workflow_chain_status"] == "ready"  # type: ignore[index]
+    assert payload["signals"]["latest_workflow_next_result_output"] == ".agentx/runs/workflow-memory-next.json"  # type: ignore[index]
     assert payload["recommendations"][0]["kind"] == "workflow_resume"  # type: ignore[index]
     assert payload["recommendations"][0]["command"] == "agentx workflow-resume .agentx/runs/workflow-memory.json --result-output auto --dry-run --json"  # type: ignore[index]
     assert payload["recommendations"][0]["command_plan"]["risk"] == "GREEN"  # type: ignore[index]
