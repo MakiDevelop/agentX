@@ -406,6 +406,7 @@ Recommendation priority is intentionally conservative:
 3. Latest artifact handoff resume.
 4. Active task resume.
 5. Idle inspect.
+6. AMH handoff and ACE council workflow-run previews.
 
 Required stable keys:
 
@@ -427,9 +428,10 @@ Required stable keys:
 
 `signals` includes `dirty`, `diff_ok`, `active_task_count`,
 `active_task_ids`, `primary_active_task`, `artifact_count`,
-`latest_artifact_needs_handoff`, `denied_approval_count`, and
-`approvals_available`. `primary_active_task` is the first task from the embedded
-active `tasks` payload, or null when no active tasks exist.
+`latest_artifact_needs_handoff`, `denied_approval_count`,
+`approvals_available`, and `workflow_recommendation_count`.
+`primary_active_task` is the first task from the embedded active `tasks`
+payload, or null when no active tasks exist.
 
 Each recommendation object includes:
 

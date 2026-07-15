@@ -74,6 +74,9 @@ def test_next_payload_recommends_gate_for_dirty_workspace(tmp_path: Path) -> Non
     assert payload["recommended_risk"] == "GREEN"
     assert payload["recommendations"][0]["kind"] == "gate"  # type: ignore[index]
     assert payload["recommendations"][1]["kind"] == "commit_plan"  # type: ignore[index]
+    recommendation_kinds = [item["kind"] for item in payload["recommendations"]]  # type: ignore[index]
+    assert "memory_handoff_workflow" in recommendation_kinds
+    assert "ace_council_workflow" in recommendation_kinds
     assert payload["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"  # type: ignore[index]
     assert payload["recommendations"][0]["command_plan"]["allowed"] is True  # type: ignore[index]
 
@@ -125,6 +128,8 @@ def test_next_payload_recommends_active_tasks_when_clean(tmp_path: Path) -> None
     }
     assert payload["recommendations"][0]["kind"] == "task_resume"  # type: ignore[index]
     assert payload["recommendations"][1]["kind"] == "headless_continue"  # type: ignore[index]
+    assert payload["recommendations"][-2]["kind"] == "memory_handoff_workflow"  # type: ignore[index]
+    assert payload["recommendations"][-1]["kind"] == "ace_council_workflow"  # type: ignore[index]
     assert "primary=#1: in_progress: continue" in payload["recommendations"][0]["reason"]  # type: ignore[index]
 
 
@@ -138,6 +143,12 @@ def test_next_payload_defaults_to_inspect_when_idle(tmp_path: Path) -> None:
     assert payload["recommendations"][0]["rank"] == 1  # type: ignore[index]
     assert payload["recommendations"][0]["kind"] == "inspect"  # type: ignore[index]
     assert payload["recommendations"][0]["command"] == "agentx inspect --json"  # type: ignore[index]
+    assert payload["recommendations"][1]["kind"] == "memory_handoff_workflow"  # type: ignore[index]
+    assert payload["recommendations"][1]["command"] == "agentx workflow-run memory --json"  # type: ignore[index]
+    assert payload["recommendations"][1]["command_plan"]["schema"] == "agentx.command_plan.v1"  # type: ignore[index]
+    assert payload["recommendations"][2]["kind"] == "ace_council_workflow"  # type: ignore[index]
+    assert payload["recommendations"][2]["command"] == "agentx workflow-run ace --json"  # type: ignore[index]
+    assert payload["signals"]["workflow_recommendation_count"] == 2  # type: ignore[index]
     assert payload["recommended_kind"] == "inspect"
     assert payload["recommended_risk"] == "GREEN"
     assert payload["recommendations"][0]["reason"] == "workspace is clean and no active runner handoff was detected"  # type: ignore[index]

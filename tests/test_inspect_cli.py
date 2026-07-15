@@ -86,6 +86,10 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     assert payload["next"]["schema"] == "agentx.next.v1"  # type: ignore[index]
     assert payload["next"]["recommended_command"] == "agentx approvals latest --denied --json --fail-on-denied"  # type: ignore[index]
     assert payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"  # type: ignore[index]
+    next_kinds = [item["kind"] for item in payload["next"]["recommendations"]]  # type: ignore[index]
+    assert "memory_handoff_workflow" in next_kinds
+    assert "ace_council_workflow" in next_kinds
+    assert payload["signals"]["workflow_recommendation_count"] == 2  # type: ignore[index]
     assert payload["verify_commands"] == [
         {"command": "uv run ruff check .", "argv": ["uv", "run", "ruff", "check", "."]},
         {"command": "uv run pytest -q", "argv": ["uv", "run", "pytest", "-q"]},
@@ -132,6 +136,9 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["artifacts"]["schema"] == "agentx.artifacts.v1"
     assert payload["next"]["schema"] == "agentx.next.v1"
     assert payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
+    next_kinds = [item["kind"] for item in payload["next"]["recommendations"]]
+    assert "memory_handoff_workflow" in next_kinds
+    assert "ace_council_workflow" in next_kinds
     assert payload["verify_commands"][0]["command"] == "uv run ruff check ."
     assert payload["verify_command_plans"][0]["schema"] == "agentx.command_plan.v1"
     assert payload["verify_command_plans"][0]["command"] == "uv run ruff check ."

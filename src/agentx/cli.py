@@ -4101,6 +4101,24 @@ def next_payload(
                 "risk": "GREEN",
             }
         )
+    recommendations.extend(
+        [
+            {
+                "rank": len(recommendations) + 1,
+                "kind": "memory_handoff_workflow",
+                "command": "agentx workflow-run memory --json",
+                "reason": "preview the AMH handoff workflow route; add --input 完成與待辦=... when ready",
+                "risk": "GREEN",
+            },
+            {
+                "rank": len(recommendations) + 2,
+                "kind": "ace_council_workflow",
+                "command": "agentx workflow-run ace --json",
+                "reason": "preview the ACE council workflow route for multi-agent coordination; add --input SESSION/GOAL/ANSWER/SUMMARY when ready",
+                "risk": "GREEN",
+            },
+        ]
+    )
     for recommendation in recommendations:
         recommendation["command_plan"] = command_plan_payload(settings, str(recommendation["command"]))
 
@@ -4123,6 +4141,7 @@ def next_payload(
             "latest_artifact_needs_handoff": latest_needs_handoff,
             "denied_approval_count": denied_count,
             "approvals_available": approvals.get("ok") is True,
+            "workflow_recommendation_count": 2,
         },
         "diff": diff,
         "tasks": tasks,
