@@ -17,6 +17,7 @@ Authoritative status page: `docs/OBJECTIVE_STATUS.md`.
 - Deterministic headless benchmark covers a fresh `agentx -p ... --agent --artifact-dir ... --no-memory --json` run in a local fixture repo, including real tool write, result/session/handoff bundle, `artifacts`, `next`, and `gate`.
 - `agentx command-parity --json` exposes a machine-readable slash-command to runner JSON matrix for AMH, ACE, artifacts, next, gate, and command-plan surfaces.
 - `agentx reliability-suite --json` runs local-only recorded backend cases and scores headless artifacts, next, gate, artifact-resume / `handoff-resume`, recovery posture, termination, and tool-call counts.
+- `agentx reliability-suite --json` includes `target_bar` (`agentx.reliability_target_bar.v1`), with proposed `recorded-v1` threshold: 4/4 cases, 100% pass rate, 0 failed cases, and all required checks passing.
 
 Evidence:
 - `tests/test_capabilities_cli.py`
@@ -74,7 +75,7 @@ Evidence:
 agentX now has a deterministic fake-backend benchmark and a local recorded reliability suite covering edit, inspect, recover-after-failure, and artifact-resume. They do not prove reliability with real local models across a representative task suite, so "Codex/Grok-like" model-facing behavior remains partially unverified.
 
 Suggested next proof:
-- Add a live backend profile with pinned model/backend details, or ratify recorded-only threshold if live proof is deferred.
+- Add a live backend profile with pinned model/backend details, or have Maki ratify the proposed `recorded-v1` threshold if live proof is deferred.
 - Track success/failure, tool-call count, termination, artifact completeness, and recovery recommendation quality.
 
 ### Gap 2: Completion criteria are spread across multiple documents
@@ -87,17 +88,16 @@ Suggested next proof:
 
 ## Recommended Next Slice
 
-Define the reliability target bar next. It should prepare a ratifiable threshold for live or recorded model reliability:
+Ratify or replace the reliability target bar next:
 
 ```text
-recorded suite metrics
-→ optional pinned live backend profile
-→ score threshold proposal
+recorded-v1 threshold proposal
+→ Maki ratification or pinned live backend profile
 → OBJECTIVE_STATUS update
 ```
 
 Acceptance criteria:
 - Runs local-only by default.
-- Reports or proposes pass threshold.
+- Records whether `recorded-v1` is ratified, replaced, or superseded by a pinned live backend profile.
 - Updates `docs/OBJECTIVE_STATUS.md`.
 - Updates `docs/HEADLESS_OPTIMIZATION_LIST.md`.

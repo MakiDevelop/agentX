@@ -8072,6 +8072,24 @@ RECORDED_RELIABILITY_CASES: list[dict[str, object]] = [
     },
 ]
 
+RELIABILITY_RECORDED_V1_REQUIRED_CASES = [
+    "edit_file",
+    "inspect_only",
+    "recover_after_failure",
+    "artifact_resume",
+]
+RELIABILITY_RECORDED_V1_REQUIRED_CHECKS = [
+    "exit_code_matches",
+    "termination_matches",
+    "artifact_complete",
+    "expected_files",
+    "next_dirty_matches",
+    "gate_payload",
+    "artifacts_latest_bundle",
+    "handoff_expected",
+    "handoff_resume",
+]
+
 
 class RecordedReliabilityClient:
     def __init__(self, responses: list[str]) -> None:
@@ -8224,6 +8242,60 @@ def _run_recorded_reliability_case(base_dir: Path, case: dict[str, object]) -> d
     }
 
 
+def reliability_target_bar_payload(cases: list[dict[str, object]]) -> dict[str, object]:
+    case_names = [str(case.get("name", "")) for case in cases]
+    missing_required_cases = [
+        name for name in RELIABILITY_RECORDED_V1_REQUIRED_CASES
+        if name not in case_names
+    ]
+    failed_cases = [str(case.get("name", "")) for case in cases if case.get("ok") is not True]
+    failed_required_checks: dict[str, list[str]] = {}
+    for case in cases:
+        checks = case.get("checks")
+        if not isinstance(checks, dict):
+            failed_required_checks[str(case.get("name", ""))] = list(RELIABILITY_RECORDED_V1_REQUIRED_CHECKS)
+            continue
+        missing_or_failed = [
+            check for check in RELIABILITY_RECORDED_V1_REQUIRED_CHECKS
+            if checks.get(check) is not True
+        ]
+        if missing_or_failed:
+            failed_required_checks[str(case.get("name", ""))] = missing_or_failed
+    passed = len(cases) - len(failed_cases)
+    pass_rate = passed / len(cases) if cases else 0.0
+    meets_proposed_threshold = (
+        bool(cases)
+        and not missing_required_cases
+        and not failed_cases
+        and not failed_required_checks
+        and pass_rate == 1.0
+    )
+    return {
+        "schema": "agentx.reliability_target_bar.v1",
+        "profile": "recorded-v1",
+        "status": "proposed",
+        "ratification_required": True,
+        "suite_kind": "recorded",
+        "minimum_case_count": len(RELIABILITY_RECORDED_V1_REQUIRED_CASES),
+        "required_cases": list(RELIABILITY_RECORDED_V1_REQUIRED_CASES),
+        "required_pass_rate": 1.0,
+        "allowed_failed_cases": 0,
+        "required_checks": list(RELIABILITY_RECORDED_V1_REQUIRED_CHECKS),
+        "observed_case_count": len(cases),
+        "observed_passed": passed,
+        "observed_failed": len(failed_cases),
+        "observed_pass_rate": pass_rate,
+        "missing_required_cases": missing_required_cases,
+        "failed_cases": failed_cases,
+        "failed_required_checks": failed_required_checks,
+        "meets_proposed_threshold": meets_proposed_threshold,
+        "decision_note": (
+            "Recorded-v1 is a proposed local-only threshold. It can prove runner mechanics and recorded reliability, "
+            "but does not prove live model quality until Maki ratifies recorded-only evidence or a pinned live backend profile is added."
+        ),
+    }
+
+
 def reliability_suite_payload(
     settings: Settings,
     *,
@@ -8245,6 +8317,7 @@ def reliability_suite_payload(
             "passed": 0,
             "failed": 0,
             "cases": [],
+            "target_bar": reliability_target_bar_payload([]),
             "blockers": ["no_matching_cases"],
             "recommended_command": "agentx reliability-suite --json",
             "recommended_kind": "fix_reliability_suite_inputs",
@@ -8259,6 +8332,13 @@ def reliability_suite_payload(
     passed = sum(1 for case in cases if case["ok"])
     failed = len(cases) - passed
     ok = failed == 0
+    target_bar = reliability_target_bar_payload(cases)
+    meets_proposed_threshold = target_bar.get("meets_proposed_threshold") is True
+    recommended_command = "agentx inspect --json" if ok and meets_proposed_threshold else "agentx reliability-suite --json"
+    recommended_kind = "inspect" if ok and meets_proposed_threshold else "run_full_reliability_suite"
+    if not ok:
+        recommended_command = "inspect failed reliability cases, then rerun agentx reliability-suite --json"
+        recommended_kind = "fix_reliability_failures"
     return {
         "schema": "agentx.reliability_suite.v1",
         "ok": ok,
@@ -8269,9 +8349,10 @@ def reliability_suite_payload(
         "passed": passed,
         "failed": failed,
         "cases": cases,
+        "target_bar": target_bar,
         "blockers": [] if ok else ["reliability_case_failed"],
-        "recommended_command": "agentx inspect --json" if ok else "inspect failed reliability cases, then rerun agentx reliability-suite --json",
-        "recommended_kind": "inspect" if ok else "fix_reliability_failures",
+        "recommended_command": recommended_command,
+        "recommended_kind": recommended_kind,
         "recommended_risk": "GREEN" if ok else "UNKNOWN",
     }
 

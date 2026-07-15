@@ -16,6 +16,15 @@ def test_reliability_suite_payload_runs_recorded_cases(tmp_path: Path) -> None:
     assert payload["case_count"] == 4
     assert payload["passed"] == 4
     assert payload["failed"] == 0
+    assert payload["target_bar"]["schema"] == "agentx.reliability_target_bar.v1"  # type: ignore[index]
+    assert payload["target_bar"]["profile"] == "recorded-v1"  # type: ignore[index]
+    assert payload["target_bar"]["status"] == "proposed"  # type: ignore[index]
+    assert payload["target_bar"]["ratification_required"] is True  # type: ignore[index]
+    assert payload["target_bar"]["meets_proposed_threshold"] is True  # type: ignore[index]
+    assert payload["target_bar"]["observed_pass_rate"] == 1.0  # type: ignore[index]
+    assert payload["target_bar"]["missing_required_cases"] == []  # type: ignore[index]
+    assert payload["target_bar"]["failed_cases"] == []  # type: ignore[index]
+    assert payload["target_bar"]["failed_required_checks"] == {}  # type: ignore[index]
     cases = {case["name"]: case for case in payload["cases"]}  # type: ignore[index]
     assert set(cases) == {"edit_file", "inspect_only", "recover_after_failure", "artifact_resume"}
     assert cases["edit_file"]["tool_call_count"] == 1
@@ -84,6 +93,13 @@ def test_reliability_suite_jsonl_outputs_event(tmp_path: Path) -> None:
     assert envelope["data"]["schema"] == "agentx.reliability_suite.v1"
     assert envelope["data"]["case_count"] == 1
     assert envelope["data"]["cases"][0]["name"] == "edit_file"
+    assert envelope["data"]["target_bar"]["meets_proposed_threshold"] is False
+    assert set(envelope["data"]["target_bar"]["missing_required_cases"]) == {
+        "inspect_only",
+        "recover_after_failure",
+        "artifact_resume",
+    }
+    assert envelope["data"]["recommended_kind"] == "run_full_reliability_suite"
 
 
 def test_reliability_suite_blocks_unknown_case(tmp_path: Path) -> None:
@@ -92,3 +108,5 @@ def test_reliability_suite_blocks_unknown_case(tmp_path: Path) -> None:
     assert payload["ok"] is False
     assert payload["blockers"] == ["no_matching_cases"]
     assert payload["case_count"] == 0
+    assert payload["target_bar"]["meets_proposed_threshold"] is False  # type: ignore[index]
+    assert payload["target_bar"]["observed_case_count"] == 0  # type: ignore[index]

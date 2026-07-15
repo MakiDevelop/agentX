@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-15
 **Objective**: 將 agentX 優化到接近 Codex CLI / Grok CLI，並加入使用 AMH 與 ACE 的能力。
-**Status**: In progress. Runner mechanics, AMH support, ACE support, recorded reliability suite, and artifact-resume coverage are covered; live model reliability and the final pass threshold are not yet ratified.
+**Status**: In progress. Runner mechanics, AMH support, ACE support, recorded reliability suite, artifact-resume coverage, and a proposed recorded-v1 reliability threshold are covered; live model reliability or final threshold ratification is still missing.
 
 This file is the single ratifiable status page for the objective. `docs/OBJECTIVE_GAP_AUDIT_2026-07-15.md` remains the detailed audit trail.
 
@@ -42,6 +42,7 @@ Current proof:
 - Deterministic headless benchmark proves the runner chain using fake backend + local fixture repo: real tool write, result/session/handoff bundle, `artifacts`, `next`, and `gate`.
 - `agentx command-parity --json` maps critical slash-command families to runner JSON surfaces.
 - `agentx reliability-suite --json` runs a local-only recorded backend suite and scores exit code, termination, tool-call count, artifact completeness, expected files, `next`, `gate`, artifact-resume / `handoff-resume`, and recovery recommendation posture.
+- The same payload now includes `target_bar` (`agentx.reliability_target_bar.v1`). Current `recorded-v1` proposal requires 4/4 cases, 100% pass rate, 0 failed cases, and all required checks passing.
 
 ### AMH
 
@@ -80,12 +81,12 @@ Current proof:
 The deterministic fake-backend benchmark and recorded reliability suite prove runner mechanics and replayable recorded behavior, not live model quality. They do not prove that real local models can reliably perform Codex/Grok-like tasks across a representative benchmark suite.
 
 Required next evidence:
-- A live backend run profile with pinned model/backend details, or Maki-ratified recorded-backend threshold if live model proof is deferred.
+- A live backend run profile with pinned model/backend details, or Maki ratification of the proposed `recorded-v1` threshold if live model proof is deferred.
 - Metrics for success/failure, tool-call count, termination, artifact completeness, gate/next quality, and recovery recommendation usefulness.
 
 ### Final Target Bar
 
-The exact pass threshold for "接近 Codex/Grok CLI" still needs Maki ratification. Until that bar is ratified and verified, the full objective remains in progress.
+The proposed `recorded-v1` pass threshold is now machine-readable in `agentx reliability-suite --json`, but it still needs Maki ratification or replacement with a pinned live backend profile. Until that bar is ratified and verified, the full objective remains in progress.
 
 ## Completion Gate
 
@@ -96,17 +97,16 @@ Do not mark the objective complete until:
 3. AMH isolated local-store write/read/status smoke passes.
 4. ACE isolated temp-root write/status smoke passes.
 5. Headless deterministic benchmark passes.
-6. Live or recorded reliability suite passes the ratified target threshold. Current recorded suite covers edit, inspect, recover-after-failure, and artifact-resume, but the threshold is not ratified yet.
+6. Live or recorded reliability suite passes the ratified target threshold. Current recorded suite covers edit, inspect, recover-after-failure, and artifact-resume, and proposes `recorded-v1`, but the threshold is not ratified yet.
 7. This file is updated with the benchmark evidence and status changes from `In progress` to `Complete`.
 
 ## Recommended Next Slice
 
-Define the reliability target bar:
+Ratify or replace the reliability target bar:
 
 ```text
-recorded suite metrics
--> optional pinned live backend profile
--> threshold proposal
+recorded-v1 threshold proposal
+-> Maki ratification or pinned live backend profile
 -> OBJECTIVE_STATUS update
 ```
 

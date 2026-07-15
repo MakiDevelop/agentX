@@ -1262,10 +1262,25 @@ Required stable keys:
 | `passed` | integer | Passing case count. |
 | `failed` | integer | Failing case count. |
 | `cases` | array of object | Per-case score records. |
+| `target_bar` | object | Proposed reliability threshold and observed score summary. |
 | `blockers` | array of string | Machine-readable suite blockers. |
 | `recommended_command` | string | Suggested follow-up command. |
 | `recommended_kind` | string | Suggested follow-up kind. |
 | `recommended_risk` | string | Risk label for the follow-up. |
+
+`target_bar` emits `agentx.reliability_target_bar.v1`. The current profile is
+`recorded-v1` with `status=proposed` and `ratification_required=true`. It is a
+machine-readable proposal for Maki to ratify or replace, not a claim that live
+model reliability has been proven.
+
+`recorded-v1` currently requires:
+
+| Requirement | Value |
+|-------------|-------|
+| `required_cases` | `edit_file`, `inspect_only`, `recover_after_failure`, `artifact_resume` |
+| `required_pass_rate` | `1.0` |
+| `allowed_failed_cases` | `0` |
+| `required_checks` | exit code, termination, artifacts, expected files, `next`, `gate`, and `handoff-resume` checks |
 
 Each case object includes:
 
