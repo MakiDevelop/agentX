@@ -13,18 +13,25 @@ def test_reliability_suite_payload_runs_recorded_cases(tmp_path: Path) -> None:
     assert payload["schema"] == "agentx.reliability_suite.v1"
     assert payload["ok"] is True
     assert payload["run_id"] == "recorded"
-    assert payload["case_count"] == 3
-    assert payload["passed"] == 3
+    assert payload["case_count"] == 4
+    assert payload["passed"] == 4
     assert payload["failed"] == 0
     cases = {case["name"]: case for case in payload["cases"]}  # type: ignore[index]
-    assert set(cases) == {"edit_file", "inspect_only", "recover_after_failure"}
+    assert set(cases) == {"edit_file", "inspect_only", "recover_after_failure", "artifact_resume"}
     assert cases["edit_file"]["tool_call_count"] == 1
     assert cases["inspect_only"]["tool_call_count"] == 1
     assert cases["recover_after_failure"]["tool_call_count"] == 2
+    assert cases["artifact_resume"]["tool_call_count"] == 1
+    assert cases["artifact_resume"]["exit_code"] == 2
+    assert cases["artifact_resume"]["termination"] == "max_steps_exceeded"
+    assert cases["artifact_resume"]["next_recommended_kind"] == "handoff_resume"
+    assert cases["artifact_resume"]["artifacts_recommended_kind"] == "handoff_resume"
+    assert cases["artifact_resume"]["handoff_resume"]["field"] == "resume_command"  # type: ignore[index]
+    assert cases["artifact_resume"]["handoff_resume"]["argv"][0] == "agentx"  # type: ignore[index]
+    assert "--prompt-file" in cases["artifact_resume"]["handoff_resume"]["argv"]  # type: ignore[index]
+    assert "--resume-session" in cases["artifact_resume"]["handoff_resume"]["argv"]  # type: ignore[index]
     for case in cases.values():
         assert case["ok"] is True
-        assert case["exit_code"] == 0
-        assert case["termination"] == "final_success"
         assert case["artifact_complete"] is True
         assert isinstance(case["gate_recommended_kind"], str)
         assert case["gate_recommended_kind"]
@@ -51,7 +58,7 @@ def test_reliability_suite_json_outputs_payload(tmp_path: Path) -> None:
     payload = json.loads(result.output)
     assert payload["schema"] == "agentx.reliability_suite.v1"
     assert payload["ok"] is True
-    assert payload["case_count"] == 3
+    assert payload["case_count"] == 4
     assert payload["recommended_kind"] == "inspect"
 
 

@@ -8020,6 +8020,9 @@ RECORDED_RELIABILITY_CASES: list[dict[str, object]] = [
         ],
         "expected_files": {"RESULT.md": "# Result\n\nrecorded edit success\n"},
         "expect_dirty": True,
+        "expected_exit_code": 0,
+        "expected_termination": "final_success",
+        "expect_handoff": False,
     },
     {
         "name": "inspect_only",
@@ -8030,6 +8033,9 @@ RECORDED_RELIABILITY_CASES: list[dict[str, object]] = [
         ],
         "expected_files": {},
         "expect_dirty": False,
+        "expected_exit_code": 0,
+        "expected_termination": "final_success",
+        "expect_handoff": False,
     },
     {
         "name": "recover_after_failure",
@@ -8047,6 +8053,22 @@ RECORDED_RELIABILITY_CASES: list[dict[str, object]] = [
         ],
         "expected_files": {"RECOVERED.md": "# Recovered\n\nsecond attempt succeeded\n"},
         "expect_dirty": True,
+        "expected_exit_code": 0,
+        "expected_termination": "final_success",
+        "expect_handoff": False,
+    },
+    {
+        "name": "artifact_resume",
+        "prompt": "Inspect README.md, then wait for a later continuation.",
+        "responses": [
+            json.dumps({"type": "tool_call", "tool": "read_file", "args": {"path": "README.md"}}),
+        ],
+        "expected_files": {},
+        "expect_dirty": False,
+        "expected_exit_code": 2,
+        "expected_termination": "max_steps_exceeded",
+        "expect_handoff": True,
+        "max_steps": 1,
     },
 ]
 
@@ -8123,7 +8145,7 @@ def _run_recorded_reliability_case(base_dir: Path, case: dict[str, object]) -> d
         return_metadata=True,
         suppress_trace=True,
         session_output_path=session_output,
-        max_steps=len(responses) + 3,
+        max_steps=int(case.get("max_steps", len(responses) + 3)),
         no_memory=True,
     )
     assert isinstance(result, HeadlessRunResult)
@@ -8147,15 +8169,40 @@ def _run_recorded_reliability_case(base_dir: Path, case: dict[str, object]) -> d
     gate = gate_payload(Settings(workspace=workspace), run_verify=False)
     artifact_complete = session_output.is_file() and result_output.is_file() and handoff_output.is_file()
     expected_dirty = bool(case.get("expect_dirty", False))
+    expected_exit_code = int(case.get("expected_exit_code", 0))
+    expected_termination = str(case.get("expected_termination", "final_success"))
+    expect_handoff = bool(case.get("expect_handoff", False))
     dirty_matches = bool(next_step.get("signals", {}).get("dirty")) == expected_dirty  # type: ignore[union-attr]
+    latest_artifact_value = artifacts.get("latest_artifact")
+    latest_artifact = latest_artifact_value if isinstance(latest_artifact_value, dict) else {}
+    handoff_payload: dict[str, object] | None = None
+    if expect_handoff:
+        raw_payload, default_prompt_file = load_handoff_resume_payload_source(str(artifact_dir))
+        resume_payload = inspect_headless_handoff_payload(raw_payload)
+        if default_prompt_file is not None:
+            resume_payload = apply_handoff_next_prompt_file(resume_payload, str(default_prompt_file))
+        handoff_payload = handoff_resume_command_payload(resume_payload)
+    handoff_argv = list(handoff_payload.get("argv", [])) if handoff_payload else []
     checks = {
-        "exit_zero": exit_code == 0,
-        "termination_final_success": result.termination == "final_success",
+        "exit_code_matches": exit_code == expected_exit_code,
+        "termination_matches": result.termination == expected_termination,
         "artifact_complete": artifact_complete,
         "expected_files": not missing_files and all(file_checks.values()),
         "next_dirty_matches": dirty_matches,
         "gate_payload": gate.get("schema") == "agentx.gate.v1",
-        "artifacts_latest_bundle": artifacts.get("latest_artifact", {}).get("artifact_type") == "headless_bundle",  # type: ignore[union-attr]
+        "artifacts_latest_bundle": latest_artifact.get("artifact_type") == "headless_bundle",  # type: ignore[union-attr]
+        "handoff_expected": bool(latest_artifact.get("needs_handoff")) == expect_handoff,  # type: ignore[union-attr]
+        "handoff_resume": (
+            not expect_handoff
+            or (
+                handoff_payload is not None
+                and handoff_payload.get("field") == "resume_command"
+                and handoff_argv[:1] == ["agentx"]
+                and "--prompt-file" in handoff_argv
+                and "--resume-session" in handoff_argv
+                and any(str(item).endswith("handoff.md") for item in handoff_argv)
+            )
+        ),
     }
     return {
         "name": name,
@@ -8170,6 +8217,8 @@ def _run_recorded_reliability_case(base_dir: Path, case: dict[str, object]) -> d
         "missing_files": missing_files,
         "next_recommended_kind": next_step.get("recommended_kind"),
         "gate_recommended_kind": gate.get("recommended_kind"),
+        "artifacts_recommended_kind": artifacts.get("recommended_kind"),
+        "handoff_resume": handoff_payload,
         "recovery_recommendation": headless_payload(result, exit_code).get("log_summary", {}).get("handoff_summary", {}),
         "checks": checks,
     }

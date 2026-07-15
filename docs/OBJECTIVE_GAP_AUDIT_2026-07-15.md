@@ -16,7 +16,7 @@ Authoritative status page: `docs/OBJECTIVE_STATUS.md`.
 - `agentx gate --json`, `review --json`, `commit-plan --json`, `verify --json`, `command-plan --json`, `tool-plan --json`, and `patch-check --json` provide runner-safe preflight surfaces.
 - Deterministic headless benchmark covers a fresh `agentx -p ... --agent --artifact-dir ... --no-memory --json` run in a local fixture repo, including real tool write, result/session/handoff bundle, `artifacts`, `next`, and `gate`.
 - `agentx command-parity --json` exposes a machine-readable slash-command to runner JSON matrix for AMH, ACE, artifacts, next, gate, and command-plan surfaces.
-- `agentx reliability-suite --json` runs local-only recorded backend cases and scores headless artifacts, next, gate, recovery posture, termination, and tool-call counts.
+- `agentx reliability-suite --json` runs local-only recorded backend cases and scores headless artifacts, next, gate, artifact-resume / `handoff-resume`, recovery posture, termination, and tool-call counts.
 
 Evidence:
 - `tests/test_capabilities_cli.py`
@@ -71,11 +71,10 @@ Evidence:
 
 ### Gap 1: Live model reliability is not benchmarked
 
-agentX now has a deterministic fake-backend benchmark and a local recorded reliability suite. They do not prove reliability with real local models across a representative task suite, so "Codex/Grok-like" model-facing behavior remains partially unverified.
+agentX now has a deterministic fake-backend benchmark and a local recorded reliability suite covering edit, inspect, recover-after-failure, and artifact-resume. They do not prove reliability with real local models across a representative task suite, so "Codex/Grok-like" model-facing behavior remains partially unverified.
 
 Suggested next proof:
 - Add a live backend profile with pinned model/backend details, or ratify recorded-only threshold if live proof is deferred.
-- Add artifact-resume scenario coverage.
 - Track success/failure, tool-call count, termination, artifact completeness, and recovery recommendation quality.
 
 ### Gap 2: Completion criteria are spread across multiple documents
@@ -88,10 +87,10 @@ Suggested next proof:
 
 ## Recommended Next Slice
 
-Extend the reliability suite next. It should add artifact-resume coverage and prepare a ratifiable threshold for live or recorded model reliability:
+Define the reliability target bar next. It should prepare a ratifiable threshold for live or recorded model reliability:
 
 ```text
-artifact-resume case
+recorded suite metrics
 → optional pinned live backend profile
 → score threshold proposal
 → OBJECTIVE_STATUS update
@@ -99,7 +98,6 @@ artifact-resume case
 
 Acceptance criteria:
 - Runs local-only by default.
-- Adds artifact-resume scoring.
 - Reports or proposes pass threshold.
 - Updates `docs/OBJECTIVE_STATUS.md`.
 - Updates `docs/HEADLESS_OPTIMIZATION_LIST.md`.

@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-15
 **Objective**: 將 agentX 優化到接近 Codex CLI / Grok CLI，並加入使用 AMH 與 ACE 的能力。
-**Status**: In progress. Runner mechanics, AMH support, ACE support, and first recorded reliability suite are covered; live model reliability and the final pass threshold are not yet ratified.
+**Status**: In progress. Runner mechanics, AMH support, ACE support, recorded reliability suite, and artifact-resume coverage are covered; live model reliability and the final pass threshold are not yet ratified.
 
 This file is the single ratifiable status page for the objective. `docs/OBJECTIVE_GAP_AUDIT_2026-07-15.md` remains the detailed audit trail.
 
@@ -41,7 +41,7 @@ Current proof:
 - `agentx next --json`, `gate --json`, `review --json`, `commit-plan --json`, `verify --json`, `command-plan --json`, `tool-plan --json`, and `patch-check --json` provide runner-safe preflight and routing.
 - Deterministic headless benchmark proves the runner chain using fake backend + local fixture repo: real tool write, result/session/handoff bundle, `artifacts`, `next`, and `gate`.
 - `agentx command-parity --json` maps critical slash-command families to runner JSON surfaces.
-- `agentx reliability-suite --json` runs a local-only recorded backend suite and scores exit code, termination, tool-call count, artifact completeness, expected files, `next`, `gate`, and recovery recommendation posture.
+- `agentx reliability-suite --json` runs a local-only recorded backend suite and scores exit code, termination, tool-call count, artifact completeness, expected files, `next`, `gate`, artifact-resume / `handoff-resume`, and recovery recommendation posture.
 
 ### AMH
 
@@ -81,7 +81,6 @@ The deterministic fake-backend benchmark and recorded reliability suite prove ru
 
 Required next evidence:
 - A live backend run profile with pinned model/backend details, or Maki-ratified recorded-backend threshold if live model proof is deferred.
-- Additional artifact-resume scenario coverage in the reliability suite.
 - Metrics for success/failure, tool-call count, termination, artifact completeness, gate/next quality, and recovery recommendation usefulness.
 
 ### Final Target Bar
@@ -97,15 +96,15 @@ Do not mark the objective complete until:
 3. AMH isolated local-store write/read/status smoke passes.
 4. ACE isolated temp-root write/status smoke passes.
 5. Headless deterministic benchmark passes.
-6. Live or recorded reliability suite passes the ratified target threshold. Current first recorded suite exists, but the threshold is not ratified yet.
+6. Live or recorded reliability suite passes the ratified target threshold. Current recorded suite covers edit, inspect, recover-after-failure, and artifact-resume, but the threshold is not ratified yet.
 7. This file is updated with the benchmark evidence and status changes from `In progress` to `Complete`.
 
 ## Recommended Next Slice
 
-Extend the reliability suite toward the final target bar:
+Define the reliability target bar:
 
 ```text
-artifact-resume case
+recorded suite metrics
 -> optional pinned live backend profile
 -> threshold proposal
 -> OBJECTIVE_STATUS update

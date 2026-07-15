@@ -1245,8 +1245,9 @@ Each entry object includes:
 
 This command runs local-only recorded backend cases under
 `.agentx/reliability/<run-id>/`. It writes fixture repos and standard headless
-artifacts, but does not call live model backends, external memory, SSH, deploy,
-or production services.
+artifacts, including a recorded artifact-resume case that exercises
+`handoff-resume`, but does not call live model backends, external memory, SSH,
+deploy, or production services.
 
 Required stable keys:
 
@@ -1282,6 +1283,8 @@ Each case object includes:
 | `missing_files` | array of string |
 | `next_recommended_kind` | string or null |
 | `gate_recommended_kind` | string or null |
+| `artifacts_recommended_kind` | string or null |
+| `handoff_resume` | object or null |
 | `recovery_recommendation` | object |
 | `checks` | object |
 
