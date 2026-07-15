@@ -12,9 +12,11 @@
 - `agentx inspect --json` aggregates status, active tasks, sessions, approvals, traces, diff, capabilities, instructions, memory status, artifacts, next recommendations, verify commands, and command plans.
 - `agentx next --json` provides deterministic next-step routing with embedded command plans.
 - `agentx gate --json`, `review --json`, `commit-plan --json`, `verify --json`, `command-plan --json`, `tool-plan --json`, and `patch-check --json` provide runner-safe preflight surfaces.
+- Deterministic headless benchmark covers a fresh `agentx -p ... --agent --artifact-dir ... --no-memory --json` run in a local fixture repo, including real tool write, result/session/handoff bundle, `artifacts`, `next`, and `gate`.
 
 Evidence:
 - `tests/test_capabilities_cli.py`
+- `tests/test_headless_task_benchmark.py::test_headless_agent_benchmark_completes_task_artifacts_next_and_gate`
 - `tests/test_inspect_cli.py`
 - `tests/test_next_cli.py`
 - `tests/test_gate_cli.py`
@@ -61,13 +63,13 @@ Evidence:
 
 ## Remaining Gaps
 
-### Gap 1: Codex/Grok-like task execution benchmark is not proven
+### Gap 1: Live model reliability is not benchmarked
 
-agentX has many runner-facing primitives, but there is no single benchmark or smoke that proves a fresh headless agent can complete a representative engineering task end-to-end at Codex/Grok-like reliability.
+agentX now has a deterministic fake-backend benchmark that proves the runner chain. It does not prove reliability with real local models across a representative task suite, so "Codex/Grok-like" model-facing behavior remains partially unverified.
 
 Suggested next proof:
-- Add a local fixture repo and an end-to-end headless smoke that runs a small safe task through `agentx -p ... --agent --artifact-dir ... --quiet`, then validates result artifact, transcript/session, diff or task state, `next`, and `gate`.
-- Keep it deterministic and not dependent on a live LLM by using a fake backend if needed.
+- Add a small fixture task suite that can run against selected live or recorded backends.
+- Track success/failure, tool-call count, termination, artifact completeness, and recovery recommendation quality.
 
 ### Gap 2: Interactive shell and runner JSON surfaces may drift
 
@@ -87,17 +89,16 @@ Suggested next proof:
 
 ## Recommended Next Slice
 
-Implement a headless task benchmark next. It should prove a fresh runner can complete a representative engineering task end-to-end without depending on a live LLM:
+Implement an AMH/ACE slash-command parity matrix next. It should reduce drift between interactive shell flows and runner JSON surfaces:
 
 ```text
-agentx -p ... --agent --artifact-dir ...
-→ result/session artifacts
-→ next
-→ gate
+/config or /memory shell path
+↔ memory-status/read/write JSON commands
+↔ ace-init/briefing/answer/status JSON commands
 ```
 
 Acceptance criteria:
-- Uses a local fixture workspace only.
-- Uses deterministic fake backend or a no-network mode.
-- Verifies task result, artifact bundle, transcript/session, `next`, and `gate`.
+- Documents command parity for AMH, ACE, artifacts, next, gate, and command-plan.
+- Adds focused tests where command mappings are machine-checkable.
+- Does not expand governance or external write behavior.
 - Updates `docs/HEADLESS_OPTIMIZATION_LIST.md`.

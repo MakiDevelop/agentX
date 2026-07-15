@@ -49,6 +49,7 @@
 **Progress Update (Headless Plan-then-Execute, 2026-07)**：
 - [x] `agentx -p ... --agent --plan-then-execute` 會在同一個 `AgentSession` 內先跑 plan-only，再切換為 execution mode。
 - [x] `agentx ask ... --plan-then-execute` 走同一套 two-phase headless runner。
+- [x] headless task benchmark 已有 deterministic fake backend smoke，使用 local fixture repo 跑真 `agentx -p ... --agent --artifact-dir ... --no-memory --json`，驗證實際工具寫檔、result/session/handoff bundle、`artifacts`、`next` 與 `gate`。
 - [x] 輸出會分成 `## Plan` 與 `## Execution`，方便人或上游 agent 判讀。
 - [x] JSON mode 會額外提供 `phases=[{name:"plan"},{name:"execution"}]`，讓 script 不必自行切割 `output`。
 - [x] 修正舊行為：不再把 `plan_then_execute` 當成整輪 `plan_only`，避免永遠不能執行工具。
