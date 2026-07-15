@@ -47,6 +47,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx ace-append --json` | `agentx.ace_append.v1` | `ace_append` |
 | `agentx ace-briefing --json` | `agentx.ace_briefing.v1` | `ace_briefing` |
 | `agentx ace-answer --json` | `agentx.ace_answer.v1` | `ace_answer` |
+| `agentx ace-status --json` | `agentx.ace_status.v1` | `ace_status` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx task-update --json` | `agentx.task_update.v1` | `task_update` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
@@ -561,6 +562,40 @@ Required stable keys:
 | `manifest` | string | Updated manifest content when ok. |
 | `recommended_command` | string | First suggested follow-up command for simple runners. |
 | `recommended_kind` | string | `next` when ok, otherwise `fix_ace_answer_blockers`. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `next_commands` | array of string | Suggested follow-up commands. |
+
+## ACE Status Payload
+
+`agentx ace-status SESSION --json` emits `agentx.ace_status.v1`.
+
+This command is read-only. It summarizes one ACE session directory so external
+runners can inspect manifest sections, open questions, briefing files, and
+answer files without parsing markdown or scanning directories themselves.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.ace_status.v1`. |
+| `ok` | boolean | True when the manifest was found and summarized. |
+| `session_id` | string | Validated session id / directory name. |
+| `root` | string | Resolved ACE root directory. |
+| `session_dir` | string or null | Resolved session directory. |
+| `manifest_path` | string or null | Resolved `_manifest.md` path. |
+| `manifest_exists` | boolean | Whether `_manifest.md` exists. |
+| `blockers` | array of string | Machine-readable blockers such as `manifest_not_found`. |
+| `warnings` | array of string | Non-blocking diagnostics, including missing expected manifest sections. |
+| `sections` | object | Manifest sections keyed by heading. |
+| `section_entries` | object | Non-placeholder bullet entries keyed by heading. |
+| `open_questions` | array of string | Non-placeholder bullets under `OPEN QUESTIONS`. |
+| `briefings` | array of object | `briefing-*.md` file metadata: `name`, `path`, `size`, `mtime`. |
+| `answers` | array of object | `answer-*.md` file metadata: `name`, `path`, `size`, `mtime`. |
+| `counts` | object | Counts for briefings, answers, open questions, and section entries. |
+| `manifest` | string | Manifest excerpt capped by `--max-manifest-chars`. |
+| `manifest_truncated` | boolean | Whether the manifest excerpt was capped. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | `ace_briefing` when open questions exist, `next` when ok, otherwise `fix_ace_status_blockers`. |
 | `recommended_risk` | string | Risk label for the recommended follow-up. |
 | `next_commands` | array of string | Suggested follow-up commands. |
 

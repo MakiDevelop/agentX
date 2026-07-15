@@ -27,7 +27,7 @@ from rich.text import Text
 
 from agentx import cli_runtime_handlers as _runtime_handlers
 from agentx import cli_slash_shims as _slash_shims
-from agentx.ace import ace_answer_payload, ace_append_payload, ace_briefing_payload, ace_init_payload
+from agentx.ace import ace_answer_payload, ace_append_payload, ace_briefing_payload, ace_init_payload, ace_status_payload
 from agentx.approval import ApprovalMode, ApprovalPolicy, approval_decision_source, normalize_approval_mode
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from agentx.config import Settings
@@ -707,6 +707,37 @@ def print_ace_answer_payload(
     else:
         console.print(
             "[red]ACE answer blocked: "
+            f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
+        )
+    console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
+
+
+def print_ace_status_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output or jsonl_output:
+        output_format = "jsonl" if jsonl_output else "json"
+        print_structured_payload(payload, output_format=output_format, event="ace_status")
+        return
+    if payload.get("ok"):
+        counts = payload.get("counts", {})
+        if not isinstance(counts, dict):
+            counts = {}
+        console.print(f"[green]ACE status ready: {payload.get('session_id')}[/green]")
+        console.print(f"[dim]manifest={payload.get('manifest_path') or '-'}[/dim]")
+        console.print(
+            "[dim]"
+            f"briefings={counts.get('briefings', 0)} "
+            f"answers={counts.get('answers', 0)} "
+            f"open_questions={counts.get('open_questions', 0)}"
+            "[/dim]"
+        )
+    else:
+        console.print(
+            "[red]ACE status blocked: "
             f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
         )
     console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
@@ -6391,6 +6422,25 @@ def ace_answer_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_ace_answer_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=0 if payload.get("ok") else 1)
+
+
+@app.command("ace-status")
+def ace_status_command(
+    session_id: str = typer.Argument(..., help="ACE session id."),
+    root: str | None = typer.Option(None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."),
+    max_manifest_chars: int = typer.Option(12000, "--max-manifest-chars", min=0, help="Maximum manifest characters to include."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Summarize one ACE session manifest, briefings, answers, and open questions."""
+    payload = ace_status_payload(
+        session_id=session_id,
+        root=root,
+        max_manifest_chars=max_manifest_chars,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_ace_status_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 

@@ -98,6 +98,7 @@
 - [x] `agentx ace-append SESSION SECTION TEXT --json` 可把 routing / sub-task / finding / decision / question 追加到既有 ACE `_manifest.md`，讓多代理 session 有 append-only 累積狀態。
 - [x] `agentx ace-briefing SESSION --agent AGENT --json` 可從 ACE `_manifest.md` 產生 scoped briefing；預設 dry-run，加 `--write` 才寫入 session 目錄。
 - [x] `agentx ace-answer SESSION --agent AGENT --answer TEXT --json` 可保存外部 agent answer 檔並把 summary 追加回 ACE `_manifest.md`，形成 briefing → answer → manifest loop。
+- [x] `agentx ace-status SESSION --json` 可 read-only 彙整 ACE `_manifest.md`、briefings、answers、open questions 與 counts，讓 runner 不用自行 parse markdown 或掃目錄。
 - [x] `agentx workflows --json` 會把人類可讀 `path` 拆成 `steps` 與可直接處理的 `commands`，讓 runner 能消費 headless/audit/commit recipe 而不用自行 parse 箭頭字串。
 - [x] `agentx workflows --json` 的每個 step 會標記 `kind`，且 top-level `agentx` step 會內嵌 `command_plan`，讓 runner 可在執行 recipe 前檢查 policy posture。
 - [x] `agentx workflows --json` 會提供 `Infra preflight` recipe（alias: infra/vps/ssh/deploy），第一步是 `agentx infra resource-bundle --json` 並內嵌 command-plan。

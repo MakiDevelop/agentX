@@ -368,6 +368,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "YELLOW - writes local ACE answer and manifest files",
     },
     {
+        "command": "agentx ace-status",
+        "usage": "agentx ace-status SESSION --json",
+        "description": "Summarize one ACE session manifest, briefing files, answer files, and open questions.",
+        "examples": [
+            "agentx ace-status 2026-07-15-agentx-ace --json",
+            "agentx ace-status 2026-07-15-agentx-ace --max-manifest-chars 4000 --output-format jsonl",
+        ],
+        "schemas": ["agentx.ace_status.v1"],
+        "jsonl_event": "ace_status",
+        "risk": "GREEN - read-only ACE session status inspection",
+    },
+    {
         "command": "agentx workflows",
         "usage": "agentx workflows [QUERY] --json",
         "description": "List practical workflow recipes for headless, audit, and commit flows.",

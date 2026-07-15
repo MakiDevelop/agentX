@@ -2,7 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
-from agentx.ace import ace_answer_payload, ace_append_payload, ace_briefing_payload, ace_init_payload
+from agentx.ace import ace_answer_payload, ace_append_payload, ace_briefing_payload, ace_init_payload, ace_status_payload
 from agentx.cli import app
 
 
@@ -457,3 +457,97 @@ def test_ace_answer_blocks_existing_output(tmp_path) -> None:  # noqa: ANN001
     assert payload["ok"] is False
     assert payload["blockers"] == ["answer_already_exists"]
     assert existing.read_text(encoding="utf-8") == "existing"
+
+
+def test_ace_status_payload_summarizes_session(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+    ace_append_payload(
+        session_id="session-1",
+        section="question",
+        text="Should Gemini review the diff?",
+        root=tmp_path,
+        agent="codex",
+    )
+    ace_briefing_payload(
+        session_id="session-1",
+        agent="gemini",
+        role="Reviewer",
+        task="Review current manifest",
+        root=tmp_path,
+        write=True,
+    )
+    ace_answer_payload(
+        session_id="session-1",
+        agent="gemini",
+        answer="No blocker found.",
+        summary="Gemini found no blocker",
+        root=tmp_path,
+        output="answer-gemini.md",
+    )
+
+    payload = ace_status_payload(session_id="session-1", root=tmp_path)
+
+    assert payload["schema"] == "agentx.ace_status.v1"
+    assert payload["ok"] is True
+    assert payload["manifest_exists"] is True
+    assert payload["counts"]["briefings"] == 1
+    assert payload["counts"]["answers"] == 1
+    assert payload["counts"]["open_questions"] == 1
+    assert payload["briefings"][0]["name"] == "briefing-gemini.md"
+    assert payload["answers"][0]["name"] == "answer-gemini.md"
+    assert "Should Gemini review the diff?" in payload["open_questions"][0]
+    assert payload["recommended_kind"] == "ace_briefing"
+
+
+def test_ace_status_cli_outputs_jsonl_event(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "ace-status",
+            "session-1",
+            "--root",
+            str(tmp_path),
+            "--output-format",
+            "jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    assert envelope["event"] == "ace_status"
+    assert envelope["data"]["schema"] == "agentx.ace_status.v1"
+    assert envelope["data"]["counts"]["briefings"] == 0
+
+
+def test_ace_status_blocks_missing_manifest(tmp_path) -> None:  # noqa: ANN001
+    payload = ace_status_payload(session_id="session-1", root=tmp_path)
+
+    assert payload["ok"] is False
+    assert payload["blockers"] == ["manifest_not_found"]
+
+
+def test_ace_status_caps_manifest(tmp_path) -> None:  # noqa: ANN001
+    ace_init_payload(
+        session_id="session-1",
+        goal="Coordinate agents",
+        root=tmp_path,
+        write=True,
+    )
+
+    payload = ace_status_payload(session_id="session-1", root=tmp_path, max_manifest_chars=20)
+
+    assert payload["ok"] is True
+    assert payload["manifest_truncated"] is True
+    assert len(payload["manifest"]) == 20

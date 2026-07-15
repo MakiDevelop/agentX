@@ -9,6 +9,7 @@ ACE_SCHEMA = "agentx.ace_session.v1"
 ACE_APPEND_SCHEMA = "agentx.ace_append.v1"
 ACE_BRIEFING_SCHEMA = "agentx.ace_briefing.v1"
 ACE_ANSWER_SCHEMA = "agentx.ace_answer.v1"
+ACE_STATUS_SCHEMA = "agentx.ace_status.v1"
 DEFAULT_ACE_ROOT = Path.home() / "Documents" / "agent-council"
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
 AGENT_SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$")
@@ -19,6 +20,20 @@ ACE_APPEND_SECTIONS = {
     "finding": "CUMULATIVE FINDINGS",
     "decision": "DECISIONS TAKEN",
     "question": "OPEN QUESTIONS",
+}
+ACE_MANIFEST_SECTIONS = [
+    "GOAL",
+    "ROUTING DECISIONS",
+    "SUB-TASKS",
+    "CUMULATIVE FINDINGS",
+    "DECISIONS TAKEN",
+    "OPEN QUESTIONS",
+]
+ACE_PLACEHOLDER_BULLETS = {
+    "- No sub-tasks recorded yet.",
+    "- No findings recorded yet.",
+    "- No decisions recorded yet.",
+    "- No open questions recorded yet.",
 }
 
 
@@ -202,6 +217,46 @@ def append_to_manifest_section(content: str, heading: str, entry: str) -> str:
         insert_at += 1
     lines.insert(insert_at, entry)
     return "\n".join(lines).rstrip() + "\n"
+
+
+def extract_manifest_sections(content: str) -> dict[str, str]:
+    sections: dict[str, list[str]] = {}
+    current_heading = ""
+    for line in content.splitlines():
+        if line.startswith("## "):
+            heading = line[3:].strip()
+            current_heading = heading if heading in ACE_MANIFEST_SECTIONS else ""
+            if current_heading:
+                sections.setdefault(current_heading, [])
+            continue
+        if current_heading:
+            sections[current_heading].append(line)
+    return {heading: "\n".join(lines).strip() for heading, lines in sections.items()}
+
+
+def manifest_section_bullets(section_text: str) -> list[str]:
+    bullets = []
+    for line in section_text.splitlines():
+        cleaned = line.strip()
+        if cleaned.startswith("- ") and cleaned not in ACE_PLACEHOLDER_BULLETS:
+            bullets.append(cleaned)
+    return bullets
+
+
+def ace_session_file_info(path: Path) -> dict[str, object]:
+    stat = path.stat()
+    return {
+        "name": path.name,
+        "path": str(path),
+        "size": stat.st_size,
+        "mtime": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+    }
+
+
+def cap_text(text: str, max_chars: int) -> tuple[str, bool]:
+    if max_chars < 0 or len(text) <= max_chars:
+        return text, False
+    return text[:max_chars], True
 
 
 def ace_append_payload(
@@ -553,4 +608,82 @@ def ace_answer_payload(
             if ok
             else "fix ACE answer blockers, then rerun agentx ace-answer SESSION --agent AGENT --answer TEXT --json"
         ],
+    }
+
+
+def ace_status_payload(
+    *,
+    session_id: str,
+    root: str | Path | None = None,
+    max_manifest_chars: int = 12000,
+) -> dict[str, object]:
+    blockers: list[str] = []
+    warnings: list[str] = []
+    session_dir: Path | None = None
+    manifest_path: Path | None = None
+    manifest = ""
+    sections: dict[str, str] = {}
+    section_entries: dict[str, list[str]] = {}
+    briefings: list[dict[str, object]] = []
+    answers: list[dict[str, object]] = []
+
+    try:
+        normalized_id = validate_ace_session_id(session_id)
+        session_dir, manifest_path = ace_session_paths(normalized_id, root=root)
+    except ValueError as exc:
+        normalized_id = session_id.strip()
+        blockers.append(str(exc))
+
+    if manifest_path is not None:
+        if not manifest_path.exists():
+            blockers.append("manifest_not_found")
+        else:
+            manifest = manifest_path.read_text(encoding="utf-8")
+
+    if session_dir is not None and not blockers:
+        briefings = [ace_session_file_info(path) for path in sorted(session_dir.glob("briefing-*.md")) if path.is_file()]
+        answers = [ace_session_file_info(path) for path in sorted(session_dir.glob("answer-*.md")) if path.is_file()]
+        sections = extract_manifest_sections(manifest)
+        section_entries = {heading: manifest_section_bullets(text) for heading, text in sections.items()}
+        missing_sections = [heading for heading in ACE_MANIFEST_SECTIONS if heading not in sections]
+        if missing_sections:
+            warnings.append("manifest_sections_missing:" + ",".join(missing_sections))
+
+    manifest_excerpt, manifest_truncated = cap_text(manifest, max_manifest_chars)
+    open_questions = section_entries.get("OPEN QUESTIONS", [])
+    ok = not blockers
+    recommended_command = (
+        f"agentx ace-briefing {normalized_id} --agent AGENT --json"
+        if ok and open_questions
+        else "agentx next --json"
+        if ok
+        else "fix ACE status blockers, then rerun agentx ace-status SESSION --json"
+    )
+    return {
+        "schema": ACE_STATUS_SCHEMA,
+        "ok": ok,
+        "session_id": normalized_id,
+        "root": str(resolve_ace_root(root)),
+        "session_dir": str(session_dir) if session_dir else None,
+        "manifest_path": str(manifest_path) if manifest_path else None,
+        "manifest_exists": bool(manifest_path.exists()) if manifest_path else False,
+        "blockers": blockers,
+        "warnings": warnings,
+        "sections": sections,
+        "section_entries": section_entries,
+        "open_questions": open_questions,
+        "briefings": briefings,
+        "answers": answers,
+        "counts": {
+            "briefings": len(briefings),
+            "answers": len(answers),
+            "open_questions": len(open_questions),
+            "section_entries": {heading: len(entries) for heading, entries in section_entries.items()},
+        },
+        "manifest": manifest_excerpt,
+        "manifest_truncated": manifest_truncated,
+        "recommended_command": recommended_command,
+        "recommended_kind": "ace_briefing" if ok and open_questions else "next" if ok else "fix_ace_status_blockers",
+        "recommended_risk": "GREEN" if ok else "UNKNOWN",
+        "next_commands": [recommended_command],
     }
