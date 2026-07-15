@@ -1,11 +1,12 @@
 import json
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
 from typer.testing import CliRunner
 
-from agentx.cli import app, next_payload
+from agentx.cli import app, next_payload, workflow_run_payload
 from agentx.config import Settings
 from agentx.tasks import save_tasks
 
@@ -155,6 +156,52 @@ def test_next_payload_recommends_workflow_resume_for_ready_artifact(tmp_path: Pa
     assert payload["recommendations"][0]["command"] == "agentx workflow-resume .agentx/runs/workflow-memory.json --result-output auto --dry-run --json"  # type: ignore[index]
     assert payload["recommendations"][0]["command_plan"]["risk"] == "GREEN"  # type: ignore[index]
     assert payload["recommended_kind"] == "workflow_resume"
+
+
+def test_next_workflow_resume_auto_result_output_chain_is_discoverable(tmp_path: Path, monkeypatch) -> None:
+    _git_repo(tmp_path)
+    runs = tmp_path / ".agentx" / "runs"
+    runs.mkdir(parents=True, exist_ok=True)
+    source = runs / "workflow-memory.json"
+    source.write_text(
+        json.dumps(
+            workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}),
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    os.utime(source, (1, 1))
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    next_result = runner.invoke(app, ["next", "--workspace", str(tmp_path), "--json"])
+
+    assert next_result.exit_code == 0, next_result.output
+    next_payload_data = json.loads(next_result.output)
+    assert next_payload_data["recommended_command"] == (
+        "agentx workflow-resume .agentx/runs/workflow-memory.json --result-output auto --dry-run --json"
+    )
+
+    resume_argv = shlex.split(next_payload_data["recommended_command"])
+    resume_result = runner.invoke(app, resume_argv[1:])
+
+    assert resume_result.exit_code == 0, resume_result.output
+    resume_payload = json.loads(resume_result.output)
+    assert resume_payload["ok"] is True
+    assert ".agentx/runs/workflow-memory-next.json" in resume_payload["argv"]
+
+    workflow_run_result = runner.invoke(app, resume_payload["argv"][1:])
+
+    assert workflow_run_result.exit_code == 0, workflow_run_result.output
+    assert (runs / "workflow-memory-next.json").exists()
+
+    artifacts_result = runner.invoke(app, ["artifacts", "--workspace", str(tmp_path), "--json"])
+
+    assert artifacts_result.exit_code == 0, artifacts_result.output
+    artifacts_payload = json.loads(artifacts_result.output)
+    assert artifacts_payload["latest_artifact"]["artifact_type"] == "workflow_run"
+    assert artifacts_payload["latest_artifact"]["relative_path"] == ".agentx/runs/workflow-memory-next.json"
+    assert artifacts_payload["latest_artifact"]["workflow_query"] == "memory"
 
 
 def test_next_payload_recommends_active_tasks_when_clean(tmp_path: Path) -> None:
