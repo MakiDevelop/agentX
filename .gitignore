@@ -14,4 +14,5 @@ playground/
 .agentx/*.md
 .agentx/handoff/
 .agentx/learning/
+.agentx/reliability/
 tmp/

@@ -8,6 +8,7 @@ import subprocess
 import sys
 import threading
 import json
+from collections.abc import Callable
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -53,7 +54,7 @@ from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import MemoryHallClient, NullMemoryClient, memory_read_payload, memory_status_payload, memory_write_payload
 from agentx.ollama import OllamaCancelledError, OllamaClient
-from agentx.provider_registry import get_llm_client, list_registered_backends, LLMClient, register_builtin_backends
+from agentx.provider_registry import get_llm_client, list_registered_backends, LLMClient, register_builtin_backends, register_llm_backend
 from agentx.persona import list_personas, normalize_persona
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile, build_project_profile_payload
@@ -8001,6 +8002,270 @@ def capabilities_command(
     """List machine-readable top-level CLI capabilities for runners."""
     structured_format = structured_output_format(json_output, output_format)
     print_capabilities(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+RECORDED_RELIABILITY_CASES: list[dict[str, object]] = [
+    {
+        "name": "edit_file",
+        "prompt": "Create RESULT.md with a short success marker.",
+        "responses": [
+            json.dumps(
+                {
+                    "type": "tool_call",
+                    "tool": "write_file",
+                    "args": {"path": "RESULT.md", "content": "# Result\n\nrecorded edit success\n"},
+                }
+            ),
+            json.dumps({"type": "final", "content": "Created RESULT.md."}),
+        ],
+        "expected_files": {"RESULT.md": "# Result\n\nrecorded edit success\n"},
+        "expect_dirty": True,
+    },
+    {
+        "name": "inspect_only",
+        "prompt": "Inspect the fixture and summarize it.",
+        "responses": [
+            json.dumps({"type": "tool_call", "tool": "list_files", "args": {"path": "."}}),
+            json.dumps({"type": "final", "content": "Inspected fixture files."}),
+        ],
+        "expected_files": {},
+        "expect_dirty": False,
+    },
+    {
+        "name": "recover_after_failure",
+        "prompt": "Recover from one bad write path, then create RECOVERED.md.",
+        "responses": [
+            json.dumps({"type": "tool_call", "tool": "write_file", "args": {"path": ".", "content": "bad"}}),
+            json.dumps(
+                {
+                    "type": "tool_call",
+                    "tool": "write_file",
+                    "args": {"path": "RECOVERED.md", "content": "# Recovered\n\nsecond attempt succeeded\n"},
+                }
+            ),
+            json.dumps({"type": "final", "content": "Recovered and created RECOVERED.md."}),
+        ],
+        "expected_files": {"RECOVERED.md": "# Recovered\n\nsecond attempt succeeded\n"},
+        "expect_dirty": True,
+    },
+]
+
+
+class RecordedReliabilityClient:
+    def __init__(self, responses: list[str]) -> None:
+        self.responses = list(responses)
+
+    def chat(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        json_mode: bool = False,
+        on_delta: Callable[[str], None] | None = None,
+        cancel_event: threading.Event | None = None,
+    ) -> str:
+        if not self.responses:
+            raise RuntimeError("recorded reliability backend exhausted")
+        response = self.responses.pop(0)
+        if on_delta is not None:
+            on_delta(response)
+        return response
+
+    def list_models(self) -> list[str]:
+        return ["recorded-reliability"]
+
+    def close(self) -> None:
+        return None
+
+    def __enter__(self) -> "RecordedReliabilityClient":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+
+def _git_fixture(workspace: Path) -> None:
+    workspace.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init"], cwd=workspace, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=workspace, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=workspace, check=True, capture_output=True, text=True)
+    (workspace / ".gitignore").write_text(".agentx/\n", encoding="utf-8")
+    (workspace / "README.md").write_text("# Reliability Fixture\n", encoding="utf-8")
+    subprocess.run(["git", "add", ".gitignore", "README.md"], cwd=workspace, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=workspace, check=True, capture_output=True, text=True)
+
+
+def _run_recorded_reliability_case(base_dir: Path, case: dict[str, object]) -> dict[str, object]:
+    name = str(case["name"])
+    case_root = base_dir / name
+    workspace = case_root / "workspace"
+    _git_fixture(workspace)
+    artifact_dir = workspace / ".agentx" / "runs" / "recorded"
+    artifact_dir.mkdir(parents=True, exist_ok=False)
+    session_output = artifact_dir / "session.session.jsonl"
+    result_output = artifact_dir / "result.json"
+    handoff_output = artifact_dir / "handoff.md"
+
+    responses = [str(response) for response in case["responses"]]  # type: ignore[index]
+    backend_name = f"recorded_reliability_{name}"
+    register_llm_backend(
+        backend_name,
+        lambda _base_url, _model, _timeout, case_responses=responses: RecordedReliabilityClient(list(case_responses)),
+        source_id="agentx.reliability_suite",
+    )
+    result = run_print_prompt(
+        str(case["prompt"]),
+        namespace="project:agentx-reliability",
+        agent_mode=True,
+        workspace_override=workspace,
+        approval_override="auto-approve",
+        backend_override=backend_name,
+        model_override="recorded-reliability",
+        return_metadata=True,
+        suppress_trace=True,
+        session_output_path=session_output,
+        max_steps=len(responses) + 3,
+        no_memory=True,
+    )
+    assert isinstance(result, HeadlessRunResult)
+    exit_code = headless_exit_code(
+        result.output,
+        termination=result.termination,
+        failing_tools=result.failing_tools,
+    )
+    write_headless_result_output(result_output, result, exit_code, output_format="json")
+    write_headless_handoff_briefing_output(handoff_output, result, exit_code)
+
+    expected_files = dict(case.get("expected_files", {}))  # type: ignore[arg-type]
+    file_checks = {
+        path: (workspace / path).read_text(encoding="utf-8") == str(expected)
+        for path, expected in expected_files.items()
+        if (workspace / path).exists()
+    }
+    missing_files = [path for path in expected_files if path not in file_checks]
+    artifacts = artifacts_payload(Settings(workspace=workspace))
+    next_step = next_payload(Settings(workspace=workspace))
+    gate = gate_payload(Settings(workspace=workspace), run_verify=False)
+    artifact_complete = session_output.is_file() and result_output.is_file() and handoff_output.is_file()
+    expected_dirty = bool(case.get("expect_dirty", False))
+    dirty_matches = bool(next_step.get("signals", {}).get("dirty")) == expected_dirty  # type: ignore[union-attr]
+    checks = {
+        "exit_zero": exit_code == 0,
+        "termination_final_success": result.termination == "final_success",
+        "artifact_complete": artifact_complete,
+        "expected_files": not missing_files and all(file_checks.values()),
+        "next_dirty_matches": dirty_matches,
+        "gate_payload": gate.get("schema") == "agentx.gate.v1",
+        "artifacts_latest_bundle": artifacts.get("latest_artifact", {}).get("artifact_type") == "headless_bundle",  # type: ignore[union-attr]
+    }
+    return {
+        "name": name,
+        "ok": all(checks.values()),
+        "workspace": str(workspace),
+        "artifact_dir": str(artifact_dir),
+        "exit_code": exit_code,
+        "termination": result.termination,
+        "tool_call_count": result.stats.get("tool_call_count") if result.stats else None,
+        "artifact_complete": artifact_complete,
+        "expected_files": file_checks,
+        "missing_files": missing_files,
+        "next_recommended_kind": next_step.get("recommended_kind"),
+        "gate_recommended_kind": gate.get("recommended_kind"),
+        "recovery_recommendation": headless_payload(result, exit_code).get("log_summary", {}).get("handoff_summary", {}),
+        "checks": checks,
+    }
+
+
+def reliability_suite_payload(
+    settings: Settings,
+    *,
+    run_id: str | None = None,
+    case_filter: str | None = None,
+) -> dict[str, object]:
+    selected = [
+        case for case in RECORDED_RELIABILITY_CASES
+        if not case_filter or case_filter.lower() in str(case["name"]).lower()
+    ]
+    if not selected:
+        return {
+            "schema": "agentx.reliability_suite.v1",
+            "ok": False,
+            "workspace": str(settings.workspace),
+            "run_id": run_id or "",
+            "root": None,
+            "case_count": 0,
+            "passed": 0,
+            "failed": 0,
+            "cases": [],
+            "blockers": ["no_matching_cases"],
+            "recommended_command": "agentx reliability-suite --json",
+            "recommended_kind": "fix_reliability_suite_inputs",
+            "recommended_risk": "UNKNOWN",
+        }
+    resolved_run_id = run_id or datetime.now().strftime("%Y%m%d-%H%M%S")
+    root = settings.workspace / ".agentx" / "reliability" / resolved_run_id
+    if root.exists():
+        raise typer.BadParameter(f"reliability run already exists: {root.relative_to(settings.workspace)}")
+    root.mkdir(parents=True)
+    cases = [_run_recorded_reliability_case(root, case) for case in selected]
+    passed = sum(1 for case in cases if case["ok"])
+    failed = len(cases) - passed
+    ok = failed == 0
+    return {
+        "schema": "agentx.reliability_suite.v1",
+        "ok": ok,
+        "workspace": str(settings.workspace),
+        "run_id": resolved_run_id,
+        "root": str(root),
+        "case_count": len(cases),
+        "passed": passed,
+        "failed": failed,
+        "cases": cases,
+        "blockers": [] if ok else ["reliability_case_failed"],
+        "recommended_command": "agentx inspect --json" if ok else "inspect failed reliability cases, then rerun agentx reliability-suite --json",
+        "recommended_kind": "inspect" if ok else "fix_reliability_failures",
+        "recommended_risk": "GREEN" if ok else "UNKNOWN",
+    }
+
+
+def print_reliability_suite_payload(payload: dict[str, object], *, json_output: bool = False, jsonl_output: bool = False) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="reliability_suite",
+        )
+        return
+    table = Table(title="agentX reliability suite", show_header=True, header_style="bold")
+    table.add_column("Case", style="cyan")
+    table.add_column("OK")
+    table.add_column("Termination")
+    table.add_column("Tools")
+    for item in payload.get("cases", []):
+        case = dict(item)
+        table.add_row(
+            str(case["name"]),
+            str(case["ok"]),
+            str(case["termination"]),
+            str(case["tool_call_count"]),
+        )
+    console.print(table)
+
+
+@app.command("reliability-suite")
+def reliability_suite_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for local reliability artifacts."),
+    run_id: str | None = typer.Option(None, "--run-id", help="Optional run id under .agentx/reliability; must not already exist."),
+    case: str | None = typer.Option(None, "--case", help="Optional recorded case name filter."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    fail_on_failure: bool = typer.Option(False, "--fail-on-failure", help="Exit 1 when any reliability case fails."),
+) -> None:
+    """Run the local-only recorded backend reliability suite."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = reliability_suite_payload(settings, run_id=run_id, case_filter=case)
+    structured_format = structured_output_format(json_output, output_format)
+    print_reliability_suite_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=1 if fail_on_failure and not payload.get("ok") else 0)
 
 
 @app.command("instructions")

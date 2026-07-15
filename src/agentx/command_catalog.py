@@ -519,6 +519,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only command catalog inspection",
     },
     {
+        "command": "agentx reliability-suite",
+        "usage": "agentx reliability-suite --json",
+        "description": "Run local-only recorded backend reliability cases and score headless artifacts, next, gate, and recovery posture.",
+        "examples": ["agentx reliability-suite --json", "agentx reliability-suite --case edit --run-id local-check --output-format jsonl"],
+        "schemas": ["agentx.reliability_suite.v1"],
+        "jsonl_event": "reliability_suite",
+        "risk": "YELLOW - writes local .agentx/reliability fixture artifacts; no external services or memory writes",
+    },
+    {
         "command": "agentx version",
         "usage": "agentx version --json",
         "description": "Print agentX and Python runtime versions.",

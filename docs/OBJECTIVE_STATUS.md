@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-15
 **Objective**: 將 agentX 優化到接近 Codex CLI / Grok CLI，並加入使用 AMH 與 ACE 的能力。
-**Status**: In progress. Runner mechanics, AMH support, and ACE support are strongly covered; live/recorded model reliability is not yet proven.
+**Status**: In progress. Runner mechanics, AMH support, ACE support, and first recorded reliability suite are covered; live model reliability and the final pass threshold are not yet ratified.
 
 This file is the single ratifiable status page for the objective. `docs/OBJECTIVE_GAP_AUDIT_2026-07-15.md` remains the detailed audit trail.
 
@@ -26,6 +26,7 @@ Evidence:
 - `tests/test_capabilities_cli.py`
 - `tests/test_command_parity_cli.py`
 - `tests/test_headless_task_benchmark.py::test_headless_agent_benchmark_completes_task_artifacts_next_and_gate`
+- `tests/test_reliability_suite_cli.py`
 - `tests/test_inspect_cli.py`
 - `tests/test_next_cli.py`
 - `tests/test_gate_cli.py`
@@ -40,6 +41,7 @@ Current proof:
 - `agentx next --json`, `gate --json`, `review --json`, `commit-plan --json`, `verify --json`, `command-plan --json`, `tool-plan --json`, and `patch-check --json` provide runner-safe preflight and routing.
 - Deterministic headless benchmark proves the runner chain using fake backend + local fixture repo: real tool write, result/session/handoff bundle, `artifacts`, `next`, and `gate`.
 - `agentx command-parity --json` maps critical slash-command families to runner JSON surfaces.
+- `agentx reliability-suite --json` runs a local-only recorded backend suite and scores exit code, termination, tool-call count, artifact completeness, expected files, `next`, `gate`, and recovery recommendation posture.
 
 ### AMH
 
@@ -73,13 +75,13 @@ Current proof:
 
 ## Not Proven Yet
 
-### Live/Recorded Model Reliability
+### Live Model Reliability
 
-The deterministic fake-backend benchmark proves runner mechanics, not model quality. It does not prove that real local models can reliably perform Codex/Grok-like tasks across a representative benchmark suite.
+The deterministic fake-backend benchmark and recorded reliability suite prove runner mechanics and replayable recorded behavior, not live model quality. They do not prove that real local models can reliably perform Codex/Grok-like tasks across a representative benchmark suite.
 
 Required next evidence:
-- A small fixture task suite with at least edit, inspect, recover-after-failure, and artifact-resume scenarios.
-- A deterministic recorded-backend mode, or a live backend run profile with pinned model/backend details.
+- A live backend run profile with pinned model/backend details, or Maki-ratified recorded-backend threshold if live model proof is deferred.
+- Additional artifact-resume scenario coverage in the reliability suite.
 - Metrics for success/failure, tool-call count, termination, artifact completeness, gate/next quality, and recovery recommendation usefulness.
 
 ### Final Target Bar
@@ -95,19 +97,18 @@ Do not mark the objective complete until:
 3. AMH isolated local-store write/read/status smoke passes.
 4. ACE isolated temp-root write/status smoke passes.
 5. Headless deterministic benchmark passes.
-6. Live or recorded reliability suite passes the ratified target threshold.
+6. Live or recorded reliability suite passes the ratified target threshold. Current first recorded suite exists, but the threshold is not ratified yet.
 7. This file is updated with the benchmark evidence and status changes from `In progress` to `Complete`.
 
 ## Recommended Next Slice
 
-Build the live/recorded backend reliability suite:
+Extend the reliability suite toward the final target bar:
 
 ```text
-fixture tasks
--> recorded or selected live backend
--> headless artifact bundle
--> next/gate/recovery evaluation
--> score summary
+artifact-resume case
+-> optional pinned live backend profile
+-> threshold proposal
+-> OBJECTIVE_STATUS update
 ```
 
 Keep the first version local-only and non-destructive. It should not deploy, SSH, touch production, or write external memory by default.

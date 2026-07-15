@@ -59,6 +59,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx doctor --json` | `agentx.doctor.v1` | `doctor` |
 | `agentx commands --json` | `agentx.command_catalog.v1` | `commands` |
 | `agentx command-parity --json` | `agentx.command_parity.v1` | `command_parity` |
+| `agentx reliability-suite --json` | `agentx.reliability_suite.v1` | `reliability_suite` |
 | `agentx tools --json` | `agentx.tool_catalog.v1` | `tools` |
 | `agentx tool-plan --json` | `agentx.tool_plan.v1` | `tool_plan` |
 | `agentx workflows --json` | `agentx.workflow_catalog.v1` | `workflows` |
@@ -1237,6 +1238,52 @@ Each entry object includes:
 | `workflow_aliases` | array of string |
 | `risk_alignment` | string |
 | `notes` | string |
+
+## Reliability Suite Payload
+
+`agentx reliability-suite --json` emits `agentx.reliability_suite.v1`.
+
+This command runs local-only recorded backend cases under
+`.agentx/reliability/<run-id>/`. It writes fixture repos and standard headless
+artifacts, but does not call live model backends, external memory, SSH, deploy,
+or production services.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.reliability_suite.v1`. |
+| `ok` | boolean | True when all selected cases pass. |
+| `workspace` | string | Workspace where local reliability artifacts were written. |
+| `run_id` | string | Run id under `.agentx/reliability`. |
+| `root` | string or null | Local reliability run root. |
+| `case_count` | integer | Number of selected cases. |
+| `passed` | integer | Passing case count. |
+| `failed` | integer | Failing case count. |
+| `cases` | array of object | Per-case score records. |
+| `blockers` | array of string | Machine-readable suite blockers. |
+| `recommended_command` | string | Suggested follow-up command. |
+| `recommended_kind` | string | Suggested follow-up kind. |
+| `recommended_risk` | string | Risk label for the follow-up. |
+
+Each case object includes:
+
+| Key | Type |
+|-----|------|
+| `name` | string |
+| `ok` | boolean |
+| `workspace` | string |
+| `artifact_dir` | string |
+| `exit_code` | integer |
+| `termination` | string |
+| `tool_call_count` | integer or null |
+| `artifact_complete` | boolean |
+| `expected_files` | object |
+| `missing_files` | array of string |
+| `next_recommended_kind` | string or null |
+| `gate_recommended_kind` | string or null |
+| `recovery_recommendation` | object |
+| `checks` | object |
 
 ## Tool Catalog Payload
 
