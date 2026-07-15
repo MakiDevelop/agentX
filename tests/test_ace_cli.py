@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -529,6 +530,121 @@ def test_ace_status_cli_outputs_jsonl_event(tmp_path) -> None:  # noqa: ANN001
     assert envelope["event"] == "ace_status"
     assert envelope["data"]["schema"] == "agentx.ace_status.v1"
     assert envelope["data"]["counts"]["briefings"] == 0
+
+
+def test_ace_write_cli_smoke_uses_temp_root_for_full_session_chain(tmp_path) -> None:  # noqa: ANN001
+    runner = CliRunner()
+    session_id = "session-write-smoke"
+
+    init_result = runner.invoke(
+        app,
+        [
+            "ace-init",
+            session_id,
+            "--goal",
+            "Verify isolated ACE write path",
+            "--route",
+            "Codex: architect; Gemini: reviewer",
+            "--root",
+            str(tmp_path),
+            "--write",
+            "--json",
+        ],
+    )
+    assert init_result.exit_code == 0, init_result.output
+    init_payload = json.loads(init_result.output)
+    assert init_payload["ok"] is True
+    assert init_payload["write"] is True
+    assert init_payload["root"] == str(tmp_path.resolve())
+    assert init_payload["manifest_exists"] is True
+
+    briefing_result = runner.invoke(
+        app,
+        [
+            "ace-briefing",
+            session_id,
+            "--agent",
+            "gemini",
+            "--role",
+            "Reviewer",
+            "--task",
+            "Review isolated ACE write path",
+            "--root",
+            str(tmp_path),
+            "--write",
+            "--json",
+        ],
+    )
+    assert briefing_result.exit_code == 0, briefing_result.output
+    briefing_payload = json.loads(briefing_result.output)
+    assert briefing_payload["ok"] is True
+    assert briefing_payload["write"] is True
+    assert briefing_payload["briefing_exists"] is True
+    assert briefing_payload["recommended_command"] == "agentx next --json"
+
+    answer_result = runner.invoke(
+        app,
+        [
+            "ace-answer",
+            session_id,
+            "--agent",
+            "gemini",
+            "--answer",
+            "No blocker found in isolated ACE write smoke.",
+            "--summary",
+            "Gemini found no blocker",
+            "--root",
+            str(tmp_path),
+            "--output",
+            "answer-gemini.md",
+            "--json",
+        ],
+    )
+    assert answer_result.exit_code == 0, answer_result.output
+    answer_payload = json.loads(answer_result.output)
+    assert answer_payload["ok"] is True
+    assert answer_payload["answer_exists"] is True
+    assert answer_payload["recommended_command"] == "agentx next --json"
+
+    status_result = runner.invoke(
+        app,
+        [
+            "ace-status",
+            session_id,
+            "--root",
+            str(tmp_path),
+            "--json",
+        ],
+    )
+    assert status_result.exit_code == 0, status_result.output
+    status_payload = json.loads(status_result.output)
+    assert status_payload["ok"] is True
+    assert status_payload["root"] == str(tmp_path.resolve())
+    assert status_payload["manifest_exists"] is True
+    assert status_payload["counts"]["briefings"] == 1
+    assert status_payload["counts"]["answers"] == 1
+    assert status_payload["counts"]["open_questions"] == 0
+    assert status_payload["briefings"][0]["name"] == "briefing-gemini.md"
+    assert status_payload["answers"][0]["name"] == "answer-gemini.md"
+    assert status_payload["recommended_command"] == "agentx next --json"
+
+    session_dir = tmp_path / session_id
+    assert (session_dir / "_manifest.md").exists()
+    assert (session_dir / "briefing-gemini.md").exists()
+    assert (session_dir / "answer-gemini.md").exists()
+    manifest_text = (session_dir / "_manifest.md").read_text(encoding="utf-8")
+    assert "Verify isolated ACE write path" in manifest_text
+    assert "gemini answer: Gemini found no blocker" in manifest_text
+
+    touched_paths = [
+        init_payload["manifest_path"],
+        briefing_payload["briefing_path"],
+        answer_payload["answer_path"],
+        status_payload["manifest_path"],
+    ]
+    for raw_path in touched_paths:
+        path = Path(raw_path)
+        assert path.is_relative_to(tmp_path.resolve())
 
 
 def test_ace_status_blocks_missing_manifest(tmp_path) -> None:  # noqa: ANN001

@@ -46,9 +46,11 @@ Evidence:
 - `workflow-run ace --result-output ... --json` can save a workflow artifact.
 - `artifacts`, `next`, `workflow-resume`, `doctor`, and `gate` can continue and observe the ACE workflow artifact chain.
 - ACE dry-run runner smoke is discoverable through `capabilities.runner_smokes`.
+- Isolated ACE write smoke covers `ace-init --write`, `ace-briefing --write`, `ace-answer`, and `ace-status` using a pytest temporary ACE root.
 
 Evidence:
 - `tests/test_ace_cli.py`
+- `tests/test_ace_cli.py::test_ace_write_cli_smoke_uses_temp_root_for_full_session_chain`
 - `tests/test_workflows_cli.py::test_ace_workflow_runner_smoke_links_artifact_next_resume_and_gate`
 - `tests/test_capabilities_cli.py`
 - `docs/CLI_JSON_CONTRACTS.md`
@@ -63,13 +65,12 @@ Suggested next proof:
 - Add a local fixture repo and an end-to-end headless smoke that runs a small safe task through `agentx -p ... --agent --artifact-dir ... --quiet`, then validates result artifact, transcript/session, diff or task state, `next`, and `gate`.
 - Keep it deterministic and not dependent on a live LLM by using a fake backend if needed.
 
-### Gap 2: Real AMH write / ACE write paths are guarded but not end-to-end smoked
+### Gap 2: Real AMH write path is guarded but not end-to-end smoked
 
-Current AMH/ACE runner smokes intentionally stay dry-run. This is correct for default safety, but it means explicit write flows are not proven through full runner chains.
+Current AMH runner smokes intentionally stay dry-run. This is correct for default safety, but it means explicit AMH write flows are not proven through a local-store runner chain. ACE write flow is now covered through an isolated temporary-root CLI smoke.
 
 Suggested next proof:
 - Add isolated local-store tests for `memory-write --write` using workspace-local AMH JSON store.
-- Add ACE write smoke under a temporary ACE root, covering `ace-init --write`, `ace-briefing --write`, `ace-answer`, and `ace-status`.
 - Keep RED/external writes out of scope; use temp dirs only.
 
 ### Gap 3: Interactive shell and runner JSON surfaces may drift
@@ -90,17 +91,16 @@ Suggested next proof:
 
 ## Recommended Next Slice
 
-Implement an isolated ACE write smoke first. It has lower external risk than AMH backend writes, exercises the multi-agent coordination feature directly, and will close one concrete gap:
+Implement an isolated AMH local-store write smoke next. It should avoid external memory backends while proving the explicit write path that default dry-run smokes intentionally skip:
 
 ```text
-ace-init --write
-→ ace-briefing --write
-→ ace-answer
-→ ace-status
+memory-write --write
+→ memory-read
+→ memory-status
 ```
 
 Acceptance criteria:
-- Uses a temporary ACE root only.
-- Does not touch `~/Documents/agent-council`.
-- Verifies manifest, briefing, answer file, status counts, and recommended commands.
+- Uses workspace-local AMH JSON store only.
+- Does not touch the default AMH store or backend service.
+- Verifies written content can be read back, status points at the local store, and recommended commands remain runner-safe.
 - Updates `docs/HEADLESS_OPTIMIZATION_LIST.md`.
