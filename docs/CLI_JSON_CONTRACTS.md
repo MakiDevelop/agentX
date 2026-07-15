@@ -1275,6 +1275,12 @@ command-plan blockers. GREEN steps run directly. YELLOW gates require both
 slash-command steps, unapproved side-effect gates, command-plan blockers, or
 failed commands.
 
+`--result-output PATH` writes the same result payload to a workspace-safe
+artifact path. The command rejects paths outside the workspace and refuses to
+overwrite an existing file. `--result-output-format auto|json|jsonl` controls
+the artifact format; `auto` uses JSON for plain/JSON stdout and JSONL for JSONL
+stdout.
+
 Required stable keys:
 
 | Key | Type | Meaning |
@@ -1286,6 +1292,8 @@ Required stable keys:
 | `approval_reason` | string or null | Human-readable reason required when allowing YELLOW gates. |
 | `ok` | boolean | True when the plan has no blockers and the run did not stop at a gate or failed command. |
 | `workspace` | string | Workspace used for planning and execution. |
+| `result_output` | string or null | Workspace-safe artifact path written by `--result-output`, or null. |
+| `result_output_format` | string | Result artifact format after resolving `auto`; either `json` or `jsonl`. |
 | `plan` | object | Embedded `agentx.workflow_plan.v1` payload. |
 | `execution_allowed` | boolean | True only when every runnable step is eligible under the current GREEN/YELLOW gate policy. |
 | `executed_steps` | array of object | Executed commands with return code and captured output. Empty for dry-run. |

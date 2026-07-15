@@ -154,6 +154,7 @@ agentx workflows ace --json
 agentx workflow-plan ace --json
 agentx workflow-plan memory --input 完成與待辦="完成 AMH 交接" --json
 agentx workflow-run memory --input 完成與待辦="完成 AMH 交接" --json
+agentx workflow-run memory --input 完成與待辦="完成 AMH 交接" --result-output .agentx/runs/workflow-memory.json --json
 agentx workflow-run infra --execute --json --fail-on-blocker
 agentx workflow-run memory --input 完成與待辦="完成 AMH 交接" --execute --allow-yellow-gates --approval-reason "Maki approved memory handoff write" --json
 agentx tools --json
@@ -241,7 +242,7 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `agentx doctor --json` 會輸出 `agentx.doctor.v1` health checks；CI 或 wrapper 可用 `agentx doctor --static --json` 只檢查本機 `uv`、git、task migration，避開 Ollama / memory live probes。加上 `--fail-on-error` 時，任一 check 失敗會在輸出 payload 後以 exit 1 結束。
 `agentx workflows --json` 會輸出 `agentx.workflow_catalog.v1`，讓 wrapper 能讀取 headless、AMH handoff、ACE council、audit、commit 等 recipe；每個 workflow 會提供含 `kind` 的 `steps`、可直接處理的 `commands`，且 top-level `agentx` step 會內嵌 `command_plan`；也可用 `agentx workflows headless --json`、`agentx workflows memory --json` 或 `agentx workflows ace --json` 查單一路徑。
 `agentx workflow-plan NAME --json` 會輸出 `agentx.workflow_plan.v1`，把單一 workflow 展開成 ordered command plans、`inputs_required`、`side_effect_gates` 與 blockers；可重複加 `--input KEY=VALUE` 產生 substitution 後的 `ready_commands`，但它不執行任何步驟；加 `--fail-on-blocker` 可讓 runner 在 placeholder 未填或 command-plan 有 blocker 時 exit 1。
-`agentx workflow-run NAME --json` 會輸出 `agentx.workflow_run.v1`，預設 dry-run 並包住 workflow-plan；只有加 `--execute` 才會逐步執行 eligible GREEN `agentx` CLI steps，遇到 placeholder blocker、slash step、YELLOW/RED gate 或命令失敗就停止；若要執行 YELLOW gate，必須同時加 `--allow-yellow-gates` 與 `--approval-reason TEXT`，payload 會回傳 `approval_receipts`。
+`agentx workflow-run NAME --json` 會輸出 `agentx.workflow_run.v1`，預設 dry-run 並包住 workflow-plan；只有加 `--execute` 才會逐步執行 eligible GREEN `agentx` CLI steps，遇到 placeholder blocker、slash step、YELLOW/RED gate 或命令失敗就停止；若要執行 YELLOW gate，必須同時加 `--allow-yellow-gates` 與 `--approval-reason TEXT`，payload 會回傳 `approval_receipts`。加 `--result-output PATH` 可把同一份 result payload 寫到 workspace 內 artifact，拒絕覆蓋既有檔案或寫到 workspace 外；`--result-output-format auto|json|jsonl` 可指定 artifact 格式，`auto` 會跟隨 stdout 的 JSON/JSONL 型態。
 `agentx tool-plan TOOL --args-json JSON --json` 會輸出 `agentx.tool_plan.v1`，解析 tool alias、risk、approval posture 與已知 args blocker；它不會執行工具。
 `agentx infra --json` 會輸出 `agentx.infrastructure_context.v1`，讓外部 runner 可在 SSH/deploy/cross-machine 前 read-only 載入專案地圖、資源地圖、家庭 AI 設施與 VPS 地圖；它不授權遠端操作。
 `agentx ace-init SESSION --goal GOAL --json` 會輸出 `agentx.ace_session.v1`，預覽 ACE session `_manifest.md`；加 `--write` 才會建立 `~/Documents/agent-council/SESSION/_manifest.md`，用於多代理 file-based 協作。

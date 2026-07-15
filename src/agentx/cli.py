@@ -5882,7 +5882,10 @@ def resolve_headless_session_output(workspace: Path, value: str | None) -> Path 
 def resolve_headless_result_output(workspace: Path, value: str | None) -> Path | None:
     if value is None:
         return None
-    target = resolve_inside_workspace(workspace, value)
+    try:
+        target = resolve_inside_workspace(workspace, value)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     if target.exists():
         raise typer.BadParameter(f"result output already exists: {value}")
     if target.name in {"", ".", ".."}:
@@ -5962,6 +5965,22 @@ def write_headless_result_output(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         headless_payload_text(result, exit_code, output_format=output_format) + "\n",
+        encoding="utf-8",
+    )
+
+
+def write_structured_result_output(
+    path: Path | None,
+    payload: dict[str, object],
+    *,
+    output_format: str,
+    event: str,
+) -> None:
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        structured_payload_text(payload, output_format=output_format, event=event) + "\n",
         encoding="utf-8",
     )
 
@@ -6943,12 +6962,17 @@ def workflow_run_command(
     allow_yellow_gates: bool = typer.Option(False, "--allow-yellow-gates", help="Allow YELLOW workflow gates when --execute is used. Requires --approval-reason."),
     approval_reason: str | None = typer.Option(None, "--approval-reason", help="Human-readable reason recorded in approval receipts for allowed YELLOW gates."),
     timeout: int = typer.Option(120, "--timeout", min=1, help="Per-command timeout in seconds when --execute is used."),
+    result_output: str | None = typer.Option(None, "--result-output", help="Write the workflow-run result JSON/JSONL payload to a specific workspace path."),
+    result_output_format: str = typer.Option("auto", "--result-output-format", help="Result artifact format: auto, json, or jsonl."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
     fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when the workflow run has blockers or stops at a gate."),
 ) -> None:
     """Dry-run or execute GREEN-only workflow steps."""
     structured_format = structured_output_format(json_output, output_format)
+    workspace_path = resolve_headless_workspace(workspace) or Settings().workspace
+    result_artifact_format = resolve_headless_result_output_format(result_output_format, stdout_format=structured_format)
+    result_output_path = resolve_headless_result_output(workspace_path, result_output)
     parsed_inputs, input_blockers = parse_workflow_inputs(input_items or [])
     payload = workflow_run_payload(
         query,
@@ -6964,6 +6988,14 @@ def workflow_run_command(
         payload["blockers"] = [*payload.get("blockers", []), *input_blockers]
         payload["recommended_kind"] = "fix_workflow_inputs"
         payload["recommended_risk"] = "UNKNOWN"
+    payload["result_output"] = str(result_output_path) if result_output_path else None
+    payload["result_output_format"] = result_artifact_format
+    write_structured_result_output(
+        result_output_path,
+        payload,
+        output_format=result_artifact_format,
+        event="workflow_run",
+    )
     print_workflow_run_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     blocked = bool(payload.get("blockers") or payload.get("stopped_at"))
     raise typer.Exit(code=1 if fail_on_blocker and blocked else 0)

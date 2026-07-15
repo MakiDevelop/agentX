@@ -451,10 +451,11 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
     },
     {
         "command": "agentx workflow-run",
-        "usage": "agentx workflow-run NAME --input KEY=VALUE --json",
-        "description": "Dry-run a workflow or execute eligible GREEN agentx CLI steps; YELLOW gates require --allow-yellow-gates plus --approval-reason.",
+        "usage": "agentx workflow-run NAME --input KEY=VALUE --result-output PATH --json",
+        "description": "Dry-run a workflow or execute eligible GREEN agentx CLI steps; can persist the result artifact; YELLOW gates require --allow-yellow-gates plus --approval-reason.",
         "examples": [
             "agentx workflow-run memory --input 完成與待辦='完成 AMH 交接' --json",
+            "agentx workflow-run memory --input 完成與待辦='完成 AMH 交接' --result-output .agentx/runs/workflow-memory.json --json",
             "agentx workflow-run infra --execute --json --fail-on-blocker",
             "agentx workflow-run memory --input 完成與待辦='完成 AMH 交接' --execute --allow-yellow-gates --approval-reason 'Maki approved memory handoff write' --json",
         ],

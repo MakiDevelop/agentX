@@ -400,6 +400,104 @@ def test_workflow_run_json_outputs_dry_run_payload() -> None:
     assert payload["plan"]["ready_commands"][1] == "agentx memory-write '完成 AMH 交接' --type handoff --json"
 
 
+def test_workflow_run_result_output_writes_json_artifact(tmp_path) -> None:  # noqa: ANN001
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-run",
+            "memory",
+            "--workspace",
+            str(tmp_path),
+            "--input",
+            "完成與待辦=完成 AMH 交接",
+            "--result-output",
+            "artifacts/workflow-run.json",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    stdout_payload = json.loads(result.output)
+    target = tmp_path / "artifacts/workflow-run.json"
+    artifact_payload = json.loads(target.read_text(encoding="utf-8"))
+    assert artifact_payload["schema"] == "agentx.workflow_run.v1"
+    assert artifact_payload["execute"] is False
+    assert artifact_payload["result_output"] == str(target)
+    assert artifact_payload["result_output_format"] == "json"
+    assert stdout_payload == artifact_payload
+
+
+def test_workflow_run_result_output_writes_jsonl_artifact(tmp_path) -> None:  # noqa: ANN001
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-run",
+            "memory",
+            "--workspace",
+            str(tmp_path),
+            "--input",
+            "完成與待辦=完成 AMH 交接",
+            "--result-output",
+            "artifacts/workflow-run.jsonl",
+            "--output-format",
+            "jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    stdout_envelope = json.loads(result.output)
+    target = tmp_path / "artifacts/workflow-run.jsonl"
+    artifact_envelope = json.loads(target.read_text(encoding="utf-8"))
+    assert artifact_envelope["event"] == "workflow_run"
+    assert artifact_envelope["data"]["schema"] == "agentx.workflow_run.v1"
+    assert artifact_envelope["data"]["result_output"] == str(target)
+    assert artifact_envelope["data"]["result_output_format"] == "jsonl"
+    assert stdout_envelope == artifact_envelope
+
+
+def test_workflow_run_result_output_rejects_existing_file(tmp_path) -> None:  # noqa: ANN001
+    target = tmp_path / "existing.json"
+    target.write_text("already here\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-run",
+            "memory",
+            "--workspace",
+            str(tmp_path),
+            "--input",
+            "完成與待辦=完成 AMH 交接",
+            "--result-output",
+            "existing.json",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "result output already exists" in result.output
+
+
+def test_workflow_run_result_output_rejects_workspace_escape(tmp_path) -> None:  # noqa: ANN001
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-run",
+            "memory",
+            "--workspace",
+            str(tmp_path),
+            "--input",
+            "完成與待辦=完成 AMH 交接",
+            "--result-output",
+            "../outside.json",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "escapes workspace" in result.output
+
+
 def test_workflow_run_jsonl_outputs_event_envelope() -> None:
     result = CliRunner().invoke(app, ["workflow-run", "memory", "--output-format", "jsonl"])
 
