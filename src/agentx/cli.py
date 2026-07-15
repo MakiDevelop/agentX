@@ -27,6 +27,7 @@ from rich.text import Text
 
 from agentx import cli_runtime_handlers as _runtime_handlers
 from agentx import cli_slash_shims as _slash_shims
+from agentx.ace import ace_init_payload
 from agentx.approval import ApprovalMode, ApprovalPolicy, approval_decision_source, normalize_approval_mode
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from agentx.config import Settings
@@ -621,6 +622,29 @@ def print_infra_payload(
         print_structured_payload(payload, output_format=output_format, event="infra")
         return
     print_raw(str(payload["content"]))
+
+
+def print_ace_init_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output or jsonl_output:
+        output_format = "jsonl" if jsonl_output else "json"
+        print_structured_payload(payload, output_format=output_format, event="ace_init")
+        return
+    if payload.get("ok"):
+        console.print(f"[green]ACE session ready: {payload.get('session_id')}[/green]")
+        console.print(f"[dim]manifest={payload.get('manifest_path') or '-'}[/dim]")
+        if not payload.get("write"):
+            console.print("[yellow]dry-run only; add --write to create _manifest.md[/yellow]")
+    else:
+        console.print(
+            "[red]ACE init blocked: "
+            f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
+        )
+    console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
 
 
 def _is_recursive_flag(token: str) -> bool:
@@ -6201,6 +6225,29 @@ def infra_command(
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
     print_infra_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("ace-init")
+def ace_init_command(
+    session_id: str = typer.Argument(..., help="ACE session id, used as the session directory name."),
+    goal: str = typer.Option(..., "--goal", help="ACE GOAL section content."),
+    routing_decision: str = typer.Option("", "--route", help="Initial ROUTING DECISIONS content."),
+    root: str | None = typer.Option(None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."),
+    write: bool = typer.Option(False, "--write", help="Create the session directory and _manifest.md."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Create or preview an ACE session manifest."""
+    payload = ace_init_payload(
+        session_id=session_id,
+        goal=goal,
+        routing_decision=routing_decision,
+        root=root,
+        write=write,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_ace_init_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 
 @app.command("command-plan")

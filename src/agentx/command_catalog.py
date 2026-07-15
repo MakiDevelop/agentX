@@ -320,6 +320,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local infrastructure map context",
     },
     {
+        "command": "agentx ace-init",
+        "usage": "agentx ace-init SESSION --goal GOAL --json",
+        "description": "Preview or create an ACE session directory with _manifest.md for multi-agent file-based coordination.",
+        "examples": [
+            "agentx ace-init 2026-07-15-agentx-ace --goal 'Add ACE support' --json",
+            "agentx ace-init 2026-07-15-agentx-ace --goal 'Add ACE support' --route 'Codex: architect; Gemini: review' --write --json",
+        ],
+        "schemas": ["agentx.ace_session.v1"],
+        "jsonl_event": "ace_init",
+        "risk": "GREEN by default; YELLOW with --write because it creates local ACE files",
+    },
+    {
         "command": "agentx workflows",
         "usage": "agentx workflows [QUERY] --json",
         "description": "List practical workflow recipes for headless, audit, and commit flows.",

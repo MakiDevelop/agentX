@@ -43,6 +43,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx gate --json` | `agentx.gate.v1` | `gate` |
 | `agentx next --json` | `agentx.next.v1` | `next` |
 | `agentx infra --json` | `agentx.infrastructure_context.v1` | `infra` |
+| `agentx ace-init --json` | `agentx.ace_session.v1` | `ace_init` |
 | `agentx tasks --json` | `agentx.tasks.v1` | `tasks` |
 | `agentx task-update --json` | `agentx.task_update.v1` | `task_update` |
 | `agentx verify --json` | `agentx.verify.v1` | `verify` |
@@ -427,6 +428,40 @@ Required stable keys:
 | `limits` | object | Applied `per_file_chars` and `max_chars` caps. |
 | `content` | string | Bounded markdown context from the selected map source(s). |
 | `next_commands` | array of string | Human-facing reminders for runtime state and approval gates. |
+
+## ACE Session Payload
+
+`agentx ace-init SESSION --goal GOAL --json` emits `agentx.ace_session.v1`.
+
+This command previews or creates an Agent Context Exchange session directory
+for file-based multi-agent coordination. By default it is a dry-run and writes
+nothing. Add `--write` to create `<root>/<SESSION>/_manifest.md`. The default
+root is `~/Documents/agent-council`; tests and wrappers can override it with
+`--root`.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.ace_session.v1`. |
+| `ok` | boolean | True when the manifest preview or write succeeded. |
+| `write` | boolean | True when `--write` was requested. |
+| `session_id` | string | Validated session id / directory name. |
+| `root` | string | Resolved ACE root directory. |
+| `session_dir` | string or null | Resolved session directory. |
+| `manifest_path` | string or null | Resolved `_manifest.md` path. |
+| `manifest_exists` | boolean | Whether `_manifest.md` exists after the operation. |
+| `blockers` | array of string | Machine-readable blockers such as `manifest_already_exists` or invalid session id errors. |
+| `warnings` | array of string | Non-blocking diagnostics such as `dry_run_no_files_written`. |
+| `manifest` | string | Rendered `_manifest.md` content. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | `ace_init_write`, `next`, or `fix_ace_blockers`. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `next_commands` | array of string | Suggested follow-up commands. |
+
+The generated manifest includes the ACE-required sections `GOAL`,
+`ROUTING DECISIONS`, `SUB-TASKS`, `CUMULATIVE FINDINGS`, `DECISIONS TAKEN`,
+and `OPEN QUESTIONS`.
 
 ## Artifacts Payload
 
