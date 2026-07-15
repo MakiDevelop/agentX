@@ -1,4 +1,5 @@
 import json
+import shlex
 import subprocess
 
 from typer.testing import CliRunner
@@ -425,6 +426,77 @@ def test_workflow_run_result_output_writes_json_artifact(tmp_path) -> None:  # n
     assert artifact_payload["result_output"] == str(target)
     assert artifact_payload["result_output_format"] == "json"
     assert stdout_payload == artifact_payload
+
+
+def test_memory_workflow_runner_smoke_links_artifact_next_resume_and_gate(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True, capture_output=True, text=True)
+    (tmp_path / ".gitignore").write_text(".agentx/\n", encoding="utf-8")
+    subprocess.run(["git", "add", ".gitignore"], cwd=tmp_path, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    run_result = runner.invoke(
+        app,
+        [
+            "workflow-run",
+            "memory",
+            "--workspace",
+            str(tmp_path),
+            "--input",
+            "完成與待辦=完成 AMH 交接",
+            "--result-output",
+            ".agentx/runs/workflow-memory.json",
+            "--json",
+        ],
+    )
+
+    assert run_result.exit_code == 0, run_result.output
+    run_payload = json.loads(run_result.output)
+    assert run_payload["schema"] == "agentx.workflow_run.v1"
+    assert run_payload["ok"] is True
+    assert run_payload["execute"] is False
+    assert (tmp_path / ".agentx" / "runs" / "workflow-memory.json").exists()
+
+    artifacts_result = runner.invoke(app, ["artifacts", "--workspace", str(tmp_path), "--json"])
+
+    assert artifacts_result.exit_code == 0, artifacts_result.output
+    artifacts_payload = json.loads(artifacts_result.output)
+    assert artifacts_payload["workflow_chain"]["status"] == "ready"
+    assert artifacts_payload["workflow_chain"]["next_result_output"] == ".agentx/runs/workflow-memory-next.json"
+
+    next_result = runner.invoke(app, ["next", "--workspace", str(tmp_path), "--json"])
+
+    assert next_result.exit_code == 0, next_result.output
+    next_payload = json.loads(next_result.output)
+    assert next_payload["recommended_kind"] == "workflow_resume"
+    assert next_payload["recommended_command"] == (
+        "agentx workflow-resume .agentx/runs/workflow-memory.json --result-output auto --dry-run --json"
+    )
+    assert next_payload["signals"]["latest_workflow_next_result_output"] == ".agentx/runs/workflow-memory-next.json"
+
+    resume_argv = shlex.split(next_payload["recommended_command"])
+    resume_result = runner.invoke(app, resume_argv[1:])
+
+    assert resume_result.exit_code == 0, resume_result.output
+    resume_payload = json.loads(resume_result.output)
+    assert resume_payload["schema"] == "agentx.workflow_resume.v1"
+    assert resume_payload["executed"] is False
+    assert ".agentx/runs/workflow-memory-next.json" in resume_payload["argv"]
+    assert "完成與待辦=完成 AMH 交接" in resume_payload["argv"]
+
+    gate_result = runner.invoke(
+        app,
+        ["gate", "--workspace", str(tmp_path), "--skip-verify", "--skip-approvals", "--json"],
+    )
+
+    assert gate_result.exit_code == 0, gate_result.output
+    gate_payload = json.loads(gate_result.output)
+    assert gate_payload["schema"] == "agentx.gate.v1"
+    assert gate_payload["doctor"]["workflow_artifact_health"]["status"] == "ready"
+    assert "workflow_artifact_needs_inspect" not in gate_payload["warnings"]
 
 
 def test_workflow_run_result_output_writes_jsonl_artifact(tmp_path) -> None:  # noqa: ANN001
