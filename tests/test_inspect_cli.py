@@ -160,6 +160,8 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["signals"]["latest_workflow_run_query"] == "ace"
     assert payload["signals"]["latest_workflow_run_ok"] is True
     assert payload["signals"]["latest_workflow_run_stopped"] is False
+    assert payload["signals"]["latest_workflow_resume_ready"] is True
+    assert payload["signals"]["latest_workflow_missing_input_count"] == 0
     assert payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
     next_kinds = [item["kind"] for item in payload["next"]["recommendations"]]
     assert "memory_handoff_workflow" in next_kinds

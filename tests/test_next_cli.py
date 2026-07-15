@@ -133,10 +133,27 @@ def test_next_payload_recommends_latest_workflow_run_artifact_when_clean(tmp_pat
     assert payload["signals"]["latest_workflow_run_query"] == "memory"  # type: ignore[index]
     assert payload["signals"]["latest_workflow_run_ok"] is False  # type: ignore[index]
     assert payload["signals"]["latest_workflow_run_stopped"] is True  # type: ignore[index]
-    assert payload["recommendations"][0]["kind"] == "workflow_run_artifact"  # type: ignore[index]
-    assert payload["recommendations"][0]["command"] == "agentx artifacts .agentx/runs/workflow-memory.json --json"  # type: ignore[index]
-    assert payload["recommended_kind"] == "workflow_run_artifact"
+    assert payload["signals"]["latest_workflow_resume_ready"] is True  # type: ignore[index]
+    assert payload["signals"]["latest_workflow_missing_input_count"] == 0  # type: ignore[index]
+    assert payload["recommendations"][0]["kind"] == "workflow_artifact_inspect"  # type: ignore[index]
+    assert payload["recommendations"][0]["command"] == "agentx workflow-inspect .agentx/runs/workflow-memory.json --json"  # type: ignore[index]
+    assert payload["recommended_kind"] == "workflow_artifact_inspect"
     assert payload["recommended_risk"] == "GREEN"
+
+
+def test_next_payload_recommends_workflow_resume_for_ready_artifact(tmp_path: Path) -> None:
+    _git_repo(tmp_path)
+    _write_workflow_run_artifact(tmp_path / ".agentx" / "runs", "workflow-memory.json", ok=True)
+
+    payload = next_payload(Settings(workspace=tmp_path))
+
+    assert payload["signals"]["latest_artifact_type"] == "workflow_run"  # type: ignore[index]
+    assert payload["signals"]["latest_workflow_run_ok"] is True  # type: ignore[index]
+    assert payload["signals"]["latest_workflow_run_stopped"] is False  # type: ignore[index]
+    assert payload["signals"]["latest_workflow_resume_ready"] is True  # type: ignore[index]
+    assert payload["recommendations"][0]["kind"] == "workflow_resume"  # type: ignore[index]
+    assert payload["recommendations"][0]["command"] == "agentx workflow-resume .agentx/runs/workflow-memory.json --dry-run --json"  # type: ignore[index]
+    assert payload["recommended_kind"] == "workflow_resume"
 
 
 def test_next_payload_recommends_active_tasks_when_clean(tmp_path: Path) -> None:

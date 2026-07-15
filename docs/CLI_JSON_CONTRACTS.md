@@ -432,7 +432,8 @@ Required stable keys:
 `active_task_ids`, `primary_active_task`, `artifact_count`,
 `latest_artifact_type`, `latest_artifact_needs_handoff`,
 `latest_workflow_run_query`, `latest_workflow_run_ok`,
-`latest_workflow_run_stopped`, `denied_approval_count`,
+`latest_workflow_run_stopped`, `latest_workflow_resume_ready`,
+`latest_workflow_missing_input_count`, `denied_approval_count`,
 `approvals_available`, and `workflow_recommendation_count`.
 `primary_active_task` is the first task from the embedded active `tasks`
 payload, or null when no active tasks exist.
@@ -702,6 +703,8 @@ Each artifact object includes:
 | `workflow_execute` | boolean or null |
 | `workflow_stopped_at` | object or null |
 | `workflow_blockers` | array of string |
+| `workflow_resume_ready` | boolean or null |
+| `workflow_missing_input_count` | integer |
 | `approval_receipt_count` | integer |
 
 ## Config Payload

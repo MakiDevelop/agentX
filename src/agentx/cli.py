@@ -2181,6 +2181,16 @@ def artifact_workflow_run_overview(workspace: Path, path: Path) -> dict[str, obj
     payload = read_artifact_result_payload(path) or {}
     approval_receipts = payload.get("approval_receipts")
     blockers = payload.get("blockers")
+    plan = payload.get("plan")
+    plan_inputs = dict(plan.get("inputs") or {}) if isinstance(plan, dict) and isinstance(plan.get("inputs"), dict) else {}
+    inputs_required = list(plan.get("inputs_required") or []) if isinstance(plan, dict) and isinstance(plan.get("inputs_required"), list) else []
+    missing_inputs = [
+        dict(item)
+        for item in inputs_required
+        if isinstance(item, dict)
+        and str(item.get("placeholder") or "").strip()
+        and str(item.get("placeholder") or "").strip() not in plan_inputs
+    ]
     return {
         "artifact_type": "workflow_run",
         "name": path.name,
@@ -2209,6 +2219,8 @@ def artifact_workflow_run_overview(workspace: Path, path: Path) -> dict[str, obj
         "workflow_execute": payload.get("execute"),
         "workflow_stopped_at": payload.get("stopped_at"),
         "workflow_blockers": list(blockers) if isinstance(blockers, list) else [],
+        "workflow_resume_ready": not missing_inputs,
+        "workflow_missing_input_count": len(missing_inputs),
         "approval_receipt_count": len(approval_receipts) if isinstance(approval_receipts, list) else 0,
     }
 
@@ -4190,6 +4202,16 @@ def next_payload(
     latest_artifact = dict(artifact_items[0]) if artifact_items else None
     latest_needs_handoff = bool(latest_artifact and latest_artifact.get("needs_handoff") is True)
     latest_artifact_type = str(latest_artifact.get("artifact_type")) if latest_artifact else None
+    latest_workflow_resume_ready = (
+        bool(latest_artifact.get("workflow_resume_ready"))
+        if latest_artifact_type == "workflow_run" and latest_artifact is not None
+        else None
+    )
+    latest_workflow_missing_input_count = (
+        int(latest_artifact.get("workflow_missing_input_count", 0) or 0)
+        if latest_artifact_type == "workflow_run" and latest_artifact is not None
+        else 0
+    )
 
     if denied_count > 0:
         recommendations.append(
@@ -4238,12 +4260,26 @@ def next_payload(
         and not latest_needs_handoff
     ):
         artifact_path = str(latest_artifact.get("relative_path") or latest_artifact.get("path") or artifacts_root)
+        workflow_has_issue = (
+            bool(latest_artifact.get("workflow_stopped_at"))
+            or bool(latest_artifact.get("workflow_blockers"))
+            or latest_workflow_resume_ready is False
+        )
+        command = (
+            f"agentx workflow-inspect {shlex.quote(artifact_path)} --json"
+            if workflow_has_issue
+            else f"agentx workflow-resume {shlex.quote(artifact_path)} --dry-run --json"
+        )
         recommendations.append(
             {
                 "rank": len(recommendations) + 1,
-                "kind": "workflow_run_artifact",
-                "command": f"agentx artifacts {shlex.quote(artifact_path)} --json",
-                "reason": "latest artifact is a workflow-run result; inspect it before choosing the next workflow step",
+                "kind": "workflow_artifact_inspect" if workflow_has_issue else "workflow_resume",
+                "command": command,
+                "reason": (
+                    "latest workflow-run artifact stopped or needs inputs; inspect rerun requirements"
+                    if workflow_has_issue
+                    else "latest workflow-run artifact is ready to be converted into a rerun command"
+                ),
                 "risk": "GREEN",
             }
         )
@@ -4318,6 +4354,8 @@ def next_payload(
             "latest_workflow_run_query": latest_artifact.get("workflow_query") if latest_artifact_type == "workflow_run" else None,
             "latest_workflow_run_ok": latest_artifact.get("workflow_ok") if latest_artifact_type == "workflow_run" else None,
             "latest_workflow_run_stopped": bool(latest_artifact.get("workflow_stopped_at")) if latest_artifact_type == "workflow_run" else False,
+            "latest_workflow_resume_ready": latest_workflow_resume_ready,
+            "latest_workflow_missing_input_count": latest_workflow_missing_input_count,
             "denied_approval_count": denied_count,
             "approvals_available": approvals.get("ok") is True,
             "workflow_recommendation_count": 2,
