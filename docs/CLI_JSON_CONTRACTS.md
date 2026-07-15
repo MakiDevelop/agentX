@@ -61,6 +61,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx command-parity --json` | `agentx.command_parity.v1` | `command_parity` |
 | `agentx reliability-suite --json` | `agentx.reliability_suite.v1` | `reliability_suite` |
 | `agentx reliability-profile --json` | `agentx.reliability_profile.v1` | `reliability_profile` |
+| `agentx reliability-decision --json` | `agentx.reliability_decision.v1` | `reliability_decision` |
 | `agentx tools --json` | `agentx.tool_catalog.v1` | `tools` |
 | `agentx tool-plan --json` | `agentx.tool_plan.v1` | `tool_plan` |
 | `agentx workflows --json` | `agentx.workflow_catalog.v1` | `workflows` |
@@ -1344,6 +1345,43 @@ Required stable keys:
 | `recommended_risk` | string | Risk label for the recommended follow-up; live probe and live run follow-ups are `YELLOW`. |
 | `live_run_template` | string | Headless command template pinned to the selected backend/model/base URL. |
 | `decision_note` | string | Human-readable caveat for live reliability evidence. |
+
+## Reliability Decision Payload
+
+`agentx reliability-decision --json` emits `agentx.reliability_decision.v1`.
+
+This command previews or writes a local reliability threshold decision artifact.
+It does not ratify anything implicitly: `ratified` and `accepted` decisions
+require an evidence file whose reliability suite `target_bar` profile matches
+and has `meets_threshold=true`. Omit `--write` for read-only preview. Add
+`--write` to save `.agentx/reliability/decision.json` or a custom workspace-local
+`--output`.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.reliability_decision.v1`. |
+| `workspace` | string | Workspace used for output path resolution. |
+| `profile` | string | `recorded-v1` or `live-v1`. |
+| `decision` | string | `ratified`, `accepted`, `rejected`, or `superseded`. |
+| `accepted` | boolean | True only when a ratified/accepted decision has valid evidence and no blockers. |
+| `decided_by` | string | Decision maker label. |
+| `decided_at` | string | Local timestamp. |
+| `note` | string | Optional note. |
+| `evidence_source` | string or null | Evidence file path supplied by `--evidence`. |
+| `evidence` | object or null | Extracted reliability suite evidence summary. |
+| `evidence_valid` | boolean | True when evidence profile matches and threshold passed. |
+| `write` | boolean | True when `--write` was requested. |
+| `output_path` | string | Absolute decision artifact path. |
+| `output_relative_path` | string | Workspace-relative decision artifact path. |
+| `overwrite` | boolean | Whether replacing an existing decision artifact was allowed. |
+| `wrote` | boolean | True when an artifact was written. |
+| `blockers` | array of string | Machine-readable blockers. |
+| `ok` | boolean | True when no blockers are present. |
+| `recommended_command` | string | Suggested follow-up command. |
+| `recommended_kind` | string | Suggested follow-up kind. |
+| `recommended_risk` | string | Risk label for the follow-up. |
 
 ## Tool Catalog Payload
 

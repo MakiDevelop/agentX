@@ -3,7 +3,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from agentx.cli import app, reliability_profile_payload, reliability_suite_payload
+from agentx.cli import app, reliability_decision_payload, reliability_profile_payload, reliability_suite_payload
 from agentx.config import Settings
 from agentx.provider_registry import register_llm_backend
 
@@ -197,6 +197,74 @@ def test_reliability_suite_live_mode_blocks_unknown_backend(tmp_path: Path) -> N
     assert payload["blockers"] == ["backend_not_registered"]
     assert payload["case_count"] == 0
     assert payload["target_bar"]["profile"] == "live-v1"  # type: ignore[index]
+
+
+def test_reliability_decision_requires_valid_evidence(tmp_path: Path) -> None:
+    payload = reliability_decision_payload(
+        Settings(workspace=tmp_path),
+        profile="recorded-v1",
+        decision="ratified",
+    )
+
+    assert payload["ok"] is False
+    assert payload["accepted"] is False
+    assert "missing_evidence_source" in payload["blockers"]  # type: ignore[operator]
+    assert "decision_requires_valid_evidence" in payload["blockers"]  # type: ignore[operator]
+
+
+def test_reliability_decision_accepts_matching_suite_evidence(tmp_path: Path) -> None:
+    suite = reliability_suite_payload(Settings(workspace=tmp_path), run_id="decision-suite")
+    evidence = tmp_path / "suite.json"
+    evidence.write_text(json.dumps(suite), encoding="utf-8")
+
+    payload = reliability_decision_payload(
+        Settings(workspace=tmp_path),
+        profile="recorded-v1",
+        decision="ratified",
+        evidence_source=str(evidence),
+    )
+
+    assert payload["ok"] is True
+    assert payload["accepted"] is True
+    assert payload["evidence_valid"] is True
+    assert payload["evidence"]["profile"] == "recorded-v1"  # type: ignore[index]
+    assert payload["write"] is False
+    assert payload["wrote"] is False
+
+
+def test_reliability_decision_cli_writes_artifact(tmp_path: Path) -> None:
+    suite = reliability_suite_payload(Settings(workspace=tmp_path), run_id="decision-cli-suite")
+    evidence = tmp_path / "suite.json"
+    evidence.write_text(json.dumps(suite), encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "reliability-decision",
+            "--workspace",
+            str(tmp_path),
+            "--profile",
+            "recorded-v1",
+            "--decision",
+            "ratified",
+            "--evidence",
+            str(evidence),
+            "--write",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["schema"] == "agentx.reliability_decision.v1"
+    assert payload["ok"] is True
+    assert payload["wrote"] is True
+    output_path = Path(payload["output_path"])
+    assert output_path.is_file()
+    written = json.loads(output_path.read_text(encoding="utf-8"))
+    assert written["schema"] == "agentx.reliability_decision.v1"
+    assert written["accepted"] is True
+    assert written["wrote"] is True
 
 
 def test_reliability_profile_payload_is_read_only_by_default(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001

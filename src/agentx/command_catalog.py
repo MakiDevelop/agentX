@@ -544,6 +544,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only config inspection by default; YELLOW with --live-probe because it calls the selected backend",
     },
     {
+        "command": "agentx reliability-decision",
+        "usage": "agentx reliability-decision --profile recorded-v1 --decision ratified --evidence suite.json --json",
+        "description": "Preview or write a local reliability threshold decision artifact backed by suite evidence.",
+        "examples": [
+            "agentx reliability-decision --profile recorded-v1 --decision ratified --evidence suite.json --json",
+            "agentx reliability-decision --profile live-v1 --decision accepted --evidence live-suite.json --write --json",
+        ],
+        "schemas": ["agentx.reliability_decision.v1"],
+        "jsonl_event": "reliability_decision",
+        "risk": "GREEN - preview is read-only; --write writes a local .agentx/reliability decision artifact",
+    },
+    {
         "command": "agentx version",
         "usage": "agentx version --json",
         "description": "Print agentX and Python runtime versions.",

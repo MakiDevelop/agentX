@@ -6472,6 +6472,122 @@ def print_reliability_profile_payload(
     console.print(table)
 
 
+def reliability_evidence_summary(source: str | None) -> tuple[dict[str, object] | None, list[str]]:
+    if not source:
+        return None, ["missing_evidence_source"]
+    try:
+        payload = load_headless_payload_source(source)
+    except Exception as exc:  # noqa: BLE001
+        return None, [f"evidence_load_failed:{type(exc).__name__}"]
+    target_bar = payload.get("target_bar")
+    if payload.get("schema") != "agentx.reliability_suite.v1" or not isinstance(target_bar, dict):
+        return {
+            "schema": payload.get("schema"),
+            "target_bar": None,
+        }, ["evidence_not_reliability_suite"]
+    return {
+        "schema": payload.get("schema"),
+        "suite_kind": payload.get("suite_kind"),
+        "run_id": payload.get("run_id"),
+        "profile": target_bar.get("profile"),
+        "status": target_bar.get("status"),
+        "meets_threshold": bool(target_bar.get("meets_threshold") or target_bar.get("meets_proposed_threshold")),
+        "observed_case_count": target_bar.get("observed_case_count"),
+        "observed_passed": target_bar.get("observed_passed"),
+        "observed_failed": target_bar.get("observed_failed"),
+    }, []
+
+
+def reliability_decision_payload(
+    settings: Settings,
+    *,
+    profile: str,
+    decision: str,
+    evidence_source: str | None = None,
+    decided_by: str = "Maki",
+    note: str | None = None,
+    output: str | None = None,
+    write: bool = False,
+    overwrite: bool = False,
+) -> dict[str, object]:
+    normalized_profile = profile.strip()
+    normalized_decision = decision.strip().lower()
+    if normalized_profile not in {"recorded-v1", "live-v1"}:
+        raise typer.BadParameter("profile must be one of: recorded-v1, live-v1")
+    if normalized_decision not in {"ratified", "accepted", "rejected", "superseded"}:
+        raise typer.BadParameter("decision must be one of: ratified, accepted, rejected, superseded")
+
+    output_path = resolve_inside_workspace(settings.workspace, output or ".agentx/reliability/decision.json")
+    evidence, evidence_blockers = reliability_evidence_summary(evidence_source)
+    blockers = list(evidence_blockers)
+    evidence_valid = False
+    if evidence is not None:
+        evidence_valid = evidence.get("profile") == normalized_profile and evidence.get("meets_threshold") is True
+        if evidence.get("profile") != normalized_profile:
+            blockers.append("evidence_profile_mismatch")
+        if evidence.get("meets_threshold") is not True:
+            blockers.append("evidence_threshold_not_met")
+    if normalized_decision in {"ratified", "accepted"} and not evidence_valid:
+        blockers.append("decision_requires_valid_evidence")
+    if write and output_path.exists() and not overwrite:
+        blockers.append("decision_output_exists")
+
+    ok = not blockers
+    payload: dict[str, object] = {
+        "schema": "agentx.reliability_decision.v1",
+        "workspace": str(settings.workspace),
+        "profile": normalized_profile,
+        "decision": normalized_decision,
+        "accepted": normalized_decision in {"ratified", "accepted"} and ok,
+        "decided_by": decided_by,
+        "decided_at": datetime.now().isoformat(timespec="seconds"),
+        "note": note or "",
+        "evidence_source": evidence_source,
+        "evidence": evidence,
+        "evidence_valid": evidence_valid,
+        "write": write,
+        "output_path": str(output_path),
+        "output_relative_path": relative_workspace_path(settings.workspace, output_path),
+        "overwrite": overwrite,
+        "wrote": False,
+        "blockers": blockers,
+        "ok": ok,
+        "recommended_command": (
+            "agentx inspect --json"
+            if ok
+            else "agentx reliability-suite --json > .agentx/reliability/latest-suite.json"
+        ),
+        "recommended_kind": "inspect" if ok else "provide_valid_reliability_evidence",
+        "recommended_risk": "GREEN" if ok else "YELLOW",
+    }
+    if write and ok:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        payload["wrote"] = True
+        output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return payload
+
+
+def print_reliability_decision_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="reliability_decision",
+        )
+        return
+    table = Table(title="agentX reliability decision", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    for key in ("profile", "decision", "accepted", "evidence_valid", "write", "wrote", "output_relative_path", "blockers"):
+        table.add_row(key, json.dumps(payload.get(key), ensure_ascii=False) if isinstance(payload.get(key), list) else str(payload.get(key)))
+    console.print(table)
+
+
 def print_model_list(payload: dict[str, object], *, json_output: bool = False, jsonl_output: bool = False) -> None:
     if json_output:
         print_structured_payload(
@@ -8639,6 +8755,39 @@ def reliability_profile_command(
     )
     structured_format = structured_output_format(json_output, output_format)
     print_reliability_profile_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=1 if fail_on_blocker and payload.get("blockers") else 0)
+
+
+@app.command("reliability-decision")
+def reliability_decision_command(
+    profile: str = typer.Option(..., "--profile", help="Reliability profile to decide: recorded-v1 or live-v1."),
+    decision: str = typer.Option(..., "--decision", help="Decision: ratified, accepted, rejected, or superseded."),
+    evidence: str | None = typer.Option(None, "--evidence", help="Reliability suite JSON/JSONL evidence file."),
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory."),
+    decided_by: str = typer.Option("Maki", "--decided-by", help="Decision maker label."),
+    note: str | None = typer.Option(None, "--note", help="Optional decision note."),
+    output: str | None = typer.Option(None, "--output", help="Decision output path inside workspace. Default: .agentx/reliability/decision.json"),
+    write: bool = typer.Option(False, "--write", help="Write the decision artifact. Omit for preview only."),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Allow replacing an existing decision artifact."),
+    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when blockers are present."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Preview or write a reliability threshold decision artifact."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = reliability_decision_payload(
+        settings,
+        profile=profile,
+        decision=decision,
+        evidence_source=evidence,
+        decided_by=decided_by,
+        note=note,
+        output=output,
+        write=write,
+        overwrite=overwrite,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_reliability_decision_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=1 if fail_on_blocker and payload.get("blockers") else 0)
 
 
