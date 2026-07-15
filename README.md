@@ -149,6 +149,8 @@ agentx commands /workflow --json
 agentx commands memory --json
 agentx workflows --json
 agentx workflows headless --json
+agentx workflows memory --json
+agentx workflows ace --json
 agentx tools --json
 agentx tools git --json
 agentx tools YELLOW --json
@@ -232,7 +234,7 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `agentx verify --json` 會輸出 `agentx.verify.v1`，依 workspace 偵測並執行預設驗證命令；加 `--fail-on-error` 時，任何驗證失敗會在輸出 payload 後以 exit 1 結束。
 `agentx status --json` 會輸出 `agentx.status.v1`，整合 version、resolved runtime、git dirty/ahead/behind 與 task counts；它只做本機 read-only 檢查，不探測網路服務。
 `agentx doctor --json` 會輸出 `agentx.doctor.v1` health checks；CI 或 wrapper 可用 `agentx doctor --static --json` 只檢查本機 `uv`、git、task migration，避開 Ollama / memory live probes。加上 `--fail-on-error` 時，任一 check 失敗會在輸出 payload 後以 exit 1 結束。
-`agentx workflows --json` 會輸出 `agentx.workflow_catalog.v1`，讓 wrapper 能讀取 headless、audit、commit 等 recipe；每個 workflow 會提供含 `kind` 的 `steps`、可直接處理的 `commands`，且 top-level `agentx` step 會內嵌 `command_plan`；也可用 `agentx workflows headless --json` 查單一路徑。
+`agentx workflows --json` 會輸出 `agentx.workflow_catalog.v1`，讓 wrapper 能讀取 headless、AMH handoff、ACE council、audit、commit 等 recipe；每個 workflow 會提供含 `kind` 的 `steps`、可直接處理的 `commands`，且 top-level `agentx` step 會內嵌 `command_plan`；也可用 `agentx workflows headless --json`、`agentx workflows memory --json` 或 `agentx workflows ace --json` 查單一路徑。
 `agentx tool-plan TOOL --args-json JSON --json` 會輸出 `agentx.tool_plan.v1`，解析 tool alias、risk、approval posture 與已知 args blocker；它不會執行工具。
 `agentx infra --json` 會輸出 `agentx.infrastructure_context.v1`，讓外部 runner 可在 SSH/deploy/cross-machine 前 read-only 載入專案地圖、資源地圖、家庭 AI 設施與 VPS 地圖；它不授權遠端操作。
 `agentx ace-init SESSION --goal GOAL --json` 會輸出 `agentx.ace_session.v1`，預覽 ACE session `_manifest.md`；加 `--write` 才會建立 `~/Documents/agent-council/SESSION/_manifest.md`，用於多代理 file-based 協作。

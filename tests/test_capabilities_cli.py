@@ -20,6 +20,18 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
         "schema": "agentx.infrastructure_context.v1",
         "reason": "load read-only resource, home AI facilities, and VPS routing context before SSH, deploy, or cross-machine work",
     }
+    assert entrypoints["memory_handoff"] == {
+        "name": "memory_handoff",
+        "command": "agentx workflows memory --json",
+        "schema": "agentx.workflow_catalog.v1",
+        "reason": "discover the AMH read, dry-run write, and explicit write handoff sequence",
+    }
+    assert entrypoints["ace_council"] == {
+        "name": "ace_council",
+        "command": "agentx workflows ace --json",
+        "schema": "agentx.workflow_catalog.v1",
+        "reason": "discover the ACE manifest, briefing, answer, and status workflow for multi-agent coordination",
+    }
     commands = {item["command"]: item for item in payload["capabilities"]}  # type: ignore[index]
     assert "agentx verify" in commands
     assert "agentx artifacts" in commands

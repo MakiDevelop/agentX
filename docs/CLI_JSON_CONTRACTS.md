@@ -1202,6 +1202,12 @@ The catalog includes an `Infra preflight` recipe with aliases such as `infra`,
 --json` and includes `command_plan`, so external runners can discover the
 resource/home-AI/VPS preflight route before SSH, deploy, or cross-machine work.
 
+The catalog also includes a `記憶交接` recipe with aliases such as `memory` and
+`amh`, plus an `ACE council` recipe with aliases such as `ace`, `council`, and
+`multi-agent`. These recipes expose the AMH read/dry-run/write handoff sequence
+and the ACE manifest/briefing/answer/status sequence as command-plan annotated
+runner steps.
+
 Each workflow object includes:
 
 | Key | Type |

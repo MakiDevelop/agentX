@@ -40,6 +40,25 @@ def test_workflow_catalog_payload_lists_aliases() -> None:
     }
     assert "Approval audit" in workflows
     assert "audit" in workflows["Approval audit"]["aliases"]
+    assert "記憶交接" in workflows
+    assert "amh" in workflows["記憶交接"]["aliases"]
+    assert workflows["記憶交接"]["commands"] == [
+        'agentx memory-read "handoff" --json',
+        'agentx memory-write "完成與待辦" --type handoff --json',
+        'agentx memory-write "完成與待辦" --type handoff --write --json',
+    ]
+    assert workflows["記憶交接"]["steps"][0]["command_plan"]["matched_policy"] == "agentx_cli_capability"
+    assert "ACE council" in workflows
+    assert "ace" in workflows["ACE council"]["aliases"]
+    assert "council" in workflows["ACE council"]["aliases"]
+    assert workflows["ACE council"]["commands"] == [
+        'agentx ace-init SESSION --goal "GOAL" --json',
+        'agentx ace-init SESSION --goal "GOAL" --write --json',
+        'agentx ace-briefing SESSION --agent gemini --role Reviewer --task "Review manifest" --json',
+        'agentx ace-answer SESSION --agent gemini --answer "ANSWER" --summary "SUMMARY" --json',
+        "agentx ace-status SESSION --json",
+    ]
+    assert workflows["ACE council"]["steps"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
     assert workflows["理解 repo"]["steps"][0]["kind"] == "slash_command"
     assert "command_plan" not in workflows["理解 repo"]["steps"][0]
     assert workflows["小步修改"]["steps"][2] == {"command": "讓 agent 讀檔與改檔", "kind": "instruction", "runnable": False}
@@ -65,6 +84,26 @@ def test_workflow_catalog_payload_filters_infra_alias() -> None:
     assert payload["workflows"][0]["goal"] == "Infra preflight"
     assert payload["workflows"][0]["commands"][0] == "agentx infra resource-bundle --json"
     assert payload["workflows"][0]["steps"][0]["command_plan"]["matched_policy"] == "agentx_cli_capability"
+
+
+def test_workflow_catalog_payload_filters_memory_alias() -> None:
+    payload = workflow_catalog_payload("amh")
+
+    assert payload["query"] == "amh"
+    assert payload["count"] == 1
+    assert payload["workflows"][0]["goal"] == "記憶交接"
+    assert payload["workflows"][0]["commands"][0] == 'agentx memory-read "handoff" --json'
+    assert payload["workflows"][0]["steps"][2]["command_plan"]["risk"] == "YELLOW"
+
+
+def test_workflow_catalog_payload_filters_ace_alias() -> None:
+    payload = workflow_catalog_payload("council")
+
+    assert payload["query"] == "council"
+    assert payload["count"] == 1
+    assert payload["workflows"][0]["goal"] == "ACE council"
+    assert payload["workflows"][0]["commands"][-1] == "agentx ace-status SESSION --json"
+    assert payload["workflows"][0]["steps"][1]["command_plan"]["risk"] == "YELLOW"
 
 
 def test_workflows_json_outputs_catalog() -> None:

@@ -485,6 +485,18 @@ RUNNER_RECOMMENDED_ENTRYPOINTS: list[dict[str, object]] = [
         "reason": "load read-only resource, home AI facilities, and VPS routing context before SSH, deploy, or cross-machine work",
     },
     {
+        "name": "memory_handoff",
+        "command": "agentx workflows memory --json",
+        "schema": "agentx.workflow_catalog.v1",
+        "reason": "discover the AMH read, dry-run write, and explicit write handoff sequence",
+    },
+    {
+        "name": "ace_council",
+        "command": "agentx workflows ace --json",
+        "schema": "agentx.workflow_catalog.v1",
+        "reason": "discover the ACE manifest, briefing, answer, and status workflow for multi-agent coordination",
+    },
+    {
         "name": "next",
         "command": "agentx next --json",
         "schema": "agentx.next.v1",
