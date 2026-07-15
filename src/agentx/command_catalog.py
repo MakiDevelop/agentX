@@ -521,11 +521,15 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
     {
         "command": "agentx reliability-suite",
         "usage": "agentx reliability-suite --json",
-        "description": "Run local-only recorded backend reliability cases and score headless artifacts, next, gate, and recovery posture.",
-        "examples": ["agentx reliability-suite --json", "agentx reliability-suite --case edit --run-id local-check --output-format jsonl"],
+        "description": "Run recorded or explicitly pinned live backend reliability cases and score headless artifacts, next, gate, and recovery posture.",
+        "examples": [
+            "agentx reliability-suite --json",
+            "agentx reliability-suite --case edit --run-id local-check --output-format jsonl",
+            "agentx reliability-suite --suite-kind live --backend ollama --model gemma4:31b --json",
+        ],
         "schemas": ["agentx.reliability_suite.v1"],
         "jsonl_event": "reliability_suite",
-        "risk": "YELLOW - writes local .agentx/reliability fixture artifacts; no external services or memory writes",
+        "risk": "YELLOW - writes local .agentx/reliability fixture artifacts; --suite-kind live calls the selected backend",
     },
     {
         "command": "agentx reliability-profile",

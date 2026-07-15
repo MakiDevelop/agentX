@@ -8263,24 +8263,38 @@ def _git_fixture(workspace: Path) -> None:
     subprocess.run(["git", "commit", "-m", "init"], cwd=workspace, check=True, capture_output=True, text=True)
 
 
-def _run_recorded_reliability_case(base_dir: Path, case: dict[str, object]) -> dict[str, object]:
+def _run_reliability_case(
+    base_dir: Path,
+    case: dict[str, object],
+    *,
+    suite_kind: str,
+    backend_override: str | None = None,
+    base_url_override: str | None = None,
+    model_override: str | None = None,
+    timeout_override: float | None = None,
+) -> dict[str, object]:
     name = str(case["name"])
     case_root = base_dir / name
     workspace = case_root / "workspace"
     _git_fixture(workspace)
-    artifact_dir = workspace / ".agentx" / "runs" / "recorded"
+    artifact_dir = workspace / ".agentx" / "runs" / suite_kind
     artifact_dir.mkdir(parents=True, exist_ok=False)
     session_output = artifact_dir / "session.session.jsonl"
     result_output = artifact_dir / "result.json"
     handoff_output = artifact_dir / "handoff.md"
 
-    responses = [str(response) for response in case["responses"]]  # type: ignore[index]
-    backend_name = f"recorded_reliability_{name}"
-    register_llm_backend(
-        backend_name,
-        lambda _base_url, _model, _timeout, case_responses=responses: RecordedReliabilityClient(list(case_responses)),
-        source_id="agentx.reliability_suite",
-    )
+    responses = [str(response) for response in case.get("responses", [])]  # type: ignore[arg-type]
+    if suite_kind == "recorded":
+        backend_name = f"recorded_reliability_{name}"
+        model_name = "recorded-reliability"
+        register_llm_backend(
+            backend_name,
+            lambda _base_url, _model, _timeout, case_responses=responses: RecordedReliabilityClient(list(case_responses)),
+            source_id="agentx.reliability_suite",
+        )
+    else:
+        backend_name = backend_override
+        model_name = model_override
     result = run_print_prompt(
         str(case["prompt"]),
         namespace="project:agentx-reliability",
@@ -8288,11 +8302,13 @@ def _run_recorded_reliability_case(base_dir: Path, case: dict[str, object]) -> d
         workspace_override=workspace,
         approval_override="auto-approve",
         backend_override=backend_name,
-        model_override="recorded-reliability",
+        base_url_override=base_url_override,
+        model_override=model_name,
+        timeout_override=timeout_override,
         return_metadata=True,
         suppress_trace=True,
         session_output_path=session_output,
-        max_steps=int(case.get("max_steps", len(responses) + 3)),
+        max_steps=int(case.get("max_steps", len(responses) + 3 if responses else 8)),
         no_memory=True,
     )
     assert isinstance(result, HeadlessRunResult)
@@ -8353,6 +8369,7 @@ def _run_recorded_reliability_case(base_dir: Path, case: dict[str, object]) -> d
     }
     return {
         "name": name,
+        "suite_kind": suite_kind,
         "ok": all(checks.values()),
         "workspace": str(workspace),
         "artifact_dir": str(artifact_dir),
@@ -8371,7 +8388,7 @@ def _run_recorded_reliability_case(base_dir: Path, case: dict[str, object]) -> d
     }
 
 
-def reliability_target_bar_payload(cases: list[dict[str, object]]) -> dict[str, object]:
+def reliability_target_bar_payload(cases: list[dict[str, object]], *, suite_kind: str = "recorded") -> dict[str, object]:
     case_names = [str(case.get("name", "")) for case in cases]
     missing_required_cases = [
         name for name in RELIABILITY_RECORDED_V1_REQUIRED_CASES
@@ -8399,12 +8416,21 @@ def reliability_target_bar_payload(cases: list[dict[str, object]]) -> dict[str, 
         and not failed_required_checks
         and pass_rate == 1.0
     )
+    live_evidence = suite_kind == "live"
+    decision_note = (
+        "Live-v1 is observed live backend evidence against the same fixture threshold."
+        if live_evidence
+        else (
+            "Recorded-v1 is a proposed local-only threshold. It can prove runner mechanics and recorded reliability, "
+            "but does not prove live model quality until Maki ratifies recorded-only evidence or a pinned live backend profile is added."
+        )
+    )
     return {
         "schema": "agentx.reliability_target_bar.v1",
-        "profile": "recorded-v1",
-        "status": "proposed",
-        "ratification_required": True,
-        "suite_kind": "recorded",
+        "profile": "live-v1" if live_evidence else "recorded-v1",
+        "status": "observed" if live_evidence else "proposed",
+        "ratification_required": not live_evidence,
+        "suite_kind": suite_kind,
         "minimum_case_count": len(RELIABILITY_RECORDED_V1_REQUIRED_CASES),
         "required_cases": list(RELIABILITY_RECORDED_V1_REQUIRED_CASES),
         "required_pass_rate": 1.0,
@@ -8417,11 +8443,9 @@ def reliability_target_bar_payload(cases: list[dict[str, object]]) -> dict[str, 
         "missing_required_cases": missing_required_cases,
         "failed_cases": failed_cases,
         "failed_required_checks": failed_required_checks,
+        "meets_threshold": meets_proposed_threshold,
         "meets_proposed_threshold": meets_proposed_threshold,
-        "decision_note": (
-            "Recorded-v1 is a proposed local-only threshold. It can prove runner mechanics and recorded reliability, "
-            "but does not prove live model quality until Maki ratifies recorded-only evidence or a pinned live backend profile is added."
-        ),
+        "decision_note": decision_note,
     }
 
 
@@ -8430,7 +8454,16 @@ def reliability_suite_payload(
     *,
     run_id: str | None = None,
     case_filter: str | None = None,
+    suite_kind: str = "recorded",
+    backend_override: str | None = None,
+    base_url_override: str | None = None,
+    model_override: str | None = None,
+    timeout_override: float | None = None,
 ) -> dict[str, object]:
+    normalized_suite_kind = suite_kind.strip().lower()
+    if normalized_suite_kind not in {"recorded", "live"}:
+        raise typer.BadParameter("suite kind must be one of: recorded, live")
+    resolved_backend = (backend_override or os.getenv("AGENTX_BACKEND", "ollama")).lower()
     selected = [
         case for case in RECORDED_RELIABILITY_CASES
         if not case_filter or case_filter.lower() in str(case["name"]).lower()
@@ -8442,26 +8475,64 @@ def reliability_suite_payload(
             "workspace": str(settings.workspace),
             "run_id": run_id or "",
             "root": None,
+            "suite_kind": normalized_suite_kind,
+            "backend": resolved_backend,
+            "base_url": base_url_override or settings.ollama_url,
+            "model": model_override or settings.model,
             "case_count": 0,
             "passed": 0,
             "failed": 0,
             "cases": [],
-            "target_bar": reliability_target_bar_payload([]),
+            "target_bar": reliability_target_bar_payload([], suite_kind=normalized_suite_kind),
             "blockers": ["no_matching_cases"],
             "recommended_command": "agentx reliability-suite --json",
             "recommended_kind": "fix_reliability_suite_inputs",
             "recommended_risk": "UNKNOWN",
         }
+    if normalized_suite_kind == "live":
+        register_builtin_backends()
+        if resolved_backend not in list_registered_backends():
+            return {
+                "schema": "agentx.reliability_suite.v1",
+                "ok": False,
+                "workspace": str(settings.workspace),
+                "run_id": run_id or "",
+                "root": None,
+                "suite_kind": normalized_suite_kind,
+                "backend": resolved_backend,
+                "base_url": base_url_override or settings.ollama_url,
+                "model": model_override or settings.model,
+                "case_count": 0,
+                "passed": 0,
+                "failed": 0,
+                "cases": [],
+                "target_bar": reliability_target_bar_payload([], suite_kind=normalized_suite_kind),
+                "blockers": ["backend_not_registered"],
+                "recommended_command": "agentx reliability-profile --json --live-probe",
+                "recommended_kind": "fix_live_profile",
+                "recommended_risk": "YELLOW",
+            }
     resolved_run_id = run_id or datetime.now().strftime("%Y%m%d-%H%M%S")
     root = settings.workspace / ".agentx" / "reliability" / resolved_run_id
     if root.exists():
         raise typer.BadParameter(f"reliability run already exists: {root.relative_to(settings.workspace)}")
     root.mkdir(parents=True)
-    cases = [_run_recorded_reliability_case(root, case) for case in selected]
+    cases = [
+        _run_reliability_case(
+            root,
+            case,
+            suite_kind=normalized_suite_kind,
+            backend_override=resolved_backend,
+            base_url_override=base_url_override,
+            model_override=model_override,
+            timeout_override=timeout_override,
+        )
+        for case in selected
+    ]
     passed = sum(1 for case in cases if case["ok"])
     failed = len(cases) - passed
     ok = failed == 0
-    target_bar = reliability_target_bar_payload(cases)
+    target_bar = reliability_target_bar_payload(cases, suite_kind=normalized_suite_kind)
     meets_proposed_threshold = target_bar.get("meets_proposed_threshold") is True
     recommended_command = "agentx inspect --json" if ok and meets_proposed_threshold else "agentx reliability-suite --json"
     recommended_kind = "inspect" if ok and meets_proposed_threshold else "run_full_reliability_suite"
@@ -8474,6 +8545,10 @@ def reliability_suite_payload(
         "workspace": str(settings.workspace),
         "run_id": resolved_run_id,
         "root": str(root),
+        "suite_kind": normalized_suite_kind,
+        "backend": resolved_backend,
+        "base_url": base_url_override or settings.ollama_url,
+        "model": model_override or settings.model,
         "case_count": len(cases),
         "passed": passed,
         "failed": failed,
@@ -8514,14 +8589,28 @@ def print_reliability_suite_payload(payload: dict[str, object], *, json_output: 
 def reliability_suite_command(
     workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for local reliability artifacts."),
     run_id: str | None = typer.Option(None, "--run-id", help="Optional run id under .agentx/reliability; must not already exist."),
-    case: str | None = typer.Option(None, "--case", help="Optional recorded case name filter."),
+    case: str | None = typer.Option(None, "--case", help="Optional case name filter."),
+    suite_kind: str = typer.Option("recorded", "--suite-kind", help="Suite kind: recorded or live."),
+    backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for --suite-kind live."),
+    base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL for --suite-kind live."),
+    model: str | None = typer.Option(None, "--model", help="Override model for --suite-kind live."),
+    timeout: float | None = typer.Option(None, "--timeout", help="Override LLM request timeout seconds for --suite-kind live."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
     fail_on_failure: bool = typer.Option(False, "--fail-on-failure", help="Exit 1 when any reliability case fails."),
 ) -> None:
-    """Run the local-only recorded backend reliability suite."""
+    """Run the recorded or explicitly pinned live backend reliability suite."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
-    payload = reliability_suite_payload(settings, run_id=run_id, case_filter=case)
+    payload = reliability_suite_payload(
+        settings,
+        run_id=run_id,
+        case_filter=case,
+        suite_kind=suite_kind,
+        backend_override=backend,
+        base_url_override=base_url,
+        model_override=model,
+        timeout_override=timeout,
+    )
     structured_format = structured_output_format(json_output, output_format)
     print_reliability_suite_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=1 if fail_on_failure and not payload.get("ok") else 0)

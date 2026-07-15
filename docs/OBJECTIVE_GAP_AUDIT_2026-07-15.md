@@ -19,6 +19,7 @@ Authoritative status page: `docs/OBJECTIVE_STATUS.md`.
 - `agentx reliability-suite --json` runs local-only recorded backend cases and scores headless artifacts, next, gate, artifact-resume / `handoff-resume`, recovery posture, termination, and tool-call counts.
 - `agentx reliability-suite --json` includes `target_bar` (`agentx.reliability_target_bar.v1`), with proposed `recorded-v1` threshold: 4/4 cases, 100% pass rate, 0 failed cases, and all required checks passing.
 - `agentx reliability-profile --json` includes pinned backend/model/base URL details for later live benchmark evidence; `--live-probe` explicitly verifies model availability.
+- `agentx reliability-suite --suite-kind live --json` can run the same fixture threshold against a pinned backend/model and emit observed `live-v1` target-bar evidence.
 
 Evidence:
 - `tests/test_capabilities_cli.py`
@@ -73,10 +74,10 @@ Evidence:
 
 ### Gap 1: Live model reliability is not benchmarked
 
-agentX now has a deterministic fake-backend benchmark, a local recorded reliability suite covering edit, inspect, recover-after-failure, and artifact-resume, and a pinned live profile inspection command. They do not yet prove reliability with real local models across a representative task suite, so "Codex/Grok-like" model-facing behavior remains partially unverified.
+agentX now has a deterministic fake-backend benchmark, a local recorded reliability suite covering edit, inspect, recover-after-failure, and artifact-resume, a pinned live profile inspection command, and a live suite execution surface. They do not yet prove reliability with real local models until a live run is executed and accepted, so "Codex/Grok-like" model-facing behavior remains partially unverified.
 
 Suggested next proof:
-- Run a live backend benchmark using a pinned `agentx reliability-profile --json --live-probe` profile, or have Maki ratify the proposed `recorded-v1` threshold if live proof is deferred.
+- Run and accept a live backend benchmark using a pinned `agentx reliability-profile --json --live-probe` profile, or have Maki ratify the proposed `recorded-v1` threshold if live proof is deferred.
 - Track success/failure, tool-call count, termination, artifact completeness, and recovery recommendation quality.
 
 ### Gap 2: Completion criteria are spread across multiple documents

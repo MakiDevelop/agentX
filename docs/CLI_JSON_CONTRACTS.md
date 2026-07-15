@@ -1244,11 +1244,12 @@ Each entry object includes:
 
 `agentx reliability-suite --json` emits `agentx.reliability_suite.v1`.
 
-This command runs local-only recorded backend cases under
-`.agentx/reliability/<run-id>/`. It writes fixture repos and standard headless
-artifacts, including a recorded artifact-resume case that exercises
-`handoff-resume`, but does not call live model backends, external memory, SSH,
-deploy, or production services.
+This command runs reliability cases under `.agentx/reliability/<run-id>/`.
+By default it uses local-only recorded backend cases. With
+`--suite-kind live`, it runs the same fixture cases against the selected pinned
+backend/model. It writes fixture repos and standard headless artifacts,
+including an artifact-resume case that exercises `handoff-resume`. It does not
+call external memory, SSH, deploy, or production services.
 
 Required stable keys:
 
@@ -1259,6 +1260,10 @@ Required stable keys:
 | `workspace` | string | Workspace where local reliability artifacts were written. |
 | `run_id` | string | Run id under `.agentx/reliability`. |
 | `root` | string or null | Local reliability run root. |
+| `suite_kind` | string | `recorded` or `live`. |
+| `backend` | string or null | Selected backend key. |
+| `base_url` | string | Selected backend base URL. |
+| `model` | string | Selected model. |
 | `case_count` | integer | Number of selected cases. |
 | `passed` | integer | Passing case count. |
 | `failed` | integer | Failing case count. |
@@ -1269,10 +1274,11 @@ Required stable keys:
 | `recommended_kind` | string | Suggested follow-up kind. |
 | `recommended_risk` | string | Risk label for the follow-up. |
 
-`target_bar` emits `agentx.reliability_target_bar.v1`. The current profile is
-`recorded-v1` with `status=proposed` and `ratification_required=true`. It is a
-machine-readable proposal for Maki to ratify or replace, not a claim that live
-model reliability has been proven.
+`target_bar` emits `agentx.reliability_target_bar.v1`. For recorded runs, the
+profile is `recorded-v1` with `status=proposed` and
+`ratification_required=true`. For live runs, the profile is `live-v1` with
+`status=observed` and `ratification_required=false`, representing observed live
+backend evidence against the same fixture threshold.
 
 `recorded-v1` currently requires:
 

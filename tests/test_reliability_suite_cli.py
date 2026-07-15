@@ -113,6 +113,92 @@ def test_reliability_suite_blocks_unknown_case(tmp_path: Path) -> None:
     assert payload["target_bar"]["observed_case_count"] == 0  # type: ignore[index]
 
 
+def test_reliability_suite_live_mode_uses_pinned_backend(tmp_path: Path) -> None:
+    response_sets = [
+        [
+            json.dumps({"type": "tool_call", "tool": "write_file", "args": {"path": "RESULT.md", "content": "# Result\n\nrecorded edit success\n"}}),
+            json.dumps({"type": "final", "content": "Created RESULT.md."}),
+        ],
+        [
+            json.dumps({"type": "tool_call", "tool": "list_files", "args": {"path": "."}}),
+            json.dumps({"type": "final", "content": "Inspected fixture files."}),
+        ],
+        [
+            json.dumps({"type": "tool_call", "tool": "write_file", "args": {"path": ".", "content": "bad"}}),
+            json.dumps({"type": "tool_call", "tool": "write_file", "args": {"path": "RECOVERED.md", "content": "# Recovered\n\nsecond attempt succeeded\n"}}),
+            json.dumps({"type": "final", "content": "Recovered and created RECOVERED.md."}),
+        ],
+        [
+            json.dumps({"type": "tool_call", "tool": "read_file", "args": {"path": "README.md"}}),
+        ],
+    ]
+
+    class LiveSuiteClient:
+        def __init__(self, responses: list[str]) -> None:
+            self.responses = list(responses)
+
+        def chat(self, messages, *, json_mode=False, on_delta=None, cancel_event=None):  # noqa: ANN001, ANN201
+            response = self.responses.pop(0)
+            if on_delta is not None:
+                on_delta(response)
+            return response
+
+        def list_models(self) -> list[str]:
+            return ["live-suite-model"]
+
+        def close(self) -> None:
+            return None
+
+        def __enter__(self) -> "LiveSuiteClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    def live_suite_factory(_base_url: str, model: str, _timeout: float) -> LiveSuiteClient:
+        assert model == "live-suite-model"
+        return LiveSuiteClient(response_sets.pop(0))
+
+    register_llm_backend("live_suite_fake", live_suite_factory, source_id="test")
+
+    payload = reliability_suite_payload(
+        Settings(workspace=tmp_path),
+        run_id="live",
+        suite_kind="live",
+        backend_override="live_suite_fake",
+        model_override="live-suite-model",
+    )
+
+    assert payload["schema"] == "agentx.reliability_suite.v1"
+    assert payload["ok"] is True
+    assert payload["suite_kind"] == "live"
+    assert payload["backend"] == "live_suite_fake"
+    assert payload["model"] == "live-suite-model"
+    assert payload["case_count"] == 4
+    assert payload["target_bar"]["profile"] == "live-v1"  # type: ignore[index]
+    assert payload["target_bar"]["status"] == "observed"  # type: ignore[index]
+    assert payload["target_bar"]["ratification_required"] is False  # type: ignore[index]
+    assert payload["target_bar"]["meets_threshold"] is True  # type: ignore[index]
+    assert {case["suite_kind"] for case in payload["cases"]} == {"live"}  # type: ignore[index]
+
+
+def test_reliability_suite_live_mode_blocks_unknown_backend(tmp_path: Path) -> None:
+    payload = reliability_suite_payload(
+        Settings(workspace=tmp_path),
+        run_id="live-missing",
+        suite_kind="live",
+        backend_override="missing_backend",
+        model_override="live-suite-model",
+    )
+
+    assert payload["ok"] is False
+    assert payload["suite_kind"] == "live"
+    assert payload["backend"] == "missing_backend"
+    assert payload["blockers"] == ["backend_not_registered"]
+    assert payload["case_count"] == 0
+    assert payload["target_bar"]["profile"] == "live-v1"  # type: ignore[index]
+
+
 def test_reliability_profile_payload_is_read_only_by_default(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
     monkeypatch.setenv("AGENTX_BACKEND", "ollama")
     payload = reliability_profile_payload(
