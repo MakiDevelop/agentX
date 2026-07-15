@@ -1,6 +1,6 @@
 import threading
 
-from agentx.cli import cancel_jobs, handle_keyboard_interrupt
+from agentx.cli import cancel_jobs, handle_keyboard_interrupt, keyboard_interrupt_should_force_exit
 from agentx.jobs import PromptJobQueue
 
 
@@ -87,3 +87,18 @@ def test_keyboard_interrupt_exits_when_idle():
     jobs = PromptJobQueue()
 
     assert handle_keyboard_interrupt(jobs, threading.Event()) is None
+
+
+def test_keyboard_interrupt_force_exit_after_cancel_requested():
+    jobs = PromptJobQueue()
+    jobs.submit("running")
+    jobs.get()
+    cancel_event = threading.Event()
+
+    assert keyboard_interrupt_should_force_exit(jobs, cancel_event) is False
+
+    first = handle_keyboard_interrupt(jobs, cancel_event)
+
+    assert first == "cancelling running job: 1"
+    assert cancel_event.is_set()
+    assert keyboard_interrupt_should_force_exit(jobs, cancel_event) is True

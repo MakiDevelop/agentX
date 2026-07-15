@@ -2001,6 +2001,14 @@ def handle_keyboard_interrupt(
     return None
 
 
+def keyboard_interrupt_should_force_exit(
+    job_queue: PromptJobQueue,
+    current_cancel: threading.Event | None = None,
+) -> bool:
+    """Return True when Ctrl+C was already requested for the running job."""
+    return bool(job_queue.current is not None and current_cancel is not None and current_cancel.is_set())
+
+
 def apply_plan_task(workspace: Path, request: str) -> str:
     text = request.strip()
     if not text:
@@ -10626,6 +10634,18 @@ def shell(
                     with patch_stdout(raw=True):
                         prompt = prompt_session.prompt("agentX: ").strip()
             except KeyboardInterrupt:
+                if keyboard_interrupt_should_force_exit(job_queue, current_cancel):
+                    current_cancel.set()
+                    cancelled = job_queue.cancel_pending()
+                    job_queue.stop()
+                    if cancelled:
+                        ids = ", ".join(str(job.id) for job in cancelled)
+                        print_raw(f"\nforce exiting; cancelled queued jobs: {ids}")
+                    else:
+                        print_raw("\nforce exiting; running job was already cancelling")
+                    transcript.write("session_end", {"reason": "keyboard_interrupt", "forced": True})
+                    console.print("\nbye")
+                    break
                 interrupt_message = handle_keyboard_interrupt(job_queue, current_cancel)
                 if interrupt_message is not None:
                     print_raw(f"\n{interrupt_message}")
