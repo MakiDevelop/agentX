@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-15
 **Objective**: 將 agentX 優化到接近 Codex CLI / Grok CLI，並加入使用 AMH 與 ACE 的能力。
-**Status**: In progress. AMH/ACE runner chain is now strongly covered; full objective is not yet proven complete.
+**Status**: Complete for the ratified recorded-v1 target. AMH/ACE runner chain, runner-facing CLI foundation, recorded reliability evidence, and objective gate are proven complete. Live-v1 remains optional stronger evidence.
 
 Authoritative status page: `docs/OBJECTIVE_STATUS.md`.
 
@@ -72,38 +72,36 @@ Evidence:
 - `tests/test_capabilities_cli.py`
 - `docs/CLI_JSON_CONTRACTS.md`
 
-## Remaining Gaps
+## Remaining Limits
 
-### Gap 1: Live model reliability is not benchmarked
+### Limit 1: Live model reliability is not benchmarked
 
-agentX now has a deterministic fake-backend benchmark, a local recorded reliability suite covering edit, inspect, recover-after-failure, and artifact-resume, a pinned live profile inspection command, a live suite execution surface, a decision artifact surface, and an objective gate. It does not yet have an accepted/ratified decision artifact, so "Codex/Grok-like" model-facing reliability remains partially unverified.
+agentX now has a deterministic fake-backend benchmark, a local recorded reliability suite covering edit, inspect, recover-after-failure, and artifact-resume, a pinned live profile inspection command, a live suite execution surface, a decision artifact surface, and an objective gate. The workspace-local decision artifact ratifies recorded-v1 evidence, so this is no longer a completion blocker. It still does not prove broad live model quality.
 
-Suggested next proof:
-- Run and accept a live backend benchmark using a pinned `agentx reliability-profile --json --live-probe` profile, or have Maki ratify the proposed `recorded-v1` threshold if live proof is deferred, then write the decision through `agentx reliability-decision --write`.
+Suggested future proof:
+- Run and accept a live backend benchmark using a pinned `agentx reliability-profile --json --live-probe` profile, then write the decision through `agentx reliability-decision --write`.
 - Track success/failure, tool-call count, termination, artifact completeness, and recovery recommendation quality.
 
-### Gap 2: Completion criteria are spread across multiple documents
+### Limit 2: Completion criteria are spread across multiple documents
 
-The current evidence lives across README, CLI contracts, headless optimization list, roadmap, and tests. That is workable, but it makes the original objective hard to audit without re-reading many files.
+The current evidence lives across README, CLI contracts, headless optimization list, roadmap, tests, `.agentx/reliability/codex-decision-smoke-suite.json`, and `.agentx/reliability/decision.json`. `docs/OBJECTIVE_STATUS.md` is the single status page, but deep audits still need to inspect those sources.
 
-Suggested next proof:
-- Keep `docs/OBJECTIVE_STATUS.md` updated as the objective checklist.
-- Ratify the target bar for "接近 Codex/Grok CLI" and record the live/recorded reliability evidence there.
+Suggested future proof:
+- Keep `docs/OBJECTIVE_STATUS.md` updated as the objective checklist when live-v1 evidence or new target bars are added.
 
-## Recommended Next Slice
+## Optional Next Slice
 
-Ratify or replace the reliability target bar next:
+Add live-v1 evidence:
 
 ```text
-recorded-v1 threshold proposal
-→ Maki ratification or live benchmark run via pinned reliability profile
-→ reliability-decision --write
+live benchmark run via pinned reliability profile
+→ reliability-decision --profile live-v1 --decision accepted --write
 → objective-gate --json
 → OBJECTIVE_STATUS update
 ```
 
 Acceptance criteria:
 - Runs local-only by default.
-- Records whether `recorded-v1` is ratified, replaced, or superseded by a live benchmark against a pinned reliability profile through a valid decision artifact.
+- Records whether `live-v1` supersedes the current recorded-v1 benchmark against a pinned reliability profile through a valid decision artifact.
 - Updates `docs/OBJECTIVE_STATUS.md`.
 - Updates `docs/HEADLESS_OPTIMIZATION_LIST.md`.

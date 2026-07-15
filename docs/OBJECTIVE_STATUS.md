@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-15
 **Objective**: 將 agentX 優化到接近 Codex CLI / Grok CLI，並加入使用 AMH 與 ACE 的能力。
-**Status**: In progress. Runner mechanics, AMH support, ACE support, recorded reliability suite, artifact-resume coverage, proposed recorded-v1 threshold, pinned live profile inspection, live suite execution surface, decision artifact support, and read-only objective gate are covered; an accepted/ratified decision artifact is still missing.
+**Status**: Complete for the ratified recorded-v1 target. Runner mechanics, AMH support, ACE support, recorded reliability suite, artifact-resume coverage, pinned live profile inspection, live suite execution surface, decision artifact support, and read-only objective gate are covered. The local decision artifact ratifies recorded-v1 evidence; live-v1 remains an optional stronger future proof, not a blocker for this objective.
 
 This file is the single ratifiable status page for the objective. `docs/OBJECTIVE_GAP_AUDIT_2026-07-15.md` remains the detailed audit trail.
 
@@ -42,11 +42,11 @@ Current proof:
 - Deterministic headless benchmark proves the runner chain using fake backend + local fixture repo: real tool write, result/session/handoff bundle, `artifacts`, `next`, and `gate`.
 - `agentx command-parity --json` maps critical slash-command families to runner JSON surfaces.
 - `agentx reliability-suite --json` runs a local-only recorded backend suite and scores exit code, termination, tool-call count, artifact completeness, expected files, `next`, `gate`, artifact-resume / `handoff-resume`, and recovery recommendation posture.
-- The same payload now includes `target_bar` (`agentx.reliability_target_bar.v1`). Current `recorded-v1` proposal requires 4/4 cases, 100% pass rate, 0 failed cases, and all required checks passing.
+- The same payload now includes `target_bar` (`agentx.reliability_target_bar.v1`). The ratified `recorded-v1` target requires 4/4 cases, 100% pass rate, 0 failed cases, and all required checks passing.
 - `agentx reliability-profile --json` emits `agentx.reliability_profile.v1`, a pinned backend/model/base URL profile for later live reliability evidence. It is read-only by default; `--live-probe` explicitly verifies model availability.
 - `agentx reliability-suite --suite-kind live --json` can run the same fixture threshold against a pinned backend/model and emit `live-v1` observed target-bar evidence.
-- `agentx reliability-decision --json` emits `agentx.reliability_decision.v1`, a write-gated decision artifact surface. `ratified` / `accepted` decisions require matching suite evidence with `meets_threshold=true`.
-- `agentx objective-gate --json` emits `agentx.objective_gate.v1`, checking required AMH/ACE/reliability CLI surfaces plus the accepted/ratified reliability decision artifact; it also discovers the latest threshold-passing suite evidence and recommends the exact `reliability-decision --write` command.
+- `agentx reliability-decision --json` emits `agentx.reliability_decision.v1`, a write-gated decision artifact surface. The workspace-local decision artifact ratifies recorded-v1 evidence from `.agentx/reliability/codex-decision-smoke-suite.json`.
+- `agentx objective-gate --json` emits `agentx.objective_gate.v1`, checking required AMH/ACE/reliability CLI surfaces plus the accepted/ratified reliability decision artifact; current output reports `completion_ready=true`.
 
 ### AMH
 
@@ -78,43 +78,38 @@ Current proof:
 - Isolated temp-root smoke proves `ace-init --write -> ace-briefing --write -> ace-answer -> ace-status`.
 - ACE workflow dry-run artifact chain is discoverable through `capabilities.runner_smokes`.
 
-## Not Proven Yet
+## Limits
 
 ### Live Model Reliability
 
-The deterministic fake-backend benchmark and recorded reliability suite prove runner mechanics and replayable recorded behavior, not live model quality. They do not prove that real local models can reliably perform Codex/Grok-like tasks across a representative benchmark suite.
-
-Required next evidence:
-- A written decision artifact accepting a `live-v1` benchmark or ratifying the proposed `recorded-v1` threshold if live model proof is deferred.
-- Metrics for success/failure, tool-call count, termination, artifact completeness, gate/next quality, and recovery recommendation usefulness.
+The deterministic fake-backend benchmark and recorded reliability suite prove runner mechanics and replayable recorded behavior, not broad live model quality. A future live-v1 benchmark can strengthen confidence against a pinned local model/backend, but recorded-v1 has been ratified for this objective.
 
 ### Final Target Bar
 
-The proposed `recorded-v1` pass threshold is machine-readable in `agentx reliability-suite --json`; `agentx reliability-profile --json` can pin live backend details; `agentx reliability-suite --suite-kind live --json` can produce observed `live-v1` evidence; `agentx reliability-decision --json --write` can record acceptance; and `agentx objective-gate --json` can verify completion readiness. The full objective still needs Maki to write or approve a valid decision artifact.
+The `recorded-v1` pass threshold is machine-readable in `agentx reliability-suite --json` and ratified by `.agentx/reliability/decision.json`. `agentx reliability-profile --json` can pin live backend details; `agentx reliability-suite --suite-kind live --json` can produce observed `live-v1` evidence if Maki wants a stronger future benchmark.
 
 ## Completion Gate
 
-Do not mark the objective complete until:
+The objective is complete when:
 
 1. `uv run pytest -q` and `uv run ruff check .` pass.
 2. `agentx capabilities --json` exposes runner discovery for headless, AMH, ACE, parity, next, gate, and command-plan surfaces.
 3. AMH isolated local-store write/read/status smoke passes.
 4. ACE isolated temp-root write/status smoke passes.
 5. Headless deterministic benchmark passes.
-6. Live or recorded reliability suite passes the ratified target threshold and has a valid decision artifact. Current recorded suite covers edit, inspect, recover-after-failure, and artifact-resume, proposes `recorded-v1`, can inspect a pinned live profile, can run `live-v1`, and can write a decision artifact, but no accepted/ratified decision artifact exists yet.
+6. Live or recorded reliability suite passes the ratified target threshold and has a valid decision artifact. Current recorded suite covers edit, inspect, recover-after-failure, and artifact-resume; recorded-v1 is ratified by `.agentx/reliability/decision.json`.
 7. `agentx objective-gate --json` reports `completion_ready=true`.
-8. This file is updated with the benchmark evidence and status changes from `In progress` to `Complete`.
+8. This file records the benchmark evidence and current `Complete` status.
 
-## Recommended Next Slice
+## Optional Next Slice
 
-Ratify or replace the reliability target bar:
+Strengthen live model evidence:
 
 ```text
-recorded-v1 threshold proposal
--> Maki ratification or live benchmark run via pinned reliability profile
--> reliability-decision --write
+live benchmark run via pinned reliability profile
+-> reliability-decision --profile live-v1 --decision accepted --write
 -> objective-gate --json
 -> OBJECTIVE_STATUS update
 ```
 
-Keep the first version local-only and non-destructive. It should not deploy, SSH, touch production, or write external memory by default.
+Keep this future slice local-only and non-destructive. It should not deploy, SSH, touch production, or write external memory by default.
