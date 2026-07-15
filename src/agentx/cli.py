@@ -6343,6 +6343,135 @@ def model_list_payload(
     }
 
 
+def reliability_profile_payload(
+    *,
+    workspace_override: Path | None = None,
+    backend_override: str | None = None,
+    base_url_override: str | None = None,
+    model_override: str | None = None,
+    timeout_override: float | None = None,
+    live_probe: bool = False,
+) -> dict[str, object]:
+    settings = Settings(workspace=workspace_override)
+    if base_url_override:
+        settings = settings.with_updates(ollama_url=base_url_override)
+    if model_override:
+        settings = settings.with_updates(model=model_override)
+    if timeout_override is not None:
+        settings = settings.with_updates(ollama_timeout=timeout_override)
+
+    register_builtin_backends()
+    backend = (backend_override or os.getenv("AGENTX_BACKEND", "ollama")).lower()
+    registered_backends = list_registered_backends()
+    backend_registered = backend in registered_backends
+    model_available: bool | None = None
+    models_count: int | None = None
+    probe_error: str | None = None
+    if live_probe and backend_registered:
+        try:
+            client = get_llm_client(
+                backend,
+                base_url=settings.ollama_url,
+                model=settings.model,
+                timeout=settings.ollama_timeout,
+            )
+            try:
+                models = client.list_models()
+            finally:
+                client.close()
+            models_count = len(models)
+            model_available = settings.model in models
+        except Exception as exc:  # noqa: BLE001
+            probe_error = f"{type(exc).__name__}: {exc}"
+            model_available = False
+
+    blockers: list[str] = []
+    if not backend_registered:
+        blockers.append("backend_not_registered")
+    if live_probe and probe_error:
+        blockers.append("live_probe_failed")
+    if live_probe and model_available is False and not probe_error:
+        blockers.append("model_not_available")
+
+    pinned = bool(backend and settings.ollama_url and settings.model)
+    ready_for_live_suite = pinned and backend_registered and (not live_probe or model_available is True)
+    if not ready_for_live_suite:
+        recommended_command = "agentx reliability-profile --json --live-probe"
+        recommended_kind = "fix_live_profile"
+        recommended_risk = "YELLOW"
+    elif not live_probe:
+        recommended_command = "agentx reliability-profile --json --live-probe"
+        recommended_kind = "verify_live_profile"
+        recommended_risk = "YELLOW"
+    else:
+        recommended_command = "agentx reliability-suite --json"
+        recommended_kind = "run_reliability_suite"
+        recommended_risk = "YELLOW"
+    return {
+        "schema": "agentx.reliability_profile.v1",
+        "workspace": str(settings.workspace),
+        "profile": "live-backend",
+        "status": "ready" if ready_for_live_suite else "needs_attention",
+        "pinned": pinned,
+        "backend": backend,
+        "base_url": settings.ollama_url,
+        "model": settings.model,
+        "timeout": settings.ollama_timeout,
+        "registered_backends": registered_backends,
+        "backend_registered": backend_registered,
+        "live_probe": live_probe,
+        "model_available": model_available,
+        "models_count": models_count,
+        "probe_error": probe_error,
+        "blockers": blockers,
+        "ready_for_live_suite": ready_for_live_suite,
+        "recommended_command": recommended_command,
+        "recommended_kind": recommended_kind,
+        "recommended_risk": recommended_risk,
+        "live_run_template": (
+            "agentx -p '<task>' --agent --no-memory "
+            f"--backend {shlex.quote(backend)} --base-url {shlex.quote(settings.ollama_url)} "
+            f"--model {shlex.quote(settings.model)} --timeout {settings.ollama_timeout} "
+            "--artifact-dir .agentx/runs/live-profile --json"
+        ),
+        "decision_note": (
+            "This profile pins backend/model/base_url for later live reliability evidence. "
+            "Without --live-probe it is read-only config evidence; with --live-probe it verifies model availability."
+        ),
+    }
+
+
+def print_reliability_profile_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output:
+        print_structured_payload(
+            payload,
+            output_format="jsonl" if jsonl_output else "json",
+            event="reliability_profile",
+        )
+        return
+    table = Table(title="agentX reliability profile", show_header=False)
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    for key in (
+        "status",
+        "backend",
+        "base_url",
+        "model",
+        "backend_registered",
+        "live_probe",
+        "model_available",
+        "ready_for_live_suite",
+        "recommended_command",
+    ):
+        table.add_row(key, str(payload.get(key)))
+    console.print(table)
+
+
 def print_model_list(payload: dict[str, object], *, json_output: bool = False, jsonl_output: bool = False) -> None:
     if json_output:
         print_structured_payload(
@@ -8396,6 +8525,32 @@ def reliability_suite_command(
     structured_format = structured_output_format(json_output, output_format)
     print_reliability_suite_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
     raise typer.Exit(code=1 if fail_on_failure and not payload.get("ok") else 0)
+
+
+@app.command("reliability-profile")
+def reliability_profile_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for config resolution."),
+    backend: str | None = typer.Option(None, "--backend", help="Override LLM backend."),
+    base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL."),
+    model: str | None = typer.Option(None, "--model", help="Override model used to initialize the backend client."),
+    timeout: float | None = typer.Option(None, "--timeout", help="Override request timeout seconds."),
+    live_probe: bool = typer.Option(False, "--live-probe", help="Call the selected backend to verify model availability."),
+    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when the profile has blockers."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Inspect the pinned backend/model profile for live reliability evidence."""
+    payload = reliability_profile_payload(
+        workspace_override=resolve_headless_workspace(workspace),
+        backend_override=backend,
+        base_url_override=base_url,
+        model_override=model,
+        timeout_override=timeout,
+        live_probe=live_probe,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_reliability_profile_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    raise typer.Exit(code=1 if fail_on_blocker and payload.get("blockers") else 0)
 
 
 @app.command("instructions")

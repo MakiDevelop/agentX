@@ -60,6 +60,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | `agentx commands --json` | `agentx.command_catalog.v1` | `commands` |
 | `agentx command-parity --json` | `agentx.command_parity.v1` | `command_parity` |
 | `agentx reliability-suite --json` | `agentx.reliability_suite.v1` | `reliability_suite` |
+| `agentx reliability-profile --json` | `agentx.reliability_profile.v1` | `reliability_profile` |
 | `agentx tools --json` | `agentx.tool_catalog.v1` | `tools` |
 | `agentx tool-plan --json` | `agentx.tool_plan.v1` | `tool_plan` |
 | `agentx workflows --json` | `agentx.workflow_catalog.v1` | `workflows` |
@@ -1302,6 +1303,41 @@ Each case object includes:
 | `handoff_resume` | object or null |
 | `recovery_recommendation` | object |
 | `checks` | object |
+
+## Reliability Profile Payload
+
+`agentx reliability-profile --json` emits `agentx.reliability_profile.v1`.
+
+This command inspects the pinned backend/model/base URL profile for later live
+reliability evidence. By default it is read-only config/registry inspection. Add
+`--live-probe` to call the selected backend and verify model availability.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.reliability_profile.v1`. |
+| `workspace` | string | Workspace used for config resolution. |
+| `profile` | string | `live-backend`. |
+| `status` | string | `ready` or `needs_attention`. |
+| `pinned` | boolean | True when backend, base URL, and model are concrete. |
+| `backend` | string | Selected backend key. |
+| `base_url` | string | Selected backend base URL. |
+| `model` | string | Selected model. |
+| `timeout` | number | Request timeout seconds. |
+| `registered_backends` | array of string | Registered backend keys. |
+| `backend_registered` | boolean | True when the selected backend is registered. |
+| `live_probe` | boolean | True only when `--live-probe` was requested. |
+| `model_available` | boolean or null | Null without live probe; otherwise whether `model` appears in backend models. |
+| `models_count` | integer or null | Number of models returned by live probe. |
+| `probe_error` | string or null | Live probe error summary, if any. |
+| `blockers` | array of string | Machine-readable blockers. |
+| `ready_for_live_suite` | boolean | True when profile is pinned, backend is registered, and live probe passed if requested. |
+| `recommended_command` | string | Suggested follow-up command. |
+| `recommended_kind` | string | Suggested follow-up kind. |
+| `recommended_risk` | string | Risk label for the recommended follow-up; live probe and live run follow-ups are `YELLOW`. |
+| `live_run_template` | string | Headless command template pinned to the selected backend/model/base URL. |
+| `decision_note` | string | Human-readable caveat for live reliability evidence. |
 
 ## Tool Catalog Payload
 

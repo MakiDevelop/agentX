@@ -18,6 +18,7 @@ Authoritative status page: `docs/OBJECTIVE_STATUS.md`.
 - `agentx command-parity --json` exposes a machine-readable slash-command to runner JSON matrix for AMH, ACE, artifacts, next, gate, and command-plan surfaces.
 - `agentx reliability-suite --json` runs local-only recorded backend cases and scores headless artifacts, next, gate, artifact-resume / `handoff-resume`, recovery posture, termination, and tool-call counts.
 - `agentx reliability-suite --json` includes `target_bar` (`agentx.reliability_target_bar.v1`), with proposed `recorded-v1` threshold: 4/4 cases, 100% pass rate, 0 failed cases, and all required checks passing.
+- `agentx reliability-profile --json` includes pinned backend/model/base URL details for later live benchmark evidence; `--live-probe` explicitly verifies model availability.
 
 Evidence:
 - `tests/test_capabilities_cli.py`
@@ -72,10 +73,10 @@ Evidence:
 
 ### Gap 1: Live model reliability is not benchmarked
 
-agentX now has a deterministic fake-backend benchmark and a local recorded reliability suite covering edit, inspect, recover-after-failure, and artifact-resume. They do not prove reliability with real local models across a representative task suite, so "Codex/Grok-like" model-facing behavior remains partially unverified.
+agentX now has a deterministic fake-backend benchmark, a local recorded reliability suite covering edit, inspect, recover-after-failure, and artifact-resume, and a pinned live profile inspection command. They do not yet prove reliability with real local models across a representative task suite, so "Codex/Grok-like" model-facing behavior remains partially unverified.
 
 Suggested next proof:
-- Add a live backend profile with pinned model/backend details, or have Maki ratify the proposed `recorded-v1` threshold if live proof is deferred.
+- Run a live backend benchmark using a pinned `agentx reliability-profile --json --live-probe` profile, or have Maki ratify the proposed `recorded-v1` threshold if live proof is deferred.
 - Track success/failure, tool-call count, termination, artifact completeness, and recovery recommendation quality.
 
 ### Gap 2: Completion criteria are spread across multiple documents
@@ -92,12 +93,12 @@ Ratify or replace the reliability target bar next:
 
 ```text
 recorded-v1 threshold proposal
-→ Maki ratification or pinned live backend profile
+→ Maki ratification or live benchmark run via pinned reliability profile
 → OBJECTIVE_STATUS update
 ```
 
 Acceptance criteria:
 - Runs local-only by default.
-- Records whether `recorded-v1` is ratified, replaced, or superseded by a pinned live backend profile.
+- Records whether `recorded-v1` is ratified, replaced, or superseded by a live benchmark against a pinned reliability profile.
 - Updates `docs/OBJECTIVE_STATUS.md`.
 - Updates `docs/HEADLESS_OPTIMIZATION_LIST.md`.

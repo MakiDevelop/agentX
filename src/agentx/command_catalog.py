@@ -528,6 +528,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "YELLOW - writes local .agentx/reliability fixture artifacts; no external services or memory writes",
     },
     {
+        "command": "agentx reliability-profile",
+        "usage": "agentx reliability-profile --json",
+        "description": "Inspect the pinned backend/model/base URL profile for later live reliability evidence; --live-probe verifies model availability.",
+        "examples": [
+            "agentx reliability-profile --json",
+            "agentx reliability-profile --backend ollama --model gemma4:31b --live-probe --json",
+        ],
+        "schemas": ["agentx.reliability_profile.v1"],
+        "jsonl_event": "reliability_profile",
+        "risk": "GREEN - read-only config inspection by default; YELLOW with --live-probe because it calls the selected backend",
+    },
+    {
         "command": "agentx version",
         "usage": "agentx version --json",
         "description": "Print agentX and Python runtime versions.",

@@ -3,8 +3,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from agentx.cli import app, reliability_suite_payload
+from agentx.cli import app, reliability_profile_payload, reliability_suite_payload
 from agentx.config import Settings
+from agentx.provider_registry import register_llm_backend
 
 
 def test_reliability_suite_payload_runs_recorded_cases(tmp_path: Path) -> None:
@@ -110,3 +111,95 @@ def test_reliability_suite_blocks_unknown_case(tmp_path: Path) -> None:
     assert payload["case_count"] == 0
     assert payload["target_bar"]["meets_proposed_threshold"] is False  # type: ignore[index]
     assert payload["target_bar"]["observed_case_count"] == 0  # type: ignore[index]
+
+
+def test_reliability_profile_payload_is_read_only_by_default(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setenv("AGENTX_BACKEND", "ollama")
+    payload = reliability_profile_payload(
+        workspace_override=tmp_path,
+        model_override="pinned-model",
+    )
+
+    assert payload["schema"] == "agentx.reliability_profile.v1"
+    assert payload["profile"] == "live-backend"
+    assert payload["backend"] == "ollama"
+    assert payload["model"] == "pinned-model"
+    assert payload["live_probe"] is False
+    assert payload["model_available"] is None
+    assert payload["backend_registered"] is True
+    assert payload["ready_for_live_suite"] is True
+    assert payload["recommended_kind"] == "verify_live_profile"
+    assert payload["recommended_risk"] == "YELLOW"
+
+
+def test_reliability_profile_blocks_unknown_backend(tmp_path: Path) -> None:
+    payload = reliability_profile_payload(
+        workspace_override=tmp_path,
+        backend_override="missing_backend",
+        model_override="pinned-model",
+    )
+
+    assert payload["status"] == "needs_attention"
+    assert payload["backend_registered"] is False
+    assert payload["blockers"] == ["backend_not_registered"]
+    assert payload["ready_for_live_suite"] is False
+
+
+def test_reliability_profile_live_probe_checks_model(tmp_path: Path) -> None:
+    class ProfileClient:
+        def __init__(self, _base_url: str, _model: str, _timeout: float) -> None:
+            pass
+
+        def chat(self, messages, *, json_mode=False, on_delta=None, cancel_event=None):  # noqa: ANN001, ANN201
+            return "{}"
+
+        def list_models(self) -> list[str]:
+            return ["pinned-live-model"]
+
+        def close(self) -> None:
+            return None
+
+        def __enter__(self) -> "ProfileClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    register_llm_backend("profile_fake", ProfileClient, source_id="test")
+
+    payload = reliability_profile_payload(
+        workspace_override=tmp_path,
+        backend_override="profile_fake",
+        model_override="pinned-live-model",
+        live_probe=True,
+    )
+
+    assert payload["live_probe"] is True
+    assert payload["model_available"] is True
+    assert payload["models_count"] == 1
+    assert payload["blockers"] == []
+    assert payload["ready_for_live_suite"] is True
+    assert payload["recommended_kind"] == "run_reliability_suite"
+
+
+def test_reliability_profile_cli_jsonl_outputs_event(tmp_path: Path) -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "reliability-profile",
+            "--workspace",
+            str(tmp_path),
+            "--backend",
+            "ollama",
+            "--model",
+            "pinned-model",
+            "--output-format",
+            "jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    assert envelope["event"] == "reliability_profile"
+    assert envelope["data"]["schema"] == "agentx.reliability_profile.v1"
+    assert envelope["data"]["model"] == "pinned-model"

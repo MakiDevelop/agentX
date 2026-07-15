@@ -130,6 +130,7 @@
 - [x] `docs/OBJECTIVE_STATUS.md` 已集中總目標要求、已證據、未證明 live/recorded backend reliability 與 completion gate，避免把 deterministic smoke 誤當完整完成證明。
 - [x] `agentx reliability-suite --json` 已提供 local-only recorded backend suite，建立 fixture repos 並評估 headless artifacts、tool-call count、termination、expected files、`artifacts`、`next`、`gate`、artifact-resume / `handoff-resume` 與 recovery recommendation posture。
 - [x] `agentx reliability-suite --json` 會輸出 `target_bar`（`agentx.reliability_target_bar.v1`），目前 `recorded-v1` 是 proposed threshold：4/4 cases、100% pass rate、0 failed cases、所有 required checks 通過；仍需 Maki ratify 或補 pinned live backend profile 才能宣告總目標完成。
+- [x] `agentx reliability-profile --json` 會輸出 pinned live backend/model/base URL profile（`agentx.reliability_profile.v1`）；預設只做 read-only config/registry inspection，`--live-probe` 才呼叫 backend 驗證 model availability。
 - [x] ACE write path 已有 isolated CLI smoke，使用 pytest temp root 覆蓋 `ace-init --write` → `ace-briefing --write` → `ace-answer` → `ace-status`，並確認所有寫入路徑留在 temp ACE root。
 - [x] AMH write path 已有 isolated CLI smoke，使用 workspace-local JSON store 覆蓋 `memory-write --write` → `memory-read` → `memory-status`，並在 AMH client namespaced 操作加上 `--caller-ns` 以符合 namespace isolation。
 - [x] `agentx command-parity --json` 會輸出 AMH、ACE、artifacts、next、gate、command-plan 的 slash-command ↔ runner JSON surface matrix，並納入 capabilities discovery。
