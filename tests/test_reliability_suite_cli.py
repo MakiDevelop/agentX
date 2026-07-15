@@ -277,6 +277,27 @@ def test_objective_gate_blocks_without_decision(tmp_path: Path) -> None:
     assert payload["decision_valid"] is False
     assert payload["missing_commands"] == []
     assert payload["blockers"] == ["reliability_decision_missing"]
+    assert payload["latest_evidence"] is None
+    assert payload["recommended_kind"] == "run_reliability_suite"
+
+
+def test_objective_gate_recommends_decision_with_latest_evidence(tmp_path: Path) -> None:
+    suite = reliability_suite_payload(Settings(workspace=tmp_path), run_id="objective-gate-latest")
+    evidence_dir = tmp_path / ".agentx" / "reliability"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    evidence = evidence_dir / "latest-suite.json"
+    evidence.write_text(json.dumps(suite), encoding="utf-8")
+
+    payload = objective_gate_payload(Settings(workspace=tmp_path))
+
+    assert payload["ok"] is False
+    assert payload["latest_evidence"]["relative_path"] == ".agentx/reliability/latest-suite.json"  # type: ignore[index]
+    assert payload["latest_evidence"]["profile"] == "recorded-v1"  # type: ignore[index]
+    assert payload["recommended_kind"] == "write_reliability_decision"
+    assert payload["recommended_command"] == (
+        "agentx reliability-decision --profile recorded-v1 --decision ratified "
+        "--evidence .agentx/reliability/latest-suite.json --write --json"
+    )
 
 
 def test_objective_gate_passes_with_valid_decision(tmp_path: Path) -> None:

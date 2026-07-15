@@ -21,7 +21,7 @@ Authoritative status page: `docs/OBJECTIVE_STATUS.md`.
 - `agentx reliability-profile --json` includes pinned backend/model/base URL details for later live benchmark evidence; `--live-probe` explicitly verifies model availability.
 - `agentx reliability-suite --suite-kind live --json` can run the same fixture threshold against a pinned backend/model and emit observed `live-v1` target-bar evidence.
 - `agentx reliability-decision --json` can preview or write a reliability decision artifact, requiring matching threshold-passing evidence for `ratified` / `accepted` decisions.
-- `agentx objective-gate --json` can read-only check required command surfaces and the reliability decision artifact for completion readiness.
+- `agentx objective-gate --json` can read-only check required command surfaces and the reliability decision artifact for completion readiness, and can recommend a concrete decision command from the latest threshold-passing suite evidence.
 
 Evidence:
 - `tests/test_capabilities_cli.py`

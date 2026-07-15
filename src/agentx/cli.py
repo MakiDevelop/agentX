@@ -6603,6 +6603,46 @@ OBJECTIVE_REQUIRED_COMMANDS = [
 ]
 
 
+def reliability_suite_evidence_overview(path: Path, workspace: Path) -> dict[str, object] | None:
+    try:
+        payload = load_headless_payload_file(path)
+    except Exception:
+        return None
+    target_bar = payload.get("target_bar")
+    if payload.get("schema") != "agentx.reliability_suite.v1" or not isinstance(target_bar, dict):
+        return None
+    meets_threshold = bool(target_bar.get("meets_threshold") or target_bar.get("meets_proposed_threshold"))
+    if not meets_threshold:
+        return None
+    return {
+        "path": str(path),
+        "relative_path": relative_workspace_path(workspace, path),
+        "suite_kind": payload.get("suite_kind"),
+        "run_id": payload.get("run_id"),
+        "profile": target_bar.get("profile"),
+        "status": target_bar.get("status"),
+        "meets_threshold": meets_threshold,
+        "observed_case_count": target_bar.get("observed_case_count"),
+        "observed_passed": target_bar.get("observed_passed"),
+        "observed_failed": target_bar.get("observed_failed"),
+        "updated_at": artifact_mtime_text(path),
+    }
+
+
+def latest_reliability_suite_evidence(workspace: Path) -> dict[str, object] | None:
+    root = workspace / ".agentx" / "reliability"
+    if not root.is_dir():
+        return None
+    candidates = [path for path in root.rglob("*") if path.is_file() and path.suffix in {".json", ".jsonl"}]
+    evidence = [
+        overview for path in candidates
+        if (overview := reliability_suite_evidence_overview(path, workspace)) is not None
+    ]
+    if not evidence:
+        return None
+    return max(evidence, key=lambda item: artifact_mtime(Path(str(item["path"]))))
+
+
 def objective_gate_payload(
     settings: Settings,
     *,
@@ -6617,6 +6657,7 @@ def objective_gate_payload(
     }
     missing_commands = [command for command in OBJECTIVE_REQUIRED_COMMANDS if command not in commands]
     blockers = [f"missing_command:{command}" for command in missing_commands]
+    latest_evidence = latest_reliability_suite_evidence(settings.workspace)
 
     decision_payload: dict[str, object] | None = None
     decision_valid = False
@@ -6641,6 +6682,15 @@ def objective_gate_payload(
             blockers.append(f"reliability_decision_load_failed:{type(exc).__name__}")
 
     ok = not blockers
+    if latest_evidence is not None:
+        evidence_profile = str(latest_evidence.get("profile") or "recorded-v1")
+        suggested_decision = "accepted" if evidence_profile == "live-v1" else "ratified"
+        decision_command = (
+            f"agentx reliability-decision --profile {shlex.quote(evidence_profile)} "
+            f"--decision {suggested_decision} --evidence {shlex.quote(str(latest_evidence['relative_path']))} --write --json"
+        )
+    else:
+        decision_command = "agentx reliability-suite --json > .agentx/reliability/latest-suite.json"
     return {
         "schema": "agentx.objective_gate.v1",
         "workspace": str(settings.workspace),
@@ -6654,13 +6704,14 @@ def objective_gate_payload(
         "decision_found": decision_path.is_file(),
         "decision_valid": decision_valid,
         "decision": decision_payload,
+        "latest_evidence": latest_evidence,
         "blockers": blockers,
         "recommended_command": (
             "agentx inspect --json"
             if ok
-            else "agentx reliability-decision --profile recorded-v1 --decision ratified --evidence <suite.json> --write --json"
+            else decision_command
         ),
-        "recommended_kind": "inspect" if ok else "write_reliability_decision",
+        "recommended_kind": "inspect" if ok else ("write_reliability_decision" if latest_evidence else "run_reliability_suite"),
         "recommended_risk": "GREEN" if ok else "YELLOW",
     }
 

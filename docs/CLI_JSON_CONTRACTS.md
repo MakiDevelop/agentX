@@ -1409,6 +1409,7 @@ Required stable keys:
 | `decision_found` | boolean | True when the decision artifact exists. |
 | `decision_valid` | boolean | True when the decision artifact is accepted/ratified and evidence-valid. |
 | `decision` | object or null | Parsed decision artifact. |
+| `latest_evidence` | object or null | Latest local reliability suite evidence that already passed its threshold. |
 | `blockers` | array of string | Machine-readable blockers. |
 | `recommended_command` | string | Suggested follow-up command. |
 | `recommended_kind` | string | Suggested follow-up kind. |

@@ -46,7 +46,7 @@ Current proof:
 - `agentx reliability-profile --json` emits `agentx.reliability_profile.v1`, a pinned backend/model/base URL profile for later live reliability evidence. It is read-only by default; `--live-probe` explicitly verifies model availability.
 - `agentx reliability-suite --suite-kind live --json` can run the same fixture threshold against a pinned backend/model and emit `live-v1` observed target-bar evidence.
 - `agentx reliability-decision --json` emits `agentx.reliability_decision.v1`, a write-gated decision artifact surface. `ratified` / `accepted` decisions require matching suite evidence with `meets_threshold=true`.
-- `agentx objective-gate --json` emits `agentx.objective_gate.v1`, checking required AMH/ACE/reliability CLI surfaces plus the accepted/ratified reliability decision artifact.
+- `agentx objective-gate --json` emits `agentx.objective_gate.v1`, checking required AMH/ACE/reliability CLI surfaces plus the accepted/ratified reliability decision artifact; it also discovers the latest threshold-passing suite evidence and recommends the exact `reliability-decision --write` command.
 
 ### AMH
 

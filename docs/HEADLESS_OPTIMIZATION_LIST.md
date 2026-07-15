@@ -133,7 +133,7 @@
 - [x] `agentx reliability-profile --json` 會輸出 pinned live backend/model/base URL profile（`agentx.reliability_profile.v1`）；預設只做 read-only config/registry inspection，`--live-probe` 才呼叫 backend 驗證 model availability。
 - [x] `agentx reliability-suite --suite-kind live --json` 可用 pinned backend/model 跑同一組 fixture cases，輸出 `live-v1` observed target bar 與完整 artifact/next/gate/handoff scoring；此模式會呼叫所選 backend。
 - [x] `agentx reliability-decision --json` 可預覽或在 `--write` 時寫入 workspace-local reliability decision artifact；`ratified` / `accepted` 必須提供 profile 相符且 threshold passed 的 suite evidence。
-- [x] `agentx objective-gate --json` 可 read-only 檢查 Codex/Grok-like + AMH/ACE 目標所需 CLI surfaces 與 reliability decision artifact；目前可用於 completion audit。
+- [x] `agentx objective-gate --json` 可 read-only 檢查 Codex/Grok-like + AMH/ACE 目標所需 CLI surfaces 與 reliability decision artifact；也會發現最新 threshold-passing suite evidence 並給出具體 `reliability-decision --write` 建議。
 - [x] ACE write path 已有 isolated CLI smoke，使用 pytest temp root 覆蓋 `ace-init --write` → `ace-briefing --write` → `ace-answer` → `ace-status`，並確認所有寫入路徑留在 temp ACE root。
 - [x] AMH write path 已有 isolated CLI smoke，使用 workspace-local JSON store 覆蓋 `memory-write --write` → `memory-read` → `memory-status`，並在 AMH client namespaced 操作加上 `--caller-ns` 以符合 namespace isolation。
 - [x] `agentx command-parity --json` 會輸出 AMH、ACE、artifacts、next、gate、command-plan 的 slash-command ↔ runner JSON surface matrix，並納入 capabilities discovery。
