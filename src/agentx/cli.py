@@ -3781,6 +3781,16 @@ def inspect_payload(
     ]
     artifacts = artifacts_payload(settings, root=".agentx/runs", limit=5)
     instructions = local_instructions_payload(settings.workspace)
+    memory_status = memory_status_payload(
+        workspace=settings.workspace,
+        namespace=namespace,
+        memory_backend=settings.memory_backend,
+        memory_amh_store=settings.memory_amh_store,
+        memory_amh_path=settings.memory_amh_path,
+        memory_hall_url=settings.memory_hall_url,
+        memory_hall_token=settings.memory_hall_token,
+        live_probe=False,
+    )
     next_steps = next_payload(
         settings,
         artifacts_root=".agentx/runs",
@@ -3795,6 +3805,9 @@ def inspect_payload(
             "verify_command_plan_count": len(verify_command_plans),
             "local_instruction_found_count": instructions.get("found_count", 0),
             "local_instruction_selected_file": instructions.get("selected_file"),
+            "memory_backend": memory_status.get("memory_backend"),
+            "memory_ok": memory_status.get("ok"),
+            "amh_available": dict(memory_status.get("amh", {})).get("available"),
         }
     )
     return {
@@ -3820,6 +3833,7 @@ def inspect_payload(
         "diff": diff_payload(settings),
         "capabilities": capabilities_payload(),
         "instructions": instructions,
+        "memory_status": memory_status,
         "artifacts": artifacts,
         "next": next_steps,
         "verify_commands": verify_commands,
@@ -3827,6 +3841,7 @@ def inspect_payload(
         "next_commands": [
             "agentx diff --json",
             "agentx instructions --json",
+            "agentx memory-status --json",
             "agentx gate --json --fail-on-blocker",
             "agentx review --json --fail-on-blocker",
             "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker",
@@ -3859,6 +3874,7 @@ def print_inspect_payload(
     sessions = dict(payload["sessions"])  # type: ignore[arg-type]
     approvals = dict(payload["approvals"])  # type: ignore[arg-type]
     instructions = dict(payload["instructions"])  # type: ignore[arg-type]
+    memory_status = dict(payload["memory_status"])  # type: ignore[arg-type]
     artifacts = dict(payload["artifacts"])  # type: ignore[arg-type]
     next_steps = dict(payload["next"])  # type: ignore[arg-type]
     table = Table(title="agentX inspect", show_header=False)
@@ -3889,6 +3905,11 @@ def print_inspect_payload(
     table.add_row(
         "instructions",
         f"found={instructions.get('found_count', 0)} selected={instructions.get('selected_file') or '-'}",
+    )
+    table.add_row(
+        "memory",
+        f"ok={memory_status.get('ok')} backend={memory_status.get('memory_backend')} "
+        f"amh_available={dict(memory_status.get('amh', {})).get('available')}",
     )
     diff = dict(payload["diff"])  # type: ignore[arg-type]
     table.add_row(

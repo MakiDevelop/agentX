@@ -144,7 +144,7 @@ Required stable keys:
 | `recommended_command` | string or null | Top-level copy of `next.recommended_command` for simple runners. |
 | `recommended_kind` | string or null | Top-level copy of `next.recommended_kind` for simple runners. |
 | `recommended_risk` | string or null | Top-level copy of `next.recommended_risk` for simple runners. |
-| `signals` | object | Top-level summary signals copied from `next.signals`, plus inspect-specific counts such as `verify_command_count`, `verify_command_plan_count`, `local_instruction_found_count`, and `local_instruction_selected_file`. |
+| `signals` | object | Top-level summary signals copied from `next.signals`, plus inspect-specific counts/posture such as `verify_command_count`, `verify_command_plan_count`, `local_instruction_found_count`, `local_instruction_selected_file`, `memory_backend`, `memory_ok`, and `amh_available`. |
 | `status` | object | Embedded `agentx.status.v1`. |
 | `tasks` | object | Embedded `agentx.tasks.v1` filtered to active tasks. |
 | `sessions` | object | Embedded `agentx.sessions.v1`. |
@@ -153,6 +153,7 @@ Required stable keys:
 | `diff` | object | Embedded `agentx.diff.v1` for current worktree diff, without patch text. |
 | `capabilities` | object | Embedded `agentx.capabilities.v1`. |
 | `instructions` | object | Embedded `agentx.local_instructions.v1` repo-local instruction inspection payload. |
+| `memory_status` | object | Embedded `agentx.memory_status.v1` read-only memory backend posture payload, with `live_probe=false`. |
 | `artifacts` | object | Embedded `agentx.artifacts.v1` catalog for recent headless runner bundles. |
 | `next` | object | Embedded `agentx.next.v1` recommendation payload, including command-plan preflights. |
 | `verify_commands` | array of object | Detected verification argv lists without executing them. |

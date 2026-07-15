@@ -61,6 +61,8 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     assert payload["signals"]["verify_command_plan_count"] == 2  # type: ignore[index]
     assert payload["signals"]["local_instruction_found_count"] == 1  # type: ignore[index]
     assert payload["signals"]["local_instruction_selected_file"] == "AGENTX.md"  # type: ignore[index]
+    assert payload["signals"]["memory_backend"] == "memhall"  # type: ignore[index]
+    assert payload["signals"]["memory_ok"] is True  # type: ignore[index]
     assert payload["status"]["schema"] == "agentx.status.v1"  # type: ignore[index]
     assert payload["tasks"]["schema"] == "agentx.tasks.v1"  # type: ignore[index]
     assert payload["tasks"]["count"] == 1  # type: ignore[index]
@@ -77,6 +79,9 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     assert payload["instructions"]["schema"] == "agentx.local_instructions.v1"  # type: ignore[index]
     assert payload["instructions"]["selected_file"] == "AGENTX.md"  # type: ignore[index]
     assert "LOCAL_RULE_MARKER" in payload["instructions"]["context"]  # type: ignore[index]
+    assert payload["memory_status"]["schema"] == "agentx.memory_status.v1"  # type: ignore[index]
+    assert payload["memory_status"]["legacy_memhall"]["token"] == "set"  # type: ignore[index]
+    assert payload["memory_status"]["live_probe"] is False  # type: ignore[index]
     assert payload["artifacts"]["schema"] == "agentx.artifacts.v1"  # type: ignore[index]
     assert payload["next"]["schema"] == "agentx.next.v1"  # type: ignore[index]
     assert payload["next"]["recommended_command"] == "agentx approvals latest --denied --json --fail-on-denied"  # type: ignore[index]
@@ -93,6 +98,7 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     assert all(item["allowed"] is True for item in payload["verify_command_plans"])  # type: ignore[index]
     assert "agentx diff --json" in payload["next_commands"]
     assert "agentx instructions --json" in payload["next_commands"]
+    assert "agentx memory-status --json" in payload["next_commands"]
     assert "agentx gate --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx review --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker" in payload["next_commands"]
@@ -115,11 +121,14 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["recommended_risk"] == payload["next"]["recommended_risk"]
     assert payload["signals"]["verify_command_count"] == len(payload["verify_commands"])
     assert payload["signals"]["local_instruction_selected_file"] == "AGENTS.md"
+    assert payload["signals"]["memory_backend"] == "memhall"
     assert payload["status"]["git"]["ok"] is True
     assert payload["diff"]["schema"] == "agentx.diff.v1"
     assert payload["instructions"]["schema"] == "agentx.local_instructions.v1"
     assert payload["instructions"]["selected_file"] == "AGENTS.md"
     assert "AGENTS_RULE_MARKER" in payload["instructions"]["context"]
+    assert payload["memory_status"]["schema"] == "agentx.memory_status.v1"
+    assert payload["memory_status"]["live_probe"] is False
     assert payload["artifacts"]["schema"] == "agentx.artifacts.v1"
     assert payload["next"]["schema"] == "agentx.next.v1"
     assert payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
@@ -128,6 +137,7 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["verify_command_plans"][0]["command"] == "uv run ruff check ."
     assert payload["next_commands"][0] == "agentx diff --json"
     assert "agentx instructions --json" in payload["next_commands"]
+    assert "agentx memory-status --json" in payload["next_commands"]
     assert "agentx gate --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx review --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker" in payload["next_commands"]
@@ -154,6 +164,7 @@ def test_inspect_plain_outputs_summary(tmp_path) -> None:  # noqa: ANN001
     assert "ok" in result.output
     assert "diff" in result.output
     assert "instructions" in result.output
+    assert "memory" in result.output
     assert "artifacts" in result.output
     assert "next" in result.output
     assert "verify_commands" in result.output
