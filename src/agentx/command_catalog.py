@@ -320,6 +320,18 @@ CLI_CAPABILITIES: list[CommandCatalogItem] = [
         "risk": "GREEN - read-only local infrastructure map context",
     },
     {
+        "command": "agentx instructions",
+        "usage": "agentx instructions --json",
+        "description": "Inspect repo-local AGENTX.md / AGENTS.md / CLAUDE.md instruction files in bootstrap priority order.",
+        "examples": [
+            "agentx instructions --json",
+            "agentx instructions --workspace /path/to/repo --output-format jsonl",
+        ],
+        "schemas": ["agentx.local_instructions.v1"],
+        "jsonl_event": "instructions",
+        "risk": "GREEN - read-only repo-local instruction inspection",
+    },
+    {
         "command": "agentx ace-init",
         "usage": "agentx ace-init SESSION --goal GOAL --json",
         "description": "Preview or create an ACE session directory with _manifest.md for multi-agent file-based coordination.",

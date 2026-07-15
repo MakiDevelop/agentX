@@ -26,6 +26,7 @@ Consumers should branch on `event` and read the payload from `data`.
 | Command | JSON schema | JSONL event |
 |---------|-------------|-------------|
 | `agentx capabilities --json` | `agentx.capabilities.v1` | `capabilities` |
+| `agentx instructions --json` | `agentx.local_instructions.v1` | `instructions` |
 | `agentx config --json` | `agentx.config.v1` | `config` |
 | `agentx inspect --json` | `agentx.inspect.v1` | `inspect` |
 | `agentx init --json` | `agentx.init.v1` | `init` |
@@ -92,6 +93,35 @@ Each capability object includes:
 | `schemas` | array of string |
 | `jsonl_event` | string |
 | `risk` | string |
+
+## Local Instructions Payload
+
+`agentx instructions --json` emits `agentx.local_instructions.v1`.
+
+This command is read-only. It reports repo-local instruction files in the same
+priority order used by bootstrap context: `AGENTX.md`, `AGENTS.md`, then
+`CLAUDE.md`. These files provide project guidance and cannot override agentX
+safety policy.
+
+Required stable keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `schema` | string | `agentx.local_instructions.v1`. |
+| `ok` | boolean | True when inspection completed. Missing instruction files are a warning, not a blocker. |
+| `workspace` | string | Resolved workspace path. |
+| `priority` | array of string | Instruction file priority order. |
+| `selected_file` | string or null | First existing instruction file by priority. |
+| `found_count` | integer | Number of existing instruction files. |
+| `files` | array of object | One entry per known instruction file, including `name`, `path`, `purpose`, `exists`, `priority`, `size`, `included_chars`, `truncated`, and `content_excerpt`. |
+| `context` | string | Merged local instruction context capped by `--max-chars`. |
+| `context_truncated` | boolean | Whether merged context was capped. |
+| `blockers` | array of string | Machine-readable blockers. Currently empty for successful read-only inspection. |
+| `warnings` | array of string | Non-blocking diagnostics such as `no_local_instruction_files_found`. |
+| `recommended_command` | string | First suggested follow-up command for simple runners. |
+| `recommended_kind` | string | Suggested follow-up kind. |
+| `recommended_risk` | string | Risk label for the recommended follow-up. |
+| `next_commands` | array of string | Suggested follow-up commands. |
 
 ## Inspect Payload
 

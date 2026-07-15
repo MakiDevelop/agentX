@@ -30,6 +30,7 @@ from agentx import cli_slash_shims as _slash_shims
 from agentx.ace import ace_answer_payload, ace_append_payload, ace_briefing_payload, ace_init_payload, ace_status_payload
 from agentx.approval import ApprovalMode, ApprovalPolicy, approval_decision_source, normalize_approval_mode
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
+from agentx.bootstrap import local_instructions_payload
 from agentx.config import Settings
 from agentx.command_catalog import (
     COMMAND_CATALOG,
@@ -622,6 +623,29 @@ def print_infra_payload(
         print_structured_payload(payload, output_format=output_format, event="infra")
         return
     print_raw(str(payload["content"]))
+
+
+def print_instructions_payload(
+    payload: dict[str, object],
+    *,
+    json_output: bool = False,
+    jsonl_output: bool = False,
+) -> None:
+    if json_output or jsonl_output:
+        output_format = "jsonl" if jsonl_output else "json"
+        print_structured_payload(payload, output_format=output_format, event="instructions")
+        return
+    if payload.get("ok"):
+        console.print(f"[green]Local instructions inspected: {payload.get('found_count', 0)} file(s)[/green]")
+        console.print(f"[dim]selected={payload.get('selected_file') or '-'}[/dim]")
+        if payload.get("context"):
+            print_raw(str(payload["context"]))
+    else:
+        console.print(
+            "[red]Local instructions blocked: "
+            f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
+        )
+    console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
 
 
 def print_ace_init_payload(
@@ -6561,6 +6585,25 @@ def capabilities_command(
     """List machine-readable top-level CLI capabilities for runners."""
     structured_format = structured_output_format(json_output, output_format)
     print_capabilities(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+
+
+@app.command("instructions")
+def instructions_command(
+    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory."),
+    per_file_chars: int = typer.Option(3000, "--per-file-chars", min=0, help="Maximum characters to include from each instruction file."),
+    max_chars: int = typer.Option(9000, "--max-chars", min=0, help="Maximum characters to include in the merged context."),
+    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
+    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+) -> None:
+    """Inspect repo-local AGENTX.md / AGENTS.md / CLAUDE.md instruction files."""
+    settings = Settings(workspace=resolve_headless_workspace(workspace))
+    payload = local_instructions_payload(
+        settings.workspace,
+        per_file_chars=per_file_chars,
+        max_chars=max_chars,
+    )
+    structured_format = structured_output_format(json_output, output_format)
+    print_instructions_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
 
 
 @app.command("sessions")

@@ -109,6 +109,7 @@ agentx --list-models --json
 agentx backends --json
 agentx capabilities --json
 agentx capabilities verify --json
+agentx instructions --json
 agentx inspect --json
 agentx inspect --output-format jsonl
 agentx diff --json
@@ -205,6 +206,7 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `stats` 目前包含 message count、粗估 context tokens、model turn count、tool call count、reflection count、error count、compaction count、pending verifies 與 task counts。
 `log_summary` 會提供精簡可機讀執行摘要：termination、tool outcomes、successful/failing tools、recent errors、recovery suggestions、pending verifies 與 deterministic `handoff_summary`。
 `agentx capabilities --json` 會輸出 `agentx.capabilities.v1`，列出 top-level automation commands、schemas、JSONL events、風險、`recommended_entrypoints` 與 `by_schema` 索引，讓外部 runner 不必解析 README。
+`agentx instructions --json` 會輸出 `agentx.local_instructions.v1`，read-only 檢查 repo-local `AGENTX.md` / `AGENTS.md` / `CLAUDE.md`，並依 bootstrap priority 回傳 selected file、檔案摘要與合併 context。
 `agentx inspect --json` 會輸出 `agentx.inspect.v1` read-only preflight bundle，彙整 status、active tasks、sessions、latest approvals、latest traces、diff、capabilities、artifacts、next recommendations、可跑的 verify commands 與對應 `command-plan`，並提供 top-level `recommended_command` / `signals` 讓 runner 不必深入解析 nested payload；它不執行測試或 live probes。
 `agentx diff --json` 會輸出 `agentx.diff.v1` git diff 摘要，包含檔案狀態、insertions/deletions、untracked files、stat；加 `--staged` 可看 index，加 `--patch` 才會附 patch text。
 `agentx patch-check PATCH --json` 會輸出 `agentx.patch_check.v1` patch preflight，讀取 workspace 內 patch 檔、列出 touched files、跑 `git apply --check -`，並檢查 patch 目標不會逃出 workspace 或落在 `.git` / `.agentx` 等受保護位置；它不會套用 patch。
@@ -231,7 +233,7 @@ JSON payload 會包含 `schema_version`、`output`、`exit_code`、`termination`
 `agentx ace-briefing SESSION --agent AGENT --json` 會輸出 `agentx.ace_briefing.v1`，從既有 ACE `_manifest.md` 產生單一 agent 的 scoped briefing；加 `--write` 才會寫入 session 目錄。
 `agentx ace-answer SESSION --agent AGENT --answer TEXT --json` 會輸出 `agentx.ace_answer.v1`，保存外部 agent 原始 answer 檔，並把 summary 追加回 `_manifest.md`。
 `agentx ace-status SESSION --json` 會輸出 `agentx.ace_status.v1`，read-only 彙整 ACE `_manifest.md`、briefings、answers、open questions 與 counts。
-`--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、capabilities、inspect、diff、patch-check、command-plan、review、commit-plan、gate、next、tool-plan、infra、ace-init、ace-append、ace-briefing、ace-answer、ace-status、config、sessions、artifacts、handoff-inspect、handoff-resume、approvals、traces、tasks、task-update、verify、status、doctor、commands、workflows、tools、models 會分別使用 `dry_run`、`version`、`backends`、`capabilities`、`inspect`、`diff`、`patch_check`、`command_plan`、`review`、`commit_plan`、`gate`、`next`、`tool_plan`、`infra`、`ace_init`、`ace_append`、`ace_briefing`、`ace_answer`、`ace_status`、`config`、`sessions`、`artifacts`、`handoff_inspect`、`handoff_resume`、`approvals`、`traces`、`tasks`、`task_update`、`verify`、`status`、`doctor`、`commands`、`workflows`、`tools`、`models` event。
+`--output-format jsonl` 會輸出單行 event envelope，例如 `{"event":"result","data":{...}}`；dry-run、version、backends、capabilities、instructions、inspect、diff、patch-check、command-plan、review、commit-plan、gate、next、tool-plan、infra、ace-init、ace-append、ace-briefing、ace-answer、ace-status、config、sessions、artifacts、handoff-inspect、handoff-resume、approvals、traces、tasks、task-update、verify、status、doctor、commands、workflows、tools、models 會分別使用 `dry_run`、`version`、`backends`、`capabilities`、`instructions`、`inspect`、`diff`、`patch_check`、`command_plan`、`review`、`commit_plan`、`gate`、`next`、`tool_plan`、`infra`、`ace_init`、`ace_append`、`ace_briefing`、`ace_answer`、`ace_status`、`config`、`sessions`、`artifacts`、`handoff_inspect`、`handoff_resume`、`approvals`、`traces`、`tasks`、`task_update`、`verify`、`status`、`doctor`、`commands`、`workflows`、`tools`、`models` event。
 `--result-output PATH` 可把同一份 result payload 寫成 workspace 內 artifact，plain stdout 時預設寫 JSON，`--output-format jsonl` 時寫 JSONL event；路徑拒絕 workspace escape 與覆蓋既有檔案。需要 artifact 格式和 stdout 格式分開時，可用 `--result-output-format auto|json|jsonl`。
 `--handoff-briefing-output PATH` 可在同一輪 headless run 結束時直接寫出 Markdown 接手檔；路徑同樣限制在 workspace 內、拒絕覆寫，且不可與 `--session-output` / `--result-output` 指到同一檔案。
 `--artifact-dir DIR` 是 runner-friendly preset，會在 workspace 內一次產生 `session.session.jsonl`、`result.json`（或 `result.jsonl`）與 `handoff.md`；它和個別 artifact output option 互斥，且會拒絕覆寫標準檔名。
