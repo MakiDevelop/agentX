@@ -112,6 +112,7 @@
 - [x] `agentx workflow-plan NAME --json` 會把單一 workflow 展開成 ordered command plans、placeholder `inputs_required`、`side_effect_gates` 與 blockers，讓 runner 能先 gate 再執行。
 - [x] `agentx workflow-plan NAME --input KEY=VALUE --json` 會套用 placeholder substitution 並輸出 `ready_commands`，讓 runner 能拿到可執行命令但仍不執行 side effects。
 - [x] `agentx workflow-run NAME --json` 會包住 workflow-plan 做 dry-run；`--execute` 只跑 eligible GREEN `agentx` CLI steps，遇到 slash step、YELLOW/RED gate、blocker 或失敗就停止。
+- [x] `agentx workflow-run NAME --execute --allow-yellow-gates --approval-reason TEXT --json` 可在明確理由下執行 YELLOW workflow gate 並輸出 `approval_receipts`；RED / blocker 仍不可越過。
 - [x] `agentx next --json` / `agentx inspect --json` 會把 AMH handoff 與 ACE council `workflow-run` previews 納入 recommendations，且不覆蓋 denied approval、dirty gate、artifact handoff、active task 等高優先級建議。
 - [x] `agentx inspect --json` 會內嵌 `verify_command_plans`，把每個預設 verify command 轉成 `agentx.command_plan.v1`，讓 runner 一次取得可執行檢查與 command policy posture。
 - [x] `agentx inspect --json` 會內嵌 `instructions`（`agentx.local_instructions.v1`）與 top-level instruction signals，讓 runner 一次取得 repo-local AGENTX/AGENTS/CLAUDE 規則狀態。

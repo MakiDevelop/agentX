@@ -1268,10 +1268,12 @@ is non-empty.
 
 This command wraps `workflow-plan`. It is dry-run by default and does not
 execute commands unless `--execute` is provided. Execution is intentionally
-GREEN-only: each runnable step must be an `agentx_cli` step with a GREEN
-`command_plan`, no blockers, and no approval requirement. The run stops before
-slash-command steps, side-effect gates, command-plan blockers, or failed
-commands.
+conservative: each runnable step must be an `agentx_cli` step with no
+command-plan blockers. GREEN steps run directly. YELLOW gates require both
+`--allow-yellow-gates` and `--approval-reason TEXT`; the run records
+`approval_receipts`. RED gates are never allowed. The run stops before
+slash-command steps, unapproved side-effect gates, command-plan blockers, or
+failed commands.
 
 Required stable keys:
 
@@ -1280,11 +1282,14 @@ Required stable keys:
 | `schema` | string | `agentx.workflow_run.v1`. |
 | `query` | string | Workflow name or alias requested. |
 | `execute` | boolean | Whether command execution was requested. |
+| `allow_yellow_gates` | boolean | Whether explicit YELLOW gate execution was allowed. |
+| `approval_reason` | string or null | Human-readable reason required when allowing YELLOW gates. |
 | `ok` | boolean | True when the plan has no blockers and the run did not stop at a gate or failed command. |
 | `workspace` | string | Workspace used for planning and execution. |
 | `plan` | object | Embedded `agentx.workflow_plan.v1` payload. |
-| `execution_allowed` | boolean | True only when every runnable step is eligible GREEN `agentx_cli`. |
+| `execution_allowed` | boolean | True only when every runnable step is eligible under the current GREEN/YELLOW gate policy. |
 | `executed_steps` | array of object | Executed commands with return code and captured output. Empty for dry-run. |
+| `approval_receipts` | array of object | YELLOW gate approval receipts emitted during execution. |
 | `stopped_at` | object or null | Gate or failure that stopped execution. |
 | `blockers` | array of string | Top-level plan blockers. |
 | `warnings` | array of string | Non-blocking diagnostics such as `dry_run_no_commands_executed`. |

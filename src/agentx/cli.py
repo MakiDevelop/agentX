@@ -409,6 +409,8 @@ def workflow_run_payload(
     workspace: str | Path | None = None,
     inputs: dict[str, str] | None = None,
     execute: bool = False,
+    allow_yellow_gates: bool = False,
+    approval_reason: str | None = None,
     timeout: int = 120,
 ) -> dict[str, object]:
     workspace_path = resolve_headless_workspace(str(workspace)) if workspace else None
@@ -417,10 +419,16 @@ def workflow_run_payload(
     blockers = [str(item) for item in plan.get("blockers", [])]
     warnings: list[str] = []
     executed_steps: list[dict[str, object]] = []
+    approval_receipts: list[dict[str, object]] = []
     stopped_at: dict[str, object] | None = None
+    normalized_approval_reason = (approval_reason or "").strip()
 
     if not execute:
         warnings.append("dry_run_no_commands_executed")
+    elif allow_yellow_gates and not normalized_approval_reason:
+        stopped_at = {
+            "reason": "approval_reason_required",
+        }
     elif blockers:
         stopped_at = {
             "reason": "plan_blocked",
@@ -455,15 +463,39 @@ def workflow_run_payload(
                     "blockers": command_plan.get("blockers"),
                 }
                 break
-            if command_plan.get("risk") != "GREEN" or command_plan.get("approval_required"):
+            risk = str(command_plan.get("risk") or "UNKNOWN")
+            approval_required = bool(command_plan.get("approval_required"))
+            if risk == "RED":
                 stopped_at = {
                     "step_index": step_data.get("index"),
                     "command": command,
                     "reason": "side_effect_gate",
-                    "risk": command_plan.get("risk"),
-                    "approval_required": command_plan.get("approval_required"),
+                    "risk": risk,
+                    "approval_required": approval_required,
                 }
                 break
+            if risk != "GREEN" or approval_required:
+                if risk == "YELLOW" and allow_yellow_gates:
+                    approval_receipts.append(
+                        {
+                            "step_index": step_data.get("index"),
+                            "command": command,
+                            "risk": risk,
+                            "approval_mode": "workflow-run",
+                            "source": "allow_yellow_gates",
+                            "allowed": True,
+                            "reason": normalized_approval_reason,
+                        }
+                    )
+                else:
+                    stopped_at = {
+                        "step_index": step_data.get("index"),
+                        "command": command,
+                        "reason": "side_effect_gate",
+                        "risk": risk,
+                        "approval_required": approval_required,
+                    }
+                    break
             completed = subprocess.run(
                 shlex.split(command),
                 cwd=settings.workspace,
@@ -494,8 +526,17 @@ def workflow_run_payload(
     execution_allowed = not blockers and all(
         dict(step).get("kind") == "agentx_cli"
         and isinstance(dict(step).get("command_plan"), dict)
-        and dict(dict(step).get("command_plan")).get("risk") == "GREEN"
-        and not dict(dict(step).get("command_plan")).get("approval_required")
+        and (
+            (
+                dict(dict(step).get("command_plan")).get("risk") == "GREEN"
+                and not dict(dict(step).get("command_plan")).get("approval_required")
+            )
+            or (
+                allow_yellow_gates
+                and dict(dict(step).get("command_plan")).get("risk") == "YELLOW"
+                and bool(normalized_approval_reason)
+            )
+        )
         and not dict(dict(step).get("command_plan")).get("blockers")
         for step in plan.get("steps", [])
         if dict(step).get("runnable")
@@ -504,11 +545,14 @@ def workflow_run_payload(
         "schema": "agentx.workflow_run.v1",
         "query": str(plan.get("query") or ""),
         "execute": execute,
+        "allow_yellow_gates": allow_yellow_gates,
+        "approval_reason": normalized_approval_reason or None,
         "ok": ok,
         "workspace": str(settings.workspace),
         "plan": plan,
         "execution_allowed": execution_allowed,
         "executed_steps": executed_steps,
+        "approval_receipts": approval_receipts,
         "stopped_at": stopped_at,
         "blockers": blockers,
         "warnings": warnings,
@@ -706,6 +750,12 @@ def print_workflow_run_payload(
         for item in executed_steps:
             step = dict(item)
             print_raw(f"- step {step.get('step_index')}: rc={step.get('returncode')} {step.get('command')}")
+    approval_receipts = payload.get("approval_receipts") or []
+    if approval_receipts:
+        print_raw("approval receipts:")
+        for item in approval_receipts:
+            receipt = dict(item)
+            print_raw(f"- step {receipt.get('step_index')}: {receipt.get('risk')} {receipt.get('source')} {receipt.get('command')}")
     next_commands = payload.get("next_commands") or []
     if next_commands:
         print_raw("next:")
@@ -1343,6 +1393,24 @@ def _agentx_headless_prompt_sources(argv: list[str]) -> list[str]:
     return sources
 
 
+def _agentx_cli_risk_from_argv(capability: dict[str, object], argv: list[str]) -> tuple[str, bool]:
+    command = str(capability.get("command") or "")
+    if command == "agentx memory-write":
+        risk = "YELLOW" if "--write" in argv else "GREEN"
+        return risk, risk == "YELLOW"
+    if command in {"agentx ace-init", "agentx ace-briefing"}:
+        risk = "YELLOW" if "--write" in argv else "GREEN"
+        return risk, risk == "YELLOW"
+    if command == "agentx handoff-resume":
+        risk = "YELLOW" if "--execute" in argv else "GREEN"
+        return risk, risk == "YELLOW"
+    if command == "agentx workflow-run":
+        risk = "YELLOW" if "--execute" in argv else "GREEN"
+        return risk, risk == "YELLOW"
+    risk = _risk_label_from_capability(capability)
+    return risk, risk == "YELLOW"
+
+
 def _has_option(argv: list[str], option: str) -> bool:
     return option in argv or any(token.startswith(f"{option}=") for token in argv)
 
@@ -1390,11 +1458,11 @@ def _agentx_command_plan(settings: Settings, argv: list[str]) -> dict[str, objec
             continue
         command = str(capability.get("command") or "")
         if command == f"agentx {subcommand}":
-            risk = _risk_label_from_capability(capability)
+            risk, approval_required = _agentx_cli_risk_from_argv(capability, argv)
             return {
                 "matched": True,
                 "risk": risk,
-                "approval_required": risk == "YELLOW",
+                "approval_required": approval_required,
                 "matched_policy": "agentx_cli_capability",
                 "tool": None,
                 "tool_args": _agentx_capability_tool_args(capability),
@@ -6872,6 +6940,8 @@ def workflow_run_command(
     workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for command policy resolution and execution."),
     input_items: list[str] = typer.Option(None, "--input", help="Placeholder substitution as KEY=VALUE. May be repeated."),
     execute: bool = typer.Option(False, "--execute", help="Execute eligible GREEN agentx CLI steps. Omit for dry-run."),
+    allow_yellow_gates: bool = typer.Option(False, "--allow-yellow-gates", help="Allow YELLOW workflow gates when --execute is used. Requires --approval-reason."),
+    approval_reason: str | None = typer.Option(None, "--approval-reason", help="Human-readable reason recorded in approval receipts for allowed YELLOW gates."),
     timeout: int = typer.Option(120, "--timeout", min=1, help="Per-command timeout in seconds when --execute is used."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
     output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
@@ -6880,7 +6950,15 @@ def workflow_run_command(
     """Dry-run or execute GREEN-only workflow steps."""
     structured_format = structured_output_format(json_output, output_format)
     parsed_inputs, input_blockers = parse_workflow_inputs(input_items or [])
-    payload = workflow_run_payload(query, workspace=workspace, inputs=parsed_inputs, execute=execute, timeout=timeout)
+    payload = workflow_run_payload(
+        query,
+        workspace=workspace,
+        inputs=parsed_inputs,
+        execute=execute,
+        allow_yellow_gates=allow_yellow_gates,
+        approval_reason=approval_reason,
+        timeout=timeout,
+    )
     if input_blockers:
         payload["ok"] = False
         payload["blockers"] = [*payload.get("blockers", []), *input_blockers]

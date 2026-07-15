@@ -178,7 +178,8 @@ def test_workflow_plan_payload_applies_ace_inputs(tmp_path) -> None:  # noqa: AN
     assert payload["inputs_required"] == []
     assert payload["ready_commands"][0] == "agentx ace-init 2026-07-15-agentx --goal 'Add ACE workflow' --json"  # type: ignore[index]
     assert payload["ready_commands"][-1] == "agentx ace-status 2026-07-15-agentx --json"  # type: ignore[index]
-    assert payload["side_effect_gates"][1]["command"] == "agentx ace-init 2026-07-15-agentx --goal 'Add ACE workflow' --write --json"  # type: ignore[index]
+    gate_commands = {item["command"] for item in payload["side_effect_gates"]}  # type: ignore[index]
+    assert "agentx ace-init 2026-07-15-agentx --goal 'Add ACE workflow' --write --json" in gate_commands
 
 
 def test_workflow_plan_payload_blocks_missing_workflow(tmp_path) -> None:  # noqa: ANN001
@@ -232,6 +233,71 @@ def test_workflow_run_payload_execute_stops_before_yellow_gate(tmp_path, monkeyp
     assert payload["ok"] is False
     assert payload["stopped_at"]["reason"] == "side_effect_gate"  # type: ignore[index]
     assert payload["stopped_at"]["risk"] == "YELLOW"  # type: ignore[index]
+
+
+def test_workflow_run_payload_allow_yellow_requires_reason(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    calls = []
+    monkeypatch.setattr(
+        "agentx.cli.subprocess.run",
+        lambda argv, **kwargs: calls.append(argv) or subprocess.CompletedProcess(argv, 0, stdout="ok", stderr=""),
+    )
+
+    payload = workflow_run_payload(
+        "memory",
+        workspace=tmp_path,
+        inputs={"完成與待辦": "完成 AMH 交接"},
+        execute=True,
+        allow_yellow_gates=True,
+    )
+
+    assert payload["ok"] is False
+    assert payload["stopped_at"] == {"reason": "approval_reason_required"}
+    assert payload["approval_receipts"] == []
+    assert calls == []
+
+
+def test_workflow_run_payload_allow_yellow_executes_with_receipt(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    calls = []
+
+    def fake_run(argv, **kwargs):  # noqa: ANN001, ANN003
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr("agentx.cli.subprocess.run", fake_run)
+
+    payload = workflow_run_payload(
+        "memory",
+        workspace=tmp_path,
+        inputs={"完成與待辦": "完成 AMH 交接"},
+        execute=True,
+        allow_yellow_gates=True,
+        approval_reason="Maki approved workflow memory handoff write",
+    )
+
+    assert payload["ok"] is True
+    assert payload["stopped_at"] is None
+    assert payload["execution_allowed"] is True
+    assert len(payload["executed_steps"]) == 3  # type: ignore[arg-type]
+    assert calls[-1] == [
+        "agentx",
+        "memory-write",
+        "完成 AMH 交接",
+        "--type",
+        "handoff",
+        "--write",
+        "--json",
+    ]
+    assert payload["approval_receipts"] == [  # type: ignore[index]
+        {
+            "step_index": 3,
+            "command": "agentx memory-write '完成 AMH 交接' --type handoff --write --json",
+            "risk": "YELLOW",
+            "approval_mode": "workflow-run",
+            "source": "allow_yellow_gates",
+            "allowed": True,
+            "reason": "Maki approved workflow memory handoff write",
+        }
+    ]
 
 
 def test_workflows_json_outputs_catalog() -> None:
@@ -349,6 +415,26 @@ def test_workflow_run_fail_on_blocker_exits_nonzero() -> None:
     assert result.exit_code == 1
     payload = json.loads(result.output)
     assert payload["blockers"] == ["missing_inputs"]
+
+
+def test_workflow_run_cli_allow_yellow_requires_reason() -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-run",
+            "memory",
+            "--input",
+            "完成與待辦=完成 AMH 交接",
+            "--execute",
+            "--allow-yellow-gates",
+            "--json",
+            "--fail-on-blocker",
+        ],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["stopped_at"] == {"reason": "approval_reason_required"}
 
 
 def test_workflows_plain_outputs_table() -> None:

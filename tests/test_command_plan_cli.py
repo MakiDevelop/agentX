@@ -101,6 +101,22 @@ def test_command_plan_payload_includes_agentx_infra_capability_metadata(tmp_path
     assert payload["tool_args"]["jsonl_event"] == "infra"  # type: ignore[index]
 
 
+def test_command_plan_payload_marks_option_sensitive_agentx_cli_risk(tmp_path) -> None:  # noqa: ANN001
+    memory_preview = command_plan_payload(Settings(workspace=tmp_path), "agentx memory-write 'handoff' --type handoff --json")
+    memory_write = command_plan_payload(Settings(workspace=tmp_path), "agentx memory-write 'handoff' --type handoff --write --json")
+    workflow_preview = command_plan_payload(Settings(workspace=tmp_path), "agentx workflow-run memory --json")
+    workflow_execute = command_plan_payload(Settings(workspace=tmp_path), "agentx workflow-run memory --execute --json")
+
+    assert memory_preview["risk"] == "GREEN"
+    assert memory_preview["approval_required"] is False
+    assert memory_write["risk"] == "YELLOW"
+    assert memory_write["approval_required"] is True
+    assert workflow_preview["risk"] == "GREEN"
+    assert workflow_preview["approval_required"] is False
+    assert workflow_execute["risk"] == "YELLOW"
+    assert workflow_execute["approval_required"] is True
+
+
 def test_command_plan_payload_marks_agentx_agent_run_yellow(tmp_path) -> None:  # noqa: ANN001
     payload = command_plan_payload(
         Settings(workspace=tmp_path),
