@@ -31,6 +31,7 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     monkeypatch.setenv("AGENTX_MEMORY_HALL_TOKEN", "secret-token")
     _git_init(tmp_path)
     (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (tmp_path / "AGENTX.md").write_text("LOCAL_RULE_MARKER", encoding="utf-8")
     (tmp_path / "tracked.py").write_text("print('one')\n", encoding="utf-8")
     subprocess.run(["git", "add", "tracked.py"], cwd=tmp_path, check=True, capture_output=True, text=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True, capture_output=True, text=True)
@@ -58,6 +59,8 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     assert payload["signals"]["denied_approval_count"] == 1  # type: ignore[index]
     assert payload["signals"]["verify_command_count"] == 2  # type: ignore[index]
     assert payload["signals"]["verify_command_plan_count"] == 2  # type: ignore[index]
+    assert payload["signals"]["local_instruction_found_count"] == 1  # type: ignore[index]
+    assert payload["signals"]["local_instruction_selected_file"] == "AGENTX.md"  # type: ignore[index]
     assert payload["status"]["schema"] == "agentx.status.v1"  # type: ignore[index]
     assert payload["tasks"]["schema"] == "agentx.tasks.v1"  # type: ignore[index]
     assert payload["tasks"]["count"] == 1  # type: ignore[index]
@@ -71,6 +74,9 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     diff_paths = {item["path"] for item in payload["diff"]["files"]}  # type: ignore[index]
     assert "tracked.py" in diff_paths
     assert payload["capabilities"]["schema"] == "agentx.capabilities.v1"  # type: ignore[index]
+    assert payload["instructions"]["schema"] == "agentx.local_instructions.v1"  # type: ignore[index]
+    assert payload["instructions"]["selected_file"] == "AGENTX.md"  # type: ignore[index]
+    assert "LOCAL_RULE_MARKER" in payload["instructions"]["context"]  # type: ignore[index]
     assert payload["artifacts"]["schema"] == "agentx.artifacts.v1"  # type: ignore[index]
     assert payload["next"]["schema"] == "agentx.next.v1"  # type: ignore[index]
     assert payload["next"]["recommended_command"] == "agentx approvals latest --denied --json --fail-on-denied"  # type: ignore[index]
@@ -86,6 +92,7 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     assert all(item["schema"] == "agentx.command_plan.v1" for item in payload["verify_command_plans"])  # type: ignore[index]
     assert all(item["allowed"] is True for item in payload["verify_command_plans"])  # type: ignore[index]
     assert "agentx diff --json" in payload["next_commands"]
+    assert "agentx instructions --json" in payload["next_commands"]
     assert "agentx gate --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx review --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker" in payload["next_commands"]
@@ -95,6 +102,7 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
 def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     _git_init(tmp_path)
     (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (tmp_path / "AGENTS.md").write_text("AGENTS_RULE_MARKER", encoding="utf-8")
 
     result = CliRunner().invoke(app, ["inspect", "--workspace", str(tmp_path), "--json"])
 
@@ -106,8 +114,12 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["recommended_kind"] == payload["next"]["recommended_kind"]
     assert payload["recommended_risk"] == payload["next"]["recommended_risk"]
     assert payload["signals"]["verify_command_count"] == len(payload["verify_commands"])
+    assert payload["signals"]["local_instruction_selected_file"] == "AGENTS.md"
     assert payload["status"]["git"]["ok"] is True
     assert payload["diff"]["schema"] == "agentx.diff.v1"
+    assert payload["instructions"]["schema"] == "agentx.local_instructions.v1"
+    assert payload["instructions"]["selected_file"] == "AGENTS.md"
+    assert "AGENTS_RULE_MARKER" in payload["instructions"]["context"]
     assert payload["artifacts"]["schema"] == "agentx.artifacts.v1"
     assert payload["next"]["schema"] == "agentx.next.v1"
     assert payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
@@ -115,6 +127,7 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["verify_command_plans"][0]["schema"] == "agentx.command_plan.v1"
     assert payload["verify_command_plans"][0]["command"] == "uv run ruff check ."
     assert payload["next_commands"][0] == "agentx diff --json"
+    assert "agentx instructions --json" in payload["next_commands"]
     assert "agentx gate --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx review --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker" in payload["next_commands"]
@@ -140,6 +153,7 @@ def test_inspect_plain_outputs_summary(tmp_path) -> None:  # noqa: ANN001
     assert "workspace" in result.output
     assert "ok" in result.output
     assert "diff" in result.output
+    assert "instructions" in result.output
     assert "artifacts" in result.output
     assert "next" in result.output
     assert "verify_commands" in result.output

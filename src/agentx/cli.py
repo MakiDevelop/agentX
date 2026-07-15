@@ -3748,6 +3748,7 @@ def inspect_payload(
         for item in verify_commands
     ]
     artifacts = artifacts_payload(settings, root=".agentx/runs", limit=5)
+    instructions = local_instructions_payload(settings.workspace)
     next_steps = next_payload(
         settings,
         artifacts_root=".agentx/runs",
@@ -3760,6 +3761,8 @@ def inspect_payload(
         {
             "verify_command_count": len(verify_commands),
             "verify_command_plan_count": len(verify_command_plans),
+            "local_instruction_found_count": instructions.get("found_count", 0),
+            "local_instruction_selected_file": instructions.get("selected_file"),
         }
     )
     return {
@@ -3784,12 +3787,14 @@ def inspect_payload(
         "traces": traces_payload(settings, session="latest", limit=20),
         "diff": diff_payload(settings),
         "capabilities": capabilities_payload(),
+        "instructions": instructions,
         "artifacts": artifacts,
         "next": next_steps,
         "verify_commands": verify_commands,
         "verify_command_plans": verify_command_plans,
         "next_commands": [
             "agentx diff --json",
+            "agentx instructions --json",
             "agentx gate --json --fail-on-blocker",
             "agentx review --json --fail-on-blocker",
             "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker",
@@ -3821,6 +3826,7 @@ def print_inspect_payload(
     tasks = dict(payload["tasks"])  # type: ignore[arg-type]
     sessions = dict(payload["sessions"])  # type: ignore[arg-type]
     approvals = dict(payload["approvals"])  # type: ignore[arg-type]
+    instructions = dict(payload["instructions"])  # type: ignore[arg-type]
     artifacts = dict(payload["artifacts"])  # type: ignore[arg-type]
     next_steps = dict(payload["next"])  # type: ignore[arg-type]
     table = Table(title="agentX inspect", show_header=False)
@@ -3847,6 +3853,10 @@ def print_inspect_payload(
     table.add_row(
         "approvals",
         f"ok={approvals.get('ok')} count={approvals.get('count')} denied={approvals.get('denied_count')}",
+    )
+    table.add_row(
+        "instructions",
+        f"found={instructions.get('found_count', 0)} selected={instructions.get('selected_file') or '-'}",
     )
     diff = dict(payload["diff"])  # type: ignore[arg-type]
     table.add_row(

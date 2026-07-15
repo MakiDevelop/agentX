@@ -104,6 +104,7 @@
 - [x] `agentx workflows --json` 的每個 step 會標記 `kind`，且 top-level `agentx` step 會內嵌 `command_plan`，讓 runner 可在執行 recipe 前檢查 policy posture。
 - [x] `agentx workflows --json` 會提供 `Infra preflight` recipe（alias: infra/vps/ssh/deploy），第一步是 `agentx infra resource-bundle --json` 並內嵌 command-plan。
 - [x] `agentx inspect --json` 會內嵌 `verify_command_plans`，把每個預設 verify command 轉成 `agentx.command_plan.v1`，讓 runner 一次取得可執行檢查與 command policy posture。
+- [x] `agentx inspect --json` 會內嵌 `instructions`（`agentx.local_instructions.v1`）與 top-level instruction signals，讓 runner 一次取得 repo-local AGENTX/AGENTS/CLAUDE 規則狀態。
 - [x] `agentx task-update ID STATUS [NOTES] --json` 可更新單一 `.agentx/tasks.json` 任務，回傳 before/after、blockers 與 top-level recommendation，讓 headless runner 可收斂 stale task 或標 blocked。
 - [x] `agentx verify --json` 會提供 top-level `recommended_command` / `recommended_kind` / `recommended_risk`，驗證通過時建議 `agentx review --json`，失敗時建議修驗證 blocker 後重跑 verify。
 - [x] `agentx review --json` 可輸出 deterministic review gate（diff + verify + commit_ready + blockers/warnings + next commands），`--fail-on-blocker` 可讓 CI/wrapper 在未達 commit 條件時 exit 1。
