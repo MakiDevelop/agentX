@@ -43,7 +43,12 @@ from agentx.recovery import RecoveryPlaybook
 from agentx.runtime_prompt import build_agent_system_prompt
 from agentx.session_store import SessionStore
 from agentx.tasks import format_task_list_summary, get_next_task_id, load_tasks, save_tasks
-from agentx.tokens import TokenCounter
+from agentx.tokens import (
+    DEFAULT_TOOL_OUTPUT_TOKEN_BUDGET,
+    TokenCounter,
+    estimate_tokens,
+    truncate_for_context,
+)
 from agentx.tools import ToolRegistry
 
 EDITING_TOOLS = {"edit_file", "write_file", "search_replace", "insert_code", "apply_patch"}
@@ -106,6 +111,8 @@ class AgentSession:
         self.trace = trace
         self.compaction_count = 0
         self.token_counter = TokenCounter()
+        # No single tool result may claim a large share of the window.
+        self.tool_output_token_budget = DEFAULT_TOOL_OUTPUT_TOKEN_BUDGET
         self.plan_only: bool = False
         self._custom_system_prompt = system_prompt
         self._has_completed_planning: bool = False
@@ -1138,6 +1145,29 @@ class AgentSession:
             return InvalidAction.BAD_SCHEMA
 
     def _format_tool_result(self, result: ToolResult) -> str:
+        """Serialise a tool result for the model, bounded to a token budget.
+
+        Several tools return whatever the underlying process printed —
+        run_tests, run_command, run_build_command and the docker_compose_*
+        family have no size limit of their own. Appended whole, a single failing
+        `pytest` run can exhaust an 8k context window and end the session.
+        Truncation keeps both ends, because runners put the summary last.
+        """
+        if result.content and estimate_tokens(result.content) > self.tool_output_token_budget:
+            bounded = truncate_for_context(
+                result.content, token_budget=self.tool_output_token_budget
+            )
+            self._emit_trace(
+                f"tool_output_truncated tool={result.tool} "
+                f"{len(result.content)}->{len(bounded)} chars"
+            )
+            result = ToolResult(
+                tool=result.tool,
+                ok=result.ok,
+                content=bounded,
+                error_type=result.error_type,
+                error_details=result.error_details,
+            )
         return result.model_dump_json()
 
     _FILE_WRITE_TOOLS = {"write_file", "edit_file", "search_replace", "insert_code", "apply_patch"}

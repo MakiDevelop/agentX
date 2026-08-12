@@ -136,3 +136,75 @@ def test_compaction_now_triggers_before_the_limit_is_exceeded() -> None:
 
     assert old_estimate < threshold, "test fixture no longer reproduces the old blind spot"
     assert new_estimate > threshold, "new estimator still under-counts CJK context"
+
+
+# --- bounding tool output -----------------------------------------------------
+
+
+def test_short_output_is_untouched() -> None:
+    from agentx.tokens import truncate_for_context
+
+    text = "5 passed in 0.3s"
+
+    assert truncate_for_context(text) == text
+
+
+def test_long_output_is_bounded_to_the_budget() -> None:
+    from agentx.tokens import truncate_for_context
+
+    text = "\n".join(f"line {i}: pytest output" for i in range(3000))
+
+    bounded = truncate_for_context(text, token_budget=1200)
+
+    # ~74k chars / ~18.5k tokens: more than twice an entire 8,192 window, which
+    # is what a failing pytest run on a medium repo actually looks like.
+    assert estimate_tokens(text) > 15_000, "fixture is not actually large"
+    assert estimate_tokens(bounded) <= 1400, "budget overshoot"
+
+
+def test_truncation_keeps_the_tail_where_the_summary_lives() -> None:
+    """Runners put the verdict last. Head-only truncation would reliably discard
+    the single most useful line while looking like a reasonable cut."""
+    from agentx.tokens import truncate_for_context
+
+    body = "\n".join(f"line {i}: pytest output" for i in range(3000))
+    text = f"{body}\n=== 5 failed, 200 passed ==="
+
+    bounded = truncate_for_context(text, token_budget=1200)
+
+    assert bounded.rstrip().endswith("=== 5 failed, 200 passed ===")
+    assert bounded.startswith("line 0:")
+
+
+def test_truncation_is_announced_not_silent() -> None:
+    """The model must be able to tell 'this is all the output' apart from
+    'there was more output than I am showing you'."""
+    from agentx.tokens import truncate_for_context
+
+    text = "\n".join(f"line {i}" for i in range(5000))
+
+    bounded = truncate_for_context(text, token_budget=200)
+
+    assert "truncated" in bounded
+    assert str(len(text)) in bounded
+
+
+def test_cjk_output_is_bounded_too() -> None:
+    """The character budget is derived through the estimator, so a Chinese tool
+    result is bounded by tokens rather than by a character count that means
+    something different for CJK."""
+    from agentx.tokens import truncate_for_context
+
+    text = "測試失敗：找不到指定的檔案，請確認路徑是否正確。" * 400
+
+    bounded = truncate_for_context(text, token_budget=800)
+
+    assert estimate_tokens(bounded) <= 1000
+
+
+def test_zero_budget_disables_truncation() -> None:
+    from agentx.tokens import truncate_for_context
+
+    text = "x" * 10_000
+
+    assert truncate_for_context(text, token_budget=0) == text

@@ -140,3 +140,60 @@ class TokenCounter:
             "calibration": round(self.calibration, 3),
             "observations": self.observations,
         }
+
+
+#: Default ceiling for a single tool result entering context, in tokens.
+#: Sized against the smallest window agentX targets (8192): one tool result must
+#: never be able to consume a large fraction of the budget on its own.
+DEFAULT_TOOL_OUTPUT_TOKEN_BUDGET = 1200
+
+
+def truncate_for_context(
+    text: str,
+    *,
+    token_budget: int = DEFAULT_TOOL_OUTPUT_TOKEN_BUDGET,
+    head_ratio: float = 0.4,
+) -> str:
+    """Bound a tool result to a token budget, keeping both ends.
+
+    Several tools are unbounded by nature — `run_tests`, `run_command`,
+    `run_build_command` and the docker_compose_* family return however much the
+    underlying process printed. A failing `pytest` on a large repo can be
+    thousands of lines. Appended whole, one such turn exhausts an 8k window and
+    the run is over.
+
+    **Head and tail, not just head.** Test runners and compilers put the summary
+    at the *end* ("5 failed, 200 passed", the final traceback, the linker error).
+    Keeping only the beginning would reliably discard the part that matters most
+    while feeling like a reasonable truncation.
+
+    The marker in the middle is explicit about how much was dropped, so the model
+    can tell the difference between "the command printed this" and "the command
+    printed more than I am showing you".
+    """
+    if token_budget <= 0:
+        return text
+    if estimate_tokens(text) <= token_budget:
+        return text
+
+    # Work back to a character budget through the same estimator, so the bound
+    # holds for CJK output too rather than only for ASCII.
+    density = estimate_tokens(text) / max(1, len(text))
+    char_budget = int(token_budget / max(density, 1e-6))
+    if char_budget >= len(text):
+        return text
+
+    head_chars = max(0, int(char_budget * head_ratio))
+    tail_chars = max(0, char_budget - head_chars)
+    dropped = len(text) - head_chars - tail_chars
+    if dropped <= 0:
+        return text
+
+    marker = (
+        f"\n\n... [truncated {dropped} of {len(text)} characters to fit the context "
+        f"budget; the start and end are shown. Re-run with a narrower query, a "
+        f"path filter, or a smaller limit to see the middle.] ...\n\n"
+    )
+    head = text[:head_chars]
+    tail = text[len(text) - tail_chars :] if tail_chars else ""
+    return f"{head}{marker}{tail}"
