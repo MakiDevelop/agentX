@@ -103,10 +103,14 @@ def main() -> None:
         file=sys.stderr,
     )
     print(
-        "      the lockfile must have been produced with  UV_EXCLUDE_NEWER=2d uv lock",
+        "      bump [tool.uv] exclude-newer in pyproject.toml to ~2 days ago,",
         file=sys.stderr,
     )
-    print("      (CI cannot enforce this — it only verifies the frozen lockfile)", file=sys.stderr)
+    print(
+        "      then `uv lock`. Never use the relative form (UV_EXCLUDE_NEWER=2d):",
+        file=sys.stderr,
+    )
+    print("      it writes a drifting timestamp and breaks `uv lock --check`.", file=sys.stderr)
     print(
         "  - review any new packages that may execute code at build/install time", file=sys.stderr
     )

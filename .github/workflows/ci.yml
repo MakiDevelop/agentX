@@ -8,24 +8,19 @@ on:
 
 env:
   UV_PYTHON_PREFERENCE: only-managed
-  # NOTE: do NOT set UV_EXCLUDE_NEWER at workflow level.
+  # NOTE: do NOT set UV_EXCLUDE_NEWER here (or anywhere) as a *relative* span.
   #
-  # It reads as a resolver setting, so uv treats its presence as a change to how
-  # the lockfile was produced and re-resolves ("Resolving despite existing
-  # lockfile due to addition of global exclude newer ..."). Every `--frozen` /
-  # `--check` step below then fails with "lockfile needs to be updated", which is
-  # exactly what happened: CI was red on every push from 2026-07-15 onward and
-  # died at ~13s, so the test suite never ran.
+  # uv reads it as a resolver setting. The relative form ("2d") resolves to a
+  # fresh absolute timestamp on every invocation, so uv sees the lockfile as
+  # produced under different settings and re-resolves ("Resolving despite
+  # existing lockfile due to addition of global exclude newer ..."). Every
+  # `--frozen` / `--check` step below then fails with "lockfile needs to be
+  # updated" — which is exactly what happened: CI was red on every push from
+  # 2026-07-15 onward, died at ~13s, and never reached the test suite.
   #
-  # The 2-day age gate (pi's min-release-age=2 equivalent) belongs at *resolution*
-  # time, not verification time. CI never resolves — it only verifies an
-  # already-committed lockfile. The gate is applied by whoever runs `uv lock`:
-  #
-  #     UV_EXCLUDE_NEWER=2d uv lock
-  #
-  # enforced socially by scripts/check-lockfile-commit.py, which blocks any commit
-  # touching uv.lock unless AGENTX_ALLOW_LOCKFILE_CHANGE=1 is set deliberately.
-  # See docs/BORROW-FROM-PI.md.
+  # The age gate now lives in pyproject.toml [tool.uv] as an ABSOLUTE cutoff.
+  # It is recorded in uv.lock [options], so `uv lock` and `uv lock --check` read
+  # the same value and agree. See docs/BORROW-FROM-PI.md.
 
 jobs:
   lint-and-supply-chain:
@@ -66,9 +61,18 @@ jobs:
       - name: Vulnerability audit (pip-audit on the locked tree)
         # Equivalent to the "pip-audit / safety check" layer. We pin the tool via
         # uvx --from for determinism (no new permanent dev dep yet). Audit
-        # findings are currently blocking for supply-chain changes; add
-        # --ignore-vuln or a baseline file only with explicit review.
-        run: uvx --from 'pip-audit==2.4.0' pip-audit --requirement <(uv export --format requirements-txt --frozen --no-dev)
+        # findings are blocking; add --ignore-vuln or a baseline file only with
+        # explicit review.
+        #
+        # pip-audit>=2.9: 2.4.0 (2022) imports `cyclonedx.parser`, which modern
+        # cyclonedx-python-lib no longer provides, so it died with
+        # ModuleNotFoundError before auditing anything. uvx pins the tool but not
+        # its transitive deps, so an "exact pin" can still rot.
+        #
+        # --no-emit-project: the export otherwise includes agentX itself as an
+        # editable requirement, which pip-audit cannot hash ("cannot be installed
+        # when requiring hashes, because there is no single file to hash").
+        run: uvx --from 'pip-audit==2.9.0' pip-audit --requirement <(uv export --format requirements-txt --frozen --no-dev --no-emit-project)
 
       # === Existing hygiene ===
 
