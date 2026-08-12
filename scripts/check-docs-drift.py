@@ -18,14 +18,12 @@ Checks:
   1. Every `agentx <command>` in the CLI appears in README.md.
   2. README does not document commands that do not exist.
 
-Run: python scripts/check-docs-drift.py
+Run: uv run python scripts/check-docs-drift.py
 """
 
 from __future__ import annotations
 
-import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -37,40 +35,24 @@ UNDOCUMENTED_ALLOWLIST: dict[str, str] = {}
 
 
 def cli_commands() -> list[str]:
-    """Ask the CLI itself which commands exist."""
-    # Inherit the environment rather than constructing a minimal one: the
-    # interpreter needs its venv (typer, rich, pydantic) to import agentx at all.
-    # Only the variables that change how the help text is *rendered* are pinned,
-    # so the output parses identically everywhere. (An earlier version built the
-    # env from scratch and CI failed with "could not enumerate CLI commands".)
-    env = dict(os.environ)
-    env.update({"NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "200"})
-    env["PYTHONPATH"] = os.pathsep.join([str(REPO_ROOT / "src"), env.get("PYTHONPATH", "")]).rstrip(
-        os.pathsep
-    )
+    """Ask Click for the command list — do not parse `--help` output.
 
-    result = subprocess.run(
-        [sys.executable, "-m", "agentx.cli", "--help"],
-        capture_output=True,
-        text=True,
-        check=False,
-        cwd=REPO_ROOT,
-        env=env,
-    )
-    output = result.stdout or result.stderr
-    if result.returncode != 0 and not output.strip():
-        print(f"`agentx --help` failed (exit {result.returncode})", file=sys.stderr)
-    commands: list[str] = []
-    in_block = False
-    for line in output.splitlines():
-        if "Commands" in line:
-            in_block = True
-            continue
-        if in_block:
-            match = re.match(r"^[\u2502|]?\s*([a-z][a-z0-9-]*)\s", line)
-            if match:
-                commands.append(match.group(1))
-    return sorted(set(commands))
+    An earlier version scraped `agentx --help`. That broke in CI: the runner
+    wrapped the help table differently, so the line regex matched words out of
+    command *descriptions* and reported phantom commands like "agentx or" and
+    "agentx plus". Parsing human-formatted output is the exact failure mode this
+    script exists to prevent, so it now reads the Typer app directly.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "src"))
+    from typer.main import get_command
+
+    from agentx.cli import app
+
+    command = get_command(app)
+    commands = getattr(command, "commands", None)
+    if not commands:
+        return []
+    return sorted(commands)
 
 
 def main() -> int:
