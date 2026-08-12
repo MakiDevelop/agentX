@@ -807,3 +807,41 @@ def test_doctor_checks_ripgrep() -> None:
 
     source = inspect.getsource(doctor.run_static_doctor)
     assert '"rg"' in source
+
+
+def test_search_tools_ask_ripgrep_for_deterministic_ordering(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every rg invocation must pass --sort path.
+
+    ripgrep searches in parallel and does not order its output unless asked.
+    Measured directly: 60 matching files, 12 identical queries, 3 distinct first
+    lines. Both tools truncate to a limit, so unordered output means the model
+    sees an arbitrary subset of the repo and cannot reproduce its own earlier
+    reasoning. This surfaced as a CI failure that would not reproduce on macOS.
+
+    This asserts the flag rather than comparing repeated outputs on purpose: the
+    underlying non-determinism is probabilistic (~10 of 12 runs agreed even
+    without the flag), so an output-comparison test would only catch the
+    regression some of the time — a flaky test, not a guard.
+    """
+    from agentx.tools import _helpers, builtin
+
+    seen: list[list[str]] = []
+
+    def _capture(cmd: list[str], cwd: Path, timeout: float = 20.0) -> tuple[int, str]:
+        seen.append(list(cmd))
+        return 0, ""
+
+    monkeypatch.setattr(_helpers, "run_subprocess", _capture)
+    monkeypatch.setattr(builtin, "run_subprocess", _capture)
+
+    builtin.SearchTextTool(tmp_path).run({"pattern": "needle"})
+    builtin.FindFilesTool(tmp_path).run({"keyword": "needle"})
+    builtin.LocateTopicTool(tmp_path).run({"topic": "needle"})
+
+    rg_calls = [cmd for cmd in seen if cmd and cmd[0] == "rg"]
+    assert rg_calls, "expected at least one ripgrep invocation"
+    for cmd in rg_calls:
+        assert "--sort" in cmd, f"rg call without --sort: {cmd}"
+        assert cmd[cmd.index("--sort") + 1] == "path", f"rg call not sorted by path: {cmd}"

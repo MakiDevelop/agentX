@@ -221,7 +221,12 @@ class SearchTextTool(_WorkspaceTool):
         limit = int(args.get("limit", 100))
         root = resolve_inside_workspace(self.workspace, path)
         _, output = run_subprocess(
-            ["rg", "--line-number", "--color", "never", pattern, str(root)],
+            # --sort path: rg searches in parallel and does NOT order its output
+            # by default, so the same query returns different lines on different
+            # machines and runs. Anything the model reads must be reproducible,
+            # and `limit` below truncates — without sorting it would keep an
+            # arbitrary subset.
+            ["rg", "--line-number", "--color", "never", "--sort", "path", pattern, str(root)],
             cwd=self.workspace,
         )
         return "\n".join(output.splitlines()[:limit])
@@ -298,6 +303,9 @@ class FindFilesTool(_WorkspaceTool):
             "never",
             "--fixed-strings",
             "--ignore-case",
+            # Deterministic output; see SearchTextTool for why this matters.
+            "--sort",
+            "path",
         ]
         for skipped in sorted(SKIPPED_DIRS):
             cmd.extend(["--glob", f"!{skipped}/**"])
