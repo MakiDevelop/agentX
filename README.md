@@ -795,6 +795,42 @@ denylist 只會製造安全幻覺，因此已於 2026-08 移除。相關保證�
 
 `objective-gate` 與 `command-parity` 都是**唯讀**的，可以安全地放進 CI 或 preflight。
 
+## 本地模型可靠性基準
+
+agentX 的價值主張是「弱模型也能可靠做事」，所以這件事必須可量測，
+不能靠感覺。`scripts/run_local_benchmark.py` 對真實的本地 Ollama 模型
+量測它撐不撐得住 agentX 的協定：
+
+```bash
+uv run python scripts/run_local_benchmark.py --model gemma4:31b
+uv run python scripts/run_local_benchmark.py --model qwen3.6:35b --json report.json
+```
+
+量四件事：
+- `json_compliance` — 有多少輪真的解析成一個合法 action。整個協定建立在
+  「每輪剛好一個 JSON 物件」上，這是地板。
+- `needed_repair` — 有多少輪是靠 json 抽取救回來的。這是「原始合規率其實
+  比表面數字差」的領先指標。
+- `tool_exists` / `expectation_match` — 有沒有叫到真實存在、而且是這個情境
+  該用的工具。
+- `recovery_after_correction` — 一輪壞掉、被糾正之後，下一輪能不能回到正軌。
+  不能恢復的模型會把一次失誤變成卡死。
+
+**這是儀器，不是及格線**，刻意不設 pass/fail。用法是改 prompt 或 loop
+前後各跑一次比較。
+
+實測案例（gemma4:31b，把工具清單從手寫改成由 ToolRegistry 生成）：
+
+| | expectation_match |
+|---|---|
+| 手寫清單（漏教 11 個工具） | 0.636 |
+| 從 registry 生成 | 0.818 |
+
+值得記下來的是：**前 6 個 case 兩邊都是 1.000**。模型光靠 `list_files`、
+`read_file`、`write_file` 這些名字就猜對了，即使 prompt 根本沒教。
+只有在測到「名字猜不出來」的工具（`docker_compose_ps`、`web_fetch`）時，
+兩份 prompt 才分得出高下。**測不出失敗的基準，什麼也沒告訴你。**
+
 ## 開發驗證
 
 ```bash
