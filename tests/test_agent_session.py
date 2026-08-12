@@ -1,6 +1,7 @@
 import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -938,3 +939,48 @@ def test_explicit_run_tests_call_in_flow(tmp_path: Path) -> None:
     assert (
         "done" in result or "explicit" in result
     )  # the final content from the padded responses (flow may surface a generic final)
+
+
+# --- termination classification ----------------------------------------------
+
+
+def test_step_exhaustion_after_real_work_does_not_blame_the_model(tmp_path) -> None:  # noqa: ANN001
+    """max_steps exhaustion and "model cannot emit JSON" are different failures
+    with opposite remedies. The loop used to report the second for both, telling
+    the operator to switch models when the real fix was raising max_steps."""
+    from agentx.loop import AgentSession
+
+    session = AgentSession.__new__(AgentSession)
+    session.settings = SimpleNamespace(max_steps=8)
+    session.valid_action_count = 7
+    session.invalid_action_count = 0
+    session.tool_call_count = 5
+    session.tasks = [{"id": 1, "description": "重構 loop", "status": "done"}]
+    session._file_ops = {"src/agentx/loop.py": {"write"}}
+
+    message = session._describe_step_exhaustion()
+
+    assert "max_steps" in message
+    assert "不是模型格式錯誤" in message
+    assert "換一個更擅長 tool calling 的模型" not in message
+    # Progress must survive, so the work can be resumed rather than redone.
+    assert "重構 loop" in message
+    assert "src/agentx/loop.py" in message
+
+
+def test_no_valid_action_still_recommends_a_different_model(tmp_path) -> None:  # noqa: ANN001
+    """The original message was right for this case; keep it."""
+    from agentx.loop import AgentSession
+
+    session = AgentSession.__new__(AgentSession)
+    session.settings = SimpleNamespace(max_steps=8)
+    session.valid_action_count = 0
+    session.invalid_action_count = 8
+    session.tool_call_count = 0
+    session.tasks = []
+    session._file_ops = {}
+
+    message = session._describe_step_exhaustion()
+
+    assert "沒有輸出可用的 JSON action" in message
+    assert "更擅長 tool calling 的模型" in message

@@ -113,6 +113,10 @@ class AgentSession:
         self.token_counter = TokenCounter()
         # No single tool result may claim a large share of the window.
         self.tool_output_token_budget = DEFAULT_TOOL_OUTPUT_TOKEN_BUDGET
+        # Distinguishes "ran out of steps while working" from "never produced a
+        # usable turn" — two failures with opposite remedies.
+        self.valid_action_count = 0
+        self.invalid_action_count = 0
         self.plan_only: bool = False
         self._custom_system_prompt = system_prompt
         self._has_completed_planning: bool = False
@@ -513,6 +517,7 @@ class AgentSession:
                 )
             action = self._parse_action(raw)
             if isinstance(action, InvalidAction):
+                self.invalid_action_count += 1
                 self.messages.append({"role": "assistant", "content": raw})
                 self.messages.append(
                     {
@@ -526,6 +531,8 @@ class AgentSession:
                     }
                 )
                 continue
+            self.valid_action_count += 1
+
             if isinstance(action, FinalAnswer):
                 failing = self._unresolved_failing_tools()
                 if failing:
@@ -819,8 +826,10 @@ class AgentSession:
             action = self._parse_action(raw)
             if isinstance(action, FinalAnswer):
                 return self._handle_final_answer(action.content, effective_plan_only)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Not silent: if the wrap-up turn itself failed, that is part of the
+            # story of why this run produced nothing.
+            self._emit_trace(f"final_summary_attempt_failed {type(exc).__name__}: {exc}")
         self.last_termination = "max_steps_exceeded"
         self._persist_runtime_state()
         if self.hooks:
@@ -833,7 +842,7 @@ class AgentSession:
                     error_count=len(self.error_history),
                 ),
             )
-        return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
+        return self._describe_step_exhaustion()
 
     def clear(self) -> None:
         """完整重置（包含 tasks）。僅供需要完全重置的場合使用。"""
@@ -1101,6 +1110,50 @@ class AgentSession:
             )
 
         return f"壓縮完成：{result} 目前約 {self.context_tokens_estimate} tokens。"
+
+    def _describe_step_exhaustion(self) -> str:
+        """Explain why the run stopped, based on what actually happened.
+
+        This used to return a single fixed string —
+        "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長
+        tool calling 的模型。" — regardless of cause. That message is only
+        correct for one of the two ways to reach here, and its advice is
+        actively wrong for the other:
+
+        - The model never produced a usable turn. Switching models is sound.
+        - The model worked fine and simply ran out of steps (max_steps defaults
+          to 8, which a read → search → edit → verify task exhausts). Telling
+          the operator their model is bad at tool calling sends them to fix
+          something that was never broken, while the real fix — raise max_steps
+          or narrow the task — goes unmentioned.
+
+        Progress made is included either way, so a runner can resume instead of
+        starting over.
+        """
+        steps = self.settings.max_steps
+        done = [t for t in self.tasks if str(t.get("status")) == "done"]
+        modified = sorted(path for path, ops in self._file_ops.items() if "write" in ops)
+
+        if self.valid_action_count == 0:
+            lines = [
+                f"模型在 {steps} 個步驟內都沒有輸出可用的 JSON action"
+                f"（{self.invalid_action_count} 次無效回覆），已停止。",
+                "建議：改用 /mode chat，或換一個更擅長 tool calling 的模型。",
+            ]
+        else:
+            lines = [
+                f"步驟預算用盡（max_steps={steps}）。"
+                f"模型完成了 {self.valid_action_count} 個有效步驟"
+                f"（其中 {self.tool_call_count} 次工具呼叫），但尚未給出最終答案。",
+                "這不是模型格式錯誤，是這個任務需要的步驟比預算多。",
+                f"建議：提高 max_steps（目前 {steps}）、把任務拆小，或用 /resume 接續。",
+            ]
+
+        if done:
+            lines.append(f"已完成的任務：{', '.join(str(t.get('description', '')) for t in done)}")
+        if modified:
+            lines.append(f"已修改的檔案：{', '.join(modified)}")
+        return "\n".join(lines)
 
     def _handle_final_answer(self, content: str, plan_only: bool) -> str:
         self.messages.append({"role": "assistant", "content": content})
