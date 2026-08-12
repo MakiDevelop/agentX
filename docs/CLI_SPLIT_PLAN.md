@@ -11,7 +11,9 @@
 |---|---|
 | session 開始（ruff format 前） | 10,761 |
 | ruff format 後 | 12,167 |
-| 拆出 cli_git.py 後 | 11,681 |
+| 拆出 cli_git.py | 11,681 |
+| 拆出 cli_output.py + cli_verify.py | 11,359 |
+| 拆出 cli_artifacts.py | **10,796** |
 
 `shell()` 單一函式的 cyclomatic complexity 是 **160**（ruff C901，已標 noqa
 並註明「不要再往裡面加分支」）。
@@ -34,8 +36,18 @@ uv run python scripts/find_closed_groups.py --prefix workflow
 ## 已完成
 
 - **cli_git.py**（12 函式 / 454 行）—— git / diff / patch payload。
-  0 external，原本連續佔 3306-3793 行。
-  cli.py 重新 export 三個對外使用的 payload 函式；私有 helper 留在模組內。
+  原本連續佔 3306-3793 行。
+- **cli_output.py**（4 名字 / 70 行）—— `console` 與 structured payload 輸出。
+  只有 12 行，卻是**最關鍵的一刀**：它被 cli.py 裡 71 個函式使用，不先拆掉
+  它，任何其他群組搬出去都會 import 回 cli.py、也就都不封閉。
+  **先拆共用接縫，再拆家族。**
+- **cli_verify.py**（10 函式 / 316 行）—— verify / review / commit-plan。
+  拆掉 cli_output 接縫之後才變成封閉。
+- **cli_artifacts.py**（30 函式 / 482 行）—— artifacts / sessions / traces /
+  approvals，唯讀可觀測性介面。
+
+四個模組都通過「不得 import 回 agentx.cli」的 AST 檢查
+（`tests/test_cli_module_size.py`）。
 
 ## 建議順序
 
@@ -43,13 +55,11 @@ uv run python scripts/find_closed_groups.py --prefix workflow
 
 | 順位 | 群組 | 函式 | 行數 | 狀態 |
 |---|---|---|---|---|
-| 1 | `commit` + `review` | 11 | 387 | 封閉，彼此共用 4 個函式，一起搬 |
-| 2 | `trace` + `approval` + `config` + `infra` + `session` | 10 | 230 | 全封閉，小而獨立，可合併成一個模組 |
-| 3 | `verify` | 4 | 101 | 封閉 |
-| 4 | `artifact` → `doctor` → `gate` | 23 / 26 / 32 | 332 / 400 / 673 | **同一個 cluster**（彼此共用 22-25 個函式），必須當一組處理，不是三刀 |
-| 5 | `task` / `objective` / `handoff` | — | — | 只差幾個 module-level 常數（`TASK_STATUS_FILTERS`、`OBJECTIVE_REQUIRED_COMMANDS`、`HEADLESS_PAYLOAD_SCHEMA_VERSION`），把常數一起搬即可封閉 |
-| 6 | `workflow` / `inspect` / `next` / `reliability` | 44-99 | 1000-2900 | 互相共用 44-60 個函式，是最大的糾纏團。要先把 `command_plan` / `artifacts` / `inspect` 的接縫抽成獨立模組 |
-| 7 | `shell()` 本體 | 1 | 1,254 | 最後處理。所有 slash handler 都是 closure over local state，`ShellState` 目前不是單一真相來源（Codex P1，見舊 handoff） |
+| 1 | `doctor` + `gate` | ~28 | ~500 | 封閉（重跑分析器確認），彼此共用 25 個函式，一起搬 |
+| 2 | `trace` + `approval` + `config` + `infra` + `session` 殘餘 | ~5 | ~100 | 大部分已隨 cli_artifacts 搬走，剩下的可併入既有模組 |
+| 3 | `task` / `objective` / `handoff` | — | — | 只差幾個 module-level 常數（`TASK_STATUS_FILTERS`、`OBJECTIVE_REQUIRED_COMMANDS`、`HEADLESS_PAYLOAD_SCHEMA_VERSION`），把常數一起搬即可封閉 |
+| 4 | `workflow` / `inspect` / `next` / `reliability` | 44-92 | 1000-2700 | 互相共用 44-59 個函式，是最大的糾纏團。要先把 `command_plan` / `inspect` 的接縫抽成獨立模組 —— 作法參考 cli_output.py 那一刀 |
+| 5 | `shell()` 本體 | 1 | 1,254 | 最後處理。所有 slash handler 都是 closure over local state，`ShellState` 目前不是單一真相來源（Codex P1，見舊 handoff） |
 
 ## 每一刀的作法
 
