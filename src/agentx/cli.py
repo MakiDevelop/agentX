@@ -7988,7 +7988,7 @@ def run_print_prompt(  # noqa: C901  (complexity 30; headless entrypoint, split 
         current_tasks = load_tasks(settings.workspace)
         task_summary = format_task_list_summary(current_tasks)
         system_prompt = build_headless_agent_system_prompt(
-            settings.persona, task_summary, model=settings.model
+            settings.persona, task_summary, model=settings.model, tools=tools
         )
 
         agent_prompt = prompt

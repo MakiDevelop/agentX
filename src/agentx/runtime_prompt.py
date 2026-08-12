@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from agentx.persona import persona_prompt
-from agentx.tools import ToolRegistry, tool_prompt_line
+from agentx.tools import ToolRegistry
 
 
 def build_chat_system_prompt(
@@ -85,37 +85,166 @@ Examples:
 - Final answer:    {"type":"final","content":"已完成修改。"}"""
 
 
-def _base_tools_section() -> str:
-    return """Available Tools (use via {"type":"tool_call","tool":"<name>","args":{...}}):
-- list_files: {"path":"."} — list workspace files
-- read_file: {"path":"file.py"} — read file content
-- find_files: {"keyword":"topic","path":"."} — find relevant files by path/name and content, with /read suggestions
-- locate_topic: {"topic":"approval policy","path":"."} — rank likely files for a topic, with /read suggestions
-- infrastructure_context: {"map":"all|quick|project|resource|home|vps|resource-bundle"} — read Maki's project/resource maps; home and vps extract the dedicated resource-map sections as read-only context before infra planning; resource-bundle loads resource + home + vps for mixed requests like 資源地圖+家庭AI設施/VPS地圖; this does not enable SSH/deploy
-- analyze_intent: {"text":"user request"} — convert a vague request into a deterministic goal/risk/inspection/verification brief before execution; SSH/deploy/VPS requests include a runtime state pre-flight template
-- plan_task: {"text":"user request"} — produce a read-only checklist and suggested /task add commands for a request; does not mutate tasks. Use slash /plan-task --apply TEXT only when the user wants to write the checklist into the task list.
-- search_text: {"pattern":"keyword","path":"."} — search in files
-- git_status: {} — show git status
-- git_branch: {} — show local branches
-- git_log: {"limit":10} — show recent commits
-- git_show: {"rev":"HEAD"} — show one revision summary/stat
-- git_diff: {} — show git diff
-- git_stage: {"paths":["file.py"]} — stage explicit files only; rejects broad paths
-- git_unstage: {"paths":["file.py"]} — unstage explicit files while keeping worktree changes
-- search_replace: {"path":"file.py","old_string":"original text","new_string":"replacement text"} — edit existing file (small changes only)
-- insert_code: {"path":"file.py","insert_after":"marker line","content":"new code"} — insert after marker
-- run_tests: {} — run project tests
-- apply_patch: {"patch":"..."} — apply unified diff (last resort)
+#: Pseudo-tools handled by AgentSession itself (see loop._handle_task_tool),
+#: not registered in the ToolRegistry. They must still be taught to the model,
+#: so they are declared here — the one hand-maintained list that remains, kept
+#: honest by tests/test_runtime_prompt.py.
+LOOP_PSEUDO_TOOLS: tuple[tuple[str, str, str], ...] = (
+    ("task_add", 'description, notes=""', "add a task to the working checklist"),
+    ("task_update", 'task_id, status="done", notes=""', "update a task's status"),
+    ("task_list", 'status=""', "show the current checklist"),
+)
 
-IMPORTANT: When creating a NEW file, always use write_file. Never use apply_patch or search_replace for new files.
-- task_add: {"description":"task"} — add task to list
-- task_update: {"task_id":1,"status":"done"} — update task status
-- task_list: {} — show all tasks
-- memory_search: {"query":"keyword", "namespace":"project:xxx"} — search Memory Hall (ACA namespaces supported)
-- memory_write: {"content":"...", "namespace":"project:xxx", "tier":"llm_derived|human_confirmed|raw_source", "memory_type":"lesson|decision|fact|..."} — write to Memory Hall. **ACA 治理**：使用 tier 標記來源（llm_derived 為模型產生，human_confirmed 需人類確認）。Anti-Ouroboros 規則：llm_derived 記憶不可在無 human intervention 下 supersede 另一 llm_derived 記憶。優先使用 write_aca 路徑。
-- memory_tier_upgrade: {"memory_id": "...", "new_tier": "human_confirmed", "confirmed_by": "human:maki", "evidence_ids": [...] } — ACA L2 操作，將 llm_derived 升級為 human_confirmed（需人類確認）。
-- memory_audit: {"memory_id": "..."} — 讀取記憶的 append-only 治理事件紀錄（ACA 相容）。
-目前 memory_backend = memhall（相容舊後端）或 amh（官方 Agent Memory Hall 參考實作，完整 ACA L1-3 治理）。設定可透過 .agentx/config.toml 或 AGENTX_MEMORY_BACKEND 切換。"""
+#: Guidance that cannot be derived from tool metadata alone.
+#
+# Phrased without naming specific tools: this text ships with every prompt,
+# including ones rendered from a restricted registry, and must not advertise a
+# tool the caller did not register.
+_TOOL_USAGE_NOTES = """Notes:
+- Call only tools listed above, with exactly the arguments in their signature.
+- Creating a file and editing a file are different tools. An edit needs the file
+  (and the exact text being replaced) to already exist.
+- Prefer the narrowest tool that does the job, and locate before guessing.
+- YELLOW tools go through an approval gate and the call may be refused. That is
+  a normal outcome, not an error to retry blindly — read the refusal and adapt."""
+
+
+def _declared_builtin_tools() -> list[tuple[str, str, str, str, list[str]]]:
+    """Read (name, signature, description, risk, aliases) off the tool classes.
+
+    Deliberately introspects the *classes* rather than instances, so the default
+    prompt needs no workspace or Memory Hall client and still cannot drift from
+    what `builtin_tools()` will actually register.
+    """
+    import inspect
+
+    from agentx.tools import builtin
+
+    found: list[tuple[str, str, str, str, list[str]]] = []
+    for obj in vars(builtin).values():
+        if not inspect.isclass(obj):
+            continue
+        name = getattr(obj, "name", None)
+        risk = getattr(obj, "risk", None)
+        if not isinstance(name, str) or risk is None:
+            continue
+        found.append(
+            (
+                name,
+                str(getattr(obj, "signature", "") or ""),
+                str(getattr(obj, "description", "") or ""),
+                getattr(risk, "value", str(risk)),
+                list(getattr(obj, "aliases", []) or []),
+            )
+        )
+    return found
+
+
+#: Rendered when a registry's shape cannot be read. Loud on purpose: the model
+#: sees it, and so does anyone reading a captured prompt. The failure mode this
+#: replaces was silent substitution of a stale hand-written list.
+UNREADABLE_TOOLS_MARKER = "(tool list unavailable: registry did not expose its tools)"
+
+
+def _tool_rows(tools: ToolRegistry | None) -> list[tuple[str, str, str, str, list[str]]] | None:
+    """Tool metadata rows, or None if `tools` exposes no readable interface."""
+    if tools is None:
+        return _declared_builtin_tools()
+
+    describe = getattr(tools, "describe_tool_infos", None)
+    if callable(describe):
+        return [
+            (
+                str(info["name"]),
+                str(info.get("signature", "") or ""),
+                str(info.get("description", "") or ""),
+                str(info.get("risk", "")),
+                list(info.get("aliases") or []),  # type: ignore[arg-type]
+            )
+            for info in describe()
+        ]
+
+    # Minimal / duck-typed registries (notably test doubles) may only expose
+    # tools(). Read the same attributes straight off each tool.
+    #
+    # If neither interface is present we return None and the caller renders
+    # UNREADABLE_TOOLS_MARKER. Deliberately *not* a fallback to a hand-written
+    # list: the previous implementation wrapped this area in
+    # `except Exception: return <static list>`, which is exactly how the prompt
+    # drifted out of sync with the registry without anyone noticing. Failing
+    # visibly is the point.
+    listing = getattr(tools, "tools", None)
+    if not callable(listing):
+        return None
+    rows: list[tuple[str, str, str, str, list[str]]] = []
+    for tool in listing():
+        risk = getattr(tool, "risk", "")
+        rows.append(
+            (
+                str(getattr(tool, "name", "")),
+                str(getattr(tool, "signature", "") or ""),
+                str(getattr(tool, "description", "") or ""),
+                str(getattr(risk, "value", risk)),
+                list(getattr(tool, "aliases", []) or []),
+            )
+        )
+    return rows
+
+
+def build_tools_section(tools: ToolRegistry | None = None) -> str:
+    """Render the Available Tools block from tool metadata.
+
+    This used to be a hand-written list, and it had drifted: 11 registered tools
+    were never taught to the model (write_file, run_command, web_fetch,
+    edit_file, git_push, run_build_command and all five docker_compose_* tools),
+    while the prose told the model to "always use write_file" — a tool the list
+    never defined. A weak local model cannot call what it was never shown, and
+    reliably malforms calls it was told to make but never given a signature for.
+
+    Generating from metadata makes that class of bug impossible rather than
+    merely fixed. Risk tiers are shown because approval is part of the calling
+    contract: the model needs to know a YELLOW call can come back refused.
+    """
+    rows = _tool_rows(tools)
+    if rows is None:
+        return UNREADABLE_TOOLS_MARKER
+    if not rows and tools is not None:
+        return "(no tools registered)"
+
+    def render(name: str, signature: str, description: str, aliases: list[str]) -> str:
+        head = f"{name}({signature})" if signature else f"{name}()"
+        line = f"- {head} — {description}"
+        if aliases:
+            line += f"  [also accepts: {', '.join(aliases)}]"
+        return line
+
+    by_risk: dict[str, list[str]] = {}
+    for name, signature, description, risk, aliases in sorted(rows):
+        by_risk.setdefault(risk, []).append(render(name, signature, description, aliases))
+
+    parts = [
+        'Available Tools (call via {"type":"tool_call","tool":"<name>","args":{...}}):',
+    ]
+    if by_risk.get("GREEN"):
+        parts.append("\nGREEN — runs immediately, no approval needed:")
+        parts.extend(by_risk["GREEN"])
+    if by_risk.get("YELLOW"):
+        parts.append("\nYELLOW — requires approval; the call may be refused:")
+        parts.extend(by_risk["YELLOW"])
+    for risk, lines in sorted(by_risk.items()):
+        if risk in {"GREEN", "YELLOW"}:
+            continue
+        parts.append(f"\n{risk}:")
+        parts.extend(lines)
+
+    parts.append("\nChecklist (handled by the agent loop, always available):")
+    parts.extend(
+        f"- {name}({signature}) — {description}"
+        for name, signature, description in LOOP_PSEUDO_TOOLS
+    )
+    parts.append("")
+    parts.append(_TOOL_USAGE_NOTES)
+    return "\n".join(parts)
 
 
 def _base_capabilities_limits() -> str:
@@ -255,6 +384,7 @@ def build_headless_agent_system_prompt(
     persona: str = "default",
     current_task_summary: str = "",
     model: str | None = None,
+    tools: ToolRegistry | None = None,
 ) -> str:
     """
     Headless 專屬的 Agent System Prompt（Phase C 統一後版本）。
@@ -274,7 +404,7 @@ Persona:
 
 {_base_output_rules()}
 
-{_base_tools_section()}
+{build_tools_section(tools)}
   （系統會在 prompt 開頭自動提供 Current Task List Status，你可以直接參考，無需每次都呼叫 task_list）
 
 Current Task List Status:
@@ -298,14 +428,7 @@ def build_agent_system_prompt(
     model: str | None = None,
 ) -> str:
     """互動式 Agent System Prompt（Phase C 統一後版本 + 安全分支動態工具支援）"""
-    if tools is None:
-        tool_section = _base_tools_section()
-    else:
-        try:
-            lines = [tool_prompt_line(tool) for tool in tools.tools()]
-            tool_section = "\n".join(lines) if lines else "(no tools registered)"
-        except Exception:
-            tool_section = _base_tools_section()
+    tool_section = build_tools_section(tools)
     gemma = _maybe_gemma_delta(model)
     return f"""You are agentX, a local engineering agent running on Maki's machine.
 Your job is to help Maki complete real software engineering work reliably, even when using relatively weak local models.
@@ -348,6 +471,7 @@ def build_worker_system_prompt(
     subtask_description: str,
     dependency_context: str = "",
     model: str | None = None,
+    tools: ToolRegistry | None = None,
 ) -> str:
     """Focused worker agent prompt — minimal context for single subtask execution."""
     dep_block = ""
@@ -361,7 +485,7 @@ def build_worker_system_prompt(
 {dep_block}
 {_base_output_rules()}
 
-{_base_tools_section()}
+{build_tools_section(tools)}
 
 Workflow (for orchestrator sub-tasks, extra strict for Gemma4/small models — 讀/寫/測 cycle):
 
