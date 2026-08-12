@@ -55,7 +55,10 @@ def _failing_verify(workspace: Path) -> dict[str, object]:
 
 def test_review_payload_reports_commit_ready(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
-    monkeypatch.setattr("agentx.cli.verify_payload", lambda settings, timeout=120: _passing_verify(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.verify_payload",
+        lambda settings, timeout=120: _passing_verify(settings.workspace),
+    )
 
     payload = review_payload(Settings(workspace=tmp_path))
 
@@ -74,7 +77,10 @@ def test_review_payload_reports_commit_ready(tmp_path: Path, monkeypatch) -> Non
 
 def test_review_payload_blocks_when_verify_fails(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
-    monkeypatch.setattr("agentx.cli.verify_payload", lambda settings, timeout=120: _failing_verify(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.verify_payload",
+        lambda settings, timeout=120: _failing_verify(settings.workspace),
+    )
 
     payload = review_payload(Settings(workspace=tmp_path))
 
@@ -88,7 +94,10 @@ def test_review_payload_blocks_when_verify_fails(tmp_path: Path, monkeypatch) ->
 
 def test_review_payload_blocks_when_no_changes(tmp_path: Path, monkeypatch) -> None:
     _git(tmp_path, ["init"])
-    monkeypatch.setattr("agentx.cli.verify_payload", lambda settings, timeout=120: _passing_verify(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.verify_payload",
+        lambda settings, timeout=120: _passing_verify(settings.workspace),
+    )
 
     payload = review_payload(Settings(workspace=tmp_path))
 
@@ -117,7 +126,10 @@ def test_review_payload_skip_verify_warns(tmp_path: Path) -> None:
 
 def test_review_json_outputs_payload(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
-    monkeypatch.setattr("agentx.cli.verify_payload", lambda settings, timeout=120: _passing_verify(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.verify_payload",
+        lambda settings, timeout=120: _passing_verify(settings.workspace),
+    )
 
     result = CliRunner().invoke(app, ["review", "--workspace", str(tmp_path), "--json"])
 
@@ -145,7 +157,10 @@ def test_review_jsonl_outputs_event_envelope(tmp_path: Path) -> None:
 
 def test_review_fail_on_blocker_exits_one_but_prints_payload(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
-    monkeypatch.setattr("agentx.cli.verify_payload", lambda settings, timeout=120: _failing_verify(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.verify_payload",
+        lambda settings, timeout=120: _failing_verify(settings.workspace),
+    )
 
     result = CliRunner().invoke(
         app,

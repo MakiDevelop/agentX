@@ -2,7 +2,9 @@ from agentx.errors import ErrorContext, ErrorType, RecoveryAction
 from agentx.recovery import RecoveryPlaybook
 
 
-def make_error(tool: str, etype: ErrorType, msg: str = "fail", count: int = 1) -> list[ErrorContext]:
+def make_error(
+    tool: str, etype: ErrorType, msg: str = "fail", count: int = 1
+) -> list[ErrorContext]:
     return [ErrorContext(error_type=etype, tool_name=tool, error_message=msg) for _ in range(count)]
 
 
@@ -36,7 +38,12 @@ def test_playbook_escalates_when_too_many_errors():
 def test_playbook_detects_same_file_repeated_failure():
     """同一個檔案連續 edit 失敗應該優先建議 BACKTRACK"""
     playbook = RecoveryPlaybook()
-    history = make_error("search_replace", ErrorType.EXECUTION_ERROR, msg="search_replace on src/auth.py failed", count=4)
+    history = make_error(
+        "search_replace",
+        ErrorType.EXECUTION_ERROR,
+        msg="search_replace on src/auth.py failed",
+        count=4,
+    )
 
     suggestions = playbook.generate_suggestions(history[-1], history)
 
@@ -50,7 +57,9 @@ def test_playbook_detects_tool_oscillation():
     history = []
     tools = ["search_replace", "insert_code"] * 4
     for t in tools:
-        history.append(ErrorContext(error_type=ErrorType.EXECUTION_ERROR, tool_name=t, error_message="fail"))
+        history.append(
+            ErrorContext(error_type=ErrorType.EXECUTION_ERROR, tool_name=t, error_message="fail")
+        )
 
     suggestions = playbook.generate_suggestions(history[-1], history)
 

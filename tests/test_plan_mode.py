@@ -77,11 +77,14 @@ def test_agent_session_plan_only_blocks_tool_call() -> None:
     )
     fake_tools = FakeToolRegistry()
 
-    with patch("agentx.loop.build_repo_context", return_value="fake repo context"), \
-         patch("agentx.loop.build_memory_context", return_value="fake memory context"):
-
+    with (
+        patch("agentx.loop.build_repo_context", return_value="fake repo context"),
+        patch("agentx.loop.build_memory_context", return_value="fake memory context"),
+    ):
         session = AgentSession(
-            settings=MagicMock(model="test", persona="default", max_steps=5, workspace=Path("/tmp/test")),
+            settings=MagicMock(
+                model="test", persona="default", max_steps=5, workspace=Path("/tmp/test")
+            ),
             ollama=fake_ollama,  # type: ignore[arg-type]
             tools=fake_tools,  # type: ignore[arg-type]
             namespace="test",
@@ -108,9 +111,10 @@ def test_agent_session_normal_mode_still_executes_tools() -> None:
     settings = MagicMock(model="test", persona="default", max_steps=3, workspace=Path("/tmp/test"))
     settings.learning_enabled = False
 
-    with patch("agentx.loop.build_repo_context", return_value="fake repo context"), \
-         patch("agentx.loop.build_memory_context", return_value="fake memory context"):
-
+    with (
+        patch("agentx.loop.build_repo_context", return_value="fake repo context"),
+        patch("agentx.loop.build_memory_context", return_value="fake memory context"),
+    ):
         session = AgentSession(
             settings=settings,
             ollama=fake_ollama,  # type: ignore[arg-type]
@@ -139,11 +143,14 @@ def test_plan_only_corrective_message_contains_structured_guidance() -> None:
     )
     fake_tools = FakeToolRegistry()
 
-    with patch("agentx.loop.build_repo_context", return_value="repo"), \
-         patch("agentx.loop.build_memory_context", return_value="mem"):
-
+    with (
+        patch("agentx.loop.build_repo_context", return_value="repo"),
+        patch("agentx.loop.build_memory_context", return_value="mem"),
+    ):
         session = AgentSession(
-            settings=MagicMock(model="test", persona="default", max_steps=5, workspace=Path("/tmp")),
+            settings=MagicMock(
+                model="test", persona="default", max_steps=5, workspace=Path("/tmp")
+            ),
             ollama=fake_ollama,  # type: ignore[arg-type]
             tools=fake_tools,  # type: ignore[arg-type]
             namespace="test",
@@ -184,11 +191,14 @@ def test_agent_session_respects_internal_plan_only_state() -> None:
     )
     fake_tools = FakeToolRegistry()
 
-    with patch("agentx.loop.build_repo_context", return_value="repo"), \
-         patch("agentx.loop.build_memory_context", return_value="mem"):
-
+    with (
+        patch("agentx.loop.build_repo_context", return_value="repo"),
+        patch("agentx.loop.build_memory_context", return_value="mem"),
+    ):
         session = AgentSession(
-            settings=MagicMock(model="test", persona="default", max_steps=5, workspace=Path("/tmp")),
+            settings=MagicMock(
+                model="test", persona="default", max_steps=5, workspace=Path("/tmp")
+            ),
             ollama=fake_ollama,  # type: ignore[arg-type]
             tools=fake_tools,  # type: ignore[arg-type]
             namespace="test",
@@ -205,11 +215,14 @@ def test_agent_session_respects_internal_plan_only_state() -> None:
 
 def test_execute_disables_plan_only_and_injects_message() -> None:
     """Simulate what /execute does: disable plan_only and inject execution context message."""
-    with patch("agentx.loop.build_repo_context", return_value="repo"), \
-         patch("agentx.loop.build_memory_context", return_value="mem"):
-
+    with (
+        patch("agentx.loop.build_repo_context", return_value="repo"),
+        patch("agentx.loop.build_memory_context", return_value="mem"),
+    ):
         session = AgentSession(
-            settings=MagicMock(model="test", persona="default", max_steps=5, workspace=Path("/tmp")),
+            settings=MagicMock(
+                model="test", persona="default", max_steps=5, workspace=Path("/tmp")
+            ),
             ollama=MagicMock(),
             tools=MagicMock(),
             namespace="test",
@@ -236,11 +249,10 @@ def test_execute_disables_plan_only_and_injects_message() -> None:
 
 def test_plan_mode_prompt_includes_execute_suggestion() -> None:
     """The plan mode prompt should instruct the model to proactively suggest /execute when planning is complete."""
-    planning_guidance = (
-        "當你認為規劃已經完整、足夠具體、可執行時，請在 final answer 的最後主動建議使用者輸入 `/execute`"
-    )
+    planning_guidance = "當你認為規劃已經完整、足夠具體、可執行時，請在 final answer 的最後主動建議使用者輸入 `/execute`"
 
     from agentx import cli
+
     cli_source = open(cli.__file__, encoding="utf-8").read()
     assert planning_guidance in cli_source
 
@@ -270,11 +282,14 @@ def test_reflection_loop_guard_triggers_warning() -> None:
     fake_ollama = FakeOllama(responses)
     fake_tools = FakeToolRegistry()
 
-    with patch("agentx.loop.build_repo_context", return_value="repo"), \
-         patch("agentx.loop.build_memory_context", return_value="mem"):
-
+    with (
+        patch("agentx.loop.build_repo_context", return_value="repo"),
+        patch("agentx.loop.build_memory_context", return_value="mem"),
+    ):
         session = AgentSession(
-            settings=MagicMock(model="test", persona="default", max_steps=10, workspace=Path("/tmp")),
+            settings=MagicMock(
+                model="test", persona="default", max_steps=10, workspace=Path("/tmp")
+            ),
             ollama=fake_ollama,  # type: ignore[arg-type]
             tools=fake_tools,  # type: ignore[arg-type]
             namespace="test",
@@ -288,7 +303,9 @@ def test_reflection_loop_guard_triggers_warning() -> None:
         "Reflection Loop Guard" in (m.get("content", "") if isinstance(m, dict) else str(m))
         for m in session.messages
     )
-    assert guard_triggered, "Reflection loop guard message was not injected to session.messages after 3+ consecutive reflects"
+    assert guard_triggered, (
+        "Reflection loop guard message was not injected to session.messages after 3+ consecutive reflects"
+    )
 
     # Final result should still be produced
     assert "最終方案" in result
@@ -308,11 +325,14 @@ def test_reflection_loop_guard_in_plan_only_uses_plan_specific_message() -> None
     fake_ollama = FakeOllama(responses)
     fake_tools = FakeToolRegistry()
 
-    with patch("agentx.loop.build_repo_context", return_value="repo"), \
-         patch("agentx.loop.build_memory_context", return_value="mem"):
-
+    with (
+        patch("agentx.loop.build_repo_context", return_value="repo"),
+        patch("agentx.loop.build_memory_context", return_value="mem"),
+    ):
         session = AgentSession(
-            settings=MagicMock(model="test", persona="default", max_steps=15, workspace=Path("/tmp")),
+            settings=MagicMock(
+                model="test", persona="default", max_steps=15, workspace=Path("/tmp")
+            ),
             ollama=fake_ollama,  # type: ignore[arg-type]
             tools=fake_tools,  # type: ignore[arg-type]
             namespace="test",
@@ -322,7 +342,8 @@ def test_reflection_loop_guard_in_plan_only_uses_plan_specific_message() -> None
 
     # Find the guard message(s)
     guard_messages = [
-        m.get("content", "") for m in session.messages
+        m.get("content", "")
+        for m in session.messages
         if isinstance(m, dict) and "Reflection Loop Guard" in m.get("content", "")
     ]
     assert len(guard_messages) >= 1, "No guard message found in plan_only run"

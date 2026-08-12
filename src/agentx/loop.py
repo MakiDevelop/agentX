@@ -13,7 +13,11 @@ from pydantic import ValidationError
 
 from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
-from agentx.context_compactor import ContextCompactor, HeuristicContextCompactor, LLMContextCompactor
+from agentx.context_compactor import (
+    ContextCompactor,
+    HeuristicContextCompactor,
+    LLMContextCompactor,
+)
 from agentx.recovery import RecoveryPlaybook
 from agentx.json_repair import extract_json_object
 from agentx.ollama import OllamaClient
@@ -188,12 +192,15 @@ class AgentSession:
         )
         errors = []
         for e in self.error_history[-5:]:
-            if hasattr(e, '__dataclass_fields__'):
+            if hasattr(e, "__dataclass_fields__"):
                 d = asdict(e)
                 errors.append({k: str(v) for k, v in d.items()})
             else:
                 errors.append(str(e))
-        tasks_summary = [{"id": t.get("id"), "status": t.get("status"), "title": t.get("title")} for t in (self.tasks or [])[-5:]]
+        tasks_summary = [
+            {"id": t.get("id"), "status": t.get("status"), "title": t.get("title")}
+            for t in (self.tasks or [])[-5:]
+        ]
 
         # Load key principles from AGENTX.md for fitness (simple read; agent can do deeper)
         principles = ""
@@ -206,7 +213,8 @@ class AgentSession:
             transcript,
             errors,
             tasks_summary,
-            principles or "Follow safety, MT22 tasks as truth, kernel/substrate decoupling, proposal-only for core changes."
+            principles
+            or "Follow safety, MT22 tasks as truth, kernel/substrate decoupling, proposal-only for core changes.",
         )
 
         # Record as learning episode if memory
@@ -227,7 +235,10 @@ class AgentSession:
             except Exception:
                 pass
 
-        return [{"id": p.id, "title": p.title, "type": p.lesson_type, "status": p.status} for p in proposals]
+        return [
+            {"id": p.id, "title": p.title, "type": p.lesson_type, "status": p.status}
+            for p in proposals
+        ]
 
     def _on_final_answer_learning(self, ctx: FinalAnswerContext) -> None:
         if ctx.plan_only:
@@ -255,10 +266,16 @@ class AgentSession:
     def _initial_messages(self) -> list[dict[str, str]]:
         if self._custom_system_prompt == self._RESTORE_SENTINEL:
             return [{"role": "system", "content": "(session restored from store)"}]
-        system_prompt = self._custom_system_prompt or build_agent_system_prompt(self.settings.persona, tools=self.tools, model=self.settings.model)
+        system_prompt = self._custom_system_prompt or build_agent_system_prompt(
+            self.settings.persona, tools=self.tools, model=self.settings.model
+        )
         return [
             {"role": "system", "content": system_prompt},
-            {"role": "system", "content": "Repo bootstrap context:\n" + build_repo_context(self.settings.workspace)},
+            {
+                "role": "system",
+                "content": "Repo bootstrap context:\n"
+                + build_repo_context(self.settings.workspace),
+            },
             {
                 "role": "system",
                 "content": "Memory Hall context:\n"
@@ -318,7 +335,10 @@ class AgentSession:
         if name == "tool_outcomes":
             self._tool_outcomes = {k: bool(v) for k, v in (data or {}).items()}
         elif name == "file_ops":
-            self._file_ops = {k: set(v) if isinstance(v, (list, tuple)) else set() for k, v in (data or {}).items()}
+            self._file_ops = {
+                k: set(v) if isinstance(v, (list, tuple)) else set()
+                for k, v in (data or {}).items()
+            }
         elif name == "last_failing_tools":
             self.last_failing_tools = set(data or [])
         elif name == "last_termination":
@@ -429,12 +449,15 @@ class AgentSession:
                 self.last_failing_tools.add(direct.tool)
             self._persist_runtime_state()
             if self.hooks:
-                self.hooks.fire(HookEvent.SESSION_END, SessionEndContext(
-                    namespace=self.namespace,
-                    termination=self.last_termination,
-                    message_count=len(self.messages),
-                    error_count=len(self.error_history),
-                ))
+                self.hooks.fire(
+                    HookEvent.SESSION_END,
+                    SessionEndContext(
+                        namespace=self.namespace,
+                        termination=self.last_termination,
+                        message_count=len(self.messages),
+                        error_count=len(self.error_history),
+                    ),
+                )
             if result.ok:
                 return result.content
             return f"工具執行失敗：{result.content}"
@@ -448,18 +471,26 @@ class AgentSession:
         self._persist_message("user", user_content)
 
         if self.hooks:
-            self.hooks.fire(HookEvent.SESSION_START, SessionStartContext(
-                namespace=namespace, prompt=prompt,
-            ))
+            self.hooks.fire(
+                HookEvent.SESSION_START,
+                SessionStartContext(
+                    namespace=namespace,
+                    prompt=prompt,
+                ),
+            )
 
         for step in range(self.settings.max_steps):
             self._maybe_auto_compact()
 
             if self.hooks:
-                self.hooks.fire(HookEvent.TURN_START, TurnStartContext(
-                    step=step, message_count=len(self.messages),
-                    tokens_estimate=self.context_tokens_estimate,
-                ))
+                self.hooks.fire(
+                    HookEvent.TURN_START,
+                    TurnStartContext(
+                        step=step,
+                        message_count=len(self.messages),
+                        tokens_estimate=self.context_tokens_estimate,
+                    ),
+                )
 
             self.model_turn_count += 1
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
@@ -586,18 +617,31 @@ class AgentSession:
             self._persist_message("tool", tool_content)
 
             if self.hooks:
-                self.hooks.fire(HookEvent.TURN_END, TurnEndContext(
-                    step=step, action_type="tool_call",
-                    tool_name=action.tool, result_ok=result.ok,
-                ))
+                self.hooks.fire(
+                    HookEvent.TURN_END,
+                    TurnEndContext(
+                        step=step,
+                        action_type="tool_call",
+                        tool_name=action.tool,
+                        result_ok=result.ok,
+                    ),
+                )
 
             # === Opt5: 成功編輯模式主動寫入 Memory Hall 作為經驗庫（供未來 few-shot recall） ===
             # 讓 Gemma4 等模型可以從過去成功案例學到模式，增加「聰明」程度。
             # (verify injection moved to _on_post_edit_verify POST hook for stateful/targeted)
-            if result.ok and action.tool in ("edit_file", "write_file", "search_replace", "insert_code", "apply_patch"):
+            if result.ok and action.tool in (
+                "edit_file",
+                "write_file",
+                "search_replace",
+                "insert_code",
+                "apply_patch",
+            ):
                 try:
                     path = action.args.get("path", "unknown")
-                    lesson = f"成功 {action.tool} on {path}。結果摘要: {(result.content or '')[:400]}"
+                    lesson = (
+                        f"成功 {action.tool} on {path}。結果摘要: {(result.content or '')[:400]}"
+                    )
                     if hasattr(self.memory, "write_aca"):
                         self.memory.write_aca(
                             content=lesson,
@@ -607,7 +651,11 @@ class AgentSession:
                             agent_id="agentx",
                             summary=f"成功 {action.tool} @{path}",
                             tags=["edit-success", "gemma-lesson", action.tool],
-                            metadata={"tool": action.tool, "path": str(path), "aca_compliant": True},
+                            metadata={
+                                "tool": action.tool,
+                                "path": str(path),
+                                "aca_compliant": True,
+                            },
                         )
                     elif hasattr(self.memory, "write_structured"):
                         self.memory.write_structured(
@@ -616,7 +664,11 @@ class AgentSession:
                             entry_type="lesson",
                             summary=f"成功 {action.tool} @{path}",
                             tags=["edit-success", "gemma-lesson", action.tool],
-                            metadata={"tool": action.tool, "path": str(path), "source_tier": "llm_derived"},
+                            metadata={
+                                "tool": action.tool,
+                                "path": str(path),
+                                "source_tier": "llm_derived",
+                            },
                         )
                     else:
                         self.memory.write(lesson, namespace=self.namespace)
@@ -644,25 +696,33 @@ class AgentSession:
                     self.current_error.error_type = ErrorType.STUCK
                     stuck_msg = self._build_stuck_intervention_message(self.current_error)
                     self.messages.append({"role": "system", "content": stuck_msg})
-                    self.messages.append({
-                        "role": "system",
-                        "content": "請立即輸出 reflect，專注解決當前卡住的問題。"
-                    })
+                    self.messages.append(
+                        {
+                            "role": "system",
+                            "content": "請立即輸出 reflect，專注解決當前卡住的問題。",
+                        }
+                    )
 
                 if self.hooks:
-                    self.hooks.fire(HookEvent.ERROR, ErrorHookContext(
-                        tool_name=action.tool, error_type=error_type.value,
-                        error_message=result.content or "",
-                        is_stuck=is_stuck,
-                        error_history_length=len(self.error_history),
-                    ))
+                    self.hooks.fire(
+                        HookEvent.ERROR,
+                        ErrorHookContext(
+                            tool_name=action.tool,
+                            error_type=error_type.value,
+                            error_message=result.content or "",
+                            is_stuck=is_stuck,
+                            error_history_length=len(self.error_history),
+                        ),
+                    )
 
                 if is_stuck:
                     continue
 
                 if error_type in (ErrorType.TRANSIENT, ErrorType.CALL_ERROR):
                     # 有限次重試引導
-                    retry_guidance = self._build_retry_guidance(action.tool, result.content, error_type)
+                    retry_guidance = self._build_retry_guidance(
+                        action.tool, result.content, error_type
+                    )
                     self.messages.append({"role": "system", "content": retry_guidance})
                 else:
                     # 較嚴重錯誤 → 強烈引導進行結構化錯誤 Reflection
@@ -670,10 +730,12 @@ class AgentSession:
                     self.messages.append({"role": "system", "content": reflection_guidance})
 
                     # 額外鼓勵模型主動輸出 reflect
-                    self.messages.append({
-                        "role": "system",
-                        "content": "請現在輸出 reflect，專注分析這個錯誤並提出恢復策略。"
-                    })
+                    self.messages.append(
+                        {
+                            "role": "system",
+                            "content": "請現在輸出 reflect，專注分析這個錯誤並提出恢復策略。",
+                        }
+                    )
 
             else:
                 self.current_error = None
@@ -694,38 +756,46 @@ class AgentSession:
 
                 # 簡單編輯（累計 <=2 次）：只報告 targeted 結果 + JSON 提醒，跳過重量級 reflection
                 if self._edit_count <= 2:
-                    self.messages.append({
-                        "role": "system",
-                        "content": (
-                            "ruff/pytest done for pending edits (full run_tests is explicit via tool call when ready). "
-                            "Continue with the next action, or reply with "
-                            '{"type":"final","content":"your summary"} if done.'
-                        ),
-                    })
+                    self.messages.append(
+                        {
+                            "role": "system",
+                            "content": (
+                                "ruff/pytest done for pending edits (full run_tests is explicit via tool call when ready). "
+                                "Continue with the next action, or reply with "
+                                '{"type":"final","content":"your summary"} if done.'
+                            ),
+                        }
+                    )
                 else:
                     # 複雜編輯（>=3 次）：完整 reflection (model can call run_tests explicitly before this for full results)
                     task_summary = self._get_current_task_summary()
-                    reflection = self._reflect(f"剛剛使用了 {action.tool} 工具，驗證結果如下（targeted ruff 已自動執行；full run_tests 需模型顯式呼叫）")
+                    reflection = self._reflect(
+                        f"剛剛使用了 {action.tool} 工具，驗證結果如下（targeted ruff 已自動執行；full run_tests 需模型顯式呼叫）"
+                    )
                     self.messages.append(
                         {"role": "system", "content": f"=== Reflection ===\n{reflection}"}
                     )
-                    self.messages.append({
-                        "role": "system",
-                        "content": (
-                            f"目前任務狀態：\n{task_summary}\n\n"
-                            'REMINDER: respond with exactly one JSON object. '
-                            '{"type":"final","content":"..."} or {"type":"tool_call","tool":"...","args":{...}}'
-                        ),
-                    })
+                    self.messages.append(
+                        {
+                            "role": "system",
+                            "content": (
+                                f"目前任務狀態：\n{task_summary}\n\n"
+                                "REMINDER: respond with exactly one JSON object. "
+                                '{"type":"final","content":"..."} or {"type":"tool_call","tool":"...","args":{...}}'
+                            ),
+                        }
+                    )
 
         # Fallback: force a final answer before giving up
-        self.messages.append({
-            "role": "user",
-            "content": (
-                "你已經用完所有步驟。請立即總結你完成的工作，用以下格式回覆：\n"
-                '{"type":"final","content":"你的總結"}'
-            ),
-        })
+        self.messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "你已經用完所有步驟。請立即總結你完成的工作，用以下格式回覆：\n"
+                    '{"type":"final","content":"你的總結"}'
+                ),
+            }
+        )
         try:
             self.model_turn_count += 1
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
@@ -737,10 +807,15 @@ class AgentSession:
         self.last_termination = "max_steps_exceeded"
         self._persist_runtime_state()
         if self.hooks:
-            self.hooks.fire(HookEvent.SESSION_END, SessionEndContext(
-                namespace=namespace, termination="max_steps_exceeded",
-                message_count=len(self.messages), error_count=len(self.error_history),
-            ))
+            self.hooks.fire(
+                HookEvent.SESSION_END,
+                SessionEndContext(
+                    namespace=namespace,
+                    termination="max_steps_exceeded",
+                    message_count=len(self.messages),
+                    error_count=len(self.error_history),
+                ),
+            )
         return "模型沒有輸出有效的工具呼叫 JSON，已停止。請改用 /mode chat 或換更擅長 tool calling 的模型。"
 
     def clear(self) -> None:
@@ -784,7 +859,9 @@ class AgentSession:
         save_tasks(self.settings.workspace, self.tasks)  # Micro-task 21: 自動持久化
         return task
 
-    def update_task(self, task_id: int | str, status: str | None = None, notes: str | None = None) -> dict | None:
+    def update_task(
+        self, task_id: int | str, status: str | None = None, notes: str | None = None
+    ) -> dict | None:
         # 對本地模型更寬容：允許 task_id 是字串或數字
         try:
             task_id = int(task_id)
@@ -821,7 +898,9 @@ class AgentSession:
             return "目前沒有任何任務。"
         return format_task_list_summary(self.tasks)
 
-    def _build_retry_guidance(self, tool_name: str, error_message: str, error_type: ErrorType) -> str:
+    def _build_retry_guidance(
+        self, tool_name: str, error_message: str, error_type: ErrorType
+    ) -> str:
         """為暫時性或呼叫錯誤產生重試引導訊息"""
         if error_type == ErrorType.TRANSIENT:
             return (
@@ -986,14 +1065,17 @@ class AgentSession:
         self._persist_state_event("file_ops", {k: list(v) for k, v in self._file_ops.items()})
 
         if self.hooks:
-            self.hooks.fire(HookEvent.COMPACT, CompactContext(
-                before_count=before_count, after_count=len(self.messages),
-                tokens_estimate=self.context_tokens_estimate, summary=result,
-            ))
+            self.hooks.fire(
+                HookEvent.COMPACT,
+                CompactContext(
+                    before_count=before_count,
+                    after_count=len(self.messages),
+                    tokens_estimate=self.context_tokens_estimate,
+                    summary=result,
+                ),
+            )
 
-        return (
-            f"壓縮完成：{result} 目前約 {self.context_tokens_estimate} tokens。"
-        )
+        return f"壓縮完成：{result} 目前約 {self.context_tokens_estimate} tokens。"
 
     def _handle_final_answer(self, content: str, plan_only: bool) -> str:
         self.messages.append({"role": "assistant", "content": content})
@@ -1002,18 +1084,25 @@ class AgentSession:
         self.last_termination = "final_failed" if self.last_failing_tools else "final_success"
         self._persist_runtime_state()
         if self.hooks:
-            self.hooks.fire(HookEvent.FINAL_ANSWER, FinalAnswerContext(
-                content=content, plan_only=plan_only,
-                message_count=len(self.messages),
-            ))
+            self.hooks.fire(
+                HookEvent.FINAL_ANSWER,
+                FinalAnswerContext(
+                    content=content,
+                    plan_only=plan_only,
+                    message_count=len(self.messages),
+                ),
+            )
             # Codex feedback: fire SESSION_END on normal successful final too
             # (currently only fired on max_steps_exceeded in the outer loop).
-            self.hooks.fire(HookEvent.SESSION_END, SessionEndContext(
-                namespace=self.namespace,
-                termination=self.last_termination,
-                message_count=len(self.messages),
-                error_count=len(self.error_history),
-            ))
+            self.hooks.fire(
+                HookEvent.SESSION_END,
+                SessionEndContext(
+                    namespace=self.namespace,
+                    termination=self.last_termination,
+                    message_count=len(self.messages),
+                    error_count=len(self.error_history),
+                ),
+            )
         return content
 
     def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | Reflect | "InvalidAction":
@@ -1050,7 +1139,7 @@ class AgentSession:
         self._track_file_op_from_args(action.tool, effective_args)
         if not result.ok:
             self._tool_outcomes[action.tool] = False
-        elif result.ok and re.search(r'\bexit=([1-9]\d*)\b', result.content or ""):
+        elif result.ok and re.search(r"\bexit=([1-9]\d*)\b", result.content or ""):
             self._tool_outcomes[action.tool] = False
         else:
             self._tool_outcomes[action.tool] = True
@@ -1082,6 +1171,7 @@ class AgentSession:
 
     def _scan_messages_for_file_ops(self, messages: list[dict[str, Any]]) -> None:
         import json as _json
+
         for msg in messages:
             if msg.get("role") != "assistant":
                 continue
@@ -1172,6 +1262,7 @@ class AgentSession:
         for p in list(self.pending_verifies):
             try:
                 import subprocess
+
                 r = subprocess.run(
                     ["uv", "run", "ruff", "check", p],
                     cwd=self.settings.workspace,
@@ -1184,24 +1275,33 @@ class AgentSession:
                 if r.returncode == 0:
                     succeeded.append(p)
                 else:
-                    self.messages.append({
-                        "role": "system",
-                        "content": f"WARNING: Targeted ruff for {p} had issues (exit={r.returncode}). Path remains in pending_verifies until fixed/verified."
-                    })
+                    self.messages.append(
+                        {
+                            "role": "system",
+                            "content": f"WARNING: Targeted ruff for {p} had issues (exit={r.returncode}). Path remains in pending_verifies until fixed/verified.",
+                        }
+                    )
             except Exception as e:
-                self.messages.append({"role": "system", "content": f"targeted ruff for {p} failed: {e}"})
+                self.messages.append(
+                    {"role": "system", "content": f"targeted ruff for {p} failed: {e}"}
+                )
 
         # Per-path targeted pytest for .py files that passed ruff (more targeted test feedback).
         # Only add to verified if pytest exit in (0 pass, 5 no tests collected).
         verified = []
         for p in succeeded:
-            if not p.endswith('.py'):
+            if not p.endswith(".py"):
                 verified.append(p)
                 continue
             try:
                 pp = Path(p)
                 stem = pp.stem
-                if pp.name.startswith("test_") or pp.name.endswith("_test.py") or "tests/" in str(pp) or "/test/" in str(pp):
+                if (
+                    pp.name.startswith("test_")
+                    or pp.name.endswith("_test.py")
+                    or "tests/" in str(pp)
+                    or "/test/" in str(pp)
+                ):
                     # Direct run for test files (stricter detection)
                     cmd = ["uv", "run", "pytest", "-q", "--tb=no", p, "--maxfail=1"]
                 else:
@@ -1213,17 +1313,23 @@ class AgentSession:
                     text=True,
                     timeout=60,
                 )
-                pytest_out = f"$ uv run pytest {' '.join(cmd[3:])} for {p}\n{r.stdout}{r.stderr}".strip()
+                pytest_out = (
+                    f"$ uv run pytest {' '.join(cmd[3:])} for {p}\n{r.stdout}{r.stderr}".strip()
+                )
                 self.messages.append({"role": "tool", "content": pytest_out})
                 if r.returncode in (0, 5):
                     verified.append(p)
                 else:
-                    self.messages.append({
-                        "role": "system",
-                        "content": f"WARNING: Targeted pytest for {p} had issues (exit={r.returncode}). Path remains in pending_verifies."
-                    })
+                    self.messages.append(
+                        {
+                            "role": "system",
+                            "content": f"WARNING: Targeted pytest for {p} had issues (exit={r.returncode}). Path remains in pending_verifies.",
+                        }
+                    )
             except Exception as e:
-                self.messages.append({"role": "system", "content": f"targeted pytest for {p} failed: {e}"})
+                self.messages.append(
+                    {"role": "system", "content": f"targeted pytest for {p} failed: {e}"}
+                )
 
         # Clear only the successfully verified paths (ruff + pytest if .py) from this batch.
         for p in verified:
@@ -1242,25 +1348,29 @@ class AgentSession:
                     "現在適合明確呼叫 run_tests 工具做 full batch verify。"
                     "否則繼續針對單一 path 做 tiny edit + 驗證。\n"
                 )
-            self.messages.append({
-                "role": "system",
-                "content": (
-                    f"【Gemma4/Small Model Tip】Targeted ruff/pytest completed for some paths.\n"
-                    f"{n} path(s) still in pending_verifies.\n"
-                    f"{batch_hint}"
-                    f"Next action: Review the hook snippet + ruff/pytest output you just received. "
-                    f"Use task_list to decide if batch is ready, then explicitly call the run_tests tool when appropriate (不要自動假設已驗)."
-                )
-            })
+            self.messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        f"【Gemma4/Small Model Tip】Targeted ruff/pytest completed for some paths.\n"
+                        f"{n} path(s) still in pending_verifies.\n"
+                        f"{batch_hint}"
+                        f"Next action: Review the hook snippet + ruff/pytest output you just received. "
+                        f"Use task_list to decide if batch is ready, then explicitly call the run_tests tool when appropriate (不要自動假設已驗)."
+                    ),
+                }
+            )
         else:
-            self.messages.append({
-                "role": "system",
-                "content": (
-                    "【Gemma4/Small Model Tip】All pending paths passed targeted ruff + pytest.\n"
-                    "Micro-verification complete. "
-                    "Now choose: continue with more small edits, or call the run_tests tool explicitly for full batch verification before outputting final."
-                )
-            })
+            self.messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "【Gemma4/Small Model Tip】All pending paths passed targeted ruff + pytest.\n"
+                        "Micro-verification complete. "
+                        "Now choose: continue with more small edits, or call the run_tests tool explicitly for full batch verification before outputting final."
+                    ),
+                }
+            )
 
     def _reflect(self, focus: str | None = None) -> str:
         """讓模型對最近的行為進行自我檢討，並明確建議下一步。"""
@@ -1277,14 +1387,10 @@ class AgentSession:
         )
 
         # 暫時把 reflection_prompt 當成 user message 丟給模型
-        reflection_messages = self.messages + [
-            {"role": "user", "content": reflection_prompt}
-        ]
+        reflection_messages = self.messages + [{"role": "user", "content": reflection_prompt}]
 
         try:
-            reflection = self.ollama.chat(
-                reflection_messages, json_mode=False, cancel_event=None
-            )
+            reflection = self.ollama.chat(reflection_messages, json_mode=False, cancel_event=None)
             return reflection.strip()
         except Exception as e:
             return f"Reflection 失敗: {str(e)}"

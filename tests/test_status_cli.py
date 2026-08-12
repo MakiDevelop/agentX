@@ -73,7 +73,9 @@ def test_status_json_outputs_workspace_posture(tmp_path) -> None:  # noqa: ANN00
 
 
 def test_status_jsonl_outputs_event_envelope(tmp_path) -> None:  # noqa: ANN001
-    result = CliRunner().invoke(app, ["status", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["status", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)

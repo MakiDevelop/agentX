@@ -197,10 +197,7 @@ def test_non_blocking_commands_set() -> None:
 
 
 def test_all_slash_commands_have_handlers() -> None:
-    declared = {
-        entry[0].split()[0]
-        for entry in SLASH_COMMANDS
-    }
+    declared = {entry[0].split()[0] for entry in SLASH_COMMANDS}
     declared.discard("/exit")
     declared.discard("/quit")
     # NOTE (post Tsumu architecture improvements): full SLASH_HANDLERS population
@@ -241,8 +238,10 @@ def test_no_duplicated_legacy_slash_fallback_after_wait() -> None:
     span = loop_match.group(0)
     # Must keep the wait gate for unhandled slash commands (except non-blocking).
     assert "wait_for_prompt_worker()" in span
-    assert 'prompt.startswith(("/jobs", "/cancel"))' in span or \
-        "prompt.startswith(('/jobs', '/cancel'))" in span
+    assert (
+        'prompt.startswith(("/jobs", "/cancel"))' in span
+        or "prompt.startswith(('/jobs', '/cancel'))" in span
+    )
     assert "slash_command_unknown" in span
     assert "format_unknown_slash_command(prompt)" in span
     # Must NOT re-enter dispatch after the wait gate.
@@ -300,8 +299,9 @@ def test_core_slash_commands_remain_declared() -> None:
 def test_exit_quit_priority_path_present() -> None:
     """`/exit` and `/quit` must keep the dedicated early-break path before dispatch."""
     source = _CLI_SOURCE.read_text(encoding="utf-8")
-    assert 'if prompt in {"/exit", "/quit"}:' in source or \
-        "if prompt in {'/exit', '/quit'}:" in source
+    assert (
+        'if prompt in {"/exit", "/quit"}:' in source or "if prompt in {'/exit', '/quit'}:" in source
+    )
     # Priority check must appear before the sole dispatch call in source order.
     exit_idx = source.find('if prompt in {"/exit", "/quit"}:')
     if exit_idx < 0:

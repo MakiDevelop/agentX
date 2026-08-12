@@ -131,6 +131,7 @@ def format_task_list_summary(tasks: list[dict[str, Any]], max_active: int = 8) -
 
 # === 單任務 → 多任務清單 自動遷移（Phase A / MT22） ===
 
+
 def single_task_path(workspace: Path) -> Path:
     """舊的單一任務檔案路徑（即將退場）"""
     return workspace / ".agentx" / "task.json"

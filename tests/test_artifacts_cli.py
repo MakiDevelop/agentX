@@ -23,17 +23,23 @@ def _result_payload(*, exit_code: int = 0, termination: str = "completed") -> di
     }
 
 
-def _write_bundle(root: Path, name: str, *, fmt: str = "json", exit_code: int = 0, mtime: int = 1) -> Path:
+def _write_bundle(
+    root: Path, name: str, *, fmt: str = "json", exit_code: int = 0, mtime: int = 1
+) -> Path:
     bundle = root / name
     bundle.mkdir(parents=True, exist_ok=True)
-    payload = _result_payload(exit_code=exit_code, termination="completed" if exit_code == 0 else "max_steps_exceeded")
+    payload = _result_payload(
+        exit_code=exit_code, termination="completed" if exit_code == 0 else "max_steps_exceeded"
+    )
     if fmt == "jsonl":
         (bundle / "result.jsonl").write_text(
             json.dumps({"event": "result", "data": payload}, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
     else:
-        (bundle / "result.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        (bundle / "result.json").write_text(
+            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+        )
     (bundle / "session.session.jsonl").write_text('{"event":"session_start"}\n', encoding="utf-8")
     (bundle / "handoff.md").write_text("# Handoff\n", encoding="utf-8")
     for path in bundle.iterdir():
@@ -41,7 +47,9 @@ def _write_bundle(root: Path, name: str, *, fmt: str = "json", exit_code: int = 
     return bundle
 
 
-def _write_workflow_run_artifact(root: Path, name: str, *, ok: bool = False, mtime: int = 30) -> Path:
+def _write_workflow_run_artifact(
+    root: Path, name: str, *, ok: bool = False, mtime: int = 30
+) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     target = root / name
     payload = {
@@ -127,7 +135,10 @@ def test_artifacts_payload_lists_workflow_run_artifacts(tmp_path: Path) -> None:
         "recommended_kind": "workflow_artifact_inspect",
     }
     assert payload["latest_artifact"]["path"] == str(target)  # type: ignore[index]
-    assert payload["recommended_command"] == "agentx artifacts .agentx/runs/workflow-memory.jsonl --json"
+    assert (
+        payload["recommended_command"]
+        == "agentx artifacts .agentx/runs/workflow-memory.jsonl --json"
+    )
     assert payload["recommended_kind"] == "inspect_artifact"
 
 
@@ -137,7 +148,10 @@ def test_artifacts_payload_reports_ready_workflow_chain_next_output(tmp_path: Pa
 
     payload = artifacts_payload(Settings(workspace=tmp_path), limit=10)
 
-    assert payload["latest_artifact"]["workflow_next_result_output"] == ".agentx/runs/workflow-memory-next.json"  # type: ignore[index]
+    assert (
+        payload["latest_artifact"]["workflow_next_result_output"]
+        == ".agentx/runs/workflow-memory-next.json"
+    )  # type: ignore[index]
     assert payload["workflow_chain"] == {  # type: ignore[index]
         "status": "ready",
         "latest_artifact": ".agentx/runs/workflow-memory.json",
@@ -156,7 +170,9 @@ def test_artifacts_payload_reports_ready_workflow_chain_next_output(tmp_path: Pa
 def test_artifacts_payload_accepts_single_workflow_run_file(tmp_path: Path) -> None:
     target = _write_workflow_run_artifact(tmp_path / ".agentx" / "runs", "workflow-memory.json")
 
-    payload = artifacts_payload(Settings(workspace=tmp_path), root=".agentx/runs/workflow-memory.json")
+    payload = artifacts_payload(
+        Settings(workspace=tmp_path), root=".agentx/runs/workflow-memory.json"
+    )
 
     assert payload["count"] == 1
     assert payload["latest_artifact"]["artifact_type"] == "workflow_run"  # type: ignore[index]
@@ -184,7 +200,10 @@ def test_artifacts_payload_missing_root_is_ok_with_empty_count(tmp_path: Path) -
     assert payload["ok"] is True
     assert payload["count"] == 0
     assert payload["latest_artifact"] is None
-    assert payload["recommended_command"] == "agentx -p '任務' --agent --artifact-dir .agentx/runs/latest --quiet"
+    assert (
+        payload["recommended_command"]
+        == "agentx -p '任務' --agent --artifact-dir .agentx/runs/latest --quiet"
+    )
     assert payload["recommended_kind"] == "headless_bundle"
     assert payload["recommended_risk"] == "YELLOW"
     assert payload["artifacts"] == []
@@ -212,7 +231,9 @@ def test_artifacts_json_outputs_catalog(tmp_path: Path) -> None:
 def test_artifacts_jsonl_outputs_event_envelope(tmp_path: Path) -> None:
     _write_bundle(tmp_path / ".agentx" / "runs", "latest")
 
-    result = CliRunner().invoke(app, ["artifacts", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["artifacts", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)

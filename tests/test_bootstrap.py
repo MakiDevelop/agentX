@@ -4,7 +4,11 @@ from typing import Any
 
 from typer.testing import CliRunner
 
-from agentx.bootstrap import build_local_instruction_context, build_repo_context, local_instructions_payload
+from agentx.bootstrap import (
+    build_local_instruction_context,
+    build_repo_context,
+    local_instructions_payload,
+)
 from agentx.cli import app
 from agentx.loop import AgentSession
 from agentx.tools import ToolRegistry, builtin_tools

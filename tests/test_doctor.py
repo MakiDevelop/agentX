@@ -15,6 +15,7 @@ def test_check_command_reports_success() -> None:
 
 # === MT22: _check_task_migration 基本覆蓋（回應 Codex P0） ===
 
+
 def test_check_task_migration_clean_workspace(tmp_path: Path) -> None:
     """乾淨 workspace（無舊無新）應回報 no_task_data。"""
     fake_settings = SimpleNamespace(workspace=tmp_path)
@@ -147,6 +148,7 @@ def test_run_doctor_shows_migration_check_in_mixed_state(tmp_path: Path) -> None
 
     # 直接呼叫內部以驗證整合行為（避免依賴完整外部服務）
     from agentx.doctor import _check_task_migration
+
     name, ok, detail = _check_task_migration(fake_settings)
 
     assert name == "task_migration (MT22)"
@@ -162,10 +164,13 @@ def test_check_task_migration_mixed_with_in_progress_task(tmp_path: Path) -> Non
     legacy_dir.mkdir()
     (legacy_dir / "task.json").write_text('{"title":"舊任務","status":"active"}', encoding="utf-8")
 
-    save_tasks(tmp_path, [
-        {"id": 1, "description": "進行中任務", "status": "in_progress", "notes": ""},
-        {"id": 2, "description": "待辦任務", "status": "pending", "notes": ""},
-    ])
+    save_tasks(
+        tmp_path,
+        [
+            {"id": 1, "description": "進行中任務", "status": "in_progress", "notes": ""},
+            {"id": 2, "description": "待辦任務", "status": "pending", "notes": ""},
+        ],
+    )
 
     fake_settings = SimpleNamespace(workspace=tmp_path)
     name, ok, detail = _check_task_migration(fake_settings)
@@ -183,10 +188,13 @@ def test_check_task_migration_legacy_with_invalid_status_in_multi(tmp_path: Path
     legacy_dir.mkdir()
     (legacy_dir / "task.json").write_text('{"title":"舊任務","status":"active"}', encoding="utf-8")
 
-    save_tasks(tmp_path, [
-        {"id": 1, "description": "正常任務", "status": "in_progress", "notes": ""},
-        {"id": 2, "description": "奇怪狀態任務", "status": "weird_status_xyz", "notes": ""},
-    ])
+    save_tasks(
+        tmp_path,
+        [
+            {"id": 1, "description": "正常任務", "status": "in_progress", "notes": ""},
+            {"id": 2, "description": "奇怪狀態任務", "status": "weird_status_xyz", "notes": ""},
+        ],
+    )
 
     fake_settings = SimpleNamespace(workspace=tmp_path)
     name, ok, detail = _check_task_migration(fake_settings)
@@ -205,10 +213,13 @@ def test_check_task_migration_legacy_with_only_done_multi_tasks(tmp_path: Path) 
     legacy_dir.mkdir()
     (legacy_dir / "task.json").write_text('{"title":"舊任務","status":"active"}', encoding="utf-8")
 
-    save_tasks(tmp_path, [
-        {"id": 1, "description": "已完成任務1", "status": "done", "notes": ""},
-        {"id": 2, "description": "已完成任務2", "status": "done", "notes": ""},
-    ])
+    save_tasks(
+        tmp_path,
+        [
+            {"id": 1, "description": "已完成任務1", "status": "done", "notes": ""},
+            {"id": 2, "description": "已完成任務2", "status": "done", "notes": ""},
+        ],
+    )
 
     fake_settings = SimpleNamespace(workspace=tmp_path)
     name, ok, detail = _check_task_migration(fake_settings)
@@ -227,7 +238,9 @@ def test_check_task_migration_legacy_with_many_multi_tasks(tmp_path: Path) -> No
     (legacy_dir / "task.json").write_text('{"title":"舊任務","status":"active"}', encoding="utf-8")
 
     # 建立 8 筆新任務
-    tasks = [{"id": i, "description": f"任務 {i}", "status": "pending", "notes": ""} for i in range(1, 9)]
+    tasks = [
+        {"id": i, "description": f"任務 {i}", "status": "pending", "notes": ""} for i in range(1, 9)
+    ]
     save_tasks(tmp_path, tasks)
 
     fake_settings = SimpleNamespace(workspace=tmp_path)
@@ -246,10 +259,13 @@ def test_check_task_migration_legacy_with_very_long_notes_in_multi(tmp_path: Pat
     legacy_dir.mkdir()
     (legacy_dir / "task.json").write_text('{"title":"舊任務","status":"active"}', encoding="utf-8")
 
-    long_notes = "x" * 450   # 接近或超過之前設定的 notes 長度限制
-    save_tasks(tmp_path, [
-        {"id": 1, "description": "長 notes 任務", "status": "in_progress", "notes": long_notes},
-    ])
+    long_notes = "x" * 450  # 接近或超過之前設定的 notes 長度限制
+    save_tasks(
+        tmp_path,
+        [
+            {"id": 1, "description": "長 notes 任務", "status": "in_progress", "notes": long_notes},
+        ],
+    )
 
     fake_settings = SimpleNamespace(workspace=tmp_path)
     name, ok, detail = _check_task_migration(fake_settings)
@@ -267,7 +283,9 @@ def test_check_task_migration_legacy_with_extreme_mixed_state(tmp_path: Path) ->
     legacy_dir.mkdir()
     (legacy_dir / "task.json").write_text('{"title":"舊任務","status":"active"}', encoding="utf-8")
 
-    tasks = [{"id": i, "description": f"任務 {i}", "status": "done", "notes": ""} for i in range(1, 6)]
+    tasks = [
+        {"id": i, "description": f"任務 {i}", "status": "done", "notes": ""} for i in range(1, 6)
+    ]
     tasks.append({"id": 6, "description": "進行中任務", "status": "in_progress", "notes": ""})
     save_tasks(tmp_path, tasks)
 
@@ -287,10 +305,13 @@ def test_check_task_migration_legacy_with_very_long_title_in_multi(tmp_path: Pat
     legacy_dir.mkdir()
     (legacy_dir / "task.json").write_text('{"title":"舊任務","status":"active"}', encoding="utf-8")
 
-    long_title = "非常非常長的任務標題" * 12   # 明顯超過 200 字限制
-    save_tasks(tmp_path, [
-        {"id": 1, "description": long_title, "status": "pending", "notes": ""},
-    ])
+    long_title = "非常非常長的任務標題" * 12  # 明顯超過 200 字限制
+    save_tasks(
+        tmp_path,
+        [
+            {"id": 1, "description": long_title, "status": "pending", "notes": ""},
+        ],
+    )
 
     fake_settings = SimpleNamespace(workspace=tmp_path)
     name, ok, detail = _check_task_migration(fake_settings)
@@ -345,13 +366,16 @@ def test_run_doctor_includes_task_migration_check(tmp_path: Path) -> None:
     # 建立一個帶有舊任務的 workspace
     legacy_dir = tmp_path / ".agentx"
     legacy_dir.mkdir()
-    (legacy_dir / "task.json").write_text('{"title":"舊單一任務","status":"active"}', encoding="utf-8")
+    (legacy_dir / "task.json").write_text(
+        '{"title":"舊單一任務","status":"active"}', encoding="utf-8"
+    )
 
     # 這裡用一個極簡的 Settings 模擬（只需要 workspace）
     fake_settings = SimpleNamespace(workspace=tmp_path)
 
     # 直接呼叫內部函式來驗證整合（避免依賴完整 Ollama/MemoryHall）
     from agentx.doctor import _check_task_migration
+
     name, ok, detail = _check_task_migration(fake_settings)
 
     assert name == "task_migration (MT22)"

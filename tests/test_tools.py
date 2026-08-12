@@ -3,7 +3,13 @@ from pathlib import Path
 import pytest
 
 from agentx import infrastructure_context
-from agentx.tools import ToolRegistry, builtin_tools, docker_compose_command, extract_web_text, validate_external_url
+from agentx.tools import (
+    ToolRegistry,
+    builtin_tools,
+    docker_compose_command,
+    extract_web_text,
+    validate_external_url,
+)
 
 
 class FakeMemory:
@@ -29,7 +35,9 @@ def test_list_files(tmp_path: Path) -> None:
     assert result.content == "a.txt"
 
 
-def test_infrastructure_context_tool_reads_resource_map(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_infrastructure_context_tool_reads_resource_map(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     infra = tmp_path / "infrastructure"
     infra.mkdir()
     (infra / "resource-map.md").write_text("RESOURCE_MAP_MARKER", encoding="utf-8")
@@ -266,6 +274,7 @@ def test_web_fetch_blocks_private_network(monkeypatch) -> None:
 
 
 # === Focused tests for WebFetchTool ===
+
 
 def test_web_fetch_is_registered(tmp_path: Path) -> None:
     registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
@@ -631,6 +640,7 @@ def test_web_fetch_rejects_response_over_max_bytes(tmp_path: Path, monkeypatch) 
 
 # === Focused tests for InsertCodeTool (added to address Codex review Medium item) ===
 
+
 def test_insert_code_success(tmp_path: Path) -> None:
     target = tmp_path / "module.py"
     target.write_text("def existing():\n    pass\n# MARKER\n", encoding="utf-8")
@@ -719,7 +729,9 @@ def test_insert_code_registry_name_resolution(tmp_path: Path) -> None:
 
     registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
     # Direct name
-    res1 = registry.run("insert_code", {"path": "t.py", "insert_after": "# END", "content": "\ny=2"})
+    res1 = registry.run(
+        "insert_code", {"path": "t.py", "insert_after": "# END", "content": "\ny=2"}
+    )
     assert res1.ok
 
     # Confirm tool is registered under the name

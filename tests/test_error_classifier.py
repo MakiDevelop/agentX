@@ -61,7 +61,9 @@ def test_classifier_execution_errors():
 def test_classifier_unknown_error():
     classifier = ErrorClassifier()
 
-    result = ToolResult(tool="search_replace", ok=False, content="Some weird error that doesn't match any pattern")
+    result = ToolResult(
+        tool="search_replace", ok=False, content="Some weird error that doesn't match any pattern"
+    )
     error_type = classifier.classify("search_replace", result)
 
     assert error_type == ErrorType.UNKNOWN
@@ -90,6 +92,7 @@ def test_classifier_empty_content():
 # AgentSession 層級錯誤處理整合測試（A 階段驗證）
 # ============================================================
 
+
 def test_agent_session_records_error_context_on_tool_failure():
     """測試工具失敗時，AgentSession 是否正確記錄 ErrorContext"""
     settings = MagicMock()
@@ -100,22 +103,18 @@ def test_agent_session_records_error_context_on_tool_failure():
     fake_ollama = MagicMock()
     fake_tools = MagicMock()
 
-    with patch("agentx.loop.build_repo_context", return_value=""), \
-         patch("agentx.loop.build_memory_context", return_value=""):
-
+    with (
+        patch("agentx.loop.build_repo_context", return_value=""),
+        patch("agentx.loop.build_memory_context", return_value=""),
+    ):
         session = AgentSession(
-            settings=settings,
-            ollama=fake_ollama,
-            tools=fake_tools,
-            namespace="test"
+            settings=settings, ollama=fake_ollama, tools=fake_tools, namespace="test"
         )
 
         # 模擬一個失敗的工具結果
         # 直接測試分類 + 記錄流程
         failing_result = ToolResult(
-            tool="search_replace",
-            ok=False,
-            content="AssertionError: test failed after edit"
+            tool="search_replace", ok=False, content="AssertionError: test failed after edit"
         )
 
         error_type = session.error_classifier.classify("search_replace", failing_result)
@@ -142,20 +141,18 @@ def test_build_error_reflection_guidance_contains_key_info():
     settings.persona = "default"
     settings.max_steps = 5
 
-    with patch("agentx.loop.build_repo_context", return_value=""), \
-         patch("agentx.loop.build_memory_context", return_value=""):
-
+    with (
+        patch("agentx.loop.build_repo_context", return_value=""),
+        patch("agentx.loop.build_memory_context", return_value=""),
+    ):
         session = AgentSession(
-            settings=settings,
-            ollama=MagicMock(),
-            tools=MagicMock(),
-            namespace="test"
+            settings=settings, ollama=MagicMock(), tools=MagicMock(), namespace="test"
         )
 
         error_ctx = ErrorContext(
             error_type=ErrorType.EXECUTION_ERROR,
             tool_name="search_replace",
-            error_message="AssertionError: test_foo.py failed"
+            error_message="AssertionError: test_foo.py failed",
         )
 
         guidance = session._build_error_reflection_guidance(error_ctx)
@@ -172,16 +169,27 @@ def test_classifier_http_4xx_as_call_error():
     classifier = ErrorClassifier()
 
     test_cases = [
-        ("web_fetch", "HTTPStatusError: Client error '403 Forbidden' for url 'https://example.com/secret'"),
-        ("web_fetch", "HTTPStatusError: Client error '401 Unauthorized' for url 'https://api.x.com/v1'"),
-        ("web_fetch", "HTTPStatusError: Client error '404 Not Found' for url 'https://foo.bar/missing'"),
+        (
+            "web_fetch",
+            "HTTPStatusError: Client error '403 Forbidden' for url 'https://example.com/secret'",
+        ),
+        (
+            "web_fetch",
+            "HTTPStatusError: Client error '401 Unauthorized' for url 'https://api.x.com/v1'",
+        ),
+        (
+            "web_fetch",
+            "HTTPStatusError: Client error '404 Not Found' for url 'https://foo.bar/missing'",
+        ),
         ("web_fetch", "Client error '403 Forbidden' for url ..."),  # 無 HTTPStatusError 前綴
     ]
 
     for tool, content in test_cases:
         result = ToolResult(tool=tool, ok=False, content=content)
         error_type = classifier.classify(tool, result)
-        assert error_type == ErrorType.CALL_ERROR, f"Expected CALL_ERROR for {tool}: {content}, got {error_type}"
+        assert error_type == ErrorType.CALL_ERROR, (
+            f"Expected CALL_ERROR for {tool}: {content}, got {error_type}"
+        )
 
 
 def test_classifier_http_5xx_as_transient():
@@ -189,15 +197,23 @@ def test_classifier_http_5xx_as_transient():
     classifier = ErrorClassifier()
 
     test_cases = [
-        ("web_fetch", "HTTPStatusError: Server error '502 Bad Gateway' for url 'https://example.com'"),
-        ("web_fetch", "HTTPStatusError: Server error '503 Service Unavailable' for url 'https://api'"),
+        (
+            "web_fetch",
+            "HTTPStatusError: Server error '502 Bad Gateway' for url 'https://example.com'",
+        ),
+        (
+            "web_fetch",
+            "HTTPStatusError: Server error '503 Service Unavailable' for url 'https://api'",
+        ),
         ("some_tool", "status_code=500 Internal Server Error"),
     ]
 
     for tool, content in test_cases:
         result = ToolResult(tool=tool, ok=False, content=content)
         error_type = classifier.classify(tool, result)
-        assert error_type == ErrorType.TRANSIENT, f"Expected TRANSIENT for {tool}: {content}, got {error_type}"
+        assert error_type == ErrorType.TRANSIENT, (
+            f"Expected TRANSIENT for {tool}: {content}, got {error_type}"
+        )
 
 
 def test_classifier_no_substring_false_positive():
@@ -206,10 +222,10 @@ def test_classifier_no_substring_false_positive():
 
     # 這個錯誤訊息包含 "blocked"（會內含 "locked" 子字串），但不是真正的 locked 錯誤
     result = ToolResult(
-        tool="web_fetch",
-        ok=False,
-        content="ValueError: blocked non-public address: 192.168.1.1"
+        tool="web_fetch", ok=False, content="ValueError: blocked non-public address: 192.168.1.1"
     )
     error_type = classifier.classify("web_fetch", result)
     # 現在應該是 CALL_ERROR（invalid path / value），而不是因為 substring 誤判 TRANSIENT
-    assert error_type == ErrorType.CALL_ERROR, f"Should not false-positive transient on 'blocked' substring, got {error_type}"
+    assert error_type == ErrorType.CALL_ERROR, (
+        f"Should not false-positive transient on 'blocked' substring, got {error_type}"
+    )

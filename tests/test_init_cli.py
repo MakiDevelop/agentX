@@ -30,7 +30,9 @@ def test_init_payload_wraps_project_profile(tmp_path) -> None:  # noqa: ANN001
 def test_init_json_outputs_read_only_profile(tmp_path) -> None:  # noqa: ANN001
     _python_uv_workspace(tmp_path)
 
-    result = CliRunner().invoke(app, ["init", "--workspace", str(tmp_path), "--namespace", "project:demo", "--json"])
+    result = CliRunner().invoke(
+        app, ["init", "--workspace", str(tmp_path), "--namespace", "project:demo", "--json"]
+    )
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -42,7 +44,9 @@ def test_init_json_outputs_read_only_profile(tmp_path) -> None:  # noqa: ANN001
 
 
 def test_init_jsonl_outputs_event_envelope(tmp_path) -> None:  # noqa: ANN001
-    result = CliRunner().invoke(app, ["init", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["init", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)

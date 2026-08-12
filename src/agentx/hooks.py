@@ -64,15 +64,15 @@ class HookEvent(str, Enum):
     - additional_context / system_message: concatenated (newlines)
     """
 
-    PRE_TOOL_USE = "PreToolUse"      # Fired before each tool execution. Args: ToolCallContext
-    POST_TOOL_USE = "PostToolUse"    # Fired after each tool execution. Args: ToolResultContext
-    SESSION_START = "SessionStart"   # Fired once at session creation.
-    SESSION_END = "SessionEnd"       # Fired on session termination.
-    FINAL_ANSWER = "FinalAnswer"     # Fired when the agent produces a final answer.
-    TURN_START = "TurnStart"         # Start of an agent turn/step.
-    TURN_END = "TurnEnd"             # End of an agent turn/step (after tool or final).
-    COMPACT = "Compact"              # Fired when context compaction occurs.
-    ERROR = "Error"                  # Fired on unrecoverable / classified errors.
+    PRE_TOOL_USE = "PreToolUse"  # Fired before each tool execution. Args: ToolCallContext
+    POST_TOOL_USE = "PostToolUse"  # Fired after each tool execution. Args: ToolResultContext
+    SESSION_START = "SessionStart"  # Fired once at session creation.
+    SESSION_END = "SessionEnd"  # Fired on session termination.
+    FINAL_ANSWER = "FinalAnswer"  # Fired when the agent produces a final answer.
+    TURN_START = "TurnStart"  # Start of an agent turn/step.
+    TURN_END = "TurnEnd"  # End of an agent turn/step (after tool or final).
+    COMPACT = "Compact"  # Fired when context compaction occurs.
+    ERROR = "Error"  # Fired on unrecoverable / classified errors.
 
 
 class HookVeto(Exception):

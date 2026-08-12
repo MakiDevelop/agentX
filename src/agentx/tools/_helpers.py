@@ -131,9 +131,13 @@ def patch_write_paths(patch: str) -> set[str]:
         if line.startswith(("--- ", "+++ ")):
             _add_patch_path(paths, line[4:], strip=1)
         elif line.startswith(("rename from ", "rename to ")):
-            _add_patch_path(paths, line.removeprefix("rename from ").removeprefix("rename to "), strip=0)
+            _add_patch_path(
+                paths, line.removeprefix("rename from ").removeprefix("rename to "), strip=0
+            )
         elif line.startswith(("copy from ", "copy to ")):
-            _add_patch_path(paths, line.removeprefix("copy from ").removeprefix("copy to "), strip=0)
+            _add_patch_path(
+                paths, line.removeprefix("copy from ").removeprefix("copy to "), strip=0
+            )
     return paths
 
 
@@ -216,17 +220,19 @@ def docker_compose_command(
 
 # === Web helpers (added to support test_tools web tests post-merge) ===
 
+
 def extract_web_text(html: str, content_type: str = "") -> str:
     """Simple text extraction: strip scripts/styles and tags. For Gemma-friendly tool use."""
     if not html or not isinstance(html, str):
         return ""
     # Remove script and style blocks
-    text = re.sub(r'(?is)<(script|style).*?>.*?</\1>', ' ', html)
+    text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", html)
     # Remove all other tags
-    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r"<[^>]+>", " ", text)
     # Collapse whitespace
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
     return text
+
 
 def validate_external_url(url: str) -> None:
     """Reject local/private hosts. Used by web_fetch tool for safety (Gemma context)."""
@@ -245,7 +251,8 @@ def validate_external_url(url: str) -> None:
             ip = sockaddr[0]
             if (
                 ip.startswith(("10.", "192.168."))
-                or ip.startswith("172.") and 16 <= int(ip.split(".")[1]) <= 31
+                or ip.startswith("172.")
+                and 16 <= int(ip.split(".")[1]) <= 31
             ):
                 raise ValueError("blocked non-public")
     except socket.gaierror:

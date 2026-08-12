@@ -23,7 +23,13 @@ def _git_repo_with_change(path: Path) -> None:
     target.write_text("one\ntwo\n", encoding="utf-8")
 
 
-def _review(workspace: Path, *, ok: bool = True, commit_ready: bool = True, blockers: list[str] | None = None) -> dict[str, object]:
+def _review(
+    workspace: Path,
+    *,
+    ok: bool = True,
+    commit_ready: bool = True,
+    blockers: list[str] | None = None,
+) -> dict[str, object]:
     return {
         "schema": "agentx.review.v1",
         "workspace": str(workspace.resolve()),
@@ -47,7 +53,10 @@ def _doctor(workspace: Path, *, ok: bool = True) -> dict[str, object]:
         "ok": ok,
         "warnings": [],
         "checks": [{"name": "git", "ok": ok, "detail": "ok" if ok else "failed"}],
-        "workflow_artifact_health": {"schema": "agentx.workflow_artifact_health.v1", "status": "no_workflow_artifact"},
+        "workflow_artifact_health": {
+            "schema": "agentx.workflow_artifact_health.v1",
+            "status": "no_workflow_artifact",
+        },
     }
 
 
@@ -66,39 +75,65 @@ def _approvals(workspace: Path, *, ok: bool = True, denied_count: int = 0) -> di
     }
 
 
-def test_gate_payload_passes_when_review_doctor_and_approvals_pass(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("agentx.cli.review_payload", lambda settings, timeout=120, run_verify=True: _review(settings.workspace))
-    monkeypatch.setattr("agentx.cli.doctor_payload", lambda settings, live_probes=False: _doctor(settings.workspace))
-    monkeypatch.setattr("agentx.cli.approvals_payload", lambda settings, session="latest", limit=20: _approvals(settings.workspace))
+def test_gate_payload_passes_when_review_doctor_and_approvals_pass(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        "agentx.cli.review_payload",
+        lambda settings, timeout=120, run_verify=True: _review(settings.workspace),
+    )
+    monkeypatch.setattr(
+        "agentx.cli.doctor_payload", lambda settings, live_probes=False: _doctor(settings.workspace)
+    )
+    monkeypatch.setattr(
+        "agentx.cli.approvals_payload",
+        lambda settings, session="latest", limit=20: _approvals(settings.workspace),
+    )
 
     payload = gate_payload(Settings(workspace=tmp_path))
 
     assert payload["schema"] == "agentx.gate.v1"
     assert payload["ok"] is True
     assert payload["commit_ready"] is True
-    assert payload["recommended_command"] == "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker"
+    assert (
+        payload["recommended_command"]
+        == "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker"
+    )
     assert payload["recommended_kind"] == "commit_plan"
     assert payload["recommended_risk"] == "GREEN"
     assert payload["blockers"] == []
     assert payload["review"]["schema"] == "agentx.review.v1"  # type: ignore[index]
     assert payload["doctor"]["schema"] == "agentx.doctor.v1"  # type: ignore[index]
     assert payload["approvals"]["schema"] == "agentx.approvals.v1"  # type: ignore[index]
-    assert "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker" in payload["next_commands"]
+    assert (
+        "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker"
+        in payload["next_commands"]
+    )
 
 
 def test_gate_payload_carries_review_blockers(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         "agentx.cli.review_payload",
-        lambda settings, timeout=120, run_verify=True: _review(settings.workspace, ok=False, commit_ready=False, blockers=["verify_failed"]),
+        lambda settings, timeout=120, run_verify=True: _review(
+            settings.workspace, ok=False, commit_ready=False, blockers=["verify_failed"]
+        ),
     )
-    monkeypatch.setattr("agentx.cli.doctor_payload", lambda settings, live_probes=False: _doctor(settings.workspace))
-    monkeypatch.setattr("agentx.cli.approvals_payload", lambda settings, session="latest", limit=20: _approvals(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.doctor_payload", lambda settings, live_probes=False: _doctor(settings.workspace)
+    )
+    monkeypatch.setattr(
+        "agentx.cli.approvals_payload",
+        lambda settings, session="latest", limit=20: _approvals(settings.workspace),
+    )
 
     payload = gate_payload(Settings(workspace=tmp_path))
 
     assert payload["ok"] is False
     assert payload["commit_ready"] is False
-    assert payload["recommended_command"] == "fix blockers, then rerun agentx gate --json --fail-on-blocker"
+    assert (
+        payload["recommended_command"]
+        == "fix blockers, then rerun agentx gate --json --fail-on-blocker"
+    )
     assert payload["recommended_kind"] == "fix_blockers"
     assert payload["recommended_risk"] == "UNKNOWN"
     assert payload["blockers"] == ["verify_failed"]
@@ -106,9 +141,18 @@ def test_gate_payload_carries_review_blockers(tmp_path: Path, monkeypatch) -> No
 
 
 def test_gate_payload_blocks_when_doctor_fails(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("agentx.cli.review_payload", lambda settings, timeout=120, run_verify=True: _review(settings.workspace))
-    monkeypatch.setattr("agentx.cli.doctor_payload", lambda settings, live_probes=False: _doctor(settings.workspace, ok=False))
-    monkeypatch.setattr("agentx.cli.approvals_payload", lambda settings, session="latest", limit=20: _approvals(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.review_payload",
+        lambda settings, timeout=120, run_verify=True: _review(settings.workspace),
+    )
+    monkeypatch.setattr(
+        "agentx.cli.doctor_payload",
+        lambda settings, live_probes=False: _doctor(settings.workspace, ok=False),
+    )
+    monkeypatch.setattr(
+        "agentx.cli.approvals_payload",
+        lambda settings, session="latest", limit=20: _approvals(settings.workspace),
+    )
 
     payload = gate_payload(Settings(workspace=tmp_path))
 
@@ -118,7 +162,10 @@ def test_gate_payload_blocks_when_doctor_fails(tmp_path: Path, monkeypatch) -> N
 
 
 def test_gate_payload_carries_doctor_workflow_artifact_warning(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("agentx.cli.review_payload", lambda settings, timeout=120, run_verify=True: _review(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.review_payload",
+        lambda settings, timeout=120, run_verify=True: _review(settings.workspace),
+    )
     monkeypatch.setattr(
         "agentx.cli.doctor_payload",
         lambda settings, live_probes=False: {
@@ -131,7 +178,10 @@ def test_gate_payload_carries_doctor_workflow_artifact_warning(tmp_path: Path, m
             },
         },
     )
-    monkeypatch.setattr("agentx.cli.approvals_payload", lambda settings, session="latest", limit=20: _approvals(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.approvals_payload",
+        lambda settings, session="latest", limit=20: _approvals(settings.workspace),
+    )
 
     payload = gate_payload(Settings(workspace=tmp_path))
 
@@ -142,8 +192,13 @@ def test_gate_payload_carries_doctor_workflow_artifact_warning(tmp_path: Path, m
 
 
 def test_gate_payload_blocks_when_approval_was_denied(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("agentx.cli.review_payload", lambda settings, timeout=120, run_verify=True: _review(settings.workspace))
-    monkeypatch.setattr("agentx.cli.doctor_payload", lambda settings, live_probes=False: _doctor(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.review_payload",
+        lambda settings, timeout=120, run_verify=True: _review(settings.workspace),
+    )
+    monkeypatch.setattr(
+        "agentx.cli.doctor_payload", lambda settings, live_probes=False: _doctor(settings.workspace)
+    )
     monkeypatch.setattr(
         "agentx.cli.approvals_payload",
         lambda settings, session="latest", limit=20: _approvals(settings.workspace, denied_count=1),
@@ -157,9 +212,17 @@ def test_gate_payload_blocks_when_approval_was_denied(tmp_path: Path, monkeypatc
 
 
 def test_gate_payload_warns_when_approval_session_is_missing(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("agentx.cli.review_payload", lambda settings, timeout=120, run_verify=True: _review(settings.workspace))
-    monkeypatch.setattr("agentx.cli.doctor_payload", lambda settings, live_probes=False: _doctor(settings.workspace))
-    monkeypatch.setattr("agentx.cli.approvals_payload", lambda settings, session="latest", limit=20: _approvals(settings.workspace, ok=False))
+    monkeypatch.setattr(
+        "agentx.cli.review_payload",
+        lambda settings, timeout=120, run_verify=True: _review(settings.workspace),
+    )
+    monkeypatch.setattr(
+        "agentx.cli.doctor_payload", lambda settings, live_probes=False: _doctor(settings.workspace)
+    )
+    monkeypatch.setattr(
+        "agentx.cli.approvals_payload",
+        lambda settings, session="latest", limit=20: _approvals(settings.workspace, ok=False),
+    )
 
     payload = gate_payload(Settings(workspace=tmp_path))
 
@@ -171,7 +234,9 @@ def test_gate_payload_warns_when_approval_session_is_missing(tmp_path: Path, mon
 def test_gate_payload_skip_options_warn_and_omit_sections(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         "agentx.cli.review_payload",
-        lambda settings, timeout=120, run_verify=False: _review(settings.workspace, commit_ready=False),
+        lambda settings, timeout=120, run_verify=False: _review(
+            settings.workspace, commit_ready=False
+        ),
     )
 
     payload = gate_payload(
@@ -193,7 +258,10 @@ def test_gate_payload_skip_options_warn_and_omit_sections(tmp_path: Path, monkey
 
 def test_gate_json_outputs_payload(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
-    monkeypatch.setattr("agentx.cli.verify_payload", lambda settings, timeout=120: {"schema": "agentx.verify.v1", "ok": True})
+    monkeypatch.setattr(
+        "agentx.cli.verify_payload",
+        lambda settings, timeout=120: {"schema": "agentx.verify.v1", "ok": True},
+    )
 
     result = CliRunner().invoke(
         app,
@@ -213,7 +281,16 @@ def test_gate_jsonl_outputs_event_envelope(tmp_path: Path) -> None:
 
     result = CliRunner().invoke(
         app,
-        ["gate", "--workspace", str(tmp_path), "--skip-verify", "--skip-doctor", "--skip-approvals", "--output-format", "jsonl"],
+        [
+            "gate",
+            "--workspace",
+            str(tmp_path),
+            "--skip-verify",
+            "--skip-doctor",
+            "--skip-approvals",
+            "--output-format",
+            "jsonl",
+        ],
     )
 
     assert result.exit_code == 0, result.output
@@ -227,7 +304,15 @@ def test_gate_fail_on_blocker_exits_one_but_prints_payload(tmp_path: Path) -> No
 
     result = CliRunner().invoke(
         app,
-        ["gate", "--workspace", str(tmp_path), "--skip-doctor", "--skip-approvals", "--json", "--fail-on-blocker"],
+        [
+            "gate",
+            "--workspace",
+            str(tmp_path),
+            "--skip-doctor",
+            "--skip-approvals",
+            "--json",
+            "--fail-on-blocker",
+        ],
     )
 
     assert result.exit_code == 1, result.output
@@ -241,7 +326,14 @@ def test_gate_plain_outputs_summary(tmp_path: Path) -> None:
 
     result = CliRunner().invoke(
         app,
-        ["gate", "--workspace", str(tmp_path), "--skip-verify", "--skip-doctor", "--skip-approvals"],
+        [
+            "gate",
+            "--workspace",
+            str(tmp_path),
+            "--skip-verify",
+            "--skip-doctor",
+            "--skip-approvals",
+        ],
     )
 
     assert result.exit_code == 0, result.output

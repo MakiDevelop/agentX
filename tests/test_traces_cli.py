@@ -89,7 +89,9 @@ def test_traces_payload_derives_events_from_session_store_metadata(tmp_path: Pat
 def test_traces_json_outputs_summary(tmp_path: Path) -> None:
     _write_trace_session(tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl")
 
-    result = CliRunner().invoke(app, ["traces", "20260102-000000", "--workspace", str(tmp_path), "--json"])
+    result = CliRunner().invoke(
+        app, ["traces", "20260102-000000", "--workspace", str(tmp_path), "--json"]
+    )
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)

@@ -174,7 +174,11 @@ def ace_init_payload(
         else "agentx next --json"
         if ok
         else "fix ACE blockers, then rerun agentx ace-init SESSION --goal GOAL --json",
-        "recommended_kind": "ace_init_write" if ok and not write else "next" if ok else "fix_ace_blockers",
+        "recommended_kind": "ace_init_write"
+        if ok and not write
+        else "next"
+        if ok
+        else "fix_ace_blockers",
         "recommended_risk": "YELLOW" if ok and not write else "GREEN" if ok else "UNKNOWN",
         "next_commands": [
             f"agentx ace-init {normalized_id} --goal GOAL --write --json"
@@ -454,7 +458,11 @@ def ace_briefing_payload(
         else "agentx next --json"
         if ok
         else "fix ACE briefing blockers, then rerun agentx ace-briefing SESSION --agent AGENT --json",
-        "recommended_kind": "ace_briefing_write" if ok and not write else "next" if ok else "fix_ace_briefing_blockers",
+        "recommended_kind": "ace_briefing_write"
+        if ok and not write
+        else "next"
+        if ok
+        else "fix_ace_briefing_blockers",
         "recommended_risk": "YELLOW" if ok and not write else "GREEN" if ok else "UNKNOWN",
         "next_commands": [
             f"agentx ace-briefing {normalized_id} --agent {agent_slug} --write --json"
@@ -641,10 +649,20 @@ def ace_status_payload(
             manifest = manifest_path.read_text(encoding="utf-8")
 
     if session_dir is not None and not blockers:
-        briefings = [ace_session_file_info(path) for path in sorted(session_dir.glob("briefing-*.md")) if path.is_file()]
-        answers = [ace_session_file_info(path) for path in sorted(session_dir.glob("answer-*.md")) if path.is_file()]
+        briefings = [
+            ace_session_file_info(path)
+            for path in sorted(session_dir.glob("briefing-*.md"))
+            if path.is_file()
+        ]
+        answers = [
+            ace_session_file_info(path)
+            for path in sorted(session_dir.glob("answer-*.md"))
+            if path.is_file()
+        ]
         sections = extract_manifest_sections(manifest)
-        section_entries = {heading: manifest_section_bullets(text) for heading, text in sections.items()}
+        section_entries = {
+            heading: manifest_section_bullets(text) for heading, text in sections.items()
+        }
         missing_sections = [heading for heading in ACE_MANIFEST_SECTIONS if heading not in sections]
         if missing_sections:
             warnings.append("manifest_sections_missing:" + ",".join(missing_sections))
@@ -678,12 +696,18 @@ def ace_status_payload(
             "briefings": len(briefings),
             "answers": len(answers),
             "open_questions": len(open_questions),
-            "section_entries": {heading: len(entries) for heading, entries in section_entries.items()},
+            "section_entries": {
+                heading: len(entries) for heading, entries in section_entries.items()
+            },
         },
         "manifest": manifest_excerpt,
         "manifest_truncated": manifest_truncated,
         "recommended_command": recommended_command,
-        "recommended_kind": "ace_briefing" if ok and open_questions else "next" if ok else "fix_ace_status_blockers",
+        "recommended_kind": "ace_briefing"
+        if ok and open_questions
+        else "next"
+        if ok
+        else "fix_ace_status_blockers",
         "recommended_risk": "GREEN" if ok else "UNKNOWN",
         "next_commands": [recommended_command],
     }

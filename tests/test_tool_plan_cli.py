@@ -44,7 +44,9 @@ def test_tool_plan_payload_blocks_missing_required_write_args(tmp_path) -> None:
 
 
 def test_tool_plan_payload_blocks_unsafe_write_path(tmp_path) -> None:  # noqa: ANN001
-    payload = tool_plan_payload(Settings(workspace=tmp_path), "write_file", '{"path":".agentx/state.json","content":"{}"}')
+    payload = tool_plan_payload(
+        Settings(workspace=tmp_path), "write_file", '{"path":".agentx/state.json","content":"{}"}'
+    )
 
     assert payload["ok"] is False
     assert payload["risk"] == "YELLOW"
@@ -52,7 +54,9 @@ def test_tool_plan_payload_blocks_unsafe_write_path(tmp_path) -> None:  # noqa: 
 
 
 def test_tool_plan_payload_integrates_run_command_policy(tmp_path) -> None:  # noqa: ANN001
-    good = tool_plan_payload(Settings(workspace=tmp_path), "run_command", '{"command":"uv run pytest -q"}')
+    good = tool_plan_payload(
+        Settings(workspace=tmp_path), "run_command", '{"command":"uv run pytest -q"}'
+    )
     bad = tool_plan_payload(Settings(workspace=tmp_path), "run_command", '{"command":"npm test"}')
 
     assert good["ok"] is True
@@ -84,7 +88,9 @@ def test_tool_plan_payload_blocks_invalid_args_json(tmp_path) -> None:  # noqa: 
 
 
 def test_tool_plan_json_outputs_payload() -> None:
-    result = CliRunner().invoke(app, ["tool-plan", "read_file", "--args-json", '{"path":"README.md"}', "--json"])
+    result = CliRunner().invoke(
+        app, ["tool-plan", "read_file", "--args-json", '{"path":"README.md"}', "--json"]
+    )
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -94,7 +100,17 @@ def test_tool_plan_json_outputs_payload() -> None:
 
 
 def test_tool_plan_jsonl_outputs_event_envelope() -> None:
-    result = CliRunner().invoke(app, ["tool-plan", "read_file", "--args-json", '{"path":"README.md"}', "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app,
+        [
+            "tool-plan",
+            "read_file",
+            "--args-json",
+            '{"path":"README.md"}',
+            "--output-format",
+            "jsonl",
+        ],
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)
@@ -105,7 +121,14 @@ def test_tool_plan_jsonl_outputs_event_envelope() -> None:
 def test_tool_plan_fail_on_blocker_exits_one_but_prints_payload() -> None:
     result = CliRunner().invoke(
         app,
-        ["tool-plan", "write_file", "--args-json", '{"path":".agentx/state.json","content":"{}"}', "--json", "--fail-on-blocker"],
+        [
+            "tool-plan",
+            "write_file",
+            "--args-json",
+            '{"path":".agentx/state.json","content":"{}"}',
+            "--json",
+            "--fail-on-blocker",
+        ],
     )
 
     assert result.exit_code == 1, result.output

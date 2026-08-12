@@ -43,7 +43,10 @@ def test_verify_payload_runs_until_first_failure(tmp_path, monkeypatch) -> None:
         ["uv", "run", "ruff", "check", "."],
         ["uv", "run", "pytest", "-q"],
     ]
-    assert payload["recommended_command"] == "fix verification failures, then rerun agentx verify --json --fail-on-error"
+    assert (
+        payload["recommended_command"]
+        == "fix verification failures, then rerun agentx verify --json --fail-on-error"
+    )
     assert payload["recommended_kind"] == "fix_verify"
     assert payload["recommended_risk"] == "UNKNOWN"
     assert payload["checks"][0]["ok"] is True  # type: ignore[index]
@@ -89,7 +92,9 @@ def test_verify_jsonl_outputs_event_envelope(tmp_path, monkeypatch) -> None:  # 
         lambda command, **kwargs: subprocess.CompletedProcess(command, 0, stdout="ok", stderr=""),
     )
 
-    result = CliRunner().invoke(app, ["verify", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["verify", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)
@@ -102,7 +107,9 @@ def test_verify_fail_on_error_exits_one_but_prints_payload(tmp_path, monkeypatch
     (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
     monkeypatch.setattr(
         "agentx.cli.subprocess.run",
-        lambda command, **kwargs: subprocess.CompletedProcess(command, 1, stdout="failed", stderr=""),
+        lambda command, **kwargs: subprocess.CompletedProcess(
+            command, 1, stdout="failed", stderr=""
+        ),
     )
 
     result = CliRunner().invoke(
@@ -121,7 +128,9 @@ def test_verify_exit_code_is_opt_in(tmp_path, monkeypatch) -> None:  # noqa: ANN
     (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
     monkeypatch.setattr(
         "agentx.cli.subprocess.run",
-        lambda command, **kwargs: subprocess.CompletedProcess(command, 1, stdout="failed", stderr=""),
+        lambda command, **kwargs: subprocess.CompletedProcess(
+            command, 1, stdout="failed", stderr=""
+        ),
     )
     payload = verify_payload(Settings(workspace=tmp_path))
 

@@ -61,7 +61,8 @@ def test_tools_json_accepts_keyword_filter(tmp_path) -> None:  # noqa: ANN001
     assert payload["query"] == "memory"
     assert payload["count"] > 0
     assert all(
-        "memory" in " ".join(
+        "memory"
+        in " ".join(
             [
                 tool["name"],
                 tool["description"],
@@ -85,7 +86,9 @@ def test_tools_json_accepts_risk_filter(tmp_path) -> None:  # noqa: ANN001
 
 
 def test_tools_jsonl_outputs_event_envelope(tmp_path) -> None:  # noqa: ANN001
-    result = CliRunner().invoke(app, ["tools", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["tools", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)

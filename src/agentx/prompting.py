@@ -46,7 +46,9 @@ def slash_completion_items_from_catalog(
                 text=slash_completion_text(usage),
                 display=usage,
                 description=str(entry["description"]),
-                risk=str(entry.get("risk", "GREEN - read-only, local display, or low-risk routing")),
+                risk=str(
+                    entry.get("risk", "GREEN - read-only, local display, or low-risk routing")
+                ),
                 examples=tuple(str(example) for example in entry.get("examples", ())),
                 related=tuple(str(command) for command in entry.get("related", ())),
             )

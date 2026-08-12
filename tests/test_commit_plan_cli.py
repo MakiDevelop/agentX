@@ -48,7 +48,10 @@ def _failing_review(workspace: Path) -> dict[str, object]:
 
 def test_commit_plan_payload_reports_ready_with_message(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
-    monkeypatch.setattr("agentx.cli.review_payload", lambda settings, timeout=120, run_verify=True: _passing_review(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.review_payload",
+        lambda settings, timeout=120, run_verify=True: _passing_review(settings.workspace),
+    )
 
     payload = commit_plan_payload(Settings(workspace=tmp_path), message="新增功能")
 
@@ -67,14 +70,20 @@ def test_commit_plan_payload_reports_ready_with_message(tmp_path: Path, monkeypa
 
 def test_commit_plan_payload_blocks_without_message(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
-    monkeypatch.setattr("agentx.cli.review_payload", lambda settings, timeout=120, run_verify=True: _passing_review(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.review_payload",
+        lambda settings, timeout=120, run_verify=True: _passing_review(settings.workspace),
+    )
 
     payload = commit_plan_payload(Settings(workspace=tmp_path))
 
     assert payload["ok"] is False
     assert payload["ready_to_commit"] is False
     assert payload["commit_message"] is None
-    assert payload["recommended_command"] == "fix blockers, then rerun agentx commit-plan --message '中文 commit 訊息' --json"
+    assert (
+        payload["recommended_command"]
+        == "fix blockers, then rerun agentx commit-plan --message '中文 commit 訊息' --json"
+    )
     assert payload["recommended_kind"] == "fix_blockers"
     assert payload["recommended_risk"] == "UNKNOWN"
     assert payload["blockers"] == ["missing_commit_message"]
@@ -83,7 +92,10 @@ def test_commit_plan_payload_blocks_without_message(tmp_path: Path, monkeypatch)
 
 def test_commit_plan_payload_carries_review_blockers(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
-    monkeypatch.setattr("agentx.cli.review_payload", lambda settings, timeout=120, run_verify=True: _failing_review(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.review_payload",
+        lambda settings, timeout=120, run_verify=True: _failing_review(settings.workspace),
+    )
 
     payload = commit_plan_payload(Settings(workspace=tmp_path), message="修正測試")
 
@@ -95,7 +107,10 @@ def test_commit_plan_payload_carries_review_blockers(tmp_path: Path, monkeypatch
 
 def test_commit_plan_json_outputs_payload(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
-    monkeypatch.setattr("agentx.cli.review_payload", lambda settings, timeout=120, run_verify=True: _passing_review(settings.workspace))
+    monkeypatch.setattr(
+        "agentx.cli.review_payload",
+        lambda settings, timeout=120, run_verify=True: _passing_review(settings.workspace),
+    )
 
     result = CliRunner().invoke(
         app,
@@ -114,7 +129,16 @@ def test_commit_plan_jsonl_outputs_event_envelope(tmp_path: Path) -> None:
 
     result = CliRunner().invoke(
         app,
-        ["commit-plan", "--workspace", str(tmp_path), "-m", "新增功能", "--skip-verify", "--output-format", "jsonl"],
+        [
+            "commit-plan",
+            "--workspace",
+            str(tmp_path),
+            "-m",
+            "新增功能",
+            "--skip-verify",
+            "--output-format",
+            "jsonl",
+        ],
     )
 
     assert result.exit_code == 0, result.output

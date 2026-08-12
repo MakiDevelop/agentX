@@ -52,12 +52,30 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
     (tmp_path / "AGENTX.md").write_text("LOCAL_RULE_MARKER", encoding="utf-8")
     (tmp_path / "tracked.py").write_text("print('one')\n", encoding="utf-8")
-    subprocess.run(["git", "add", "tracked.py"], cwd=tmp_path, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "add", "tracked.py"], cwd=tmp_path, check=True, capture_output=True, text=True
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "init"], cwd=tmp_path, check=True, capture_output=True, text=True
+    )
     (tmp_path / "tracked.py").write_text("print('one')\nprint('two')\n", encoding="utf-8")
-    save_tasks(tmp_path, [{"id": 1, "description": "active work", "status": "in_progress", "notes": ""}])
+    save_tasks(
+        tmp_path, [{"id": 1, "description": "active work", "status": "in_progress", "notes": ""}]
+    )
     _write_session(tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl")
 
     payload = inspect_payload(
@@ -71,7 +89,9 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     assert payload["workspace"] == str(tmp_path.resolve())
     assert payload["ok"] is True
     assert payload["live_probes"] is False
-    assert payload["recommended_command"] == "agentx approvals latest --denied --json --fail-on-denied"
+    assert (
+        payload["recommended_command"] == "agentx approvals latest --denied --json --fail-on-denied"
+    )
     assert payload["recommended_kind"] == "approval_audit"
     assert payload["recommended_risk"] == "GREEN"
     assert payload["signals"]["dirty"] is True  # type: ignore[index]
@@ -103,8 +123,13 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     assert payload["memory_status"]["live_probe"] is False  # type: ignore[index]
     assert payload["artifacts"]["schema"] == "agentx.artifacts.v1"  # type: ignore[index]
     assert payload["next"]["schema"] == "agentx.next.v1"  # type: ignore[index]
-    assert payload["next"]["recommended_command"] == "agentx approvals latest --denied --json --fail-on-denied"  # type: ignore[index]
-    assert payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"  # type: ignore[index]
+    assert (
+        payload["next"]["recommended_command"]
+        == "agentx approvals latest --denied --json --fail-on-denied"
+    )  # type: ignore[index]
+    assert (
+        payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
+    )  # type: ignore[index]
     next_kinds = [item["kind"] for item in payload["next"]["recommendations"]]  # type: ignore[index]
     assert "memory_handoff_workflow" in next_kinds
     assert "ace_council_workflow" in next_kinds
@@ -117,14 +142,19 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
         "uv run ruff check .",
         "uv run pytest -q",
     ]
-    assert all(item["schema"] == "agentx.command_plan.v1" for item in payload["verify_command_plans"])  # type: ignore[index]
+    assert all(
+        item["schema"] == "agentx.command_plan.v1" for item in payload["verify_command_plans"]
+    )  # type: ignore[index]
     assert all(item["allowed"] is True for item in payload["verify_command_plans"])  # type: ignore[index]
     assert "agentx diff --json" in payload["next_commands"]
     assert "agentx instructions --json" in payload["next_commands"]
     assert "agentx memory-status --json" in payload["next_commands"]
     assert "agentx gate --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx review --json --fail-on-blocker" in payload["next_commands"]
-    assert "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker" in payload["next_commands"]
+    assert (
+        "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker"
+        in payload["next_commands"]
+    )
     assert "secret-token" not in json.dumps(payload)
 
 
@@ -156,7 +186,10 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["artifacts"]["schema"] == "agentx.artifacts.v1"
     assert payload["artifacts"]["latest_artifact"]["artifact_type"] == "workflow_run"
     assert payload["artifacts"]["workflow_chain"]["status"] == "ready"
-    assert payload["artifacts"]["workflow_chain"]["next_result_output"] == ".agentx/runs/workflow-ace-next.json"
+    assert (
+        payload["artifacts"]["workflow_chain"]["next_result_output"]
+        == ".agentx/runs/workflow-ace-next.json"
+    )
     assert payload["next"]["schema"] == "agentx.next.v1"
     assert payload["signals"]["latest_artifact_type"] == "workflow_run"
     assert payload["signals"]["latest_workflow_run_query"] == "ace"
@@ -165,8 +198,13 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["signals"]["latest_workflow_resume_ready"] is True
     assert payload["signals"]["latest_workflow_missing_input_count"] == 0
     assert payload["signals"]["latest_workflow_chain_status"] == "ready"
-    assert payload["signals"]["latest_workflow_next_result_output"] == ".agentx/runs/workflow-ace-next.json"
-    assert payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
+    assert (
+        payload["signals"]["latest_workflow_next_result_output"]
+        == ".agentx/runs/workflow-ace-next.json"
+    )
+    assert (
+        payload["next"]["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
+    )
     next_kinds = [item["kind"] for item in payload["next"]["recommendations"]]
     assert "memory_handoff_workflow" in next_kinds
     assert "ace_council_workflow" in next_kinds
@@ -178,13 +216,18 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert "agentx memory-status --json" in payload["next_commands"]
     assert "agentx gate --json --fail-on-blocker" in payload["next_commands"]
     assert "agentx review --json --fail-on-blocker" in payload["next_commands"]
-    assert "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker" in payload["next_commands"]
+    assert (
+        "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker"
+        in payload["next_commands"]
+    )
     assert "agentx verify --json --fail-on-error" in payload["next_commands"]
     assert "agentx traces latest --json" in payload["next_commands"]
 
 
 def test_inspect_jsonl_outputs_event_envelope(tmp_path) -> None:  # noqa: ANN001
-    result = CliRunner().invoke(app, ["inspect", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["inspect", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)

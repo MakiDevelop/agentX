@@ -509,7 +509,9 @@ def test_handle_infra_dispatches_map_and_failure_prefix() -> None:
         )
     ]
 
-    default_tools = FakeTools(ToolResult(tool="infrastructure_context", ok=True, content="ALL MAPS"))
+    default_tools = FakeTools(
+        ToolResult(tool="infrastructure_context", ok=True, content="ALL MAPS")
+    )
     default_transcript = FakeTranscript()
     default_lines, default_emit = _capture()
     handle_infra("/infra", tools=default_tools, transcript=default_transcript, emit=default_emit)
@@ -517,7 +519,9 @@ def test_handle_infra_dispatches_map_and_failure_prefix() -> None:
     assert default_tools.calls == [("infrastructure_context", {"map": "all"})]
     assert default_lines == ["ALL MAPS"]
 
-    fail_tools = FakeTools(ToolResult(tool="infrastructure_context", ok=False, content="unknown map"))
+    fail_tools = FakeTools(
+        ToolResult(tool="infrastructure_context", ok=False, content="unknown map")
+    )
     fail_transcript = FakeTranscript()
     fail_lines, fail_emit = _capture()
     handle_infra("/infra nope", tools=fail_tools, transcript=fail_transcript, emit=fail_emit)
@@ -547,7 +551,9 @@ def test_handle_intent_dispatches_text_and_failure_prefix() -> None:
         )
     ]
 
-    fail_tools = FakeTools(ToolResult(tool="analyze_intent", ok=False, content="intent text is required"))
+    fail_tools = FakeTools(
+        ToolResult(tool="analyze_intent", ok=False, content="intent text is required")
+    )
     fail_transcript = FakeTranscript()
     fail_lines, fail_emit = _capture()
     handle_intent("/intent", tools=fail_tools, transcript=fail_transcript, emit=fail_emit)
@@ -577,7 +583,9 @@ def test_handle_plan_task_dispatches_text_and_failure_prefix() -> None:
         )
     ]
 
-    fail_tools = FakeTools(ToolResult(tool="plan_task", ok=False, content="plan-task text is required"))
+    fail_tools = FakeTools(
+        ToolResult(tool="plan_task", ok=False, content="plan-task text is required")
+    )
     fail_transcript = FakeTranscript()
     fail_lines, fail_emit = _capture()
     handle_plan_task("/plan-task", tools=fail_tools, transcript=fail_transcript, emit=fail_emit)
@@ -1526,10 +1534,13 @@ def test_handle_transcript_approvals_denied_filters_current_session(tmp_path: Pa
     state = _state(tmp_path)
     path = tmp_path / "session.jsonl"
     path.write_text(
-        "\n".join([
-            '{"ts":"2026-01-02T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}',
-            '{"ts":"2026-01-02T00:00:01","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}',
-        ]) + "\n",
+        "\n".join(
+            [
+                '{"ts":"2026-01-02T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}',
+                '{"ts":"2026-01-02T00:00:01","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}',
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
     transcript = FakeTranscript(path=path)
@@ -1583,10 +1594,13 @@ def test_handle_transcript_approvals_latest_denied_filters_previous_session(tmp_
     sessions.mkdir(parents=True)
     previous = sessions / "20260101-000000.jsonl"
     previous.write_text(
-        "\n".join([
-            '{"ts":"2026-01-01T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}',
-            '{"ts":"2026-01-01T00:00:01","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}',
-        ]) + "\n",
+        "\n".join(
+            [
+                '{"ts":"2026-01-01T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}',
+                '{"ts":"2026-01-01T00:00:01","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}',
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
     current = sessions / "20260102-000000.jsonl"

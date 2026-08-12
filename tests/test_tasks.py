@@ -368,6 +368,7 @@ def test_migrate_skips_blank_title(tmp_path: Path):
 # - 可被 CI 直接收集執行，作為 "task.py 移除後無回歸" 的 gate
 # =============================================================================
 
+
 def test_ci_no_legacy_clean_workspace_migration_status(tmp_path: Path):
     """模擬完全無 legacy 環境：乾淨 workspace 應回報無 legacy 資料。"""
     status = get_task_migration_status(tmp_path)
@@ -385,9 +386,7 @@ def test_ci_no_legacy_subprocess_has_no_task_module(tmp_path: Path):
     env = os.environ.copy()
     existing_pythonpath = env.get("PYTHONPATH")
     env["PYTHONPATH"] = (
-        str(src_path)
-        if not existing_pythonpath
-        else f"{src_path}{os.pathsep}{existing_pythonpath}"
+        str(src_path) if not existing_pythonpath else f"{src_path}{os.pathsep}{existing_pythonpath}"
     )
     code = """
 from importlib.util import find_spec

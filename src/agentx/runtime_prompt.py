@@ -6,7 +6,9 @@ from agentx.persona import persona_prompt
 from agentx.tools import ToolRegistry, tool_prompt_line
 
 
-def build_chat_system_prompt(workspace: Path, persona: str = "default", model: str | None = None) -> str:
+def build_chat_system_prompt(
+    workspace: Path, persona: str = "default", model: str | None = None
+) -> str:
     """純聊天模式專用 prompt（較輕量，不走 JSON agent 模式）"""
     gemma = _maybe_gemma_delta(model)
     return f"""You are agentX, a local Ollama-powered engineering shell.
@@ -46,6 +48,7 @@ When the user asks about your capabilities, answer as this local agentX runtime,
 # Phase C: Prompt 統一（DRY 核心區塊）
 # 所有 agent 模式共用的原則與規則，只寫一次。
 # ============================================================
+
 
 def _base_engineering_principles() -> str:
     return """Core Principles (Maki's Engineering Culture):
@@ -187,9 +190,11 @@ Example 2 — When tests may be affected:
 - Only after clearing pending with targeted → consider full run_tests.
 """
 
+
 # ============================================================
 # 各模式專屬 Delta
 # ============================================================
+
 
 def _interactive_delta() -> str:
     return """Engineering Workflow for Gemma4 / Small Models (讀 code → 寫 code → 測 code cycle):

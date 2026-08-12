@@ -132,7 +132,9 @@ def test_diff_jsonl_outputs_event_envelope(tmp_path: Path) -> None:
     target = _git_repo_with_file(tmp_path)
     target.write_text("one\ntwo\n", encoding="utf-8")
 
-    result = CliRunner().invoke(app, ["diff", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["diff", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)

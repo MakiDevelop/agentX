@@ -3,7 +3,12 @@ import json
 from typer.testing import CliRunner
 
 from agentx.cli import app
-from agentx.command_catalog import CLI_CAPABILITIES, RUNNER_RECOMMENDED_ENTRYPOINTS, RUNNER_SMOKE_WORKFLOWS, capabilities_payload
+from agentx.command_catalog import (
+    CLI_CAPABILITIES,
+    RUNNER_RECOMMENDED_ENTRYPOINTS,
+    RUNNER_SMOKE_WORKFLOWS,
+    capabilities_payload,
+)
 
 
 def test_capabilities_payload_lists_top_level_cli_commands() -> None:
@@ -117,7 +122,8 @@ def test_capabilities_payload_lists_top_level_cli_commands() -> None:
     }
     assert payload["by_schema"]["agentx.gate.v1"]["command"] == "agentx gate"  # type: ignore[index]
     assert all(
-        set(item) == {
+        set(item)
+        == {
             "command",
             "usage",
             "description",
@@ -196,7 +202,9 @@ def test_capabilities_payload_filters_by_schema_or_keyword() -> None:
     assert reliability_profile_payload["count"] == 1
     assert reliability_profile_payload["capabilities"][0]["command"] == "agentx reliability-profile"  # type: ignore[index]
     assert reliability_decision_payload["count"] == 1
-    assert reliability_decision_payload["capabilities"][0]["command"] == "agentx reliability-decision"  # type: ignore[index]
+    assert (
+        reliability_decision_payload["capabilities"][0]["command"] == "agentx reliability-decision"
+    )  # type: ignore[index]
     assert objective_gate_payload["count"] == 1
     assert objective_gate_payload["capabilities"][0]["command"] == "agentx objective-gate"  # type: ignore[index]
 
@@ -212,7 +220,9 @@ def test_capabilities_json_outputs_catalog() -> None:
 
 
 def test_capabilities_jsonl_outputs_event_envelope() -> None:
-    result = CliRunner().invoke(app, ["capabilities", "agentx.verify.v1", "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["capabilities", "agentx.verify.v1", "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)

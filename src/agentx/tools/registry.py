@@ -91,7 +91,9 @@ class ToolRegistry:
         return [tool for tool in self._tools.values() if tool_is_enabled(tool)]
 
     def describe_tools(self) -> dict[str, str]:
-        return {name: tool.description for name, tool in self._tools.items() if tool_is_enabled(tool)}
+        return {
+            name: tool.description for name, tool in self._tools.items() if tool_is_enabled(tool)
+        }
 
     def describe_tool_infos(self) -> list[dict[str, object]]:
         infos: list[dict[str, object]] = []

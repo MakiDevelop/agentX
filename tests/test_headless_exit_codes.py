@@ -55,7 +55,12 @@ def test_headless_exit_code_cancelled() -> None:
 
 
 def test_structured_headless_exit_code_overrides_success_text() -> None:
-    assert cli.headless_exit_code("看起來完成", termination="final_failed", failing_tools=("run_tests",)) == 1
+    assert (
+        cli.headless_exit_code(
+            "看起來完成", termination="final_failed", failing_tools=("run_tests",)
+        )
+        == 1
+    )
     assert cli.headless_exit_code("完成", termination="max_steps_exceeded") == 2
     assert cli.headless_exit_code("runtime error: timeout", termination="runtime_error") == 2
     assert cli.headless_exit_code("run timed out", termination="timeout") == 124
@@ -255,7 +260,10 @@ def test_headless_payload_contract_required_keys() -> None:
         "session_path",
     }.issubset(payload)
     assert payload["schema_version"] == cli.HEADLESS_PAYLOAD_SCHEMA_VERSION
-    assert payload["recommended_command"] == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json"
+    assert (
+        payload["recommended_command"]
+        == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json"
+    )
     assert payload["recommended_kind"] == "resume_headless"
     assert payload["recommended_risk"] == "YELLOW"
 
@@ -331,12 +339,17 @@ def test_handoff_inspect_payload_extracts_takeover_fields() -> None:
 
 def test_handoff_inspect_command_plain_output() -> None:
     runner = CliRunner()
-    result = runner.invoke(cli.app, ["handoff-inspect", "tests/fixtures/headless_result_failure.json"])
+    result = runner.invoke(
+        cli.app, ["handoff-inspect", "tests/fixtures/headless_result_failure.json"]
+    )
 
     assert result.exit_code == 0
     assert "schema_version: agentx.headless_result.v1" in result.output
     assert "status: final_failed" in result.output
-    assert "resume_command: agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json" in result.output
+    assert (
+        "resume_command: agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json"
+        in result.output
+    )
     assert "- Run the smallest targeted verification" in result.output
 
 
@@ -344,7 +357,12 @@ def test_handoff_inspect_command_jsonl_output() -> None:
     runner = CliRunner()
     result = runner.invoke(
         cli.app,
-        ["handoff-inspect", "tests/fixtures/headless_result_failure.json", "--output-format", "jsonl"],
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--output-format",
+            "jsonl",
+        ],
     )
     event = json.loads(result.output)
 
@@ -358,22 +376,38 @@ def test_handoff_inspect_field_resume_command_plain() -> None:
     runner = CliRunner()
     result = runner.invoke(
         cli.app,
-        ["handoff-inspect", "tests/fixtures/headless_result_failure.json", "--field", "resume_command"],
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+        ],
     )
 
     assert result.exit_code == 0
-    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    assert (
+        result.output
+        == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    )
 
 
 def test_handoff_inspect_default_exit_zero_for_failed_payload() -> None:
     runner = CliRunner()
     result = runner.invoke(
         cli.app,
-        ["handoff-inspect", "tests/fixtures/headless_result_failure.json", "--field", "resume_command"],
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "resume_command",
+        ],
     )
 
     assert result.exit_code == 0
-    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    assert (
+        result.output
+        == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    )
 
 
 def test_handoff_inspect_use_payload_exit_code_plain() -> None:
@@ -390,7 +424,10 @@ def test_handoff_inspect_use_payload_exit_code_plain() -> None:
     )
 
     assert result.exit_code == 1
-    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    assert (
+        result.output
+        == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    )
 
 
 def test_handoff_inspect_use_payload_exit_code_jsonl() -> None:
@@ -411,7 +448,10 @@ def test_handoff_inspect_use_payload_exit_code_jsonl() -> None:
 
     assert result.exit_code == 1
     assert event["event"] == "handoff_inspect_field"
-    assert event["data"]["value"] == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json"
+    assert (
+        event["data"]["value"]
+        == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json"
+    )
 
 
 def test_handoff_inspect_require_handoff_accepts_ready_payload() -> None:
@@ -428,7 +468,10 @@ def test_handoff_inspect_require_handoff_accepts_ready_payload() -> None:
     )
 
     assert result.exit_code == 0
-    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    assert (
+        result.output
+        == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    )
 
 
 def test_handoff_inspect_require_handoff_rejects_missing_resume_command(tmp_path: Path) -> None:
@@ -440,7 +483,9 @@ def test_handoff_inspect_require_handoff_rejects_missing_resume_command(tmp_path
     target = tmp_path / "result.json"
     target.write_text(json.dumps(event), encoding="utf-8")
 
-    result = runner.invoke(cli.app, ["handoff-inspect", str(target), "--field", "resume_command", "--require-handoff"])
+    result = runner.invoke(
+        cli.app, ["handoff-inspect", str(target), "--field", "resume_command", "--require-handoff"]
+    )
 
     assert result.exit_code == 1
     assert result.output == "\n"
@@ -483,7 +528,10 @@ def test_handoff_inspect_require_handoff_ready_can_preserve_payload_exit_code() 
     )
 
     assert result.exit_code == 1
-    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    assert (
+        result.output
+        == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    )
 
 
 def test_handoff_inspect_require_schema_version_accepts_current_fixture() -> None:
@@ -561,14 +609,24 @@ def test_handoff_inspect_exit_code_normalizes_payload_exit_code(
 
 
 def test_handoff_takeover_ready_requires_flag_and_resume_command() -> None:
-    assert cli.handoff_takeover_ready({"needs_handoff": True, "resume_command": "agentx ..."}) is True
-    assert cli.handoff_takeover_ready({"needs_handoff": False, "resume_command": "agentx ..."}) is False
+    assert (
+        cli.handoff_takeover_ready({"needs_handoff": True, "resume_command": "agentx ..."}) is True
+    )
+    assert (
+        cli.handoff_takeover_ready({"needs_handoff": False, "resume_command": "agentx ..."})
+        is False
+    )
     assert cli.handoff_takeover_ready({"needs_handoff": True, "resume_command": None}) is False
 
 
 def test_handoff_schema_version_matches_current_contract() -> None:
-    assert cli.handoff_schema_version_matches({"schema_version": cli.HEADLESS_PAYLOAD_SCHEMA_VERSION}) is True
-    assert cli.handoff_schema_version_matches({"schema_version": "agentx.headless_result.v0"}) is False
+    assert (
+        cli.handoff_schema_version_matches({"schema_version": cli.HEADLESS_PAYLOAD_SCHEMA_VERSION})
+        is True
+    )
+    assert (
+        cli.handoff_schema_version_matches({"schema_version": "agentx.headless_result.v0"}) is False
+    )
     assert cli.handoff_schema_version_matches({}) is False
 
 
@@ -608,7 +666,7 @@ def test_handoff_inspect_next_prompt_quotes_shell_sensitive_text() -> None:
 
     assert result.exit_code == 0
     assert result.output == (
-        'agentx -p \'fix Bob\'"\'"\'s test\' --agent --resume-session contract.session.jsonl --json\n'
+        "agentx -p 'fix Bob'\"'\"'s test' --agent --resume-session contract.session.jsonl --json\n"
     )
 
 
@@ -648,7 +706,7 @@ def test_handoff_inspect_next_prompt_file_quotes_shell_sensitive_path() -> None:
 
     assert result.exit_code == 0
     assert result.output == (
-        'agentx --prompt-file \'briefings/Bob\'"\'"\'s next.md\' --agent --resume-session contract.session.jsonl --json\n'
+        "agentx --prompt-file 'briefings/Bob'\"'\"'s next.md' --agent --resume-session contract.session.jsonl --json\n"
     )
 
 
@@ -684,7 +742,10 @@ def test_format_handoff_briefing_markdown_includes_takeover_fields() -> None:
     assert briefing.startswith("# agentX Handoff Briefing\n")
     assert "Schema Version: agentx.headless_result.v1" in briefing
     assert "Needs Handoff: true" in briefing
-    assert "```bash\nagentx --prompt-file .agentx/handoff/next.md --agent --resume-session contract.session.jsonl --json\n```" in briefing
+    assert (
+        "```bash\nagentx --prompt-file .agentx/handoff/next.md --agent --resume-session contract.session.jsonl --json\n```"
+        in briefing
+    )
     assert "## Recovery Checklist" in briefing
     assert "- Run the smallest targeted verification" in briefing
 
@@ -719,7 +780,10 @@ def test_handoff_inspect_briefing_output_writes_markdown(
     assert briefing.is_file()
     content = briefing.read_text(encoding="utf-8")
     assert "# agentX Handoff Briefing" in content
-    assert "agentx --prompt-file artifacts/handoff.md --agent --resume-session contract.session.jsonl --json" in content
+    assert (
+        "agentx --prompt-file artifacts/handoff.md --agent --resume-session contract.session.jsonl --json"
+        in content
+    )
     assert "## Next Steps" in content
 
 
@@ -832,7 +896,10 @@ def test_handoff_inspect_resume_output_format_json_keeps_json_mode() -> None:
     )
 
     assert result.exit_code == 0
-    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    assert (
+        result.output
+        == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    )
 
 
 def test_handoff_inspect_resume_output_format_rejects_unknown() -> None:
@@ -854,7 +921,9 @@ def test_handoff_inspect_resume_output_format_rejects_unknown() -> None:
 
 
 def test_apply_handoff_resume_output_format_replaces_existing_output_format() -> None:
-    payload = {"resume_command": "agentx -p next --agent --resume-session s.jsonl --output-format jsonl"}
+    payload = {
+        "resume_command": "agentx -p next --agent --resume-session s.jsonl --output-format jsonl"
+    }
 
     assert cli.apply_handoff_resume_output_format(payload, "json") == {
         "resume_command": "agentx -p next --agent --resume-session s.jsonl --json"
@@ -882,7 +951,9 @@ def test_handoff_inspect_next_prompt_and_file_are_mutually_exclusive() -> None:
 
 
 def test_apply_handoff_next_prompt_file_leaves_non_placeholder_commands_unchanged() -> None:
-    payload = {"resume_command": "agentx --prompt-file next.md --agent --resume-session s.jsonl --json"}
+    payload = {
+        "resume_command": "agentx --prompt-file next.md --agent --resume-session s.jsonl --json"
+    }
 
     assert cli.apply_handoff_next_prompt_file(payload, "other.md") == payload
 
@@ -891,7 +962,12 @@ def test_handoff_inspect_field_recovery_checklist_plain() -> None:
     runner = CliRunner()
     result = runner.invoke(
         cli.app,
-        ["handoff-inspect", "tests/fixtures/headless_result_failure.json", "--field", "recovery_checklist"],
+        [
+            "handoff-inspect",
+            "tests/fixtures/headless_result_failure.json",
+            "--field",
+            "recovery_checklist",
+        ],
     )
 
     assert result.exit_code == 0
@@ -963,10 +1039,12 @@ def test_handoff_inspect_reads_jsonl_input(tmp_path: Path) -> None:
     event = json.loads(fixture.read_text(encoding="utf-8"))
     target = tmp_path / "result.jsonl"
     target.write_text(
-        "\n".join([
-            json.dumps({"event": "dry_run", "data": {"ok": True}}),
-            json.dumps(event),
-        ]),
+        "\n".join(
+            [
+                json.dumps({"event": "dry_run", "data": {"ok": True}}),
+                json.dumps(event),
+            ]
+        ),
         encoding="utf-8",
     )
 
@@ -981,10 +1059,12 @@ def test_handoff_inspect_reads_stdin_jsonl() -> None:
     runner = CliRunner()
     fixture = Path("tests/fixtures/headless_result_failure.json")
     event = json.loads(fixture.read_text(encoding="utf-8"))
-    jsonl_input = "\n".join([
-        json.dumps({"event": "dry_run", "data": {"ok": True}}),
-        json.dumps(event),
-    ])
+    jsonl_input = "\n".join(
+        [
+            json.dumps({"event": "dry_run", "data": {"ok": True}}),
+            json.dumps(event),
+        ]
+    )
 
     result = runner.invoke(
         cli.app,
@@ -1024,10 +1104,15 @@ def test_handoff_resume_uses_bundle_handoff_markdown_as_prompt_file(tmp_path: Pa
 def test_handoff_resume_result_file_keeps_prompt_placeholder() -> None:
     runner = CliRunner()
 
-    result = runner.invoke(cli.app, ["handoff-resume", "tests/fixtures/headless_result_failure.json"])
+    result = runner.invoke(
+        cli.app, ["handoff-resume", "tests/fixtures/headless_result_failure.json"]
+    )
 
     assert result.exit_code == 0
-    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    assert (
+        result.output
+        == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    )
 
 
 def test_handoff_resume_accepts_next_prompt_and_output_format(tmp_path: Path) -> None:
@@ -1100,7 +1185,9 @@ def test_handoff_resume_dry_run_jsonl_output(tmp_path: Path) -> None:
     (bundle / "result.json").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
     (bundle / "handoff.md").write_text("# next\n", encoding="utf-8")
 
-    result = runner.invoke(cli.app, ["handoff-resume", str(bundle), "--dry-run", "--output-format", "jsonl"])
+    result = runner.invoke(
+        cli.app, ["handoff-resume", str(bundle), "--dry-run", "--output-format", "jsonl"]
+    )
     event = json.loads(result.output)
 
     assert result.exit_code == 0
@@ -1109,7 +1196,9 @@ def test_handoff_resume_dry_run_jsonl_output(tmp_path: Path) -> None:
     assert str(bundle / "handoff.md") in event["data"]["argv"]
 
 
-def test_handoff_resume_execute_runs_generated_argv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handoff_resume_execute_runs_generated_argv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     runner = CliRunner()
     bundle = tmp_path / "run"
     bundle.mkdir()
@@ -1128,15 +1217,17 @@ def test_handoff_resume_execute_runs_generated_argv(tmp_path: Path, monkeypatch:
     result = runner.invoke(cli.app, ["handoff-resume", str(bundle), "--execute"])
 
     assert result.exit_code == 7
-    assert calls == [[
-        "agentx",
-        "--prompt-file",
-        str(bundle / "handoff.md"),
-        "--agent",
-        "--resume-session",
-        "contract.session.jsonl",
-        "--json",
-    ]]
+    assert calls == [
+        [
+            "agentx",
+            "--prompt-file",
+            str(bundle / "handoff.md"),
+            "--agent",
+            "--resume-session",
+            "contract.session.jsonl",
+            "--json",
+        ]
+    ]
 
 
 def test_handoff_resume_dry_run_and_execute_are_mutually_exclusive(tmp_path: Path) -> None:
@@ -1178,7 +1269,10 @@ def test_handoff_resume_missing_handoff_exits_nonzero(tmp_path: Path) -> None:
     result = runner.invoke(cli.app, ["handoff-resume", str(target)])
 
     assert result.exit_code == 1
-    assert result.output == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    assert (
+        result.output
+        == "agentx -p '<next prompt>' --agent --resume-session contract.session.jsonl --json\n"
+    )
 
 
 def test_headless_payload_keeps_resume_fields_null_without_session_path() -> None:
@@ -1224,8 +1318,14 @@ def test_headless_json_payload_includes_optional_phases() -> None:
 
 
 def test_headless_exception_result_is_structured() -> None:
-    result = cli.headless_exception_result(RuntimeError("boom"), session_path="/tmp/run.session.jsonl")
-    payload = json.loads(cli.headless_json_payload(result, cli.headless_exit_code(result.output, termination=result.termination)))
+    result = cli.headless_exception_result(
+        RuntimeError("boom"), session_path="/tmp/run.session.jsonl"
+    )
+    payload = json.loads(
+        cli.headless_json_payload(
+            result, cli.headless_exit_code(result.output, termination=result.termination)
+        )
+    )
 
     assert payload["termination"] == "runtime_error"
     assert payload["exit_code"] == 2
@@ -1241,12 +1341,18 @@ def test_headless_exception_result_is_structured() -> None:
     ]
     assert payload["log_summary"]["handoff_summary"]["status"] == "runtime_error"
     assert payload["log_summary"]["handoff_summary"]["needs_handoff"] is True
-    assert payload["log_summary"]["handoff_summary"]["last_error"]["message"] == "RuntimeError: boom"
+    assert (
+        payload["log_summary"]["handoff_summary"]["last_error"]["message"] == "RuntimeError: boom"
+    )
 
 
 def test_headless_timeout_result_is_structured() -> None:
     result = cli.headless_timeout_result(1.5, session_path="/tmp/run.session.jsonl")
-    payload = json.loads(cli.headless_json_payload(result, cli.headless_exit_code(result.output, termination=result.termination)))
+    payload = json.loads(
+        cli.headless_json_payload(
+            result, cli.headless_exit_code(result.output, termination=result.termination)
+        )
+    )
 
     assert payload["termination"] == "timeout"
     assert payload["exit_code"] == 124
@@ -1309,7 +1415,9 @@ def test_wants_json_output_rejects_unknown_format() -> None:
 
 
 def test_structured_payload_text_wraps_jsonl_event() -> None:
-    data = json.loads(cli.structured_payload_text({"ok": True}, output_format="jsonl", event="result"))
+    data = json.loads(
+        cli.structured_payload_text({"ok": True}, output_format="jsonl", event="result")
+    )
 
     assert data == {"event": "result", "data": {"ok": True}}
 
@@ -1729,7 +1837,9 @@ def test_print_prompt_dry_run_jsonl_wraps_dry_run_event(monkeypatch) -> None:  #
     runner = CliRunner()
     monkeypatch.setattr(cli, "run_print_prompt", lambda *args, **kwargs: "should not run")
 
-    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--dry-run", "--output-format", "jsonl"])
+    result = runner.invoke(
+        cli.app, ["-p", "demo", "--agent", "--dry-run", "--output-format", "jsonl"]
+    )
     event = json.loads(result.output)
 
     assert result.exit_code == 0
@@ -2189,7 +2299,9 @@ def test_print_prompt_result_output_writes_jsonl_artifact(tmp_path: Path, monkey
     result_path = tmp_path / "artifacts" / "result.jsonl"
 
     def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
-        return cli.HeadlessRunResult(output="failed", termination="final_failed", failing_tools=("run_tests",))
+        return cli.HeadlessRunResult(
+            output="failed", termination="final_failed", failing_tools=("run_tests",)
+        )
 
     monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
 
@@ -2295,7 +2407,9 @@ def test_print_prompt_handoff_briefing_output_writes_markdown_artifact(
     briefing_path = tmp_path / "artifacts" / "handoff.md"
 
     def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
-        return headless_result_with_handoff(session_path=str(tmp_path / ".agentx" / "sessions" / "run.session.jsonl"))
+        return headless_result_with_handoff(
+            session_path=str(tmp_path / ".agentx" / "sessions" / "run.session.jsonl")
+        )
 
     monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
 
@@ -2327,7 +2441,9 @@ def test_print_prompt_handoff_briefing_output_rejects_collision_with_result_outp
     monkeypatch,
 ) -> None:  # noqa: ANN001
     runner = CliRunner()
-    monkeypatch.setattr(cli, "run_print_prompt", lambda *args, **kwargs: headless_result_with_handoff())
+    monkeypatch.setattr(
+        cli, "run_print_prompt", lambda *args, **kwargs: headless_result_with_handoff()
+    )
 
     result = runner.invoke(
         cli.app,
@@ -2403,7 +2519,10 @@ def test_print_prompt_artifact_dir_writes_standard_bundle(
     payload = json.loads((artifact_dir / "result.json").read_text(encoding="utf-8"))
     briefing = (artifact_dir / "handoff.md").read_text(encoding="utf-8")
     assert payload["termination"] == "max_steps_exceeded"
-    assert "agentx -p '<next prompt>' --agent --resume-session session.session.jsonl --json" in briefing
+    assert (
+        "agentx -p '<next prompt>' --agent --resume-session session.session.jsonl --json"
+        in briefing
+    )
 
 
 def test_print_prompt_artifact_dir_uses_jsonl_result_name(
@@ -2514,7 +2633,9 @@ def test_print_prompt_quiet_suppresses_plain_output(monkeypatch) -> None:  # noq
     monkeypatch.setattr(
         cli,
         "run_print_prompt",
-        lambda *args, **kwargs: cli.HeadlessRunResult(output="SHOULD_NOT_PRINT", termination="final_success"),
+        lambda *args, **kwargs: cli.HeadlessRunResult(
+            output="SHOULD_NOT_PRINT", termination="final_success"
+        ),
     )
 
     result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--quiet"])
@@ -2582,7 +2703,15 @@ def test_print_prompt_workspace_option_controls_prompt_file_and_runner(
 
     result = runner.invoke(
         cli.app,
-        ["--workspace", str(tmp_path), "--prompt-file", "briefing.md", "--agent", "--output-format", "json"],
+        [
+            "--workspace",
+            str(tmp_path),
+            "--prompt-file",
+            "briefing.md",
+            "--agent",
+            "--output-format",
+            "json",
+        ],
     )
 
     assert result.exit_code == 0
@@ -2630,13 +2759,24 @@ def test_print_prompt_forwards_session_flags(monkeypatch) -> None:  # noqa: ANN0
 
     def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
         captured.update(kwargs)
-        return cli.HeadlessRunResult(output="ok", termination="final_success", session_path="/tmp/s.session.jsonl")
+        return cli.HeadlessRunResult(
+            output="ok", termination="final_success", session_path="/tmp/s.session.jsonl"
+        )
 
     monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
 
     result = runner.invoke(
         cli.app,
-        ["-p", "demo", "--agent", "--save-session", "--resume-session", "latest", "--no-memory", "--json"],
+        [
+            "-p",
+            "demo",
+            "--agent",
+            "--save-session",
+            "--resume-session",
+            "latest",
+            "--no-memory",
+            "--json",
+        ],
     )
     data = json.loads(result.output)
 
@@ -2662,7 +2802,11 @@ def test_print_prompt_forwards_session_output(monkeypatch) -> None:  # noqa: ANN
 
     def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
         captured.update(kwargs)
-        return cli.HeadlessRunResult(output="ok", termination="final_success", session_path=str(Path.cwd() / "artifacts/run.session.jsonl"))
+        return cli.HeadlessRunResult(
+            output="ok",
+            termination="final_success",
+            session_path=str(Path.cwd() / "artifacts/run.session.jsonl"),
+        )
 
     monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
 
@@ -2703,7 +2847,9 @@ def test_print_prompt_forwards_base_url_override(monkeypatch) -> None:  # noqa: 
 
     monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
 
-    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--base-url", "http://127.0.0.1:8081"])
+    result = runner.invoke(
+        cli.app, ["-p", "demo", "--agent", "--base-url", "http://127.0.0.1:8081"]
+    )
 
     assert result.exit_code == 0
     assert captured["base_url_override"] == "http://127.0.0.1:8081"
@@ -2777,7 +2923,9 @@ def test_print_prompt_dry_run_includes_run_timeout(monkeypatch) -> None:  # noqa
     runner = CliRunner()
     monkeypatch.setattr(cli, "run_print_prompt", lambda *args, **kwargs: "should not run")
 
-    result = runner.invoke(cli.app, ["-p", "demo", "--agent", "--run-timeout", "7", "--dry-run", "--json"])
+    result = runner.invoke(
+        cli.app, ["-p", "demo", "--agent", "--run-timeout", "7", "--dry-run", "--json"]
+    )
     data = json.loads(result.output)
 
     assert result.exit_code == 0
@@ -2820,13 +2968,17 @@ def test_run_print_prompt_plan_then_execute_runs_two_phases(monkeypatch) -> None
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
+        def run(
+            self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None
+        ) -> str:
             calls.append((prompt, plan_only))
             if plan_only:
                 return "PLAN_RESULT"
             return "EXECUTION_RESULT"
 
-    monkeypatch.setattr(cli, "build_runtime", lambda *args, **kwargs: (object(), object(), object()))
+    monkeypatch.setattr(
+        cli, "build_runtime", lambda *args, **kwargs: (object(), object(), object())
+    )
     monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
 
     result = cli.run_print_prompt(
@@ -2871,7 +3023,9 @@ def test_run_print_prompt_uses_model_override(monkeypatch) -> None:  # noqa: ANN
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
+        def run(
+            self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None
+        ) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, **kwargs):  # noqa: ANN001
@@ -2913,7 +3067,9 @@ def test_run_print_prompt_uses_base_url_override(monkeypatch) -> None:  # noqa: 
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
+        def run(
+            self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None
+        ) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, **kwargs):  # noqa: ANN001
@@ -2961,7 +3117,9 @@ def test_run_print_prompt_uses_workspace_override_and_project_config(
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
+        def run(
+            self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None
+        ) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, **kwargs):  # noqa: ANN001
@@ -3003,7 +3161,9 @@ def test_run_print_prompt_uses_timeout_override(monkeypatch) -> None:  # noqa: A
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
+        def run(
+            self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None
+        ) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, **kwargs):  # noqa: ANN001
@@ -3052,7 +3212,9 @@ def test_run_print_prompt_approval_override_wins_over_project_config(
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
+        def run(
+            self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None
+        ) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, approval_policy=None, **kwargs):  # noqa: ANN001
@@ -3106,7 +3268,9 @@ def test_run_print_prompt_includes_approval_receipts_in_log_summary(
                 _tool_outcomes={"memory_write": True},
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
+        def run(
+            self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None
+        ) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, approval_audit=None, **kwargs):  # noqa: ANN001
@@ -3165,7 +3329,9 @@ def test_run_print_prompt_forwards_backend_override_to_runtime(monkeypatch) -> N
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
+        def run(
+            self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None
+        ) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, backend_override=None, **kwargs):  # noqa: ANN001
@@ -3207,7 +3373,9 @@ def test_run_print_prompt_forwards_no_memory_to_runtime(monkeypatch) -> None:  #
                 last_failing_tools=set(),
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
+        def run(
+            self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None
+        ) -> str:
             return "ok"
 
     def fake_build_runtime(settings, *args, no_memory=False, **kwargs):  # noqa: ANN001
@@ -3240,16 +3408,22 @@ def test_run_print_prompt_writes_explicit_session_output(tmp_path: Path, monkeyp
 
             self.session = AgentSession(
                 settings=settings or make_settings(tmp_path, learning_enabled=False),
-                ollama=SimpleNamespace(chat=lambda *args, **kwargs: '{"type":"final","content":"done"}'),
+                ollama=SimpleNamespace(
+                    chat=lambda *args, **kwargs: '{"type":"final","content":"done"}'
+                ),
                 tools=ToolRegistry([]),
                 memory=None,
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
+        def run(
+            self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None
+        ) -> str:
             return "ok"
 
     target = tmp_path / "artifacts" / "run.session.jsonl"
-    monkeypatch.setattr(cli, "build_runtime", lambda *args, **kwargs: (object(), object(), object()))
+    monkeypatch.setattr(
+        cli, "build_runtime", lambda *args, **kwargs: (object(), object(), object())
+    )
     monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
 
     result = cli.run_print_prompt(
@@ -3281,16 +3455,22 @@ def test_run_print_prompt_runtime_error_preserves_explicit_session_output(
 
             self.session = AgentSession(
                 settings=settings or make_settings(tmp_path, learning_enabled=False),
-                ollama=SimpleNamespace(chat=lambda *args, **kwargs: '{"type":"final","content":"done"}'),
+                ollama=SimpleNamespace(
+                    chat=lambda *args, **kwargs: '{"type":"final","content":"done"}'
+                ),
                 tools=ToolRegistry([]),
                 memory=None,
             )
 
-        def run(self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None) -> str:
+        def run(
+            self, prompt: str, *, namespace: str, plan_only: bool | None = None, cancel_event=None
+        ) -> str:
             raise TimeoutError("model timed out")
 
     target = tmp_path / "artifacts" / "run.session.jsonl"
-    monkeypatch.setattr(cli, "build_runtime", lambda *args, **kwargs: (object(), object(), object()))
+    monkeypatch.setattr(
+        cli, "build_runtime", lambda *args, **kwargs: (object(), object(), object())
+    )
     monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
 
     result = cli.run_print_prompt(
@@ -3388,7 +3568,10 @@ def test_build_runtime_no_memory_uses_null_memory_client(tmp_path: Path, monkeyp
     _, memory, tools = cli.build_runtime(make_settings(tmp_path), no_memory=True)
 
     assert isinstance(memory, NullMemoryClient)
-    assert tools.run("memory_search", {"query": "anything", "namespace": "project:test"}).content == "[]"
+    assert (
+        tools.run("memory_search", {"query": "anything", "namespace": "project:test"}).content
+        == "[]"
+    )
 
 
 def test_build_runtime_records_yellow_approval_audit(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
@@ -3437,7 +3620,9 @@ def test_build_runtime_can_write_approval_audit_to_transcript(tmp_path: Path, mo
     )
 
     tools.run("memory_write", {"content": "receipt test", "namespace": "project:test"})
-    records = [json.loads(line) for line in transcript.path.read_text(encoding="utf-8").splitlines()]
+    records = [
+        json.loads(line) for line in transcript.path.read_text(encoding="utf-8").splitlines()
+    ]
 
     approval_records = [record for record in records if record["event"] == "approval"]
     assert approval_records == [
@@ -3460,13 +3645,25 @@ def test_ask_uses_shared_headless_runner_and_forwards_session_flags(monkeypatch)
     def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
         captured["args"] = args
         captured.update(kwargs)
-        return cli.HeadlessRunResult(output="ok", termination="final_success", session_path="/tmp/s.session.jsonl")
+        return cli.HeadlessRunResult(
+            output="ok", termination="final_success", session_path="/tmp/s.session.jsonl"
+        )
 
     monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
 
     result = runner.invoke(
         cli.app,
-        ["ask", "demo", "--save-session", "--resume-session", "latest", "--max-steps", "3", "--no-memory", "--json"],
+        [
+            "ask",
+            "demo",
+            "--save-session",
+            "--resume-session",
+            "latest",
+            "--max-steps",
+            "3",
+            "--no-memory",
+            "--json",
+        ],
     )
     data = json.loads(result.output)
 
@@ -3496,11 +3693,17 @@ def test_ask_forwards_session_output(monkeypatch) -> None:  # noqa: ANN001
 
     def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
         captured.update(kwargs)
-        return cli.HeadlessRunResult(output="ok", termination="final_success", session_path=str(Path.cwd() / "artifacts/ask.session.jsonl"))
+        return cli.HeadlessRunResult(
+            output="ok",
+            termination="final_success",
+            session_path=str(Path.cwd() / "artifacts/ask.session.jsonl"),
+        )
 
     monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
 
-    result = runner.invoke(cli.app, ["ask", "demo", "--session-output", "artifacts/ask.session.jsonl", "--json"])
+    result = runner.invoke(
+        cli.app, ["ask", "demo", "--session-output", "artifacts/ask.session.jsonl", "--json"]
+    )
     data = json.loads(result.output)
 
     assert result.exit_code == 0
@@ -3578,7 +3781,9 @@ def test_ask_handoff_briefing_output_writes_markdown_artifact(
     briefing_path = tmp_path / "artifacts" / "ask-handoff.md"
 
     def fake_run_print_prompt(*args, **kwargs):  # noqa: ANN001
-        return headless_result_with_handoff(session_path=str(tmp_path / ".agentx" / "sessions" / "ask.session.jsonl"))
+        return headless_result_with_handoff(
+            session_path=str(tmp_path / ".agentx" / "sessions" / "ask.session.jsonl")
+        )
 
     monkeypatch.setattr(cli, "run_print_prompt", fake_run_print_prompt)
 
@@ -3634,7 +3839,10 @@ def test_ask_artifact_dir_writes_standard_bundle(
     assert result.exit_code == 2
     assert result.output == ""
     assert (artifact_dir / "session.session.jsonl").is_file()
-    assert json.loads((artifact_dir / "result.json").read_text(encoding="utf-8"))["termination"] == "max_steps_exceeded"
+    assert (
+        json.loads((artifact_dir / "result.json").read_text(encoding="utf-8"))["termination"]
+        == "max_steps_exceeded"
+    )
     assert "# agentX Handoff Briefing" in (artifact_dir / "handoff.md").read_text(encoding="utf-8")
 
 
@@ -3805,7 +4013,9 @@ def test_ask_quiet_suppresses_plain_output(monkeypatch) -> None:  # noqa: ANN001
     monkeypatch.setattr(
         cli,
         "run_print_prompt",
-        lambda *args, **kwargs: cli.HeadlessRunResult(output="SHOULD_NOT_PRINT", termination="final_success"),
+        lambda *args, **kwargs: cli.HeadlessRunResult(
+            output="SHOULD_NOT_PRINT", termination="final_success"
+        ),
     )
 
     result = runner.invoke(cli.app, ["ask", "demo", "--quiet"])

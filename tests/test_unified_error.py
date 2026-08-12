@@ -26,7 +26,9 @@ class _OkTool:
 
 
 def test_tool_result_with_error_fields() -> None:
-    r = ToolResult(tool="t", ok=False, content="err", error_type="ValueError", error_details={"key": "val"})
+    r = ToolResult(
+        tool="t", ok=False, content="err", error_type="ValueError", error_details={"key": "val"}
+    )
     assert r.error_type == "ValueError"
     assert r.error_details == {"key": "val"}
 
@@ -53,8 +55,11 @@ def test_registry_no_error_type_on_success() -> None:
 
 def test_error_details_survives_json_roundtrip() -> None:
     original = ToolResult(
-        tool="t", ok=False, content="err",
-        error_type="KeyError", error_details={"missing": "field_x"},
+        tool="t",
+        ok=False,
+        content="err",
+        error_type="KeyError",
+        error_details={"missing": "field_x"},
     )
     json_str = original.model_dump_json()
     restored = ToolResult.model_validate_json(json_str)

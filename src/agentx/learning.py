@@ -23,15 +23,20 @@ PROPOSAL_STATUS_TRANSITIONS = {
 @dataclass
 class LearningProposal:
     """A structured proposal for self-improvement / learning outcome."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     source: str = ""  # e.g. session_id, task_id, recovery
     lesson_type: str = ""  # prompt_improvement, recovery_strategy, agentyx_md_update, task_template, tool_usage_pattern
     title: str = ""
     description: str = ""
-    evidence: list[str] = field(default_factory=list)  # quotes from transcript, error logs, success metrics
+    evidence: list[str] = field(
+        default_factory=list
+    )  # quotes from transcript, error logs, success metrics
     proposed_change: str = ""  # concrete diff, new text, or instruction for edit
-    fitness: dict[str, Any] = field(default_factory=dict)  # e.g. {"tests_pass": true, "ruff_ok": true, "no_principle_drift": true, "notes": "..."}
+    fitness: dict[str, Any] = field(
+        default_factory=dict
+    )  # e.g. {"tests_pass": true, "ruff_ok": true, "no_principle_drift": true, "notes": "..."}
     status: str = "proposed"  # proposed, under_review, approved, applied, rejected
     applied_to: list[str] = field(default_factory=list)  # e.g. ["AGENTX.md:123", "recovery.py"]
 
@@ -130,15 +135,17 @@ class LearningManager:
         self._write_md(proposal, md_path)
 
         # Update index
-        self.index["proposals"].append({
-            "id": proposal.id,
-            "timestamp": proposal.timestamp,
-            "type": proposal.lesson_type,
-            "status": proposal.status,
-            "title": proposal.title,
-            "json": str(json_path.relative_to(self.workspace)),
-            "md": str(md_path.relative_to(self.workspace)),
-        })
+        self.index["proposals"].append(
+            {
+                "id": proposal.id,
+                "timestamp": proposal.timestamp,
+                "type": proposal.lesson_type,
+                "status": proposal.status,
+                "title": proposal.title,
+                "json": str(json_path.relative_to(self.workspace)),
+                "md": str(md_path.relative_to(self.workspace)),
+            }
+        )
         self._save_index()
 
         # Optionally write to Memory Hall as learning episode
@@ -179,7 +186,9 @@ class LearningManager:
                     return LearningProposal(**data)
         return None
 
-    def update_status(self, proposal_id: str, new_status: str, applied_to: list[str] | None = None) -> bool:
+    def update_status(
+        self, proposal_id: str, new_status: str, applied_to: list[str] | None = None
+    ) -> bool:
         """Update a proposal's status (e.g. after human review). For core applies, use with care per AGENTX.md protocol."""
         for p in self.index.get("proposals", []):
             if p["id"] == proposal_id:
@@ -245,8 +254,11 @@ Only propose things that are generalizable and would have helped in this session
         try:
             # Use actual OllamaClient.chat (returns str content). Request JSON for structured proposals.
             messages = [
-                {"role": "system", "content": "You are a careful, evidence-based self-improvement module for agentX. Output ONLY a JSON array of 0-3 proposals. No extra text."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are a careful, evidence-based self-improvement module for agentX. Output ONLY a JSON array of 0-3 proposals. No extra text.",
+                },
+                {"role": "user", "content": prompt},
             ]
             text = ollama.chat(messages, json_mode=True)
             parsed = json.loads(text.strip())

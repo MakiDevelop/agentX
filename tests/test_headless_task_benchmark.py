@@ -112,12 +112,18 @@ def test_headless_agent_benchmark_completes_task_artifacts_next_and_gate(tmp_pat
     assert payload["schema_version"] == "agentx.headless_result.v1"
     assert payload["exit_code"] == 0
     assert payload["termination"] == "final_success"
-    assert payload["output"] == "Created BENCHMARK.md and completed the deterministic headless benchmark."
+    assert (
+        payload["output"]
+        == "Created BENCHMARK.md and completed the deterministic headless benchmark."
+    )
     assert payload["stats"]["tool_call_count"] == 1
     assert payload["session_path"].endswith(".agentx/runs/benchmark/session.session.jsonl")
 
     benchmark_file = tmp_path / "BENCHMARK.md"
-    assert benchmark_file.read_text(encoding="utf-8") == "# Headless Benchmark\n\ncompleted by deterministic fake backend\n"
+    assert (
+        benchmark_file.read_text(encoding="utf-8")
+        == "# Headless Benchmark\n\ncompleted by deterministic fake backend\n"
+    )
 
     artifact_dir = tmp_path / ".agentx" / "runs" / "benchmark"
     assert (artifact_dir / "session.session.jsonl").is_file()
@@ -144,7 +150,9 @@ def test_headless_agent_benchmark_completes_task_artifacts_next_and_gate(tmp_pat
     assert next_payload["recommended_kind"] == "gate"
     assert next_payload["recommended_command"] == "agentx gate --json --fail-on-blocker"
 
-    gate_result = runner.invoke(app, ["gate", "--workspace", str(tmp_path), "--skip-verify", "--json"])
+    gate_result = runner.invoke(
+        app, ["gate", "--workspace", str(tmp_path), "--skip-verify", "--json"]
+    )
     assert gate_result.exit_code == 0, gate_result.output
     gate_payload = json.loads(gate_result.output)
     assert gate_payload["schema"] == "agentx.gate.v1"

@@ -65,7 +65,9 @@ def _settings(workspace: Path, max_steps: int = 5) -> Settings:
     )
 
 
-def _coordinator(tmp_path: Path, responses: Sequence[str], tools: list[Any] | None = None) -> tuple[Coordinator, FakeOllama]:
+def _coordinator(
+    tmp_path: Path, responses: Sequence[str], tools: list[Any] | None = None
+) -> tuple[Coordinator, FakeOllama]:
     ollama = FakeOllama(responses)
     memory = FakeMemory()
     registry = ToolRegistry(tools or [])
@@ -140,12 +142,7 @@ def test_coordinator_marks_failure_when_step_stops(tmp_path: Path) -> None:
 
 
 def test_coordinator_continues_after_failure(tmp_path: Path) -> None:
-    plan_json = (
-        '{"steps": ['
-        '{"title": "fail", "details": "f"},'
-        '{"title": "ok", "details": "o"}'
-        "]}"
-    )
+    plan_json = '{"steps": [{"title": "fail", "details": "f"},{"title": "ok", "details": "o"}]}'
     coordinator, _ = _coordinator(
         tmp_path,
         [
@@ -199,9 +196,7 @@ class _FailingTool:
 def test_coordinator_rejects_plan_exceeding_max_steps(tmp_path: Path) -> None:
     # Plan with 8 steps exceeds PLAN_MAX_STEPS (7) → Pydantic validation
     # fails inside Coordinator._plan, wrapped in CoordinatorError (review N6).
-    big_plan_steps = ",".join(
-        f'{{"title": "s{i}", "details": "d"}}' for i in range(8)
-    )
+    big_plan_steps = ",".join(f'{{"title": "s{i}", "details": "d"}}' for i in range(8))
     plan_json = f'{{"steps": [{big_plan_steps}]}}'
 
     coordinator, _ = _coordinator(tmp_path, [plan_json])
@@ -217,9 +212,9 @@ def test_coordinator_step_fails_when_session_has_unresolved_failing_tool(tmp_pat
     responses = [
         plan_json,
         '{"type":"tool_call","tool":"fake_run","args":{}}',  # sub iter 1
-        '{"type":"final","content":"all good"}',             # iter 2 — blocked
-        '{"type":"final","content":"still done"}',           # iter 3 — blocked
-        '{"type":"final","content":"finished"}',             # iter 4 — blocked
+        '{"type":"final","content":"all good"}',  # iter 2 — blocked
+        '{"type":"final","content":"still done"}',  # iter 3 — blocked
+        '{"type":"final","content":"finished"}',  # iter 4 — blocked
         '{"type":"final","content":"final answer succeeded"}',  # iter 5 — accepted
         "merge report",
     ]

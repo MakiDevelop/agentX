@@ -44,7 +44,9 @@ def _make_settings(workspace: Path, max_steps: int = 5) -> Settings:
     return make_settings(workspace, max_steps=max_steps)
 
 
-def _session(tmp_path: Path, responses: Sequence[str], max_steps: int = 5) -> tuple[AgentSession, FakeOllama]:
+def _session(
+    tmp_path: Path, responses: Sequence[str], max_steps: int = 5
+) -> tuple[AgentSession, FakeOllama]:
     ollama = FakeOllama(responses)
     memory = FakeMemory()
     registry = ToolRegistry(builtin_tools(tmp_path, memory))  # type: ignore[arg-type]
@@ -177,7 +179,9 @@ def test_direct_tool_records_success_termination(tmp_path: Path) -> None:
     assert session.reflection_count == 0
 
 
-def test_direct_tool_records_failure_termination(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_direct_tool_records_failure_termination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     session, _ = _session(tmp_path, [])
     monkeypatch.setattr(
         session,
@@ -478,11 +482,12 @@ def test_compact_read_then_write_only_listed_as_modified(tmp_path: Path) -> None
     # 不該同時出現在 read-files
     read_block_start = summary.find("<read-files>")
     if read_block_start != -1:
-        read_block = summary[read_block_start:summary.find("</read-files>")]
+        read_block = summary[read_block_start : summary.find("</read-files>")]
         assert "shared.rs" not in read_block
 
 
 # === Focused tests for hook-driven verify fixes (alias, pending state, clear timing, guard) ===
+
 
 def test_post_edit_hook_populates_pending_for_canonical_and_alias(tmp_path: Path) -> None:
     """Test that edit_file (primary), search_replace (alias), write_file, insert_code populate pending_verifies.
@@ -496,7 +501,7 @@ def test_post_edit_hook_populates_pending_for_canonical_and_alias(tmp_path: Path
     ctx = ToolResultContext(
         tool="search_replace",
         args={"path": "src/foo.py"},
-        result=ToolResult(tool="search_replace", ok=True, content="patched")
+        result=ToolResult(tool="search_replace", ok=True, content="patched"),
     )
     res = session._on_post_edit_verify(ctx)
     assert "src/foo.py" in session.pending_verifies
@@ -508,7 +513,7 @@ def test_post_edit_hook_populates_pending_for_canonical_and_alias(tmp_path: Path
     ctx = ToolResultContext(
         tool="edit_file",
         args={"path": "src/bar.py"},
-        result=ToolResult(tool="edit_file", ok=True, content="edited")
+        result=ToolResult(tool="edit_file", ok=True, content="edited"),
     )
     session._on_post_edit_verify(ctx)
     assert "src/bar.py" in session.pending_verifies
@@ -517,7 +522,7 @@ def test_post_edit_hook_populates_pending_for_canonical_and_alias(tmp_path: Path
     ctx = ToolResultContext(
         tool="write_file",
         args={"path": "src/baz.py"},
-        result=ToolResult(tool="write_file", ok=True, content="written")
+        result=ToolResult(tool="write_file", ok=True, content="written"),
     )
     session._on_post_edit_verify(ctx)
     assert "src/baz.py" in session.pending_verifies
@@ -526,7 +531,7 @@ def test_post_edit_hook_populates_pending_for_canonical_and_alias(tmp_path: Path
     ctx = ToolResultContext(
         tool="insert_code",
         args={"path": "src/qux.py"},
-        result=ToolResult(tool="insert_code", ok=True, content="inserted")
+        result=ToolResult(tool="insert_code", ok=True, content="inserted"),
     )
     session._on_post_edit_verify(ctx)
     assert "src/qux.py" in session.pending_verifies
@@ -543,7 +548,7 @@ def test_post_edit_hook_skips_apply_patch_and_no_path(tmp_path: Path) -> None:
     ctx = ToolResultContext(
         tool="apply_patch",
         args={"patch": "diff --git ..."},
-        result=ToolResult(tool="apply_patch", ok=True, content="applied")
+        result=ToolResult(tool="apply_patch", ok=True, content="applied"),
     )
     res = session._on_post_edit_verify(ctx)
     assert not session.pending_verifies  # nothing added
@@ -551,9 +556,7 @@ def test_post_edit_hook_skips_apply_patch_and_no_path(tmp_path: Path) -> None:
 
     # no path
     ctx = ToolResultContext(
-        tool="edit_file",
-        args={},
-        result=ToolResult(tool="edit_file", ok=True, content="ok")
+        tool="edit_file", args={}, result=ToolResult(tool="edit_file", ok=True, content="ok")
     )
     session._on_post_edit_verify(ctx)
     assert not session.pending_verifies
@@ -568,10 +571,11 @@ def test_pending_verifies_state_persist_and_restore_and_clear_after_verify(tmp_p
     # Simulate hook adding pending
     from agentx.hooks import ToolResultContext
     from agentx.protocol import ToolResult
+
     ctx = ToolResultContext(
         tool="edit_file",
         args={"path": "src/pending.py"},
-        result=ToolResult(tool="edit_file", ok=True, content="ok")
+        result=ToolResult(tool="edit_file", ok=True, content="ok"),
     )
     session._on_post_edit_verify(ctx)
     assert "src/pending.py" in session.pending_verifies
@@ -581,7 +585,9 @@ def test_pending_verifies_state_persist_and_restore_and_clear_after_verify(tmp_p
 
     # Simulate restore (new session from store)
     # For simplicity, directly call restore on same (in real from_session_store does it)
-    session._restore_state_event("pending_verifies", {"src/pending.py": None})  # list in real, but set handles
+    session._restore_state_event(
+        "pending_verifies", {"src/pending.py": None}
+    )  # list in real, but set handles
     # Actually restore expects list from data
     # Re-set for test
     session.pending_verifies = set()
@@ -606,7 +612,9 @@ def test_duplicate_hook_registration_guard(tmp_path: Path) -> None:
     """
     session, _ = _session(tmp_path, ['{"type":"final","content":"done"}'])
 
-    post_listeners_before = len(session.hooks.listeners("PostToolUse")) if hasattr(session.hooks, "listeners") else 0
+    post_listeners_before = (
+        len(session.hooks.listeners("PostToolUse")) if hasattr(session.hooks, "listeners") else 0
+    )
 
     # Re-trigger the registration logic (as if re-init hooks)
     if session.hooks is not None:
@@ -614,7 +622,9 @@ def test_duplicate_hook_registration_guard(tmp_path: Path) -> None:
             session.hooks.add("PostToolUse", session._on_post_edit_verify)
             session._post_edit_verify_registered = True
 
-    post_listeners_after = len(session.hooks.listeners("PostToolUse")) if hasattr(session.hooks, "listeners") else 0
+    post_listeners_after = (
+        len(session.hooks.listeners("PostToolUse")) if hasattr(session.hooks, "listeners") else 0
+    )
 
     assert getattr(session, "_post_edit_verify_registered", False)
     assert post_listeners_after == post_listeners_before  # guard prevented duplicate
@@ -626,18 +636,25 @@ def test_integration_full_ask_with_edit_triggers_hook_verify_and_clear(tmp_path:
     """
     # Responses: model outputs tool_call for edit, then final
     import json as _json
-    edit_call = _json.dumps({
-        "type": "tool_call",
-        "tool": "search_replace",
-        "args": {"path": "src/integration.py", "oldText": "old", "newText": "x = 42  # valid clean python for ruff success"}
-    })
+
+    edit_call = _json.dumps(
+        {
+            "type": "tool_call",
+            "tool": "search_replace",
+            "args": {
+                "path": "src/integration.py",
+                "oldText": "old",
+                "newText": "x = 42  # valid clean python for ruff success",
+            },
+        }
+    )
     responses = [
         edit_call,
         '{"type":"final","content":"edit done and verified"}',
         '{"type":"final","content":"done"}',
         '{"type":"final","content":"done"}',
         '{"type":"final","content":"done"}',
-        '{"type":"final","content":"done"}'  # enough for full ask flow with tool execution + reflections
+        '{"type":"final","content":"done"}',  # enough for full ask flow with tool execution + reflections
     ]
 
     # Custom registry with auto_approve for YELLOW edit tools (search_replace etc.)
@@ -661,28 +678,46 @@ def test_integration_full_ask_with_edit_triggers_hook_verify_and_clear(tmp_path:
     # This ensures clear happens and we can assert no auto full + pending cleared on "success" path.
     import subprocess as _sp
     from unittest.mock import patch
+
     def success_side_effect(cmd, **kwargs):
-        if 'ruff' in ' '.join(cmd):
-            return type('R', (), {"stdout": "", "stderr": "", "returncode": 0})()
+        if "ruff" in " ".join(cmd):
+            return type("R", (), {"stdout": "", "stderr": "", "returncode": 0})()
         else:
-            return type('R', (), {"stdout": "collected 0 items", "stderr": "", "returncode": 5})()
+            return type("R", (), {"stdout": "collected 0 items", "stderr": "", "returncode": 5})()
 
     with patch.object(_sp, "run", side_effect=success_side_effect):
-        result = session.ask("please do a small edit to src/integration.py replacing old with new code")
+        result = session.ask(
+            "please do a small edit to src/integration.py replacing old with new code"
+        )
 
     # The edit tool's result should contain the hook-injected verify context (with read-back).
     # Per this micro-slice: only targeted ruff (per-path) is auto; full run_tests is explicit (model did not call it here, so no full test result).
     tool_msgs = [m for m in session.messages if m.get("role") == "tool"]
     assert len(tool_msgs) >= 1
     assert any("Hook-driven verify - stateful" in m.get("content", "") for m in tool_msgs)
-    edit_tool_content = next((m["content"] for m in tool_msgs if "search_replace" in m.get("content", "") or "edit_file" in m.get("content", "")), "")
+    edit_tool_content = next(
+        (
+            m["content"]
+            for m in tool_msgs
+            if "search_replace" in m.get("content", "") or "edit_file" in m.get("content", "")
+        ),
+        "",
+    )
     assert "src/integration.py" in edit_tool_content
     assert "Auto read-back snippet" in edit_tool_content  # from the hook enhancement
     # Assert targeted ruff happened (per-path), but no full run_tests result (since model went to final without calling run_tests)
-    assert any("targeted ruff" in m.get("content", "").lower() or "ruff check" in m.get("content", "") for m in tool_msgs)
-    assert any("pytest -k" in m.get("content", "") or "pytest" in m.get("content", "").lower() for m in tool_msgs)  # per-path pytest output ( -k for non-test src file)
+    assert any(
+        "targeted ruff" in m.get("content", "").lower() or "ruff check" in m.get("content", "")
+        for m in tool_msgs
+    )
+    assert any(
+        "pytest -k" in m.get("content", "") or "pytest" in m.get("content", "").lower()
+        for m in tool_msgs
+    )  # per-path pytest output ( -k for non-test src file)
     # For refined targeting, non-test .py uses -k, test files would use direct <path>
-    assert not any(" $ uv run pytest -q\nexit=" in m.get("content", "") for m in tool_msgs)  # no auto full test output (per-path uses -k , not the full -q exit format)
+    assert not any(
+        " $ uv run pytest -q\nexit=" in m.get("content", "") for m in tool_msgs
+    )  # no auto full test output (per-path uses -k , not the full -q exit format)
 
     # pending clear on success path is covered by dedicated tests (e.g. ruff_failure keeps, pytest_failure keeps, resume/restore). This integration focuses on hook context injection, per-path targeted outputs in tool_msgs, and no auto full run_tests in simple edit-to-final flow.
     # assert not session.pending_verifies
@@ -697,12 +732,19 @@ def test_ruff_failure_does_not_clear_pending(tmp_path: Path) -> None:
     """
     from unittest.mock import patch
     import json as _json
-    edit_call = _json.dumps({
-        "type": "tool_call",
-        "tool": "search_replace",
-        "args": {"path": "src/fail.py", "oldText": "old", "newText": "new code here"}
-    })
-    responses = [edit_call, '{"type":"final","content":"tried but ruff failed"}', '{"type":"final","content":"done"}']
+
+    edit_call = _json.dumps(
+        {
+            "type": "tool_call",
+            "tool": "search_replace",
+            "args": {"path": "src/fail.py", "oldText": "old", "newText": "new code here"},
+        }
+    )
+    responses = [
+        edit_call,
+        '{"type":"final","content":"tried but ruff failed"}',
+        '{"type":"final","content":"done"}',
+    ]
     # setup similar to integration
     memory = FakeMemory()
     registry = ToolRegistry(builtin_tools(tmp_path, memory), auto_approve_yellow=True)
@@ -715,7 +757,9 @@ def test_ruff_failure_does_not_clear_pending(tmp_path: Path) -> None:
 
     with patch("subprocess.run") as mock_ruff:
         # simulate ruff failure (returncode=1, some output)
-        mock_result = type("R", (), {"stdout": "error: F401 unused import", "stderr": "", "returncode": 1})()
+        mock_result = type(
+            "R", (), {"stdout": "error: F401 unused import", "stderr": "", "returncode": 1}
+        )()
         mock_ruff.return_value = mock_result
         result = session.ask("edit src/fail.py , introduce lint error so ruff fails")
 
@@ -727,23 +771,28 @@ def test_ruff_failure_does_not_clear_pending(tmp_path: Path) -> None:
     assert "tried but ruff failed" in result
 
 
-@pytest.mark.xfail(reason="per-path pytest failure path (WARNING append + keep pending) is fragile under subprocess patch in this test env (ruff block/pytest block may not both hit the mocked run reliably); ruff_failure test + integration tool_msgs 'pytest' assert + resume/explicit provide solid coverage for id=7 'expand + keep on failure' intent. The test code documents the desired negative case for future hardening of the per-path block.")
+@pytest.mark.xfail(
+    reason="per-path pytest failure path (WARNING append + keep pending) is fragile under subprocess patch in this test env (ruff block/pytest block may not both hit the mocked run reliably); ruff_failure test + integration tool_msgs 'pytest' assert + resume/explicit provide solid coverage for id=7 'expand + keep on failure' intent. The test code documents the desired negative case for future hardening of the per-path block."
+)
 def test_pytest_failure_keeps_pending_after_ruff_success(tmp_path: Path) -> None:
     """Negative test for pytest failure after ruff success (ruff 0, pytest 1): assert path remains in pending, failure reported."""
     from unittest.mock import patch
     import json as _json
-    edit_call = _json.dumps({
-        "type": "tool_call",
-        "tool": "search_replace",
-        "args": {"path": "src/fail_pytest.py", "oldText": "old", "newText": "new code here"}
-    })
+
+    edit_call = _json.dumps(
+        {
+            "type": "tool_call",
+            "tool": "search_replace",
+            "args": {"path": "src/fail_pytest.py", "oldText": "old", "newText": "new code here"},
+        }
+    )
     responses = [
         edit_call,
         '{"type":"final","content":"tried"}',
         '{"type":"final","content":"done"}',
         '{"type":"final","content":"done"}',
         '{"type":"final","content":"done"}',
-        '{"type":"final","content":"done"}'  # pad for extra ollama.chat calls in ask flow (reflection etc.)
+        '{"type":"final","content":"done"}',  # pad for extra ollama.chat calls in ask flow (reflection etc.)
     ]
     memory = FakeMemory()
     registry = ToolRegistry(builtin_tools(tmp_path, memory), auto_approve_yellow=True)
@@ -752,20 +801,28 @@ def test_pytest_failure_keeps_pending_after_ruff_success(tmp_path: Path) -> None
     session = AgentSession(settings=settings, ollama=ollama, tools=registry, memory=memory)
 
     (tmp_path / "src").mkdir(exist_ok=True)
-    (tmp_path / "src/fail_pytest.py").write_text("x = 1  # valid for ruff patch\n", encoding="utf-8")
+    (tmp_path / "src/fail_pytest.py").write_text(
+        "x = 1  # valid for ruff patch\n", encoding="utf-8"
+    )
 
     import subprocess as _sp
+
     def side_effect(cmd, **kwargs):
-        if 'ruff' in ' '.join(cmd):
-            return type('R', (), {"stdout": "", "stderr": "", "returncode": 0})()
+        if "ruff" in " ".join(cmd):
+            return type("R", (), {"stdout": "", "stderr": "", "returncode": 0})()
         else:
-            return type('R', (), {"stdout": "FAILED", "stderr": "", "returncode": 1})()
+            return type("R", (), {"stdout": "FAILED", "stderr": "", "returncode": 1})()
 
     with patch.object(_sp, "run", side_effect=side_effect):
-        session.ask("edit src/fail_pytest.py")  # patch forces ruff=0 (succeeded) then pytest=1 to hit WARNING append + keep in pending
+        session.ask(
+            "edit src/fail_pytest.py"
+        )  # patch forces ruff=0 (succeeded) then pytest=1 to hit WARNING append + keep in pending
 
     tool_msgs = [m for m in session.messages if m.get("role") == "tool"]
-    assert any("pytest -k" in m.get("content", "") or "pytest" in m.get("content", "").lower() for m in tool_msgs)
+    assert any(
+        "pytest -k" in m.get("content", "") or "pytest" in m.get("content", "").lower()
+        for m in tool_msgs
+    )
     # pending NOT cleared on pytest failure (even if ruff success) — this is the primary assertion for the "failure keeps pending" behavior. Reporting strings under mocks may vary; the ruff_failure test covers similar for lint.
     # pending NOT cleared on pytest failure (even if ruff success)
     assert "src/fail_pytest.py" in session.pending_verifies
@@ -847,16 +904,15 @@ def test_persisted_runtime_state_survives_from_session_store(tmp_path: Path) -> 
 def test_explicit_run_tests_call_in_flow(tmp_path: Path) -> None:
     """Test for explicit model call to run_tests mid-flow: after edit, model calls run_tests, assert full test result is in messages (for complex batch)."""
     import json as _json
-    edit_call = _json.dumps({
-        "type": "tool_call",
-        "tool": "search_replace",
-        "args": {"path": "src/explicit.py", "oldText": "old", "newText": "x = 1"}
-    })
-    run_tests_call = _json.dumps({
-        "type": "tool_call",
-        "tool": "run_tests",
-        "args": {}
-    })
+
+    edit_call = _json.dumps(
+        {
+            "type": "tool_call",
+            "tool": "search_replace",
+            "args": {"path": "src/explicit.py", "oldText": "old", "newText": "x = 1"},
+        }
+    )
+    run_tests_call = _json.dumps({"type": "tool_call", "tool": "run_tests", "args": {}})
     responses = [
         edit_call,
         run_tests_call,
@@ -864,7 +920,7 @@ def test_explicit_run_tests_call_in_flow(tmp_path: Path) -> None:
         '{"type":"final","content":"done"}',
         '{"type":"final","content":"done"}',
         '{"type":"final","content":"done"}',
-        '{"type":"final","content":"done"}'  # pad for extra reflections/tool result processing in ask flow
+        '{"type":"final","content":"done"}',  # pad for extra reflections/tool result processing in ask flow
     ]
     memory = FakeMemory()
     registry = ToolRegistry(builtin_tools(tmp_path, memory), auto_approve_yellow=True)
@@ -878,5 +934,10 @@ def test_explicit_run_tests_call_in_flow(tmp_path: Path) -> None:
     result = session.ask("edit src/explicit.py then explicitly call run_tests for full verify")
 
     tool_msgs = [m for m in session.messages if m.get("role") == "tool"]
-    assert any("run_tests" in m.get("content", "").lower() and "exit=" in m.get("content", "") for m in tool_msgs)  # explicit full run_tests tool was called mid-flow
-    assert "done" in result or "explicit" in result  # the final content from the padded responses (flow may surface a generic final)
+    assert any(
+        "run_tests" in m.get("content", "").lower() and "exit=" in m.get("content", "")
+        for m in tool_msgs
+    )  # explicit full run_tests tool was called mid-flow
+    assert (
+        "done" in result or "explicit" in result
+    )  # the final content from the padded responses (flow may surface a generic final)

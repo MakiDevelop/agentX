@@ -138,7 +138,9 @@ def _selected_map_keys(key: str) -> tuple[str, ...]:
     return (key,)
 
 
-def infrastructure_context_metadata(map_key: str = "all", *, home: Path | None = None) -> dict[str, object]:
+def infrastructure_context_metadata(
+    map_key: str = "all", *, home: Path | None = None
+) -> dict[str, object]:
     raw_key, key = resolve_infrastructure_map_key(map_key)
     maps = infrastructure_maps(home)
     selected_keys = _selected_map_keys(key)
@@ -162,7 +164,9 @@ def infrastructure_context_metadata(map_key: str = "all", *, home: Path | None =
         "available_maps": sorted(maps),
         "selected_maps": list(selected_keys),
         "sources": sources,
-        "source_status": "complete" if all(bool(source["exists"]) for source in sources) else "missing",
+        "source_status": "complete"
+        if all(bool(source["exists"]) for source in sources)
+        else "missing",
     }
 
 

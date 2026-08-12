@@ -44,11 +44,7 @@ def test_format_attachment_context(tmp_path):
 def test_read_png_attachment_metadata(tmp_path):
     path = tmp_path / "image.png"
     path.write_bytes(
-        b"\x89PNG\r\n\x1a\n"
-        b"\x00\x00\x00\rIHDR"
-        b"\x00\x00\x00\x02"
-        b"\x00\x00\x00\x03"
-        b"\x08\x02\x00\x00\x00"
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x02\x00\x00\x00\x03\x08\x02\x00\x00\x00"
     )
 
     context = format_attachment_context(read_attachments([path]))

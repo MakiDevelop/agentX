@@ -37,7 +37,9 @@ def test_config_json_outputs_resolved_config(tmp_path) -> None:  # noqa: ANN001
 
 
 def test_config_jsonl_outputs_event_envelope(tmp_path) -> None:  # noqa: ANN001
-    result = CliRunner().invoke(app, ["config", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["config", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)
@@ -97,7 +99,9 @@ def test_memory_status_jsonl_outputs_event(tmp_path, monkeypatch) -> None:  # no
     monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/amh" if name == "amh" else None)
     monkeypatch.setenv("AGENTX_MEMORY_BACKEND", "amh")
 
-    result = CliRunner().invoke(app, ["memory-status", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["memory-status", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)
@@ -118,10 +122,16 @@ def test_memory_status_exits_nonzero_when_amh_missing(tmp_path, monkeypatch) -> 
 
 
 def test_memory_read_json_outputs_payload(tmp_path, monkeypatch) -> None:  # noqa: ANN001
-    fake_memory = type("FakeMemory", (), {"search": lambda self, query, namespace, limit: f"{namespace}:{limit}:{query}"})()
+    fake_memory = type(
+        "FakeMemory",
+        (),
+        {"search": lambda self, query, namespace, limit: f"{namespace}:{limit}:{query}"},
+    )()
     monkeypatch.setattr("agentx.cli.build_cli_memory_client", lambda settings: fake_memory)
 
-    result = CliRunner().invoke(app, ["memory-read", "handoff", "--workspace", str(tmp_path), "--limit", "2", "--json"])
+    result = CliRunner().invoke(
+        app, ["memory-read", "handoff", "--workspace", str(tmp_path), "--limit", "2", "--json"]
+    )
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -133,7 +143,9 @@ def test_memory_read_jsonl_outputs_event(tmp_path, monkeypatch) -> None:  # noqa
     fake_memory = type("FakeMemory", (), {"search": lambda self, query, namespace, limit: "ok"})()
     monkeypatch.setattr("agentx.cli.build_cli_memory_client", lambda settings: fake_memory)
 
-    result = CliRunner().invoke(app, ["memory-read", "handoff", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["memory-read", "handoff", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)
@@ -153,7 +165,9 @@ def test_memory_write_dry_run_does_not_call_backend(tmp_path, monkeypatch) -> No
     fake_memory = FakeMemory()
     monkeypatch.setattr("agentx.cli.build_cli_memory_client", lambda settings: fake_memory)
 
-    result = CliRunner().invoke(app, ["memory-write", "preview only", "--workspace", str(tmp_path), "--json"])
+    result = CliRunner().invoke(
+        app, ["memory-write", "preview only", "--workspace", str(tmp_path), "--json"]
+    )
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -206,10 +220,14 @@ def test_memory_write_with_write_calls_backend(tmp_path, monkeypatch) -> None:  
 
 
 def test_memory_write_jsonl_outputs_event(tmp_path, monkeypatch) -> None:  # noqa: ANN001
-    fake_memory = type("FakeMemory", (), {"write_aca": lambda self, **kwargs: {"memory_id": "mem-1"}})()
+    fake_memory = type(
+        "FakeMemory", (), {"write_aca": lambda self, **kwargs: {"memory_id": "mem-1"}}
+    )()
     monkeypatch.setattr("agentx.cli.build_cli_memory_client", lambda settings: fake_memory)
 
-    result = CliRunner().invoke(app, ["memory-write", "preview", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["memory-write", "preview", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)
@@ -218,7 +236,9 @@ def test_memory_write_jsonl_outputs_event(tmp_path, monkeypatch) -> None:  # noq
     assert envelope["data"]["write"] is False
 
 
-def test_memory_amh_local_store_cli_smoke_writes_reads_and_reports_status(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+def test_memory_amh_local_store_cli_smoke_writes_reads_and_reports_status(
+    tmp_path, monkeypatch
+) -> None:  # noqa: ANN001
     if shutil.which("amh") is None:
         pytest.skip("AMH CLI is not installed")
 

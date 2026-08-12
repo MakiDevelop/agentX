@@ -3,7 +3,13 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from agentx.cli import app, objective_gate_payload, reliability_decision_payload, reliability_profile_payload, reliability_suite_payload
+from agentx.cli import (
+    app,
+    objective_gate_payload,
+    reliability_decision_payload,
+    reliability_profile_payload,
+    reliability_suite_payload,
+)
 from agentx.config import Settings
 from agentx.provider_registry import register_llm_backend
 
@@ -104,7 +110,9 @@ def test_reliability_suite_jsonl_outputs_event(tmp_path: Path) -> None:
 
 
 def test_reliability_suite_blocks_unknown_case(tmp_path: Path) -> None:
-    payload = reliability_suite_payload(Settings(workspace=tmp_path), run_id="none", case_filter="missing")
+    payload = reliability_suite_payload(
+        Settings(workspace=tmp_path), run_id="none", case_filter="missing"
+    )
 
     assert payload["ok"] is False
     assert payload["blockers"] == ["no_matching_cases"]
@@ -116,7 +124,13 @@ def test_reliability_suite_blocks_unknown_case(tmp_path: Path) -> None:
 def test_reliability_suite_live_mode_uses_pinned_backend(tmp_path: Path) -> None:
     response_sets = [
         [
-            json.dumps({"type": "tool_call", "tool": "write_file", "args": {"path": "RESULT.md", "content": "# Result\n\nrecorded edit success\n"}}),
+            json.dumps(
+                {
+                    "type": "tool_call",
+                    "tool": "write_file",
+                    "args": {"path": "RESULT.md", "content": "# Result\n\nrecorded edit success\n"},
+                }
+            ),
             json.dumps({"type": "final", "content": "Created RESULT.md."}),
         ],
         [
@@ -124,8 +138,19 @@ def test_reliability_suite_live_mode_uses_pinned_backend(tmp_path: Path) -> None
             json.dumps({"type": "final", "content": "Inspected fixture files."}),
         ],
         [
-            json.dumps({"type": "tool_call", "tool": "write_file", "args": {"path": ".", "content": "bad"}}),
-            json.dumps({"type": "tool_call", "tool": "write_file", "args": {"path": "RECOVERED.md", "content": "# Recovered\n\nsecond attempt succeeded\n"}}),
+            json.dumps(
+                {"type": "tool_call", "tool": "write_file", "args": {"path": ".", "content": "bad"}}
+            ),
+            json.dumps(
+                {
+                    "type": "tool_call",
+                    "tool": "write_file",
+                    "args": {
+                        "path": "RECOVERED.md",
+                        "content": "# Recovered\n\nsecond attempt succeeded\n",
+                    },
+                }
+            ),
             json.dumps({"type": "final", "content": "Recovered and created RECOVERED.md."}),
         ],
         [

@@ -1,4 +1,9 @@
-from agentx.approval import ApprovalMode, ApprovalPolicy, approval_decision_source, normalize_approval_mode
+from agentx.approval import (
+    ApprovalMode,
+    ApprovalPolicy,
+    approval_decision_source,
+    normalize_approval_mode,
+)
 from agentx.safety import Risk
 
 

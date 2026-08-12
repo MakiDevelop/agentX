@@ -35,36 +35,46 @@ def main():
         from agentx.tasks import load_tasks, save_tasks, get_next_task_id
 
         tasks = []
-        tasks.append({
-            "id": get_next_task_id(tasks),
-            "description": "分析 agentX 的 Task List 持久化機制",
-            "status": "in_progress",
-            "notes": "已讀取 tasks.py 與 loop.py"
-        })
-        tasks.append({
-            "id": get_next_task_id(tasks),
-            "description": "建立真實驗證腳本",
-            "status": "done",
-            "notes": "scripts/verify_task_list_persistence.py 已完成"
-        })
-        tasks.append({
-            "id": get_next_task_id(tasks),
-            "description": "在 docs/HEADLESS_OPTIMIZATION_LIST.md 記錄進度",
-            "status": "pending",
-            "notes": ""
-        })
-        tasks.append({
-            "id": get_next_task_id(tasks),
-            "description": "準備 Phase B prompt 注入實作",
-            "status": "pending",
-            "notes": ""
-        })
-        tasks.append({
-            "id": get_next_task_id(tasks),
-            "description": "執行 Codex review",
-            "status": "pending",
-            "notes": ""
-        })
+        tasks.append(
+            {
+                "id": get_next_task_id(tasks),
+                "description": "分析 agentX 的 Task List 持久化機制",
+                "status": "in_progress",
+                "notes": "已讀取 tasks.py 與 loop.py",
+            }
+        )
+        tasks.append(
+            {
+                "id": get_next_task_id(tasks),
+                "description": "建立真實驗證腳本",
+                "status": "done",
+                "notes": "scripts/verify_task_list_persistence.py 已完成",
+            }
+        )
+        tasks.append(
+            {
+                "id": get_next_task_id(tasks),
+                "description": "在 docs/HEADLESS_OPTIMIZATION_LIST.md 記錄進度",
+                "status": "pending",
+                "notes": "",
+            }
+        )
+        tasks.append(
+            {
+                "id": get_next_task_id(tasks),
+                "description": "準備 Phase B prompt 注入實作",
+                "status": "pending",
+                "notes": "",
+            }
+        )
+        tasks.append(
+            {
+                "id": get_next_task_id(tasks),
+                "description": "執行 Codex review",
+                "status": "pending",
+                "notes": "",
+            }
+        )
 
         save_tasks(workspace, tasks)
         print("   → 已建立 5 個任務並持久化")
@@ -78,7 +88,9 @@ def main():
 
         print(f"\n   載入結果：共 {len(loaded)} 個任務")
         for t in loaded:
-            status_icon = "✅" if t["status"] == "done" else "⏳" if t["status"] == "in_progress" else "○"
+            status_icon = (
+                "✅" if t["status"] == "done" else "⏳" if t["status"] == "in_progress" else "○"
+            )
             print(f"   {status_icon} [{t['id']}] {t['description']} ({t['status']})")
 
         # 5. 驗證

@@ -366,13 +366,17 @@ def handle_git(
     subcommand = parts[0] if parts else "status"
     if subcommand == "status":
         if len(parts) > 1:
-            _emit_git_usage(transcript, emit, f"unsupported /git status args: {' '.join(parts[1:])}")
+            _emit_git_usage(
+                transcript, emit, f"unsupported /git status args: {' '.join(parts[1:])}"
+            )
             return
         tool_name = "git_status"
         tool_args: dict[str, Any] = {}
     elif subcommand == "branch":
         if len(parts) > 1:
-            _emit_git_usage(transcript, emit, f"unsupported /git branch args: {' '.join(parts[1:])}")
+            _emit_git_usage(
+                transcript, emit, f"unsupported /git branch args: {' '.join(parts[1:])}"
+            )
             return
         tool_name = "git_branch"
         tool_args = {}

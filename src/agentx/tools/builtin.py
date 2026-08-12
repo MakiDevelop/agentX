@@ -141,6 +141,7 @@ class InsertCodeTool(_WorkspaceTool):
     Promoted heavily in prompts for small, safe additions (e.g. add a function after a marker line).
     Must appear exactly once (like edit_file's oldText rule) to prevent accidental wrong inserts.
     """
+
     name = "insert_code"
     description = (
         "在 workspace 既有檔案的指定 marker 之後插入內容；"
@@ -524,7 +525,9 @@ class GitShowTool(_WorkspaceTool):
         if rev.startswith("-") or any(token in rev for token in (" ", "\t", "\n", "\r")):
             raise ValueError(f"unsupported git revision: {rev!r}")
         max_chars = int(args.get("max_chars", 30000))
-        _, output = run_subprocess(["git", "show", "--stat", "--oneline", "--no-color", rev], cwd=self.workspace)
+        _, output = run_subprocess(
+            ["git", "show", "--stat", "--oneline", "--no-color", rev], cwd=self.workspace
+        )
         return output[:max_chars]
 
 
@@ -662,14 +665,16 @@ class MemoryTierUpgradeTool:
             evidence_ids=args.get("evidence_ids") or [],
             namespace=args.get("namespace"),
         )
-        return f"tier_upgrade ok for {args['memory_id']} -> {args.get('new_tier', 'human_confirmed')}"
+        return (
+            f"tier_upgrade ok for {args['memory_id']} -> {args.get('new_tier', 'human_confirmed')}"
+        )
 
 
 class MemoryAuditTool:
     name = "memory_audit"
     description = "ACA L1/L2：讀取某筆記憶的 append-only 事件紀錄（寫入、tier 變更、轉移等）。"
     risk = Risk.GREEN
-    signature = 'memory_id'
+    signature = "memory_id"
 
     def __init__(self, memory: MemoryHallClient) -> None:
         self.memory = memory
@@ -678,7 +683,9 @@ class MemoryAuditTool:
         events = self.memory.audit(args["memory_id"])
         if not events:
             return f"no audit events found for {args['memory_id']}"
-        lines = [f"- {e.get('event', 'unknown')}: {str(e.get('data', ''))[:200]}" for e in events[:10]]
+        lines = [
+            f"- {e.get('event', 'unknown')}: {str(e.get('data', ''))[:200]}" for e in events[:10]
+        ]
         return "\n".join(lines)
 
 
@@ -752,9 +759,7 @@ class RunTestsTool(_WorkspaceTool):
                 check=False,
             )
             output = completed.stdout or completed.stderr
-            outputs.append(
-                f"$ {' '.join(command)}\nexit={completed.returncode}\n{output.strip()}"
-            )
+            outputs.append(f"$ {' '.join(command)}\nexit={completed.returncode}\n{output.strip()}")
             if completed.returncode != 0:
                 break
         return "\n\n".join(outputs)
@@ -959,7 +964,9 @@ class WebFetchTool:
                 response.raise_for_status()
                 content_type = response.headers.get("content-type", "")
                 normalized_type = content_type.split(";", 1)[0].strip().lower()
-                if normalized_type and not normalized_type.startswith(_WEB_FETCH_TEXT_CONTENT_TYPES):
+                if normalized_type and not normalized_type.startswith(
+                    _WEB_FETCH_TEXT_CONTENT_TYPES
+                ):
                     raise ValueError(f"unsupported content-type: {content_type}")
                 encoding = getattr(response, "encoding", None) or "utf-8"
 

@@ -19,7 +19,16 @@ MEMORY_WRITE_SCHEMA = "agentx.memory_write.v1"
 # agentX aims for L1 (Memory) + L2 (Trust) conformance when writing organizational memory.
 
 ACA_SOURCE_TIERS = ("raw_source", "llm_derived", "human_confirmed")
-ACA_MEMORY_TYPES = ("decision", "fact", "preference", "constraint", "lesson", "risk", "handoff", "note")
+ACA_MEMORY_TYPES = (
+    "decision",
+    "fact",
+    "preference",
+    "constraint",
+    "lesson",
+    "risk",
+    "handoff",
+    "note",
+)
 
 # Anti-Ouroboros rule (L2 Trust invariant):
 # LLM-derived knowledge MUST NOT supersede LLM-derived knowledge without human intervention.
@@ -162,7 +171,9 @@ class MemoryHallClient:
             )
             response.raise_for_status()
             data = response.json()
-            data.setdefault("governance_applied", []).append({"rule": "aca_tier", "tier": source_tier})
+            data.setdefault("governance_applied", []).append(
+                {"rule": "aca_tier", "tier": source_tier}
+            )
             return data
 
     def write_structured(
@@ -209,7 +220,9 @@ class MemoryHallClient:
             response.raise_for_status()
             return response.json()
 
-    def link(self, entry_id: str, target_entry_id: str, relation: str = "related") -> dict[str, Any]:
+    def link(
+        self, entry_id: str, target_entry_id: str, relation: str = "related"
+    ) -> dict[str, Any]:
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(
                 f"{self.base_url}/v1/memory/{entry_id}/link",
@@ -379,7 +392,9 @@ class NullMemoryClient:
     def get(self, entry_id: str) -> dict[str, Any]:
         return {"memory_id": entry_id, "status": "disabled"}
 
-    def link(self, entry_id: str, target_entry_id: str, relation: str = "related") -> dict[str, Any]:
+    def link(
+        self, entry_id: str, target_entry_id: str, relation: str = "related"
+    ) -> dict[str, Any]:
         return {"status": "disabled", "entry_id": entry_id, "target_entry_id": target_entry_id}
 
     def list_entries(
@@ -425,7 +440,9 @@ class AmhClient:
     in bootstrap, tools, loop, etc.
     """
 
-    def __init__(self, store: str = "json", store_path: str | None = None, timeout: float = 30.0) -> None:
+    def __init__(
+        self, store: str = "json", store_path: str | None = None, timeout: float = 30.0
+    ) -> None:
         self.timeout = timeout
         self._amh_cmd = self._resolve_amh_cmd()
         self.store = store
@@ -448,7 +465,9 @@ class AmhClient:
             return ["amh"]
         return ["npx", "@chibakuma/agent-memory-hall"]
 
-    def _run_amh(self, *args: str, input_text: str | None = None, caller_ns: str | None = None) -> str:
+    def _run_amh(
+        self, *args: str, input_text: str | None = None, caller_ns: str | None = None
+    ) -> str:
         cmd = self._amh_cmd + list(args)
         # Always include --store for any supported store (json, sqlite, postgres, memhall, ...)
         cmd += ["--store", self.store]
@@ -484,9 +503,12 @@ class AmhClient:
         entry_type = "handoff" if "handoff" in content.lower() else "note"
         out = self._run_amh(
             "write",
-            "--agent", "agentx",
-            "--ns", namespace,
-            "--type", entry_type,
+            "--agent",
+            "agentx",
+            "--ns",
+            namespace,
+            "--type",
+            entry_type,
             content,
             caller_ns=namespace,
         )
@@ -517,7 +539,15 @@ class AmhClient:
         source_ref = metadata.get("source_ref") if metadata else None
         source_ref = str(source_ref or f"agentx:{datetime.now().strftime('%Y-%m-%d')}")
         stored_content = content
-        if cli_type != memory_type or summary or tags or references or metadata or created_by or valid_until:
+        if (
+            cli_type != memory_type
+            or summary
+            or tags
+            or references
+            or metadata
+            or created_by
+            or valid_until
+        ):
             envelope = {
                 "content": content,
                 "summary": summary,
@@ -538,11 +568,16 @@ class AmhClient:
 
         out = self._run_amh(
             "write",
-            "--agent", agent_id,
-            "--ns", namespace,
-            "--type", cli_type,
-            "--tier", source_tier,
-            "--source-ref", source_ref,
+            "--agent",
+            agent_id,
+            "--ns",
+            namespace,
+            "--type",
+            cli_type,
+            "--tier",
+            source_tier,
+            "--source-ref",
+            source_ref,
             stored_content,
             caller_ns=namespace,
         ).strip()
@@ -554,7 +589,9 @@ class AmhClient:
             parsed.setdefault("status", "ok")
             parsed.setdefault("output", out)
             parsed.setdefault("memory_id", parsed.get("id") or parsed.get("memory_id") or "amh-cli")
-            parsed.setdefault("governance_applied", []).append({"rule": "aca_tier", "tier": source_tier})
+            parsed.setdefault("governance_applied", []).append(
+                {"rule": "aca_tier", "tier": source_tier}
+            )
             parsed.setdefault("store", self.store)
             parsed.setdefault("path", self.store_path)
             return parsed
@@ -594,9 +631,12 @@ class AmhClient:
         text = json.dumps(payload, ensure_ascii=False)
         out = self._run_amh(
             "write",
-            "--agent", agent_id,
-            "--ns", namespace,
-            "--type", entry_type,
+            "--agent",
+            agent_id,
+            "--ns",
+            namespace,
+            "--type",
+            entry_type,
             text,
             caller_ns=namespace,
         )
@@ -617,9 +657,12 @@ class AmhClient:
         try:
             out = self._run_amh(
                 "tier-upgrade",
-                "--id", memory_id,
-                "--tier", new_tier,
-                "--by", confirmed_by,
+                "--id",
+                memory_id,
+                "--tier",
+                new_tier,
+                "--by",
+                confirmed_by,
             )
             return {"status": "ok", "output": out}
         except Exception:
@@ -649,13 +692,21 @@ class AmhClient:
         for line in out.splitlines():
             if memory_id in line:
                 events.append({"event": "log", "data": line})
-        return events or [{"event": "no_audit", "data": "AMH CLI audit limited; use full AMH for rich logs"}]
+        return events or [
+            {"event": "no_audit", "data": "AMH CLI audit limited; use full AMH for rich logs"}
+        ]
 
     # Minimal compatibility for get / list if needed by existing code
     def get(self, entry_id: str) -> dict[str, Any]:
         return {"memory_id": entry_id, "note": "AMH CLI get is limited"}
 
-    def list_entries(self, namespace: str, entry_type: str | None = None, tags: list[str] | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    def list_entries(
+        self,
+        namespace: str,
+        entry_type: str | None = None,
+        tags: list[str] | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
         out = self._run_amh("read", "--ns", namespace, "--limit", str(limit), caller_ns=namespace)
         return [{"content": line} for line in out.splitlines()[:limit]]
 
@@ -739,7 +790,9 @@ def memory_status_payload(
             "using_npx_fallback": not bool(amh_bin) and bool(npx_bin),
             "store": store,
             "path": amh_path,
-            "path_exists": bool(Path(amh_path).exists()) if amh_path and store in {"json", "sqlite"} else None,
+            "path_exists": bool(Path(amh_path).exists())
+            if amh_path and store in {"json", "sqlite"}
+            else None,
             "live_probe_result": live_probe_result,
         },
         "recommended_command": "agentx inspect --json"
@@ -850,7 +903,11 @@ def memory_write_payload(
         else "agentx inspect --json"
         if ok
         else "fix memory write blockers, then rerun agentx memory-write CONTENT --json",
-        "recommended_kind": "memory_write_execute" if ok and not write else "inspect" if ok else "fix_memory_write_blockers",
+        "recommended_kind": "memory_write_execute"
+        if ok and not write
+        else "inspect"
+        if ok
+        else "fix_memory_write_blockers",
         "recommended_risk": "YELLOW" if ok and not write else "GREEN" if ok else "UNKNOWN",
         "next_commands": [
             "agentx memory-write CONTENT --write --json"

@@ -10,7 +10,9 @@ from agentx.ollama import OllamaClient
 from agentx.tasks import get_task_migration_status
 
 
-def run_doctor(settings: Settings, memory: MemoryHallClient, ollama: OllamaClient) -> list[tuple[str, bool, str]]:
+def run_doctor(
+    settings: Settings, memory: MemoryHallClient, ollama: OllamaClient
+) -> list[tuple[str, bool, str]]:
     checks = [
         _check_command("uv", ["uv", "--version"]),
         _check_command("git", ["git", "status", "--short", "--branch"], cwd=settings.workspace),
@@ -34,7 +36,9 @@ def run_static_doctor(settings: Settings) -> list[tuple[str, bool, str]]:
 
 def _check_command(name: str, command: list[str], cwd=None) -> tuple[str, bool, str]:
     try:
-        result = subprocess.run(command, cwd=cwd, text=True, capture_output=True, timeout=20, check=False)
+        result = subprocess.run(
+            command, cwd=cwd, text=True, capture_output=True, timeout=20, check=False
+        )
     except Exception as exc:
         return name, False, f"{type(exc).__name__}: {exc}"
     output = (result.stdout or result.stderr).strip()
@@ -101,7 +105,9 @@ def _check_task_migration(settings: Settings) -> tuple[str, bool, str]:
         return "task_migration (MT22)", False, f"{type(exc).__name__}: {exc}"
 
 
-def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -> tuple[str, bool, str]:
+def _check_memory_backend(
+    settings: Settings, memory: MemoryHallClient = None
+) -> tuple[str, bool, str]:
     backend = getattr(settings, "memory_backend", "memhall")
     detail = f"backend={backend}"
     if backend == "amh":
@@ -114,10 +120,14 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                 # Enhanced probe: test write + read-back verification with temporary marker
                 # (tests actual store usability, including ACA write path if available)
                 marker = f"aca-doctor-probe-write:{datetime.now().isoformat(timespec='seconds')}"
-                content = f"ACA doctor probe write test - temporary diagnostic entry, marker={marker}"
+                content = (
+                    f"ACA doctor probe write test - temporary diagnostic entry, marker={marker}"
+                )
                 content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
                 # short TTL for diagnostic entry (auto-expire)
-                valid_until = (datetime.now() + timedelta(minutes=10)).isoformat(timespec="seconds") + "Z"
+                valid_until = (datetime.now() + timedelta(minutes=10)).isoformat(
+                    timespec="seconds"
+                ) + "Z"
                 write_resp = None
                 if hasattr(memory, "write_aca"):
                     write_resp = memory.write_aca(
@@ -127,7 +137,11 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                         source_tier="human_confirmed",
                         summary=f"doctor probe {marker}",
                         tags=["aca", "doctor", "probe"],
-                        metadata={"probe_marker": marker, "content_hash": content_hash, "aca_version": "0.1"},
+                        metadata={
+                            "probe_marker": marker,
+                            "content_hash": content_hash,
+                            "aca_version": "0.1",
+                        },
                         valid_until=valid_until,
                     )
                 else:
@@ -137,14 +151,23 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                         entry_type="note",
                         summary=f"doctor probe {marker}",
                         tags=["aca", "doctor", "probe"],
-                        metadata={"probe_marker": marker, "content_hash": content_hash, "aca_version": "0.1"},
+                        metadata={
+                            "probe_marker": marker,
+                            "content_hash": content_hash,
+                            "aca_version": "0.1",
+                        },
                         valid_until=valid_until,
                     )
                 # read-back verification + attempt to confirm ACA fields in stored record
                 result = memory.search(marker, namespace="project:agentX", limit=3)
                 aca_fields_verified = False
                 try:
-                    entries = memory.list_entries(namespace="project:agentX", entry_type="note", tags=["aca", "doctor", "probe"], limit=5)
+                    entries = memory.list_entries(
+                        namespace="project:agentX",
+                        entry_type="note",
+                        tags=["aca", "doctor", "probe"],
+                        limit=5,
+                    )
                     for e in entries or []:
                         e_str = str(e)
                         if marker in e_str and content_hash in e_str:
@@ -153,17 +176,28 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                 except Exception:
                     pass
                 if marker in (result or ""):
-                    fields_note = " + content_hash/tier verified in record" if aca_fields_verified else ""
+                    fields_note = (
+                        " + content_hash/tier verified in record" if aca_fields_verified else ""
+                    )
                     # try to surface the actual expiration from stored record (for "最近 probe entry 的過期時間")
                     probe_expires = valid_until
                     try:
-                        entries = memory.list_entries(namespace="project:agentX", entry_type="note", tags=["aca", "doctor", "probe"], limit=5)
+                        entries = memory.list_entries(
+                            namespace="project:agentX",
+                            entry_type="note",
+                            tags=["aca", "doctor", "probe"],
+                            limit=5,
+                        )
                         for e in entries or []:
                             e_str = str(e)
                             if marker in e_str:
                                 # extract valid_until if the list_entries result contains it (structure depends on backend)
                                 if isinstance(e, dict):
-                                    probe_expires = e.get("valid_until") or (e.get("metadata") or {}).get("valid_until") or valid_until
+                                    probe_expires = (
+                                        e.get("valid_until")
+                                        or (e.get("metadata") or {}).get("valid_until")
+                                        or valid_until
+                                    )
                                 break
                     except Exception:
                         pass
@@ -173,7 +207,12 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                     try:
                         evidence_id = marker
                         if isinstance(write_resp, dict):
-                            evidence_id = write_resp.get("memory_id") or write_resp.get("id") or write_resp.get("entry_id") or marker
+                            evidence_id = (
+                                write_resp.get("memory_id")
+                                or write_resp.get("id")
+                                or write_resp.get("entry_id")
+                                or marker
+                            )
                         completion_content = f"probe 完成 for {marker} - governance record for ACA doctor store probe"
                         completion_metadata = {
                             "probe_marker": marker,
@@ -206,9 +245,17 @@ def _check_memory_backend(settings: Settings, memory: MemoryHallClient = None) -
                     except Exception:
                         pass  # non-fatal, main probe succeeded
                 else:
-                    return "memory_backend (ACA)", False, f"backend={backend} store={store} path={path} | write+read probe: write succeeded but marker not found in search"
+                    return (
+                        "memory_backend (ACA)",
+                        False,
+                        f"backend={backend} store={store} path={path} | write+read probe: write succeeded but marker not found in search",
+                    )
             except Exception as exc:
-                return "memory_backend (ACA)", False, f"backend={backend} store={store} path={path} | store probe FAILED: {type(exc).__name__}: {exc}"
+                return (
+                    "memory_backend (ACA)",
+                    False,
+                    f"backend={backend} store={store} path={path} | store probe FAILED: {type(exc).__name__}: {exc}",
+                )
     else:
         detail += " (legacy memhall — ACA client shaping enabled via write_aca + tier tools)"
     return "memory_backend (ACA)", True, detail

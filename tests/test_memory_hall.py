@@ -55,9 +55,14 @@ class TestWriteAca:
         def fake_post(url, headers=None, json=None):
             captured["url"] = url
             captured["json"] = json
+
             class Resp:
-                def raise_for_status(self): pass
-                def json(self): return {"memory_id": "fake-123"}
+                def raise_for_status(self):
+                    pass
+
+                def json(self):
+                    return {"memory_id": "fake-123"}
+
             return Resp()
 
         monkeypatch.setattr("httpx.Client.post", fake_post, raising=False)
@@ -115,9 +120,14 @@ class TestWriteAca:
 
         def fake_post(url, headers=None, json=None):
             captured["json"] = json
+
             class Resp:
-                def raise_for_status(self): pass
-                def json(self): return {"memory_id": "id"}
+                def raise_for_status(self):
+                    pass
+
+                def json(self):
+                    return {"memory_id": "id"}
+
             return Resp()
 
         with patch("httpx.Client") as mock_client_cls:
@@ -151,12 +161,14 @@ class TestMemoryWriteToolAca:
         }
         tool = MemoryWriteTool(fake_memory)
 
-        result = tool.run({
-            "content": "Important human fact",
-            "namespace": "project:agentX",
-            "tier": "human_confirmed",
-            "memory_type": "fact",
-        })
+        result = tool.run(
+            {
+                "content": "Important human fact",
+                "namespace": "project:agentX",
+                "tier": "human_confirmed",
+                "memory_type": "fact",
+            }
+        )
 
         assert "aca_write ok" in result
         fake_memory.write_aca.assert_called_once()
@@ -169,10 +181,12 @@ class TestMemoryWriteToolAca:
         fake_memory.write.return_value = "legacy-ok"
         tool = MemoryWriteTool(fake_memory)
 
-        result = tool.run({
-            "content": "plain note without tier",
-            "namespace": "project:agentX",
-        })
+        result = tool.run(
+            {
+                "content": "plain note without tier",
+                "namespace": "project:agentX",
+            }
+        )
 
         assert result == "legacy-ok"
         fake_memory.write.assert_called_once_with(
@@ -187,10 +201,12 @@ class TestMemoryWriteToolAca:
         tool = MemoryWriteTool(fake_memory)
 
         with pytest.raises(RuntimeError, match="simulated AMH rejection"):
-            tool.run({
-                "content": "this should not fallback",
-                "tier": "llm_derived",
-            })
+            tool.run(
+                {
+                    "content": "this should not fallback",
+                    "tier": "llm_derived",
+                }
+            )
 
 
 class TestAmhClient:
@@ -206,10 +222,12 @@ class TestAmhClient:
         def fake_run(cmd, input=None, capture_output=True, timeout=None, check=False):
             captured["cmd"] = cmd
             captured["input"] = input
+
             class Result:
                 returncode = 0
                 stdout = b"written"
                 stderr = b""
+
             return Result()
 
         monkeypatch.setattr("subprocess.run", fake_run)
@@ -234,7 +252,7 @@ class TestAmhClient:
             "some irrelevant line",
             "important decision about postgres",
             "another line with query",
-            "query keyword here"
+            "query keyword here",
         ]
 
         def fake_run(cmd, input=None, capture_output=True, timeout=None, check=False):
@@ -242,6 +260,7 @@ class TestAmhClient:
                 returncode = 0
                 stdout = "\n".join(output_lines).encode()
                 stderr = b""
+
             return Result()
 
         monkeypatch.setattr("subprocess.run", fake_run)
@@ -262,10 +281,12 @@ class TestAmhClient:
 
         def fake_run(cmd, input=None, capture_output=True, timeout=None, check=False):
             calls.append(cmd)
+
             class Result:
                 returncode = 1  # simulate failure of native tier-upgrade subcommand
                 stdout = b""
                 stderr = b"unknown subcommand"
+
             return Result()
 
         monkeypatch.setattr("subprocess.run", fake_run)
@@ -274,6 +295,7 @@ class TestAmhClient:
         def capture_write_structured(**kwargs):
             calls.append(("fallback", kwargs))
             return {"status": "ok", "memory_id": "fallback-id"}
+
         client.write_structured = capture_write_structured
 
         resp = client.tier_upgrade(
@@ -303,6 +325,7 @@ class TestAmhClient:
                 returncode = 0
                 stdout = mock_output.encode()
                 stderr = b""
+
             return Result()
 
         monkeypatch.setattr("subprocess.run", fake_run)
@@ -319,19 +342,31 @@ class TestAmhClient:
         test_cases = [
             ("json", "/tmp/m.json", ["--store", "json", "--path", "/tmp/m.json"]),
             ("sqlite", "/tmp/m.db", ["--store", "sqlite", "--path", "/tmp/m.db"]),
-            ("postgres", "postgres://user:pass@host/db", ["--store", "postgres", "--path", "postgres://user:pass@host/db"]),
-            ("memhall", "http://100.89.41.50:9100", ["--store", "memhall", "--path", "http://100.89.41.50:9100"]),
+            (
+                "postgres",
+                "postgres://user:pass@host/db",
+                ["--store", "postgres", "--path", "postgres://user:pass@host/db"],
+            ),
+            (
+                "memhall",
+                "http://100.89.41.50:9100",
+                ["--store", "memhall", "--path", "http://100.89.41.50:9100"],
+            ),
         ]
 
         for store, path, expected in test_cases:
             captured = {}
+
             def fake_run(cmd, **kwargs):
                 captured["cmd"] = cmd
+
                 class R:
                     returncode = 0
                     stdout = b"ok"
                     stderr = b""
+
                 return R()
+
             monkeypatch.setattr("subprocess.run", fake_run)
 
             client = AmhClient(store=store, store_path=path)
@@ -380,7 +415,9 @@ class TestMemoryStatusPayload:
         assert payload["amh"]["path"].endswith(".agentx/amh/memory.json")
 
     def test_memory_status_payload_uses_amh_before_npx(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}" if name in {"amh", "npx"} else None)
+        monkeypatch.setattr(
+            "shutil.which", lambda name: f"/usr/bin/{name}" if name in {"amh", "npx"} else None
+        )
 
         payload = memory_status_payload(
             workspace=tmp_path,

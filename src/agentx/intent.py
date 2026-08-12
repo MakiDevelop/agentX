@@ -83,7 +83,18 @@ _RUN_MODE_HINTS = {
     "systemd": "systemd",
 }
 
-_HOME_INFRA_HINTS = ("家庭", "home ai", "home-ai", "mac mini", "mini2", "dgx", "rtx", "nas", "s20", "pdsnet")
+_HOME_INFRA_HINTS = (
+    "家庭",
+    "home ai",
+    "home-ai",
+    "mac mini",
+    "mini2",
+    "dgx",
+    "rtx",
+    "nas",
+    "s20",
+    "pdsnet",
+)
 _VPS_INFRA_HINTS = ("vps", "外網", "n1k", "2ch", "ranran", "chiba.tw", "dx.chiba", "ai.chiba")
 
 _STOPWORDS = {
@@ -220,9 +231,17 @@ def plan_task_items(request: str, *, max_terms: int = 4) -> list[str]:
 def _runtime_state_preflight(text: str, risk: IntentRisk) -> list[str]:
     lowered = text.lower()
     map_hint = _infra_map_hint(lowered)
-    machine = _first_hint(lowered, _RUNTIME_TARGET_HINTS) or "unknown - resolve from /infra before acting"
-    service = _first_hint(lowered, _SERVICE_HINTS) or "unknown - identify concrete service/repo/container/job"
-    run_mode = _first_hint(lowered, _RUN_MODE_HINTS) or "unknown - verify from repo docs, process manager, or infra map"
+    machine = (
+        _first_hint(lowered, _RUNTIME_TARGET_HINTS) or "unknown - resolve from /infra before acting"
+    )
+    service = (
+        _first_hint(lowered, _SERVICE_HINTS)
+        or "unknown - identify concrete service/repo/container/job"
+    )
+    run_mode = (
+        _first_hint(lowered, _RUN_MODE_HINTS)
+        or "unknown - verify from repo docs, process manager, or infra map"
+    )
     constraint = _runtime_constraint(risk)
 
     return [
@@ -259,7 +278,9 @@ def _first_hint(lowered: str, hints: dict[str, str]) -> str | None:
 
 def _runtime_constraint(risk: IntentRisk) -> str:
     if risk.reason == "production":
-        return "production path; requires explicit Maki approval before external write/restart/deploy"
+        return (
+            "production path; requires explicit Maki approval before external write/restart/deploy"
+        )
     if risk.reason == "remote":
         return "remote host; read-only inspection until machine/service/run mode are confirmed"
     return "high-risk action; explicit approval required before execution"

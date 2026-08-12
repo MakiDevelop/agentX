@@ -7,7 +7,9 @@ from agentx.cli import app, sessions_payload
 from agentx.config import Settings
 
 
-def _write_session(path: Path, *, model: str = "gemma4:31b", namespace: str = "project:test") -> None:
+def _write_session(
+    path: Path, *, model: str = "gemma4:31b", namespace: str = "project:test"
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "\n".join(
@@ -53,7 +55,9 @@ def test_sessions_json_outputs_saved_sessions(tmp_path) -> None:  # noqa: ANN001
 def test_sessions_jsonl_outputs_event_envelope(tmp_path) -> None:  # noqa: ANN001
     _write_session(tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl")
 
-    result = CliRunner().invoke(app, ["sessions", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["sessions", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)

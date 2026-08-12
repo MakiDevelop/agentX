@@ -9,11 +9,27 @@ from agentx.cli import app, workflow_catalog_payload, workflow_plan_payload, wor
 
 def _clean_git_repo_ignoring_agentx(path, monkeypatch) -> None:  # noqa: ANN001
     subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=path, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "config", "user.name", "Test User"], cwd=path, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     (path / ".gitignore").write_text(".agentx/\n", encoding="utf-8")
-    subprocess.run(["git", "add", ".gitignore"], cwd=path, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=path, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "add", ".gitignore"], cwd=path, check=True, capture_output=True, text=True
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "init"], cwd=path, check=True, capture_output=True, text=True
+    )
     monkeypatch.chdir(path)
 
 
@@ -32,7 +48,10 @@ def test_workflow_catalog_payload_lists_aliases() -> None:
     ]
     assert all(step["runnable"] is True for step in workflows["Headless bundle"]["steps"])
     assert workflows["Headless bundle"]["steps"][0]["kind"] == "agentx_cli"
-    assert workflows["Headless bundle"]["steps"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
+    assert (
+        workflows["Headless bundle"]["steps"][0]["command_plan"]["schema"]
+        == "agentx.command_plan.v1"
+    )
     assert workflows["Headless bundle"]["steps"][0]["command_plan"]["risk"] == "YELLOW"
     assert workflows["Headless bundle"]["steps"][1]["command_plan"]["allowed"] is True
     assert "Infra preflight" in workflows
@@ -43,7 +62,10 @@ def test_workflow_catalog_payload_lists_aliases() -> None:
         "/intent SSH/deploy/cross-machine",
     ]
     assert workflows["Infra preflight"]["steps"][0]["kind"] == "agentx_cli"
-    assert workflows["Infra preflight"]["steps"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
+    assert (
+        workflows["Infra preflight"]["steps"][0]["command_plan"]["schema"]
+        == "agentx.command_plan.v1"
+    )
     assert workflows["Infra preflight"]["steps"][0]["command_plan"]["risk"] == "GREEN"
     assert workflows["Infra preflight"]["steps"][2] == {
         "command": "填寫 runtime state block",
@@ -59,7 +81,10 @@ def test_workflow_catalog_payload_lists_aliases() -> None:
         'agentx memory-write "完成與待辦" --type handoff --json',
         'agentx memory-write "完成與待辦" --type handoff --write --json',
     ]
-    assert workflows["記憶交接"]["steps"][0]["command_plan"]["matched_policy"] == "agentx_cli_capability"
+    assert (
+        workflows["記憶交接"]["steps"][0]["command_plan"]["matched_policy"]
+        == "agentx_cli_capability"
+    )
     assert "ACE council" in workflows
     assert "ace" in workflows["ACE council"]["aliases"]
     assert "council" in workflows["ACE council"]["aliases"]
@@ -70,10 +95,16 @@ def test_workflow_catalog_payload_lists_aliases() -> None:
         'agentx ace-answer SESSION --agent gemini --answer "ANSWER" --summary "SUMMARY" --json',
         "agentx ace-status SESSION --json",
     ]
-    assert workflows["ACE council"]["steps"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
+    assert (
+        workflows["ACE council"]["steps"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"
+    )
     assert workflows["理解 repo"]["steps"][0]["kind"] == "slash_command"
     assert "command_plan" not in workflows["理解 repo"]["steps"][0]
-    assert workflows["小步修改"]["steps"][2] == {"command": "讓 agent 讀檔與改檔", "kind": "instruction", "runnable": False}
+    assert workflows["小步修改"]["steps"][2] == {
+        "command": "讓 agent 讀檔與改檔",
+        "kind": "instruction",
+        "runnable": False,
+    }
     assert "讓 agent 讀檔與改檔" not in workflows["小步修改"]["commands"]
 
 
@@ -95,7 +126,10 @@ def test_workflow_catalog_payload_filters_infra_alias() -> None:
     assert payload["count"] == 1
     assert payload["workflows"][0]["goal"] == "Infra preflight"
     assert payload["workflows"][0]["commands"][0] == "agentx infra resource-bundle --json"
-    assert payload["workflows"][0]["steps"][0]["command_plan"]["matched_policy"] == "agentx_cli_capability"
+    assert (
+        payload["workflows"][0]["steps"][0]["command_plan"]["matched_policy"]
+        == "agentx_cli_capability"
+    )
 
 
 def test_workflow_catalog_payload_filters_memory_alias() -> None:
@@ -156,7 +190,9 @@ def test_workflow_plan_payload_reports_ace_placeholders(tmp_path) -> None:  # no
 
 
 def test_workflow_plan_payload_applies_memory_inputs(tmp_path) -> None:  # noqa: ANN001
-    payload = workflow_plan_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"})
+    payload = workflow_plan_payload(
+        "memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}
+    )
 
     assert payload["ok"] is True
     assert payload["blockers"] == []
@@ -170,7 +206,10 @@ def test_workflow_plan_payload_applies_memory_inputs(tmp_path) -> None:  # noqa:
     assert payload["next_commands"] == payload["ready_commands"]
     assert payload["recommended_command"] == 'agentx memory-read "handoff" --json'
     assert payload["recommended_risk"] == "YELLOW"
-    assert payload["side_effect_gates"][-1]["command"] == "agentx memory-write '完成 AMH 交接' --type handoff --write --json"  # type: ignore[index]
+    assert (
+        payload["side_effect_gates"][-1]["command"]
+        == "agentx memory-write '完成 AMH 交接' --type handoff --write --json"
+    )  # type: ignore[index]
 
 
 def test_workflow_plan_payload_applies_ace_inputs(tmp_path) -> None:  # noqa: ANN001
@@ -187,10 +226,16 @@ def test_workflow_plan_payload_applies_ace_inputs(tmp_path) -> None:  # noqa: AN
 
     assert payload["ok"] is True
     assert payload["inputs_required"] == []
-    assert payload["ready_commands"][0] == "agentx ace-init 2026-07-15-agentx --goal 'Add ACE workflow' --json"  # type: ignore[index]
+    assert (
+        payload["ready_commands"][0]
+        == "agentx ace-init 2026-07-15-agentx --goal 'Add ACE workflow' --json"
+    )  # type: ignore[index]
     assert payload["ready_commands"][-1] == "agentx ace-status 2026-07-15-agentx --json"  # type: ignore[index]
     gate_commands = {item["command"] for item in payload["side_effect_gates"]}  # type: ignore[index]
-    assert "agentx ace-init 2026-07-15-agentx --goal 'Add ACE workflow' --write --json" in gate_commands
+    assert (
+        "agentx ace-init 2026-07-15-agentx --goal 'Add ACE workflow' --write --json"
+        in gate_commands
+    )
 
 
 def test_workflow_plan_payload_blocks_missing_workflow(tmp_path) -> None:  # noqa: ANN001
@@ -203,7 +248,9 @@ def test_workflow_plan_payload_blocks_missing_workflow(tmp_path) -> None:  # noq
 
 
 def test_workflow_run_payload_dry_run_does_not_execute(tmp_path) -> None:  # noqa: ANN001
-    payload = workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"})
+    payload = workflow_run_payload(
+        "memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}
+    )
 
     assert payload["schema"] == "agentx.workflow_run.v1"
     assert payload["execute"] is False
@@ -212,7 +259,10 @@ def test_workflow_run_payload_dry_run_does_not_execute(tmp_path) -> None:  # noq
     assert payload["executed_steps"] == []
     assert payload["stopped_at"] is None
     assert payload["warnings"] == ["dry_run_no_commands_executed"]
-    assert payload["plan"]["ready_commands"][1] == "agentx memory-write '完成 AMH 交接' --type handoff --json"  # type: ignore[index]
+    assert (
+        payload["plan"]["ready_commands"][1]
+        == "agentx memory-write '完成 AMH 交接' --type handoff --json"
+    )  # type: ignore[index]
 
 
 def test_workflow_run_payload_execute_stops_before_non_agentx_step(tmp_path, monkeypatch) -> None:  # noqa: ANN001
@@ -239,7 +289,9 @@ def test_workflow_run_payload_execute_stops_before_yellow_gate(tmp_path, monkeyp
         lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stdout="ok", stderr=""),
     )
 
-    payload = workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}, execute=True)
+    payload = workflow_run_payload(
+        "memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}, execute=True
+    )
 
     assert payload["ok"] is False
     assert payload["stopped_at"]["reason"] == "side_effect_gate"  # type: ignore[index]
@@ -250,7 +302,9 @@ def test_workflow_run_payload_allow_yellow_requires_reason(tmp_path, monkeypatch
     calls = []
     monkeypatch.setattr(
         "agentx.cli.subprocess.run",
-        lambda argv, **kwargs: calls.append(argv) or subprocess.CompletedProcess(argv, 0, stdout="ok", stderr=""),
+        lambda argv, **kwargs: (
+            calls.append(argv) or subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
+        ),
     )
 
     payload = workflow_run_payload(
@@ -370,11 +424,15 @@ def test_workflow_plan_json_accepts_input_substitution() -> None:
     payload = json.loads(result.output)
     assert payload["ok"] is True
     assert payload["inputs_required"] == []
-    assert payload["ready_commands"][1] == "agentx memory-write '完成 AMH 交接' --type handoff --json"
+    assert (
+        payload["ready_commands"][1] == "agentx memory-write '完成 AMH 交接' --type handoff --json"
+    )
 
 
 def test_workflow_plan_invalid_input_can_fail_on_blocker() -> None:
-    result = CliRunner().invoke(app, ["workflow-plan", "memory", "--input", "bad", "--json", "--fail-on-blocker"])
+    result = CliRunner().invoke(
+        app, ["workflow-plan", "memory", "--input", "bad", "--json", "--fail-on-blocker"]
+    )
 
     assert result.exit_code == 1
     payload = json.loads(result.output)
@@ -408,7 +466,10 @@ def test_workflow_run_json_outputs_dry_run_payload() -> None:
     payload = json.loads(result.output)
     assert payload["schema"] == "agentx.workflow_run.v1"
     assert payload["execute"] is False
-    assert payload["plan"]["ready_commands"][1] == "agentx memory-write '完成 AMH 交接' --type handoff --json"
+    assert (
+        payload["plan"]["ready_commands"][1]
+        == "agentx memory-write '完成 AMH 交接' --type handoff --json"
+    )
 
 
 def test_workflow_run_result_output_writes_json_artifact(tmp_path) -> None:  # noqa: ANN001
@@ -438,7 +499,9 @@ def test_workflow_run_result_output_writes_json_artifact(tmp_path) -> None:  # n
     assert stdout_payload == artifact_payload
 
 
-def test_memory_workflow_runner_smoke_links_artifact_next_resume_and_gate(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+def test_memory_workflow_runner_smoke_links_artifact_next_resume_and_gate(
+    tmp_path, monkeypatch
+) -> None:  # noqa: ANN001
     _clean_git_repo_ignoring_agentx(tmp_path, monkeypatch)
     runner = CliRunner()
 
@@ -469,7 +532,10 @@ def test_memory_workflow_runner_smoke_links_artifact_next_resume_and_gate(tmp_pa
     assert artifacts_result.exit_code == 0, artifacts_result.output
     artifacts_payload = json.loads(artifacts_result.output)
     assert artifacts_payload["workflow_chain"]["status"] == "ready"
-    assert artifacts_payload["workflow_chain"]["next_result_output"] == ".agentx/runs/workflow-memory-next.json"
+    assert (
+        artifacts_payload["workflow_chain"]["next_result_output"]
+        == ".agentx/runs/workflow-memory-next.json"
+    )
 
     next_result = runner.invoke(app, ["next", "--workspace", str(tmp_path), "--json"])
 
@@ -479,7 +545,10 @@ def test_memory_workflow_runner_smoke_links_artifact_next_resume_and_gate(tmp_pa
     assert next_payload["recommended_command"] == (
         "agentx workflow-resume .agentx/runs/workflow-memory.json --result-output auto --dry-run --json"
     )
-    assert next_payload["signals"]["latest_workflow_next_result_output"] == ".agentx/runs/workflow-memory-next.json"
+    assert (
+        next_payload["signals"]["latest_workflow_next_result_output"]
+        == ".agentx/runs/workflow-memory-next.json"
+    )
 
     resume_argv = shlex.split(next_payload["recommended_command"])
     resume_result = runner.invoke(app, resume_argv[1:])
@@ -503,7 +572,9 @@ def test_memory_workflow_runner_smoke_links_artifact_next_resume_and_gate(tmp_pa
     assert "workflow_artifact_needs_inspect" not in gate_payload["warnings"]
 
 
-def test_ace_workflow_runner_smoke_links_artifact_next_resume_and_gate(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+def test_ace_workflow_runner_smoke_links_artifact_next_resume_and_gate(
+    tmp_path, monkeypatch
+) -> None:  # noqa: ANN001
     _clean_git_repo_ignoring_agentx(tmp_path, monkeypatch)
     runner = CliRunner()
 
@@ -541,7 +612,10 @@ def test_ace_workflow_runner_smoke_links_artifact_next_resume_and_gate(tmp_path,
     assert artifacts_result.exit_code == 0, artifacts_result.output
     artifacts_payload = json.loads(artifacts_result.output)
     assert artifacts_payload["workflow_chain"]["status"] == "ready"
-    assert artifacts_payload["workflow_chain"]["next_result_output"] == ".agentx/runs/workflow-ace-next.json"
+    assert (
+        artifacts_payload["workflow_chain"]["next_result_output"]
+        == ".agentx/runs/workflow-ace-next.json"
+    )
 
     next_result = runner.invoke(app, ["next", "--workspace", str(tmp_path), "--json"])
 
@@ -685,7 +759,10 @@ def test_workflow_run_cli_allow_yellow_requires_reason() -> None:
 
 def test_workflow_inspect_builds_resume_command_for_missing_inputs(tmp_path) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.json"
-    source.write_text(json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False), encoding="utf-8")
+    source.write_text(
+        json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False),
+        encoding="utf-8",
+    )
 
     result = CliRunner().invoke(app, ["workflow-inspect", str(source), "--json"])
 
@@ -705,7 +782,10 @@ def test_workflow_inspect_builds_resume_command_for_missing_inputs(tmp_path) -> 
 
 def test_workflow_inspect_input_override_fills_missing_inputs(tmp_path) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.json"
-    source.write_text(json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False), encoding="utf-8")
+    source.write_text(
+        json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False),
+        encoding="utf-8",
+    )
 
     result = CliRunner().invoke(
         app,
@@ -731,7 +811,10 @@ def test_workflow_inspect_input_override_fills_missing_inputs(tmp_path) -> None:
 
 def test_workflow_inspect_invalid_input_can_fail_on_blocker(tmp_path) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.json"
-    source.write_text(json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False), encoding="utf-8")
+    source.write_text(
+        json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False),
+        encoding="utf-8",
+    )
 
     result = CliRunner().invoke(
         app,
@@ -746,8 +829,13 @@ def test_workflow_inspect_invalid_input_can_fail_on_blocker(tmp_path) -> None:  
 
 def test_workflow_inspect_preserves_known_inputs_and_result_output(tmp_path) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.jsonl"
-    run_payload = workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"})
-    source.write_text(json.dumps({"event": "workflow_run", "data": run_payload}, ensure_ascii=False) + "\n", encoding="utf-8")
+    run_payload = workflow_run_payload(
+        "memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}
+    )
+    source.write_text(
+        json.dumps({"event": "workflow_run", "data": run_payload}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
 
     result = CliRunner().invoke(
         app,
@@ -778,7 +866,9 @@ def test_workflow_inspect_preserves_known_inputs_and_result_output(tmp_path) -> 
 
 def test_workflow_inspect_result_output_auto_allocates_artifact_path(tmp_path) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.json"
-    run_payload = workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"})
+    run_payload = workflow_run_payload(
+        "memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}
+    )
     source.write_text(json.dumps(run_payload, ensure_ascii=False), encoding="utf-8")
 
     result = CliRunner().invoke(
@@ -802,13 +892,17 @@ def test_workflow_inspect_result_output_auto_allocates_artifact_path(tmp_path) -
 
 def test_workflow_inspect_result_output_auto_avoids_existing_path(tmp_path) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.json"
-    run_payload = workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"})
+    run_payload = workflow_run_payload(
+        "memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}
+    )
     source.write_text(json.dumps(run_payload, ensure_ascii=False), encoding="utf-8")
     existing = tmp_path / ".agentx" / "runs" / "workflow-memory-next.json"
     existing.parent.mkdir(parents=True, exist_ok=True)
     existing.write_text("existing\n", encoding="utf-8")
 
-    result = CliRunner().invoke(app, ["workflow-inspect", str(source), "--result-output", "auto", "--json"])
+    result = CliRunner().invoke(
+        app, ["workflow-inspect", str(source), "--result-output", "auto", "--json"]
+    )
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -820,7 +914,9 @@ def test_workflow_inspect_field_outputs_resume_command(tmp_path) -> None:  # noq
     source = tmp_path / "workflow-memory.json"
     source.write_text(
         json.dumps(
-            workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}),
+            workflow_run_payload(
+                "memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}
+            ),
             ensure_ascii=False,
         ),
         encoding="utf-8",
@@ -835,7 +931,10 @@ def test_workflow_inspect_field_outputs_resume_command(tmp_path) -> None:  # noq
 
 def test_workflow_inspect_jsonl_outputs_event_envelope(tmp_path) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.json"
-    source.write_text(json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False), encoding="utf-8")
+    source.write_text(
+        json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False),
+        encoding="utf-8",
+    )
 
     result = CliRunner().invoke(app, ["workflow-inspect", str(source), "--output-format", "jsonl"])
 
@@ -849,7 +948,9 @@ def test_workflow_resume_dry_run_outputs_command_payload(tmp_path) -> None:  # n
     source = tmp_path / "workflow-memory.json"
     source.write_text(
         json.dumps(
-            workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}),
+            workflow_run_payload(
+                "memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}
+            ),
             ensure_ascii=False,
         ),
         encoding="utf-8",
@@ -868,7 +969,10 @@ def test_workflow_resume_dry_run_outputs_command_payload(tmp_path) -> None:  # n
 
 def test_workflow_resume_input_override_makes_dry_run_ready(tmp_path) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.json"
-    source.write_text(json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False), encoding="utf-8")
+    source.write_text(
+        json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False),
+        encoding="utf-8",
+    )
 
     result = CliRunner().invoke(
         app,
@@ -891,8 +995,13 @@ def test_workflow_resume_input_override_makes_dry_run_ready(tmp_path) -> None:  
 
 def test_workflow_resume_result_output_auto_uses_jsonl_suffix(tmp_path) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.jsonl"
-    run_payload = workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"})
-    source.write_text(json.dumps({"event": "workflow_run", "data": run_payload}, ensure_ascii=False) + "\n", encoding="utf-8")
+    run_payload = workflow_run_payload(
+        "memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}
+    )
+    source.write_text(
+        json.dumps({"event": "workflow_run", "data": run_payload}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
 
     result = CliRunner().invoke(
         app,
@@ -917,7 +1026,10 @@ def test_workflow_resume_result_output_auto_uses_jsonl_suffix(tmp_path) -> None:
 
 def test_workflow_resume_execute_rejects_missing_inputs(tmp_path) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.json"
-    source.write_text(json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False), encoding="utf-8")
+    source.write_text(
+        json.dumps(workflow_run_payload("memory", workspace=tmp_path), ensure_ascii=False),
+        encoding="utf-8",
+    )
 
     result = CliRunner().invoke(app, ["workflow-resume", str(source), "--execute", "--json"])
 
@@ -925,11 +1037,15 @@ def test_workflow_resume_execute_rejects_missing_inputs(tmp_path) -> None:  # no
     assert "workflow resume inputs are required" in result.output
 
 
-def test_workflow_resume_execute_uses_artifact_workspace_and_reports_result(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+def test_workflow_resume_execute_uses_artifact_workspace_and_reports_result(
+    tmp_path, monkeypatch
+) -> None:  # noqa: ANN001
     source = tmp_path / "workflow-memory.json"
     source.write_text(
         json.dumps(
-            workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}),
+            workflow_run_payload(
+                "memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}
+            ),
             ensure_ascii=False,
         ),
         encoding="utf-8",
@@ -938,7 +1054,9 @@ def test_workflow_resume_execute_uses_artifact_workspace_and_reports_result(tmp_
 
     def fake_run(argv, **kwargs):  # noqa: ANN001, ANN003
         calls.append((argv, kwargs))
-        return subprocess.CompletedProcess(argv, 7, stdout="resume stdout\n", stderr="resume stderr\n")
+        return subprocess.CompletedProcess(
+            argv, 7, stdout="resume stdout\n", stderr="resume stderr\n"
+        )
 
     monkeypatch.setattr("agentx.cli.subprocess.run", fake_run)
 

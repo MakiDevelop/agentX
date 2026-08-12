@@ -28,8 +28,19 @@ from rich.text import Text
 
 from agentx import cli_runtime_handlers as _runtime_handlers
 from agentx import cli_slash_shims as _slash_shims
-from agentx.ace import ace_answer_payload, ace_append_payload, ace_briefing_payload, ace_init_payload, ace_status_payload
-from agentx.approval import ApprovalMode, ApprovalPolicy, approval_decision_source, normalize_approval_mode
+from agentx.ace import (
+    ace_answer_payload,
+    ace_append_payload,
+    ace_briefing_payload,
+    ace_init_payload,
+    ace_status_payload,
+)
+from agentx.approval import (
+    ApprovalMode,
+    ApprovalPolicy,
+    approval_decision_source,
+    normalize_approval_mode,
+)
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from agentx.bootstrap import local_instructions_payload
 from agentx.config import Settings
@@ -48,13 +59,28 @@ from agentx.command_catalog import (
 from agentx.context_compactor import LLMContextCompactor
 from agentx.doctor import run_doctor, run_static_doctor
 from agentx.git_workflow import build_commit_plan, commit_and_push
-from agentx.infrastructure_context import build_infrastructure_context, infrastructure_context_metadata
+from agentx.infrastructure_context import (
+    build_infrastructure_context,
+    infrastructure_context_metadata,
+)
 from agentx.intent import plan_task_items
 from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
-from agentx.memory_hall import MemoryHallClient, NullMemoryClient, memory_read_payload, memory_status_payload, memory_write_payload
+from agentx.memory_hall import (
+    MemoryHallClient,
+    NullMemoryClient,
+    memory_read_payload,
+    memory_status_payload,
+    memory_write_payload,
+)
 from agentx.ollama import OllamaCancelledError, OllamaClient
-from agentx.provider_registry import get_llm_client, list_registered_backends, LLMClient, register_builtin_backends, register_llm_backend
+from agentx.provider_registry import (
+    get_llm_client,
+    list_registered_backends,
+    LLMClient,
+    register_builtin_backends,
+    register_llm_backend,
+)
 from agentx.persona import list_personas, normalize_persona
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile, build_project_profile_payload
@@ -106,16 +132,15 @@ if TYPE_CHECKING:
 HEADLESS_PAYLOAD_SCHEMA_VERSION = "agentx.headless_result.v1"
 
 
-
-
 @dataclass
 class ShellState:
     """管理互動式 shell 的狀態（階段一基礎版）"""
+
     settings: "Settings"
     agent_session: "AgentSession | None" = None
     memory: "MemoryHallClient | None" = None  # for hot-reload of ACA amh backend
     plan_mode: bool = False
-    mode: str = "chat"           # "chat" 或 "agent"
+    mode: str = "chat"  # "chat" 或 "agent"
     namespace: str = "project:agentX"
     compaction_count: int = 0
 
@@ -173,8 +198,8 @@ cmd_quit = _slash_shims.cmd_quit
 
 
 GUIDE_MODE_ROWS = [
-    ("chat", "純聊天 / 解釋概念", "uv run agentx chat \"只回一句話：你是什麼？\""),
-    ("ask", "單次 agent 任務", "uv run agentx ask \"幫我找出這個 repo 的測試指令\""),
+    ("chat", "純聊天 / 解釋概念", 'uv run agentx chat "只回一句話：你是什麼？"'),
+    ("ask", "單次 agent 任務", 'uv run agentx ask "幫我找出這個 repo 的測試指令"'),
     ("shell", "長時間協作 CLI", "ax"),
 ]
 
@@ -191,11 +216,26 @@ WORKFLOW_ROWS = [
     ("安全執行", "/tools  →  /approval strict  →  /run uv run pytest -q"),
     ("工程驗證", "/git  →  /diff  →  /test  →  /review"),
     ("Docker 檢查", "/docker ps  →  /docker build  →  /docker up  →  /docker logs"),
-    ("記憶交接", "agentx memory-read \"handoff\" --json  →  agentx memory-write \"完成與待辦\" --type handoff --json  →  agentx memory-write \"完成與待辦\" --type handoff --write --json"),
-    ("Headless bundle", "agentx -p \"任務\" --agent --artifact-dir .agentx/runs/latest --quiet  →  agentx handoff-resume .agentx/runs/latest --dry-run"),
-    ("Infra preflight", "agentx infra resource-bundle --json  →  /intent SSH/deploy/cross-machine  →  填寫 runtime state block"),
-    ("ACE council", "agentx ace-init SESSION --goal \"GOAL\" --json  →  agentx ace-init SESSION --goal \"GOAL\" --write --json  →  agentx ace-briefing SESSION --agent gemini --role Reviewer --task \"Review manifest\" --json  →  agentx ace-answer SESSION --agent gemini --answer \"ANSWER\" --summary \"SUMMARY\" --json  →  agentx ace-status SESSION --json"),
-    ("Approval audit", "/sessions  →  /transcript approvals latest --denied  →  /transcript approvals SESSION"),
+    (
+        "記憶交接",
+        'agentx memory-read "handoff" --json  →  agentx memory-write "完成與待辦" --type handoff --json  →  agentx memory-write "完成與待辦" --type handoff --write --json',
+    ),
+    (
+        "Headless bundle",
+        'agentx -p "任務" --agent --artifact-dir .agentx/runs/latest --quiet  →  agentx handoff-resume .agentx/runs/latest --dry-run',
+    ),
+    (
+        "Infra preflight",
+        "agentx infra resource-bundle --json  →  /intent SSH/deploy/cross-machine  →  填寫 runtime state block",
+    ),
+    (
+        "ACE council",
+        'agentx ace-init SESSION --goal "GOAL" --json  →  agentx ace-init SESSION --goal "GOAL" --write --json  →  agentx ace-briefing SESSION --agent gemini --role Reviewer --task "Review manifest" --json  →  agentx ace-answer SESSION --agent gemini --answer "ANSWER" --summary "SUMMARY" --json  →  agentx ace-status SESSION --json',
+    ),
+    (
+        "Approval audit",
+        "/sessions  →  /transcript approvals latest --denied  →  /transcript approvals SESSION",
+    ),
     ("提交收尾", "/review  →  /commit 中文訊息"),
 ]
 
@@ -254,7 +294,9 @@ def format_workflow_recipe(name: str) -> str:
     return f"{goal}\n{path}"
 
 
-def workflow_catalog_payload(query: str | None = None, *, workspace: Path | None = None) -> dict[str, object]:
+def workflow_catalog_payload(
+    query: str | None = None, *, workspace: Path | None = None
+) -> dict[str, object]:
     normalized_query = (query or "").strip()
     settings = Settings(workspace=workspace)
     recipes = []
@@ -272,11 +314,7 @@ def workflow_catalog_payload(query: str | None = None, *, workspace: Path | None
         )
     if normalized_query:
         recipe = workflow_recipe(normalized_query)
-        recipes = [
-            item
-            for item in recipes
-            if recipe is not None and item["goal"] == recipe[0]
-        ]
+        recipes = [item for item in recipes if recipe is not None and item["goal"] == recipe[0]]
     return {
         "schema": "agentx.workflow_catalog.v1",
         "query": normalized_query or None,
@@ -350,7 +388,11 @@ def workflow_plan_payload(
             if placeholders:
                 step["inputs_required"] = placeholders
                 inputs_required.extend(placeholders)
-            command_plan = command_plan_payload(settings, ready_command) if step.get("kind") == "agentx_cli" else step.get("command_plan")
+            command_plan = (
+                command_plan_payload(settings, ready_command)
+                if step.get("kind") == "agentx_cli"
+                else step.get("command_plan")
+            )
             if step.get("kind") == "agentx_cli":
                 step["command_plan"] = command_plan
             if isinstance(command_plan, dict):
@@ -363,7 +405,10 @@ def workflow_plan_payload(
                             "blockers": plan_blockers,
                         }
                     )
-                if command_plan.get("approval_required") or command_plan.get("risk") in {"YELLOW", "RED"}:
+                if command_plan.get("approval_required") or command_plan.get("risk") in {
+                    "YELLOW",
+                    "RED",
+                }:
                     side_effect_gates.append(
                         {
                             "step_index": index,
@@ -398,10 +443,18 @@ def workflow_plan_payload(
         "command_blockers": command_blockers,
         "blockers": blockers,
         "warnings": warnings,
-        "recommended_command": ready_commands[0] if ok and ready_commands else f"agentx workflows {normalized_query or 'NAME'} --json",
+        "recommended_command": ready_commands[0]
+        if ok and ready_commands
+        else f"agentx workflows {normalized_query or 'NAME'} --json",
         "recommended_kind": "execute_first_step" if ok and commands else "fill_workflow_inputs",
-        "recommended_risk": "GREEN" if ok and not side_effect_gates else "YELLOW" if ok else "UNKNOWN",
-        "next_commands": ready_commands if ok else [f"agentx workflows {normalized_query or 'NAME'} --json"],
+        "recommended_risk": "GREEN"
+        if ok and not side_effect_gates
+        else "YELLOW"
+        if ok
+        else "UNKNOWN",
+        "next_commands": ready_commands
+        if ok
+        else [f"agentx workflows {normalized_query or 'NAME'} --json"],
     }
 
 
@@ -558,7 +611,9 @@ def workflow_run_payload(
         "stopped_at": stopped_at,
         "blockers": blockers,
         "warnings": warnings,
-        "recommended_command": str(plan.get("next_commands", [""])[0]) if ok and plan.get("next_commands") else f"agentx workflow-plan {query} --json",
+        "recommended_command": str(plan.get("next_commands", [""])[0])
+        if ok and plan.get("next_commands")
+        else f"agentx workflow-plan {query} --json",
         "recommended_kind": "execute_next_ready_command" if ok else "fix_workflow_run_blockers",
         "recommended_risk": "GREEN" if ok and execution_allowed else "YELLOW" if ok else "UNKNOWN",
         "next_commands": plan.get("next_commands", []),
@@ -591,7 +646,9 @@ def parse_workflow_inputs(items: list[str]) -> tuple[dict[str, str], list[str]]:
     return inputs, blockers
 
 
-def _apply_workflow_inputs(command: str, inputs: dict[str, str]) -> tuple[str, list[tuple[str, str]]]:
+def _apply_workflow_inputs(
+    command: str, inputs: dict[str, str]
+) -> tuple[str, list[tuple[str, str]]]:
     ready_command = command
     applied: list[tuple[str, str]] = []
     for placeholder in sorted(WORKFLOW_PLACEHOLDERS, key=len, reverse=True):
@@ -705,13 +762,17 @@ def print_workflow_plan_payload(
         print_raw("inputs required:")
         for item in inputs_required:
             required = dict(item)
-            print_raw(f"- step {required.get('step_index')}: {required.get('placeholder')} ({required.get('description')})")
+            print_raw(
+                f"- step {required.get('step_index')}: {required.get('placeholder')} ({required.get('description')})"
+            )
     gates = payload.get("side_effect_gates") or []
     if gates:
         print_raw("side-effect gates:")
         for item in gates:
             gate = dict(item)
-            print_raw(f"- step {gate.get('step_index')}: {gate.get('risk')} approval={gate.get('approval_required')}")
+            print_raw(
+                f"- step {gate.get('step_index')}: {gate.get('risk')} approval={gate.get('approval_required')}"
+            )
     next_commands = payload.get("next_commands") or []
     if next_commands:
         print_raw("next:")
@@ -751,13 +812,17 @@ def print_workflow_run_payload(
         print_raw("executed:")
         for item in executed_steps:
             step = dict(item)
-            print_raw(f"- step {step.get('step_index')}: rc={step.get('returncode')} {step.get('command')}")
+            print_raw(
+                f"- step {step.get('step_index')}: rc={step.get('returncode')} {step.get('command')}"
+            )
     approval_receipts = payload.get("approval_receipts") or []
     if approval_receipts:
         print_raw("approval receipts:")
         for item in approval_receipts:
             receipt = dict(item)
-            print_raw(f"- step {receipt.get('step_index')}: {receipt.get('risk')} {receipt.get('source')} {receipt.get('command')}")
+            print_raw(
+                f"- step {receipt.get('step_index')}: {receipt.get('risk')} {receipt.get('source')} {receipt.get('command')}"
+            )
     next_commands = payload.get("next_commands") or []
     if next_commands:
         print_raw("next:")
@@ -787,32 +852,103 @@ def print_slash_help(topic: str = "") -> None:
     """
     if topic.strip():
         command = normalize_slash_command_topic(topic)
-        console.print(Panel(slash_command_help(topic), title=f"Slash Help {command}", border_style="cyan", padding=(0, 1)))
+        console.print(
+            Panel(
+                slash_command_help(topic),
+                title=f"Slash Help {command}",
+                border_style="cyan",
+                padding=(0, 1),
+            )
+        )
         return
 
     # Category definitions (vision-aligned grouping)
     categories = [
-        ("核心與模式", [
-            "/help", "/commands", "/guide", "/workflows", "/status", "/mode", "/plan", "/execute", "/clear", "/exit",
-        ]),
-        ("檔案與內容", [
-            "/files", "/read", "/find", "/where", "/infra", "/intent", "/plan-task", "/grep", "/search", "/attach", "/fetch",
-        ]),
-        ("Git 與變更", [
-            "/git", "/diff", "/stage", "/unstage", "/push", "/apply", "/commit",
-        ]),
-        ("記憶與交接 (Memory Hall)", [
-            "/memory", "/remember", "/handoff", "/resume", "/sessions", "/transcript",
-        ]),
-        ("安全與核准 (Safety)", [
-            "/approval", "/run", "/docker", "/test",
-        ]),
-        ("診斷與維護", [
-            "/doctor", "/init", "/config", "/context", "/compact", "/jobs", "/cancel",
-        ]),
-        ("其他", [
-            "/history", "/models", "/model", "/persona", "/review",
-        ]),
+        (
+            "核心與模式",
+            [
+                "/help",
+                "/commands",
+                "/guide",
+                "/workflows",
+                "/status",
+                "/mode",
+                "/plan",
+                "/execute",
+                "/clear",
+                "/exit",
+            ],
+        ),
+        (
+            "檔案與內容",
+            [
+                "/files",
+                "/read",
+                "/find",
+                "/where",
+                "/infra",
+                "/intent",
+                "/plan-task",
+                "/grep",
+                "/search",
+                "/attach",
+                "/fetch",
+            ],
+        ),
+        (
+            "Git 與變更",
+            [
+                "/git",
+                "/diff",
+                "/stage",
+                "/unstage",
+                "/push",
+                "/apply",
+                "/commit",
+            ],
+        ),
+        (
+            "記憶與交接 (Memory Hall)",
+            [
+                "/memory",
+                "/remember",
+                "/handoff",
+                "/resume",
+                "/sessions",
+                "/transcript",
+            ],
+        ),
+        (
+            "安全與核准 (Safety)",
+            [
+                "/approval",
+                "/run",
+                "/docker",
+                "/test",
+            ],
+        ),
+        (
+            "診斷與維護",
+            [
+                "/doctor",
+                "/init",
+                "/config",
+                "/context",
+                "/compact",
+                "/jobs",
+                "/cancel",
+            ],
+        ),
+        (
+            "其他",
+            [
+                "/history",
+                "/models",
+                "/model",
+                "/persona",
+                "/review",
+            ],
+        ),
     ]
 
     # Build a quick lookup
@@ -849,7 +985,9 @@ def print_slash_help(topic: str = "") -> None:
         console.print(panel)
         console.print()  # spacing between sections
 
-    console.print("[dim]安全是 agentX 的核心 —— 你永遠可以透過 /approval 隨時調整。輸入 /doctor 查看目前姿勢。[/dim]")
+    console.print(
+        "[dim]安全是 agentX 的核心 —— 你永遠可以透過 /approval 隨時調整。輸入 /doctor 查看目前姿勢。[/dim]"
+    )
 
 
 def print_guide() -> None:
@@ -888,9 +1026,13 @@ def print_guide() -> None:
     safety.add_row("GREEN", "讀取、搜尋、git status/diff 等低風險操作會自動執行。")
     safety.add_row("YELLOW", "改檔、Docker build/up/down、Memory write 依 /approval 策略確認。")
     safety.add_row("RED", "危險操作與敏感路徑預設受保護。")
-    safety.add_row("Memory Hall", "用 /remember 寫入重點，用 /handoff 交接，用 /resume 延續上一輪。")
+    safety.add_row(
+        "Memory Hall", "用 /remember 寫入重點，用 /handoff 交接，用 /resume 延續上一輪。"
+    )
     console.print(safety)
-    console.print("[dim]下一步：輸入 /workflows 看實務路徑，/help 看全部指令，或 /tools 看工具與風險分級。[/dim]")
+    console.print(
+        "[dim]下一步：輸入 /workflows 看實務路徑，/help 看全部指令，或 /tools 看工具與風險分級。[/dim]"
+    )
 
 
 def print_workflows() -> None:
@@ -909,7 +1051,9 @@ def print_workflows() -> None:
     for goal, path in WORKFLOW_ROWS:
         table.add_row(goal, path)
     console.print(table)
-    console.print("[dim]提示：/mode ask 與 /mode agent 使用同一個工具模式；ask 是面向使用者的命名。[/dim]")
+    console.print(
+        "[dim]提示：/mode ask 與 /mode agent 使用同一個工具模式；ask 是面向使用者的命名。[/dim]"
+    )
 
 
 def print_tools(tools: ToolRegistry, query: str | None = None) -> None:
@@ -971,7 +1115,9 @@ def tool_catalog_payload(tools: ToolRegistry, query: str | None = None) -> dict[
     }
 
 
-def filtered_tool_infos(infos: list[dict[str, object]], query: str | None = None) -> list[dict[str, object]]:
+def filtered_tool_infos(
+    infos: list[dict[str, object]], query: str | None = None
+) -> list[dict[str, object]]:
     normalized = (query or "").strip().lower()
     if not normalized:
         return infos
@@ -983,7 +1129,9 @@ def filtered_tool_infos(infos: list[dict[str, object]], query: str | None = None
 
 def _tool_info_matches(item: dict[str, object], query: str) -> bool:
     aliases = item.get("aliases", [])
-    alias_text = " ".join(str(alias) for alias in aliases) if isinstance(aliases, list) else str(aliases)
+    alias_text = (
+        " ".join(str(alias) for alias in aliases) if isinstance(aliases, list) else str(aliases)
+    )
     haystack = " ".join(
         [
             str(item.get("name", "")),
@@ -1073,7 +1221,9 @@ def print_instructions_payload(
         print_structured_payload(payload, output_format=output_format, event="instructions")
         return
     if payload.get("ok"):
-        console.print(f"[green]Local instructions inspected: {payload.get('found_count', 0)} file(s)[/green]")
+        console.print(
+            f"[green]Local instructions inspected: {payload.get('found_count', 0)} file(s)[/green]"
+        )
         console.print(f"[dim]selected={payload.get('selected_file') or '-'}[/dim]")
         if payload.get("context"):
             print_raw(str(payload["context"]))
@@ -1454,7 +1604,9 @@ def _agentx_command_plan(settings: Settings, argv: list[str]) -> dict[str, objec
             "warnings": [],
             "next_commands": [
                 "agentx inspect --json",
-                "agentx artifacts --json" if tool_args.get("artifact_dir") else "agentx next --json",
+                "agentx artifacts --json"
+                if tool_args.get("artifact_dir")
+                else "agentx next --json",
             ],
         }
     subcommand = argv[1] if len(argv) >= 2 else ""
@@ -1485,7 +1637,7 @@ def _agentx_command_plan(settings: Settings, argv: list[str]) -> dict[str, objec
         "resolved_argv": argv,
         "blockers": ["agentx_command_not_in_capabilities"],
         "warnings": [],
-}
+    }
 
 
 def _agentx_capability_tool_args(capability: dict[str, object]) -> dict[str, object]:
@@ -1542,7 +1694,9 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
         return _with_command_plan_recommendation(payload)
 
     if destructive_blockers or "invalid_command_syntax" in blockers:
-        payload["next_commands"] = ["Do not execute this command; ask Maki for a safer plan or human-run deletion path"]
+        payload["next_commands"] = [
+            "Do not execute this command; ask Maki for a safer plan or human-run deletion path"
+        ]
         return _with_command_plan_recommendation(payload)
 
     if command_text in ALLOWED_COMMANDS:
@@ -1572,7 +1726,10 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
                 "tool": "run_build_command",
                 "tool_args": {"command": command_text},
                 "resolved_argv": BUILD_COMMANDS[command_text],
-                "next_commands": [f"/run {command_text}", "Confirm YELLOW approval before execution"],
+                "next_commands": [
+                    f"/run {command_text}",
+                    "Confirm YELLOW approval before execution",
+                ],
             }
         )
         return _with_command_plan_recommendation(payload)
@@ -1643,14 +1800,21 @@ def command_plan_payload(settings: Settings, command: str) -> dict[str, object]:
         return _with_command_plan_recommendation(payload)
 
     blockers.append("command_not_allowlisted")
-    payload["detail"] = "Command is not in ALLOWED_COMMANDS, BUILD_COMMANDS, docker compose policy, or agentx CLI capabilities"
-    payload["next_commands"] = ["Use agentx tools --json to inspect runnable tools", "Ask Maki before expanding command policy"]
+    payload["detail"] = (
+        "Command is not in ALLOWED_COMMANDS, BUILD_COMMANDS, docker compose policy, or agentx CLI capabilities"
+    )
+    payload["next_commands"] = [
+        "Use agentx tools --json to inspect runnable tools",
+        "Ask Maki before expanding command policy",
+    ]
     return _with_command_plan_recommendation(payload)
 
 
 def _with_command_plan_recommendation(payload: dict[str, object]) -> dict[str, object]:
     next_commands = payload.get("next_commands")
-    recommended_command = str(next_commands[0]) if isinstance(next_commands, list) and next_commands else None
+    recommended_command = (
+        str(next_commands[0]) if isinstance(next_commands, list) and next_commands else None
+    )
     if recommended_command is None:
         payload["recommended_command"] = None
         payload["recommended_kind"] = None
@@ -1734,7 +1898,9 @@ def _coerce_path_list(value: object) -> list[str]:
     return []
 
 
-def _tool_plan_arg_blockers(settings: Settings, canonical_tool: str, args: dict[str, object]) -> list[str]:
+def _tool_plan_arg_blockers(
+    settings: Settings, canonical_tool: str, args: dict[str, object]
+) -> list[str]:
     blockers: list[str] = []
     if canonical_tool in {"write_file", "edit_file", "insert_code"}:
         path_value = args.get("path")
@@ -1747,7 +1913,10 @@ def _tool_plan_arg_blockers(settings: Settings, canonical_tool: str, args: dict[
             if not isinstance(edits, list) or not edits:
                 blockers.append("missing_edits")
         if canonical_tool == "insert_code":
-            if not isinstance(args.get("insert_after"), str) or not str(args.get("insert_after") or "").strip():
+            if (
+                not isinstance(args.get("insert_after"), str)
+                or not str(args.get("insert_after") or "").strip()
+            ):
                 blockers.append("missing_insert_after")
             if not isinstance(args.get("content"), str):
                 blockers.append("missing_content")
@@ -1776,9 +1945,15 @@ def _tool_plan_arg_blockers(settings: Settings, canonical_tool: str, args: dict[
         command_plan = command_plan_payload(settings, command)
         if command_plan.get("blockers"):
             blockers.extend(str(item) for item in command_plan["blockers"])  # type: ignore[index]
-        if canonical_tool == "run_command" and command_plan.get("matched_policy") != "allowed_command":
+        if (
+            canonical_tool == "run_command"
+            and command_plan.get("matched_policy") != "allowed_command"
+        ):
             blockers.append("run_command_requires_green_allowlist")
-        if canonical_tool == "run_build_command" and command_plan.get("matched_policy") != "build_command":
+        if (
+            canonical_tool == "run_build_command"
+            and command_plan.get("matched_policy") != "build_command"
+        ):
             blockers.append("run_build_command_requires_build_allowlist")
     elif canonical_tool.startswith("docker_compose_"):
         action = canonical_tool.removeprefix("docker_compose_")
@@ -1786,7 +1961,9 @@ def _tool_plan_arg_blockers(settings: Settings, canonical_tool: str, args: dict[
             docker_compose_command(
                 settings.workspace,
                 action,
-                compose_file=str(args["compose_file"]) if args.get("compose_file") is not None else None,
+                compose_file=str(args["compose_file"])
+                if args.get("compose_file") is not None
+                else None,
                 service=str(args["service"]) if args.get("service") is not None else None,
                 tail=int(args.get("tail", 100)),
             )
@@ -1808,7 +1985,9 @@ def _tool_plan_embedded_command_plan(
     return command_plan_payload(settings, command)
 
 
-def tool_plan_payload(settings: Settings, tool_name: str, args_json: str | None = None) -> dict[str, object]:
+def tool_plan_payload(
+    settings: Settings, tool_name: str, args_json: str | None = None
+) -> dict[str, object]:
     registry = ToolRegistry(builtin_tools(settings.workspace, NullMemoryClient()))
     args, blockers, detail = _parse_tool_args(args_json)
     requested_tool = tool_name.strip()
@@ -1856,7 +2035,9 @@ def tool_plan_payload(settings: Settings, tool_name: str, args_json: str | None 
         if risk == Risk.YELLOW:
             payload["next_commands"] = ["Confirm YELLOW approval before execution"]
         else:
-            payload["next_commands"] = ["Tool call is preflight-clean; execute only through agentX tool policy"]
+            payload["next_commands"] = [
+                "Tool call is preflight-clean; execute only through agentX tool policy"
+            ]
     return payload
 
 
@@ -1913,7 +2094,9 @@ def print_context(agent_session: AgentSession, chat_messages: list[dict[str, str
     table.add_row("agent tokens estimate", str(report["tokens_estimate"]))
     table.add_row("compactions", str(report["compactions"]))
     table.add_row("chat messages", str(len(chat_messages)))
-    table.add_row("chat tokens estimate", str(sum(len(m.get("content", "")) for m in chat_messages) // 4))
+    table.add_row(
+        "chat tokens estimate", str(sum(len(m.get("content", "")) for m in chat_messages) // 4)
+    )
     console.print(table)
 
 
@@ -2006,7 +2189,9 @@ def keyboard_interrupt_should_force_exit(
     current_cancel: threading.Event | None = None,
 ) -> bool:
     """Return True when Ctrl+C was already requested for the running job."""
-    return bool(job_queue.current is not None and current_cancel is not None and current_cancel.is_set())
+    return bool(
+        job_queue.current is not None and current_cancel is not None and current_cancel.is_set()
+    )
 
 
 def apply_plan_task(workspace: Path, request: str) -> str:
@@ -2060,7 +2245,9 @@ def print_sessions(settings: Settings) -> None:
 
 
 def sessions_payload(settings: Settings, *, limit: int = 10) -> dict[str, object]:
-    sessions = [transcript_overview(path) for path in list_transcripts(settings.workspace, limit=limit)]
+    sessions = [
+        transcript_overview(path) for path in list_transcripts(settings.workspace, limit=limit)
+    ]
     return {
         "schema": "agentx.sessions.v1",
         "workspace": str(settings.workspace),
@@ -2082,7 +2269,12 @@ def resolve_artifacts_root(workspace: Path, value: str) -> Path:
 def artifact_mtime(path: Path) -> float:
     if path.is_file():
         return path.stat().st_mtime
-    candidates = [path / "result.json", path / "result.jsonl", path / "session.session.jsonl", path / "handoff.md"]
+    candidates = [
+        path / "result.json",
+        path / "result.jsonl",
+        path / "session.session.jsonl",
+        path / "handoff.md",
+    ]
     existing = [candidate.stat().st_mtime for candidate in candidates if candidate.exists()]
     if existing:
         return max(existing)
@@ -2171,15 +2363,21 @@ def artifact_bundle_overview(workspace: Path, bundle: Path) -> dict[str, object]
         "updated_at": artifact_mtime_text(bundle),
         "has_result": result_path is not None,
         "result_path": str(result_path) if result_path else None,
-        "result_relative_path": relative_workspace_path(workspace, result_path) if result_path else None,
+        "result_relative_path": relative_workspace_path(workspace, result_path)
+        if result_path
+        else None,
         "result_format": result_format,
         "result_conflict": result_conflict,
         "has_session": session_path.is_file(),
         "session_path": str(session_path) if session_path.is_file() else None,
-        "session_relative_path": relative_workspace_path(workspace, session_path) if session_path.is_file() else None,
+        "session_relative_path": relative_workspace_path(workspace, session_path)
+        if session_path.is_file()
+        else None,
         "has_handoff": handoff_path.is_file(),
         "handoff_path": str(handoff_path) if handoff_path.is_file() else None,
-        "handoff_relative_path": relative_workspace_path(workspace, handoff_path) if handoff_path.is_file() else None,
+        "handoff_relative_path": relative_workspace_path(workspace, handoff_path)
+        if handoff_path.is_file()
+        else None,
         "schema": artifact_payload_schema(result_payload),
         "schema_version": result_payload.get("schema_version") if result_payload else None,
         "termination": result_payload.get("termination") if result_payload else None,
@@ -2211,8 +2409,16 @@ def artifact_workflow_run_overview(workspace: Path, path: Path) -> dict[str, obj
     approval_receipts = payload.get("approval_receipts")
     blockers = payload.get("blockers")
     plan = payload.get("plan")
-    plan_inputs = dict(plan.get("inputs") or {}) if isinstance(plan, dict) and isinstance(plan.get("inputs"), dict) else {}
-    inputs_required = list(plan.get("inputs_required") or []) if isinstance(plan, dict) and isinstance(plan.get("inputs_required"), list) else []
+    plan_inputs = (
+        dict(plan.get("inputs") or {})
+        if isinstance(plan, dict) and isinstance(plan.get("inputs"), dict)
+        else {}
+    )
+    inputs_required = (
+        list(plan.get("inputs_required") or [])
+        if isinstance(plan, dict) and isinstance(plan.get("inputs_required"), list)
+        else []
+    )
     missing_inputs = [
         dict(item)
         for item in inputs_required
@@ -2221,7 +2427,9 @@ def artifact_workflow_run_overview(workspace: Path, path: Path) -> dict[str, obj
         and str(item.get("placeholder") or "").strip() not in plan_inputs
     ]
     workflow_resume_ready = not missing_inputs
-    workflow_has_issue = bool(payload.get("stopped_at")) or bool(blockers) or not workflow_resume_ready
+    workflow_has_issue = (
+        bool(payload.get("stopped_at")) or bool(blockers) or not workflow_resume_ready
+    )
     workflow_next_result_output = (
         allocate_workflow_resume_auto_result_output(
             workspace,
@@ -2262,7 +2470,9 @@ def artifact_workflow_run_overview(workspace: Path, path: Path) -> dict[str, obj
         "workflow_resume_ready": workflow_resume_ready,
         "workflow_missing_input_count": len(missing_inputs),
         "workflow_next_result_output": workflow_next_result_output,
-        "approval_receipt_count": len(approval_receipts) if isinstance(approval_receipts, list) else 0,
+        "approval_receipt_count": len(approval_receipts)
+        if isinstance(approval_receipts, list)
+        else 0,
     }
 
 
@@ -2301,7 +2511,9 @@ def list_artifact_entries(root: Path) -> list[Path]:
     return [path for path in root.iterdir() if is_artifact_entry(path)]
 
 
-def artifacts_payload(settings: Settings, *, root: str = ".agentx/runs", limit: int = 20) -> dict[str, object]:
+def artifacts_payload(
+    settings: Settings, *, root: str = ".agentx/runs", limit: int = 20
+) -> dict[str, object]:
     artifact_root = resolve_artifacts_root(settings.workspace, root)
     if not artifact_root.exists():
         return {
@@ -2324,7 +2536,9 @@ def artifacts_payload(settings: Settings, *, root: str = ".agentx/runs", limit: 
     entries = sorted(list_artifact_entries(artifact_root), key=artifact_mtime, reverse=True)[:limit]
     artifacts = [artifact_entry_overview(settings.workspace, entry) for entry in entries]
     latest_artifact = dict(artifacts[0]) if artifacts else None
-    recommended_command, recommended_kind, recommended_risk = _artifacts_recommendation(latest_artifact)
+    recommended_command, recommended_kind, recommended_risk = _artifacts_recommendation(
+        latest_artifact
+    )
     return {
         "schema": "agentx.artifacts.v1",
         "workspace": str(settings.workspace),
@@ -2350,9 +2564,15 @@ def _artifacts_recommendation(artifact: dict[str, object] | None) -> tuple[str, 
             "headless_bundle",
             "YELLOW",
         )
-    artifact_path = str(artifact.get("relative_path") or artifact.get("path") or ".agentx/runs/latest")
+    artifact_path = str(
+        artifact.get("relative_path") or artifact.get("path") or ".agentx/runs/latest"
+    )
     if artifact.get("needs_handoff") is True and artifact.get("resume_command"):
-        return f"agentx handoff-resume {shlex.quote(artifact_path)} --dry-run", "handoff_resume", "GREEN"
+        return (
+            f"agentx handoff-resume {shlex.quote(artifact_path)} --dry-run",
+            "handoff_resume",
+            "GREEN",
+        )
     return f"agentx artifacts {shlex.quote(artifact_path)} --json", "inspect_artifact", "GREEN"
 
 
@@ -2361,7 +2581,11 @@ def workflow_chain_payload(artifact: dict[str, object] | None) -> dict[str, obje
         return None
     artifact_path = str(artifact.get("relative_path") or artifact.get("path") or ".agentx/runs")
     blockers = list(artifact.get("workflow_blockers") or [])
-    stopped_at = artifact.get("workflow_stopped_at") if isinstance(artifact.get("workflow_stopped_at"), dict) else None
+    stopped_at = (
+        artifact.get("workflow_stopped_at")
+        if isinstance(artifact.get("workflow_stopped_at"), dict)
+        else None
+    )
     resume_ready = artifact.get("workflow_resume_ready") is True
     missing_input_count = int(artifact.get("workflow_missing_input_count", 0) or 0)
     has_issue = bool(stopped_at) or bool(blockers) or not resume_ready
@@ -2513,13 +2737,13 @@ def traces_payload(
     records, invalid_line_count = read_transcript_records(path)
     event_counts = Counter(trace_event_name(record) for record in records)
     tool_counts = Counter(
-        tool_name
-        for record in records
-        if (tool_name := trace_tool_name(record)) is not None
+        tool_name for record in records if (tool_name := trace_tool_name(record)) is not None
     )
     approval_count = int(event_counts.get("approval", 0))
     approval_denied_count = sum(
-        1 for record in records if trace_event_name(record) == "approval" and record.get("allowed") is False
+        1
+        for record in records
+        if trace_event_name(record) == "approval" and record.get("allowed") is False
     )
     tool_failure_count = sum(
         1 for record in records if trace_event_name(record) == "tool" and record.get("ok") is False
@@ -2760,7 +2984,10 @@ def run_review(ollama: OllamaClient, tools: ToolRegistry) -> str:
     try:
         return ollama.chat(
             [
-                {"role": "system", "content": "Use Traditional Chinese. Be concise and findings-first."},
+                {
+                    "role": "system",
+                    "content": "Use Traditional Chinese. Be concise and findings-first.",
+                },
                 {"role": "user", "content": prompt},
             ],
             json_mode=False,
@@ -2807,7 +3034,9 @@ def format_plan_status(enabled: bool) -> str:
     return "on（只討論方案，不使用工具）" if enabled else "off"
 
 
-def build_status_line(model: str, plan_mode: bool, context_pct: int, approval: str | None = None) -> str:
+def build_status_line(
+    model: str, plan_mode: bool, context_pct: int, approval: str | None = None
+) -> str:
     """Build the bottom status line text shown in TUI and classic prompt mode.
 
     Now includes optional approval mode for constant safety awareness (vision alignment).
@@ -2822,10 +3051,19 @@ def build_status_line(model: str, plan_mode: bool, context_pct: int, approval: s
 
 
 EXECUTE_TRIGGERS = [
-    "現在執行", "執行吧", "開始執行", "go ahead",
-    "執行這個方案", "執行剛剛的", "現在就做", "proceed",
-    "照這個做", "照這個方案做", "這個方案做",
+    "現在執行",
+    "執行吧",
+    "開始執行",
+    "go ahead",
+    "執行這個方案",
+    "執行剛剛的",
+    "現在就做",
+    "proceed",
+    "照這個做",
+    "照這個方案做",
+    "這個方案做",
 ]
+
 
 def is_natural_execute_trigger(text: str) -> bool:
     """Check if the user input looks like a natural language request to start execution."""
@@ -2981,7 +3219,9 @@ def print_config_payload(
     for key, value in payload.items():
         if key == "schema":
             continue
-        table.add_row(key, json.dumps(value, ensure_ascii=False) if isinstance(value, dict) else str(value))
+        table.add_row(
+            key, json.dumps(value, ensure_ascii=False) if isinstance(value, dict) else str(value)
+        )
     console.print(table)
 
 
@@ -3246,7 +3486,9 @@ def diff_payload(
     workspace = settings.workspace
     relative_path = _diff_relative_path(workspace, path)
     try:
-        repo_code, repo_stdout, repo_stderr = _git_read(workspace, ["rev-parse", "--is-inside-work-tree"])
+        repo_code, repo_stdout, repo_stderr = _git_read(
+            workspace, ["rev-parse", "--is-inside-work-tree"]
+        )
     except Exception as exc:
         return {
             "schema": "agentx.diff.v1",
@@ -3466,11 +3708,11 @@ def patch_check_payload(
             }
             details.append(f"git apply --check timed out after {timeout}s")
 
-        for args, collector in (
-            (["--name-only"], name_only_paths),
-        ):
+        for args, collector in ((["--name-only"], name_only_paths),):
             try:
-                code, stdout, _stderr = _git_apply_read(workspace, args, patch=patch_text, timeout=timeout)
+                code, stdout, _stderr = _git_apply_read(
+                    workspace, args, patch=patch_text, timeout=timeout
+                )
             except subprocess.TimeoutExpired:
                 warnings.append("git_apply_name_only_timeout")
                 continue
@@ -3492,7 +3734,9 @@ def patch_check_payload(
         except subprocess.TimeoutExpired:
             warnings.append("git_apply_numstat_timeout")
 
-    touched_paths = sorted(path for path in {*parsed_paths, *name_only_paths} if path and path != "/dev/null")
+    touched_paths = sorted(
+        path for path in {*parsed_paths, *name_only_paths} if path and path != "/dev/null"
+    )
     files: list[dict[str, object]] = []
     unsafe_paths: list[str] = []
     for path in touched_paths:
@@ -3734,11 +3978,15 @@ def task_update_payload(
         "before": before,
         "after": after,
         "by_status": _headless_task_counts(tasks),
-        "recommended_command": "agentx next --json" if ok else "fix task-update blockers, then rerun agentx task-update ID STATUS --json",
+        "recommended_command": "agentx next --json"
+        if ok
+        else "fix task-update blockers, then rerun agentx task-update ID STATUS --json",
         "recommended_kind": "next" if ok else "fix_task_update_blockers",
         "recommended_risk": "GREEN" if ok else "UNKNOWN",
         "next_commands": [
-            "agentx next --json" if ok else "fix task-update blockers, then rerun agentx task-update ID STATUS --json"
+            "agentx next --json"
+            if ok
+            else "fix task-update blockers, then rerun agentx task-update ID STATUS --json"
         ],
     }
 
@@ -3771,9 +4019,7 @@ def print_task_update_payload(
             "[red]task update blocked: "
             f"{','.join(str(item) for item in payload.get('blockers', [])) or 'unknown'}[/red]"
         )
-    console.print(
-        f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]"
-    )
+    console.print(f"[dim]recommended={payload.get('recommended_command') or '-'}[/dim]")
 
 
 def print_tasks_payload(
@@ -3838,7 +4084,9 @@ def verify_payload_from_checks(
         recommended_kind = "review"
         recommended_risk = "GREEN"
     else:
-        recommended_command = "fix verification failures, then rerun agentx verify --json --fail-on-error"
+        recommended_command = (
+            "fix verification failures, then rerun agentx verify --json --fail-on-error"
+        )
         recommended_kind = "fix_verify"
         recommended_risk = "UNKNOWN"
     return {
@@ -4057,8 +4305,12 @@ def commit_plan_payload(
         recommended_kind = "commit"
         recommended_risk = "YELLOW"
     elif blockers:
-        next_commands.append("fix blockers, then rerun agentx commit-plan --message '中文 commit 訊息' --json")
-        recommended_command = "fix blockers, then rerun agentx commit-plan --message '中文 commit 訊息' --json"
+        next_commands.append(
+            "fix blockers, then rerun agentx commit-plan --message '中文 commit 訊息' --json"
+        )
+        recommended_command = (
+            "fix blockers, then rerun agentx commit-plan --message '中文 commit 訊息' --json"
+        )
         recommended_kind = "fix_blockers"
         recommended_risk = "UNKNOWN"
     elif not review_commit_ready:
@@ -4138,7 +4390,11 @@ def gate_payload(
 ) -> dict[str, object]:
     review = review_payload(settings, timeout=timeout, run_verify=run_verify)
     doctor = doctor_payload(settings, live_probes=False) if run_doctor else None
-    approvals = approvals_payload(settings, session="latest", limit=approvals_limit) if run_approvals else None
+    approvals = (
+        approvals_payload(settings, session="latest", limit=approvals_limit)
+        if run_approvals
+        else None
+    )
     blockers = [str(item) for item in review.get("blockers", [])]
     warnings = [str(item) for item in review.get("warnings", [])]
 
@@ -4164,8 +4420,12 @@ def gate_payload(
         "agentx approvals latest --denied --json --fail-on-denied",
     ]
     if commit_ready:
-        next_commands.append("agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker")
-        recommended_command = "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker"
+        next_commands.append(
+            "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker"
+        )
+        recommended_command = (
+            "agentx commit-plan --message '中文 commit 訊息' --json --fail-on-blocker"
+        )
         recommended_kind = "commit_plan"
         recommended_risk = "GREEN"
     elif blockers:
@@ -4264,13 +4524,19 @@ def next_payload(
     diff = diff_payload(settings)
     tasks = tasks_payload(settings, status_filter="active")
     artifacts = artifacts_payload(settings, root=artifacts_root, limit=artifacts_limit)
-    approvals = approvals_payload(settings, session="latest", limit=approvals_limit, denied_only=True)
+    approvals = approvals_payload(
+        settings, session="latest", limit=approvals_limit, denied_only=True
+    )
 
     recommendations: list[dict[str, object]] = []
     denied_count = int(approvals.get("denied_count", 0) or 0) if approvals.get("ok") is True else 0
     dirty = diff.get("dirty") is True
     active_task_count = int(tasks.get("count", 0) or 0)
-    active_task_items = [dict(task) for task in tasks.get("tasks", [])] if isinstance(tasks.get("tasks"), list) else []
+    active_task_items = (
+        [dict(task) for task in tasks.get("tasks", [])]
+        if isinstance(tasks.get("tasks"), list)
+        else []
+    )
     active_task_ids = [task.get("id") for task in active_task_items if task.get("id") is not None]
     primary_active_task = active_task_items[0] if active_task_items else None
     artifact_items = list(artifacts.get("artifacts", [])) if artifacts.get("ok") is True else []
@@ -4287,7 +4553,11 @@ def next_payload(
         if latest_artifact_type == "workflow_run" and latest_artifact is not None
         else 0
     )
-    workflow_chain = artifacts.get("workflow_chain") if isinstance(artifacts.get("workflow_chain"), dict) else None
+    workflow_chain = (
+        artifacts.get("workflow_chain")
+        if isinstance(artifacts.get("workflow_chain"), dict)
+        else None
+    )
 
     if denied_count > 0:
         recommendations.append(
@@ -4319,7 +4589,9 @@ def next_payload(
             }
         )
     if latest_artifact is not None and latest_needs_handoff:
-        artifact_path = str(latest_artifact.get("relative_path") or latest_artifact.get("path") or artifacts_root)
+        artifact_path = str(
+            latest_artifact.get("relative_path") or latest_artifact.get("path") or artifacts_root
+        )
         recommendations.append(
             {
                 "rank": len(recommendations) + 1,
@@ -4335,7 +4607,9 @@ def next_payload(
         and latest_artifact_type == "workflow_run"
         and not latest_needs_handoff
     ):
-        artifact_path = str(latest_artifact.get("relative_path") or latest_artifact.get("path") or artifacts_root)
+        artifact_path = str(
+            latest_artifact.get("relative_path") or latest_artifact.get("path") or artifacts_root
+        )
         workflow_has_issue = (
             bool(latest_artifact.get("workflow_stopped_at"))
             or bool(latest_artifact.get("workflow_blockers"))
@@ -4365,7 +4639,9 @@ def next_payload(
                 "rank": len(recommendations) + 1,
                 "kind": "task_resume",
                 "command": "agentx tasks active --json",
-                "reason": _next_task_reason("active tasks exist and the workspace is clean", primary_active_task),
+                "reason": _next_task_reason(
+                    "active tasks exist and the workspace is clean", primary_active_task
+                ),
                 "risk": "GREEN",
             }
         )
@@ -4374,7 +4650,9 @@ def next_payload(
                 "rank": len(recommendations) + 1,
                 "kind": "headless_continue",
                 "command": "agentx -p '繼續目前 active task' --agent --json",
-                "reason": _next_task_reason("continue active task work from current repo state", primary_active_task),
+                "reason": _next_task_reason(
+                    "continue active task work from current repo state", primary_active_task
+                ),
                 "risk": "YELLOW",
             }
         )
@@ -4407,7 +4685,9 @@ def next_payload(
         ]
     )
     for recommendation in recommendations:
-        recommendation["command_plan"] = command_plan_payload(settings, str(recommendation["command"]))
+        recommendation["command_plan"] = command_plan_payload(
+            settings, str(recommendation["command"])
+        )
 
     return {
         "schema": "agentx.next.v1",
@@ -4427,13 +4707,23 @@ def next_payload(
             "artifact_count": artifacts.get("count", 0),
             "latest_artifact_type": latest_artifact_type,
             "latest_artifact_needs_handoff": latest_needs_handoff,
-            "latest_workflow_run_query": latest_artifact.get("workflow_query") if latest_artifact_type == "workflow_run" else None,
-            "latest_workflow_run_ok": latest_artifact.get("workflow_ok") if latest_artifact_type == "workflow_run" else None,
-            "latest_workflow_run_stopped": bool(latest_artifact.get("workflow_stopped_at")) if latest_artifact_type == "workflow_run" else False,
+            "latest_workflow_run_query": latest_artifact.get("workflow_query")
+            if latest_artifact_type == "workflow_run"
+            else None,
+            "latest_workflow_run_ok": latest_artifact.get("workflow_ok")
+            if latest_artifact_type == "workflow_run"
+            else None,
+            "latest_workflow_run_stopped": bool(latest_artifact.get("workflow_stopped_at"))
+            if latest_artifact_type == "workflow_run"
+            else False,
             "latest_workflow_resume_ready": latest_workflow_resume_ready,
             "latest_workflow_missing_input_count": latest_workflow_missing_input_count,
-            "latest_workflow_chain_status": workflow_chain.get("status") if workflow_chain else None,
-            "latest_workflow_next_result_output": workflow_chain.get("next_result_output") if workflow_chain else None,
+            "latest_workflow_chain_status": workflow_chain.get("status")
+            if workflow_chain
+            else None,
+            "latest_workflow_next_result_output": workflow_chain.get("next_result_output")
+            if workflow_chain
+            else None,
             "denied_approval_count": denied_count,
             "approvals_available": approvals.get("ok") is True,
             "workflow_recommendation_count": 2,
@@ -4522,8 +4812,7 @@ def inspect_payload(
         for command in default_verify_commands(settings.workspace)
     ]
     verify_command_plans = [
-        command_plan_payload(settings, str(item["command"]))
-        for item in verify_commands
+        command_plan_payload(settings, str(item["command"])) for item in verify_commands
     ]
     artifacts = artifacts_payload(settings, root=".agentx/runs", limit=5)
     instructions = local_instructions_payload(settings.workspace)
@@ -4742,7 +5031,10 @@ def print_status_payload(
         f"dirty={git.get('dirty')} ahead={git.get('ahead')} behind={git.get('behind')} "
         f"changes={git.get('changes_count')}",
     )
-    table.add_row("tasks", f"count={tasks.get('count')} by_status={json.dumps(task_counts, ensure_ascii=False)}")
+    table.add_row(
+        "tasks",
+        f"count={tasks.get('count')} by_status={json.dumps(task_counts, ensure_ascii=False)}",
+    )
     console.print(table)
 
 
@@ -4762,13 +5054,16 @@ def doctor_payload_from_checks(
         for name, ok, detail in checks
     ]
     health = workflow_artifact_health or workflow_artifact_health_payload(settings)
-    health_warnings = [str(item) for item in health.get("warnings", [])] if isinstance(health, dict) else []
+    health_warnings = (
+        [str(item) for item in health.get("warnings", [])] if isinstance(health, dict) else []
+    )
     return {
         "schema": "agentx.doctor.v1",
         "workspace": str(settings.workspace),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "live_probes": live_probes,
-        "ok": all(item["ok"] for item in normalized) and (not isinstance(health, dict) or health.get("ok") is True),
+        "ok": all(item["ok"] for item in normalized)
+        and (not isinstance(health, dict) or health.get("ok") is True),
         "warnings": health_warnings,
         "checks": normalized,
         "workflow_artifact_health": health,
@@ -4777,7 +5072,11 @@ def doctor_payload_from_checks(
 
 def workflow_artifact_health_payload(settings: Settings) -> dict[str, object]:
     artifacts = artifacts_payload(settings, root=".agentx/runs", limit=1)
-    chain = artifacts.get("workflow_chain") if isinstance(artifacts.get("workflow_chain"), dict) else None
+    chain = (
+        artifacts.get("workflow_chain")
+        if isinstance(artifacts.get("workflow_chain"), dict)
+        else None
+    )
     if chain is None:
         return {
             "schema": "agentx.workflow_artifact_health.v1",
@@ -4855,9 +5154,7 @@ def doctor_exit_code(payload: dict[str, object], *, fail_on_error: bool = False)
     return 0 if payload.get("ok") is True else 1
 
 
-def _collect_aca_probe_info(
-    settings: Settings, memory: "MemoryHallClient | None"
-) -> dict:
+def _collect_aca_probe_info(settings: Settings, memory: "MemoryHallClient | None") -> dict:
     """Collect live ACA probe/governance/audit signals for /status, /config and /doctor.
 
     This enables /status to also display the complete post-governance-record audit event list
@@ -4888,9 +5185,9 @@ def _collect_aca_probe_info(
                     start = e_str.find("aca-doctor-probe-write:")
                     if start >= 0:
                         probe_marker = e_str[start : start + 50].split()[0]
-                    info["latest_probe_expires"] = e.get("valid_until") or (e.get("metadata") or {}).get(
-                        "valid_until"
-                    )
+                    info["latest_probe_expires"] = e.get("valid_until") or (
+                        e.get("metadata") or {}
+                    ).get("valid_until")
                     if info["latest_probe_expires"] and probe_marker:
                         try:
                             events = memory.audit(probe_marker) if hasattr(memory, "audit") else []
@@ -4900,7 +5197,9 @@ def _collect_aca_probe_info(
                         except Exception:
                             info["latest_probe_audit"] = "audit error"
                 # governance record (post probe write)
-                if ("governance" in e_str or "probe_completed" in e_str or "probe 完成" in e_str) and probe_marker:
+                if (
+                    "governance" in e_str or "probe_completed" in e_str or "probe 完成" in e_str
+                ) and probe_marker:
                     meta = e.get("metadata") or {}
                     evidence = meta.get("evidence_ids", [])
                     gov_type = meta.get("governance_type")
@@ -5134,18 +5433,27 @@ def headless_handoff_summary(
     if recovery_actions:
         next_steps.append(f"Apply recovery action: {recovery_actions[0]}.")
     if termination == "max_steps_exceeded":
-        next_steps.append("Resume from the saved session if session_path is present, or rerun with higher --max-steps.")
+        next_steps.append(
+            "Resume from the saved session if session_path is present, or rerun with higher --max-steps."
+        )
     elif termination == "final_failed":
-        next_steps.append("Do not treat the final answer as done; resolve failing tools or pending verifies first.")
+        next_steps.append(
+            "Do not treat the final answer as done; resolve failing tools or pending verifies first."
+        )
     elif termination in {"runtime_error", "timeout"}:
-        next_steps.append("Fix the runtime condition, then rerun the same prompt with --resume-session if available.")
+        next_steps.append(
+            "Fix the runtime condition, then rerun the same prompt with --resume-session if available."
+        )
     elif not next_steps:
         next_steps.append("No immediate recovery action detected.")
 
-    task_counts = stats.get("task_counts", {}) if isinstance(stats.get("task_counts", {}), dict) else {}
+    task_counts = (
+        stats.get("task_counts", {}) if isinstance(stats.get("task_counts", {}), dict) else {}
+    )
     return {
         "status": termination,
-        "needs_handoff": termination not in {"final_success", "direct_tool_success", "chat", "final"},
+        "needs_handoff": termination
+        not in {"final_success", "direct_tool_success", "chat", "final"},
         "failing_tools": failing_tools,
         "pending_verifies": pending_verifies,
         "task_counts": task_counts,
@@ -5181,63 +5489,87 @@ def headless_recovery_checklist(
         checklist.append(f"Start from last_error tool={tool} type={err_type}.")
 
     if action == "verify_assumption":
-        checklist.extend([
-            "Read the relevant source and test files before editing.",
-            "Run the smallest targeted verification that can prove or disprove the assumption.",
-        ])
+        checklist.extend(
+            [
+                "Read the relevant source and test files before editing.",
+                "Run the smallest targeted verification that can prove or disprove the assumption.",
+            ]
+        )
     elif action == "backtrack":
-        checklist.extend([
-            "Inspect the current diff and identify the last risky change.",
-            "Propose the minimal revert or corrective edit; do not run destructive reset commands automatically.",
-        ])
+        checklist.extend(
+            [
+                "Inspect the current diff and identify the last risky change.",
+                "Propose the minimal revert or corrective edit; do not run destructive reset commands automatically.",
+            ]
+        )
     elif action == "change_strategy":
-        checklist.extend([
-            "Stop repeating the same tool sequence.",
-            "Write a one-step alternative plan before the next tool call.",
-        ])
+        checklist.extend(
+            [
+                "Stop repeating the same tool sequence.",
+                "Write a one-step alternative plan before the next tool call.",
+            ]
+        )
     elif action == "simplify_scope":
-        checklist.extend([
-            "Reduce the task to one failing file, command, or behavior.",
-            "Defer unrelated cleanup until the focused failure is resolved.",
-        ])
+        checklist.extend(
+            [
+                "Reduce the task to one failing file, command, or behavior.",
+                "Defer unrelated cleanup until the focused failure is resolved.",
+            ]
+        )
     elif action == "retry_with_fix":
-        checklist.extend([
-            "Correct the path, argument, or missing input first.",
-            "Retry only the corrected minimal tool call.",
-        ])
+        checklist.extend(
+            [
+                "Correct the path, argument, or missing input first.",
+                "Retry only the corrected minimal tool call.",
+            ]
+        )
     elif action == "retry":
-        checklist.extend([
-            "Retry once after confirming the failure is transient.",
-            "Escalate or change strategy if the same transient failure repeats.",
-        ])
+        checklist.extend(
+            [
+                "Retry once after confirming the failure is transient.",
+                "Escalate or change strategy if the same transient failure repeats.",
+            ]
+        )
     elif action == "reprioritize":
-        checklist.extend([
-            "Mark or summarize the blocked task before switching focus.",
-            "Choose the next smallest unblocked task.",
-        ])
+        checklist.extend(
+            [
+                "Mark or summarize the blocked task before switching focus.",
+                "Choose the next smallest unblocked task.",
+            ]
+        )
     elif action == "escalate_to_user":
-        checklist.extend([
-            "Stop new code changes for this failure.",
-            "Report goal, observed behavior, logs, attempts, and the specific decision needed.",
-        ])
+        checklist.extend(
+            [
+                "Stop new code changes for this failure.",
+                "Report goal, observed behavior, logs, attempts, and the specific decision needed.",
+            ]
+        )
     elif action == "request_clarification":
-        checklist.extend([
-            "Stop assumptions that would change behavior or scope.",
-            "Ask the shortest concrete question needed to proceed.",
-        ])
+        checklist.extend(
+            [
+                "Stop assumptions that would change behavior or scope.",
+                "Ask the shortest concrete question needed to proceed.",
+            ]
+        )
     elif action == "reflect_and_adjust":
-        checklist.extend([
-            "Write the suspected root cause and the next different action.",
-            "Proceed only after the new action differs from the failed loop.",
-        ])
+        checklist.extend(
+            [
+                "Write the suspected root cause and the next different action.",
+                "Proceed only after the new action differs from the failed loop.",
+            ]
+        )
     elif action == "abandon_and_restart":
-        checklist.extend([
-            "Preserve current findings and constraints.",
-            "Draft a new approach before touching code again.",
-        ])
+        checklist.extend(
+            [
+                "Preserve current findings and constraints.",
+                "Draft a new approach before touching code again.",
+            ]
+        )
 
     if not checklist:
-        checklist.append("No deterministic recovery checklist available; inspect recent errors before continuing.")
+        checklist.append(
+            "No deterministic recovery checklist available; inspect recent errors before continuing."
+        )
     return checklist
 
 
@@ -5287,7 +5619,9 @@ def headless_payload(result: HeadlessRunResult, exit_code: int) -> dict[str, obj
     return payload
 
 
-def _headless_recommendation(log_summary: dict[str, object]) -> tuple[str | None, str | None, str | None]:
+def _headless_recommendation(
+    log_summary: dict[str, object],
+) -> tuple[str | None, str | None, str | None]:
     handoff = log_summary.get("handoff_summary")
     if not isinstance(handoff, dict):
         return None, None, None
@@ -5313,8 +5647,7 @@ def headless_handoff_with_resume(
     resume_session = Path(session_path).name
     enriched["resume_session"] = resume_session
     enriched["resume_command"] = (
-        "agentx -p '<next prompt>' --agent "
-        f"--resume-session {shlex.quote(resume_session)} --json"
+        f"agentx -p '<next prompt>' --agent --resume-session {shlex.quote(resume_session)} --json"
     )
     next_steps = list(enriched.get("next_steps", []) or [])
     if not any("resume-session" in str(step) for step in next_steps):
@@ -5349,7 +5682,9 @@ def print_headless_payload(
     print_json_output(headless_payload_text(result, exit_code, output_format=output_format))
 
 
-def headless_exception_result(exc: Exception, *, session_path: str | None = None) -> HeadlessRunResult:
+def headless_exception_result(
+    exc: Exception, *, session_path: str | None = None
+) -> HeadlessRunResult:
     message = f"{type(exc).__name__}: {exc}"
     recent_errors: list[dict[str, object]] = [
         {
@@ -5383,7 +5718,9 @@ def headless_exception_result(exc: Exception, *, session_path: str | None = None
     )
 
 
-def headless_timeout_result(seconds: float, *, session_path: str | None = None) -> HeadlessRunResult:
+def headless_timeout_result(
+    seconds: float, *, session_path: str | None = None
+) -> HeadlessRunResult:
     message = f"run timed out after {seconds:g}s"
     recent_errors: list[dict[str, object]] = [
         {
@@ -5444,7 +5781,9 @@ def run_with_headless_timeout(
         cancel_event.set()
         return headless_timeout_result(
             run_timeout,
-            session_path=str(session_output_path) if session_output_path and session_output_path.exists() else None,
+            session_path=str(session_output_path)
+            if session_output_path and session_output_path.exists()
+            else None,
         )
 
     result = results.get()
@@ -5477,13 +5816,17 @@ def wants_jsonl_output(json_output: bool, output_format: str | None) -> bool:
     return structured_output_format(json_output, output_format) == "jsonl"
 
 
-def structured_payload_text(payload: object, *, output_format: str = "json", event: str = "result") -> str:
+def structured_payload_text(
+    payload: object, *, output_format: str = "json", event: str = "result"
+) -> str:
     if output_format == "jsonl":
         return json.dumps({"event": event, "data": payload}, ensure_ascii=False)
     return json.dumps(payload, ensure_ascii=False)
 
 
-def print_structured_payload(payload: object, *, output_format: str = "json", event: str = "result") -> None:
+def print_structured_payload(
+    payload: object, *, output_format: str = "json", event: str = "result"
+) -> None:
     print_json_output(structured_payload_text(payload, output_format=output_format, event=event))
 
 
@@ -5531,11 +5874,17 @@ def load_headless_payload_source(source: str) -> dict[str, object]:
 def resolve_handoff_resume_payload_source(source: str) -> tuple[Path, Path | None]:
     path = Path(source).expanduser()
     if path.is_dir():
-        candidates = [candidate for candidate in (path / "result.json", path / "result.jsonl") if candidate.is_file()]
+        candidates = [
+            candidate
+            for candidate in (path / "result.json", path / "result.jsonl")
+            if candidate.is_file()
+        ]
         if not candidates:
             raise typer.BadParameter(f"artifact dir missing result.json or result.jsonl: {source}")
         if len(candidates) > 1:
-            raise typer.BadParameter(f"artifact dir has both result.json and result.jsonl: {source}")
+            raise typer.BadParameter(
+                f"artifact dir has both result.json and result.jsonl: {source}"
+            )
         return candidates[0], path / "handoff.md"
     if path.is_file():
         return path, None
@@ -5573,7 +5922,9 @@ def inspect_headless_handoff_payload(payload: dict[str, object]) -> dict[str, ob
     }
 
 
-def apply_handoff_next_prompt(payload: dict[str, object], next_prompt: str | None) -> dict[str, object]:
+def apply_handoff_next_prompt(
+    payload: dict[str, object], next_prompt: str | None
+) -> dict[str, object]:
     if not next_prompt:
         return payload
     enriched = dict(payload)
@@ -5587,7 +5938,9 @@ def apply_handoff_next_prompt(payload: dict[str, object], next_prompt: str | Non
     return enriched
 
 
-def apply_handoff_next_prompt_file(payload: dict[str, object], next_prompt_file: str | None) -> dict[str, object]:
+def apply_handoff_next_prompt_file(
+    payload: dict[str, object], next_prompt_file: str | None
+) -> dict[str, object]:
     if not next_prompt_file:
         return payload
     enriched = dict(payload)
@@ -5595,15 +5948,23 @@ def apply_handoff_next_prompt_file(payload: dict[str, object], next_prompt_file:
     if isinstance(command, str):
         quoted_path = shlex.quote(next_prompt_file)
         if " -p '<next prompt>' " in command:
-            enriched["resume_command"] = command.replace(" -p '<next prompt>' ", f" --prompt-file {quoted_path} ")
+            enriched["resume_command"] = command.replace(
+                " -p '<next prompt>' ", f" --prompt-file {quoted_path} "
+            )
         elif ' -p "<next prompt>" ' in command:
-            enriched["resume_command"] = command.replace(' -p "<next prompt>" ', f" --prompt-file {quoted_path} ")
+            enriched["resume_command"] = command.replace(
+                ' -p "<next prompt>" ', f" --prompt-file {quoted_path} "
+            )
         elif " -p <next prompt> " in command:
-            enriched["resume_command"] = command.replace(" -p <next prompt> ", f" --prompt-file {quoted_path} ")
+            enriched["resume_command"] = command.replace(
+                " -p <next prompt> ", f" --prompt-file {quoted_path} "
+            )
     return enriched
 
 
-def apply_handoff_resume_output_format(payload: dict[str, object], resume_output_format: str | None) -> dict[str, object]:
+def apply_handoff_resume_output_format(
+    payload: dict[str, object], resume_output_format: str | None
+) -> dict[str, object]:
     if not resume_output_format:
         return payload
     normalized = resume_output_format.strip().lower()
@@ -5948,7 +6309,9 @@ def inspect_workflow_run_artifact_payload(
         "resume_argv": argv,
         "ready_commands": list(plan_data.get("ready_commands") or []),
         "next_commands": list(payload.get("next_commands") or []),
-        "approval_receipt_count": len(approval_receipts) if isinstance(approval_receipts, list) else 0,
+        "approval_receipt_count": len(approval_receipts)
+        if isinstance(approval_receipts, list)
+        else 0,
         "recommended_command": shlex.join(argv),
         "recommended_kind": "workflow_run_resume" if resume_ready else "fill_workflow_inputs",
         "recommended_risk": "YELLOW" if workflow_execute else "GREEN",
@@ -5991,7 +6354,9 @@ def workflow_resume_command_payload(payload: dict[str, object]) -> dict[str, obj
         "command": command,
         "argv": argv,
         "blockers": [] if payload.get("resume_ready") else ["resume_inputs_required"],
-        "missing_inputs": payload.get("missing_inputs") if isinstance(payload.get("missing_inputs"), list) else [],
+        "missing_inputs": payload.get("missing_inputs")
+        if isinstance(payload.get("missing_inputs"), list)
+        else [],
         "executed": False,
         "execution_cwd": None,
         "returncode": None,
@@ -6096,7 +6461,9 @@ def print_command_catalog(
     json_output: bool = False,
     jsonl_output: bool = False,
 ) -> None:
-    payload = command_catalog_payload() if query is None else filtered_command_catalog_payload(query)
+    payload = (
+        command_catalog_payload() if query is None else filtered_command_catalog_payload(query)
+    )
     if json_output:
         print_structured_payload(
             payload,
@@ -6261,7 +6628,9 @@ def build_headless_dry_run_payload(
         "session_output": str(session_output) if session_output else None,
         "result_output": str(result_output) if result_output else None,
         "result_output_format": result_output_format,
-        "handoff_briefing_output": str(handoff_briefing_output) if handoff_briefing_output else None,
+        "handoff_briefing_output": str(handoff_briefing_output)
+        if handoff_briefing_output
+        else None,
         "artifact_dir": str(artifact_dir) if artifact_dir else None,
         "prompt_chars": len(prompt),
     }
@@ -6402,7 +6771,9 @@ def reliability_profile_payload(
         blockers.append("model_not_available")
 
     pinned = bool(backend and settings.ollama_url and settings.model)
-    ready_for_live_suite = pinned and backend_registered and (not live_probe or model_available is True)
+    ready_for_live_suite = (
+        pinned and backend_registered and (not live_probe or model_available is True)
+    )
     if not ready_for_live_suite:
         recommended_command = "agentx reliability-profile --json --live-probe"
         recommended_kind = "fix_live_profile"
@@ -6499,7 +6870,9 @@ def reliability_evidence_summary(source: str | None) -> tuple[dict[str, object] 
         "run_id": payload.get("run_id"),
         "profile": target_bar.get("profile"),
         "status": target_bar.get("status"),
-        "meets_threshold": bool(target_bar.get("meets_threshold") or target_bar.get("meets_proposed_threshold")),
+        "meets_threshold": bool(
+            target_bar.get("meets_threshold") or target_bar.get("meets_proposed_threshold")
+        ),
         "observed_case_count": target_bar.get("observed_case_count"),
         "observed_passed": target_bar.get("observed_passed"),
         "observed_failed": target_bar.get("observed_failed"),
@@ -6523,14 +6896,21 @@ def reliability_decision_payload(
     if normalized_profile not in {"recorded-v1", "live-v1"}:
         raise typer.BadParameter("profile must be one of: recorded-v1, live-v1")
     if normalized_decision not in {"ratified", "accepted", "rejected", "superseded"}:
-        raise typer.BadParameter("decision must be one of: ratified, accepted, rejected, superseded")
+        raise typer.BadParameter(
+            "decision must be one of: ratified, accepted, rejected, superseded"
+        )
 
-    output_path = resolve_inside_workspace(settings.workspace, output or ".agentx/reliability/decision.json")
+    output_path = resolve_inside_workspace(
+        settings.workspace, output or ".agentx/reliability/decision.json"
+    )
     evidence, evidence_blockers = reliability_evidence_summary(evidence_source)
     blockers = list(evidence_blockers)
     evidence_valid = False
     if evidence is not None:
-        evidence_valid = evidence.get("profile") == normalized_profile and evidence.get("meets_threshold") is True
+        evidence_valid = (
+            evidence.get("profile") == normalized_profile
+            and evidence.get("meets_threshold") is True
+        )
         if evidence.get("profile") != normalized_profile:
             blockers.append("evidence_profile_mismatch")
         if evidence.get("meets_threshold") is not True:
@@ -6571,7 +6951,10 @@ def reliability_decision_payload(
     if write and ok:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         payload["wrote"] = True
-        output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     return payload
 
 
@@ -6591,8 +6974,22 @@ def print_reliability_decision_payload(
     table = Table(title="agentX reliability decision", show_header=False)
     table.add_column("Key", style="cyan")
     table.add_column("Value")
-    for key in ("profile", "decision", "accepted", "evidence_valid", "write", "wrote", "output_relative_path", "blockers"):
-        table.add_row(key, json.dumps(payload.get(key), ensure_ascii=False) if isinstance(payload.get(key), list) else str(payload.get(key)))
+    for key in (
+        "profile",
+        "decision",
+        "accepted",
+        "evidence_valid",
+        "write",
+        "wrote",
+        "output_relative_path",
+        "blockers",
+    ):
+        table.add_row(
+            key,
+            json.dumps(payload.get(key), ensure_ascii=False)
+            if isinstance(payload.get(key), list)
+            else str(payload.get(key)),
+        )
     console.print(table)
 
 
@@ -6619,7 +7016,9 @@ def reliability_suite_evidence_overview(path: Path, workspace: Path) -> dict[str
     target_bar = payload.get("target_bar")
     if payload.get("schema") != "agentx.reliability_suite.v1" or not isinstance(target_bar, dict):
         return None
-    meets_threshold = bool(target_bar.get("meets_threshold") or target_bar.get("meets_proposed_threshold"))
+    meets_threshold = bool(
+        target_bar.get("meets_threshold") or target_bar.get("meets_proposed_threshold")
+    )
     if not meets_threshold:
         return None
     return {
@@ -6641,9 +7040,12 @@ def latest_reliability_suite_evidence(workspace: Path) -> dict[str, object] | No
     root = workspace / ".agentx" / "reliability"
     if not root.is_dir():
         return None
-    candidates = [path for path in root.rglob("*") if path.is_file() and path.suffix in {".json", ".jsonl"}]
+    candidates = [
+        path for path in root.rglob("*") if path.is_file() and path.suffix in {".json", ".jsonl"}
+    ]
     evidence = [
-        overview for path in candidates
+        overview
+        for path in candidates
         if (overview := reliability_suite_evidence_overview(path, workspace)) is not None
     ]
     if not evidence:
@@ -6656,14 +7058,18 @@ def objective_gate_payload(
     *,
     decision: str | None = None,
 ) -> dict[str, object]:
-    decision_path = resolve_inside_workspace(settings.workspace, decision or ".agentx/reliability/decision.json")
+    decision_path = resolve_inside_workspace(
+        settings.workspace, decision or ".agentx/reliability/decision.json"
+    )
     capabilities = capabilities_payload()
     commands = {
         str(item.get("command"))
         for item in capabilities.get("capabilities", [])
         if isinstance(item, dict)
     }
-    missing_commands = [command for command in OBJECTIVE_REQUIRED_COMMANDS if command not in commands]
+    missing_commands = [
+        command for command in OBJECTIVE_REQUIRED_COMMANDS if command not in commands
+    ]
     blockers = [f"missing_command:{command}" for command in missing_commands]
     latest_evidence = latest_reliability_suite_evidence(settings.workspace)
 
@@ -6714,12 +7120,10 @@ def objective_gate_payload(
         "decision": decision_payload,
         "latest_evidence": latest_evidence,
         "blockers": blockers,
-        "recommended_command": (
-            "agentx inspect --json"
-            if ok
-            else decision_command
-        ),
-        "recommended_kind": "inspect" if ok else ("write_reliability_decision" if latest_evidence else "run_reliability_suite"),
+        "recommended_command": ("agentx inspect --json" if ok else decision_command),
+        "recommended_kind": "inspect"
+        if ok
+        else ("write_reliability_decision" if latest_evidence else "run_reliability_suite"),
         "recommended_risk": "GREEN" if ok else "YELLOW",
     }
 
@@ -6740,13 +7144,25 @@ def print_objective_gate_payload(
     table = Table(title="agentX objective gate", show_header=False)
     table.add_column("Key", style="cyan")
     table.add_column("Value")
-    for key in ("ok", "completion_ready", "decision_found", "decision_valid", "missing_commands", "blockers", "recommended_command"):
+    for key in (
+        "ok",
+        "completion_ready",
+        "decision_found",
+        "decision_valid",
+        "missing_commands",
+        "blockers",
+        "recommended_command",
+    ):
         value = payload.get(key)
-        table.add_row(key, json.dumps(value, ensure_ascii=False) if isinstance(value, list) else str(value))
+        table.add_row(
+            key, json.dumps(value, ensure_ascii=False) if isinstance(value, list) else str(value)
+        )
     console.print(table)
 
 
-def print_model_list(payload: dict[str, object], *, json_output: bool = False, jsonl_output: bool = False) -> None:
+def print_model_list(
+    payload: dict[str, object], *, json_output: bool = False, jsonl_output: bool = False
+) -> None:
     if json_output:
         print_structured_payload(
             payload,
@@ -6774,9 +7190,15 @@ def load_headless_prompt(
     stdin_prompt: bool = False,
     stdin_reader: object | None = None,
 ) -> str | None:
-    sources = sum(1 for enabled in (print_prompt is not None, prompt_file is not None, stdin_prompt) if enabled)
+    sources = sum(
+        1
+        for enabled in (print_prompt is not None, prompt_file is not None, stdin_prompt)
+        if enabled
+    )
     if sources > 1:
-        raise typer.BadParameter("use only one prompt source: -p/--print, --prompt-file, or --stdin")
+        raise typer.BadParameter(
+            "use only one prompt source: -p/--print, --prompt-file, or --stdin"
+        )
     if stdin_prompt:
         reader = stdin_reader or sys.stdin
         return reader.read()
@@ -6977,7 +7399,13 @@ def structured_headless_exit_code(
         return 130
     if normalized in {"timeout", "timed_out", "run_timeout"}:
         return 124
-    if normalized in {"max_steps_exceeded", "invalid_action", "bad_schema", "non_json", "runtime_error"}:
+    if normalized in {
+        "max_steps_exceeded",
+        "invalid_action",
+        "bad_schema",
+        "non_json",
+        "runtime_error",
+    }:
         return 2
     if normalized in {"direct_tool_failure", "tool_failure", "final_failed"}:
         return 1
@@ -6998,7 +7426,10 @@ def headless_exit_code(
     normalized = " ".join((output or "").strip().split()).lower()
     if not normalized:
         return 2
-    if any(marker in normalized for marker in ("cancelled", "request cancelled", "ollama request cancelled")):
+    if any(
+        marker in normalized
+        for marker in ("cancelled", "request cancelled", "ollama request cancelled")
+    ):
         return 130
     if any(
         marker in normalized
@@ -7039,7 +7470,9 @@ def run_init(settings: Settings, tools: ToolRegistry, namespace: str) -> str:
         },
     )
     if result.ok:
-        return "project profile written to Memory Hall (human_confirmed, ACA L2)\n\n" + profile[:4000]
+        return (
+            "project profile written to Memory Hall (human_confirmed, ACA L2)\n\n" + profile[:4000]
+        )
     return "project profile write failed\n\n" + result.content
 
 
@@ -7081,8 +7514,13 @@ def print_init_payload(
     table.add_column("Value")
     table.add_row("workspace", str(payload["workspace"]))
     table.add_row("namespace", str(payload["namespace"]))
-    table.add_row("detected", ", ".join(str(item) for item in profile.get("detected", [])) or "unknown")
-    table.add_row("test_commands", ", ".join(str(item) for item in profile.get("test_commands", [])) or "unknown")
+    table.add_row(
+        "detected", ", ".join(str(item) for item in profile.get("detected", [])) or "unknown"
+    )
+    table.add_row(
+        "test_commands",
+        ", ".join(str(item) for item in profile.get("test_commands", [])) or "unknown",
+    )
     table.add_row("write_memory", str(payload["write_memory"]))
     if payload.get("memory_result") is not None:
         table.add_row("memory_result", json.dumps(payload["memory_result"], ensure_ascii=False))
@@ -7092,37 +7530,118 @@ def print_init_payload(
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    print_prompt: str | None = typer.Option(None, "-p", "--print", help="Print one response and exit."),
-    prompt_file: str | None = typer.Option(None, "--prompt-file", help="Read the headless prompt from a workspace file."),
-    stdin_prompt: bool = typer.Option(False, "--stdin", help="Read the headless prompt from stdin."),
+    print_prompt: str | None = typer.Option(
+        None, "-p", "--print", help="Print one response and exit."
+    ),
+    prompt_file: str | None = typer.Option(
+        None, "--prompt-file", help="Read the headless prompt from a workspace file."
+    ),
+    stdin_prompt: bool = typer.Option(
+        False, "--stdin", help="Read the headless prompt from stdin."
+    ),
     agent: bool = typer.Option(False, "--agent", help="Use agent/tool mode with -p."),
-    plan: bool = typer.Option(False, "--plan", help="Start in pure planning mode for -p (only produce high-quality plan + reflection, no tools)."),
-    plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan thoroughly first, then seamlessly continue into execution in the same run (recommended for complex tasks)."),
-    orchestrate: bool = typer.Option(False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."),
+    plan: bool = typer.Option(
+        False,
+        "--plan",
+        help="Start in pure planning mode for -p (only produce high-quality plan + reflection, no tools).",
+    ),
+    plan_then_execute: bool = typer.Option(
+        False,
+        "--plan-then-execute",
+        help="Plan thoroughly first, then seamlessly continue into execution in the same run (recommended for complex tasks).",
+    ),
+    orchestrate: bool = typer.Option(
+        False, "--orchestrate", help="Multi-agent orchestration: plan → split → parallel workers."
+    ),
     namespace: str | None = typer.Option(None, "--namespace", help="Memory Hall namespace for -p."),
-    list_backends: bool = typer.Option(False, "--list-backends", help="List registered LLM backend keys and exit."),
-    list_models: bool = typer.Option(False, "--list-models", help="List models for the selected LLM backend and exit."),
-    show_version: bool = typer.Option(False, "--version", help="Show agentX and Python versions and exit."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Run this headless task against a specific workspace directory."),
-    approval: str | None = typer.Option(None, "--approval", help="Override approval policy for this headless run: ask, auto, off, strict, auto-approve, or deny."),
-    backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
-    base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL for this headless run."),
+    list_backends: bool = typer.Option(
+        False, "--list-backends", help="List registered LLM backend keys and exit."
+    ),
+    list_models: bool = typer.Option(
+        False, "--list-models", help="List models for the selected LLM backend and exit."
+    ),
+    show_version: bool = typer.Option(
+        False, "--version", help="Show agentX and Python versions and exit."
+    ),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Run this headless task against a specific workspace directory.",
+    ),
+    approval: str | None = typer.Option(
+        None,
+        "--approval",
+        help="Override approval policy for this headless run: ask, auto, off, strict, auto-approve, or deny.",
+    ),
+    backend: str | None = typer.Option(
+        None, "--backend", help="Override LLM backend for this headless run."
+    ),
+    base_url: str | None = typer.Option(
+        None, "--base-url", help="Override LLM backend base URL for this headless run."
+    ),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
-    timeout: float | None = typer.Option(None, "--timeout", help="Override LLM request timeout seconds for this headless run."),
-    run_timeout: float | None = typer.Option(None, "--run-timeout", help="Limit total headless run time in seconds; returns exit 124 on timeout."),
-    max_steps: int | None = typer.Option(None, "--max-steps", help="Override max agent loop steps for -p."),
-    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for headless automation."),
-    output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain, json, or jsonl."),
-    quiet: bool = typer.Option(False, "--quiet", help="Suppress plain stdout for headless automation; JSON output is still printed."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Validate headless options and print the normalized run configuration without calling the model."),
-    save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
-    resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
-    session_output: str | None = typer.Option(None, "--session-output", help="Write the headless session JSONL artifact to a specific workspace path."),
-    result_output: str | None = typer.Option(None, "--result-output", help="Write the headless result JSON/JSONL payload to a specific workspace path."),
-    result_output_format: str = typer.Option("auto", "--result-output-format", help="Result artifact format: auto, json, or jsonl."),
-    handoff_briefing_output: str | None = typer.Option(None, "--handoff-briefing-output", help="Write a Markdown handoff briefing artifact to a specific workspace path."),
-    artifact_dir: str | None = typer.Option(None, "--artifact-dir", help="Write standard headless artifacts under this workspace directory."),
-    no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
+    timeout: float | None = typer.Option(
+        None, "--timeout", help="Override LLM request timeout seconds for this headless run."
+    ),
+    run_timeout: float | None = typer.Option(
+        None,
+        "--run-timeout",
+        help="Limit total headless run time in seconds; returns exit 124 on timeout.",
+    ),
+    max_steps: int | None = typer.Option(
+        None, "--max-steps", help="Override max agent loop steps for -p."
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", help="Print a structured JSON result for headless automation."
+    ),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Headless output format: plain, json, or jsonl."
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        help="Suppress plain stdout for headless automation; JSON output is still printed.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Validate headless options and print the normalized run configuration without calling the model.",
+    ),
+    save_session: bool = typer.Option(
+        False, "--save-session", help="Persist the headless agent session for later resume."
+    ),
+    resume_session: str | None = typer.Option(
+        None,
+        "--resume-session",
+        help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl.",
+    ),
+    session_output: str | None = typer.Option(
+        None,
+        "--session-output",
+        help="Write the headless session JSONL artifact to a specific workspace path.",
+    ),
+    result_output: str | None = typer.Option(
+        None,
+        "--result-output",
+        help="Write the headless result JSON/JSONL payload to a specific workspace path.",
+    ),
+    result_output_format: str = typer.Option(
+        "auto", "--result-output-format", help="Result artifact format: auto, json, or jsonl."
+    ),
+    handoff_briefing_output: str | None = typer.Option(
+        None,
+        "--handoff-briefing-output",
+        help="Write a Markdown handoff briefing artifact to a specific workspace path.",
+    ),
+    artifact_dir: str | None = typer.Option(
+        None,
+        "--artifact-dir",
+        help="Write standard headless artifacts under this workspace directory.",
+    ),
+    no_memory: bool = typer.Option(
+        False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."
+    ),
 ) -> None:
     """Run local Ollama agent workflows."""
     if ctx.invoked_subcommand is not None:
@@ -7145,14 +7664,25 @@ def main(
         result_output=result_output,
         handoff_briefing_output=handoff_briefing_output,
     )
-    result_artifact_format = resolve_headless_result_output_format(result_output_format, stdout_format=structured_format)
-    bundle_session_output_path, bundle_result_output_path, bundle_handoff_briefing_output_path = artifact_bundle_paths(
-        artifact_dir_path,
-        result_output_format=result_artifact_format,
+    result_artifact_format = resolve_headless_result_output_format(
+        result_output_format, stdout_format=structured_format
     )
-    session_output_path = bundle_session_output_path or resolve_headless_session_output(settings_for_prompt.workspace, session_output)
-    result_output_path = bundle_result_output_path or resolve_headless_result_output(settings_for_prompt.workspace, result_output)
-    handoff_briefing_output_path = bundle_handoff_briefing_output_path or resolve_handoff_briefing_output(settings_for_prompt.workspace, handoff_briefing_output)
+    bundle_session_output_path, bundle_result_output_path, bundle_handoff_briefing_output_path = (
+        artifact_bundle_paths(
+            artifact_dir_path,
+            result_output_format=result_artifact_format,
+        )
+    )
+    session_output_path = bundle_session_output_path or resolve_headless_session_output(
+        settings_for_prompt.workspace, session_output
+    )
+    result_output_path = bundle_result_output_path or resolve_headless_result_output(
+        settings_for_prompt.workspace, result_output
+    )
+    handoff_briefing_output_path = (
+        bundle_handoff_briefing_output_path
+        or resolve_handoff_briefing_output(settings_for_prompt.workspace, handoff_briefing_output)
+    )
     ensure_distinct_headless_output_paths(
         ("--session-output", session_output_path),
         ("--result-output", result_output_path),
@@ -7210,7 +7740,9 @@ def main(
             artifact_dir=artifact_dir_path,
             no_memory=no_memory,
         )
-        print_headless_dry_run(payload, json_output=structured_output, jsonl_output=jsonl_output, quiet=quiet)
+        print_headless_dry_run(
+            payload, json_output=structured_output, jsonl_output=jsonl_output, quiet=quiet
+        )
         raise typer.Exit(code=0)
     try:
         output = run_with_headless_timeout(
@@ -7249,20 +7781,29 @@ def main(
         )
         write_headless_handoff_briefing_output(handoff_briefing_output_path, output, exit_code)
         if structured_output:
-            write_headless_result_output(result_output_path, output, exit_code, output_format=result_artifact_format)
+            write_headless_result_output(
+                result_output_path, output, exit_code, output_format=result_artifact_format
+            )
             print_headless_payload(output, exit_code, output_format=structured_format)
             raise typer.Exit(code=exit_code)
-        write_headless_result_output(result_output_path, output, exit_code, output_format=result_artifact_format)
+        write_headless_result_output(
+            result_output_path, output, exit_code, output_format=result_artifact_format
+        )
         if not quiet:
             print_raw(output.output)
-        raise typer.Exit(
-            code=exit_code
-        )
+        raise typer.Exit(code=exit_code)
     if structured_output:
         fallback_result = HeadlessRunResult(output=output)
         fallback_exit_code = headless_exit_code(output)
-        write_headless_handoff_briefing_output(handoff_briefing_output_path, fallback_result, fallback_exit_code)
-        write_headless_result_output(result_output_path, fallback_result, fallback_exit_code, output_format=result_artifact_format)
+        write_headless_handoff_briefing_output(
+            handoff_briefing_output_path, fallback_result, fallback_exit_code
+        )
+        write_headless_result_output(
+            result_output_path,
+            fallback_result,
+            fallback_exit_code,
+            output_format=result_artifact_format,
+        )
         print_headless_payload(
             fallback_result,
             fallback_exit_code,
@@ -7271,8 +7812,15 @@ def main(
         raise typer.Exit(code=fallback_exit_code)
     fallback_exit_code = headless_exit_code(output)
     fallback_result = HeadlessRunResult(output=output)
-    write_headless_handoff_briefing_output(handoff_briefing_output_path, fallback_result, fallback_exit_code)
-    write_headless_result_output(result_output_path, fallback_result, fallback_exit_code, output_format=result_artifact_format)
+    write_headless_handoff_briefing_output(
+        handoff_briefing_output_path, fallback_result, fallback_exit_code
+    )
+    write_headless_result_output(
+        result_output_path,
+        fallback_result,
+        fallback_exit_code,
+        output_format=result_artifact_format,
+    )
     if not quiet:
         print_raw(output)
     raise typer.Exit(code=fallback_exit_code)
@@ -7295,6 +7843,7 @@ def build_runtime(
     See src/agentx/provider_registry.py and the self-registration in ollama.py / llama_cpp.py.
     """
     import os
+
     # Ensure built-in backends are registered (idempotent). This must happen
     # at runtime inside the function so it occurs after the whole cli module
     # has finished its top-level imports (avoids E402).
@@ -7310,6 +7859,7 @@ def build_runtime(
         memory = NullMemoryClient()
     elif (settings.memory_backend or "memhall").lower() == "amh":
         from agentx.memory_hall import AmhClient
+
         # Prefer config.toml values (memory_amh_store / memory_amh_path), env as fallback
         memory = AmhClient(
             store=settings.memory_amh_store,
@@ -7320,6 +7870,7 @@ def build_runtime(
             base_url=settings.memory_hall_url,
             token=settings.memory_hall_token,
         )
+
     def approve(tool: str, args: dict[str, object], risk: Risk) -> bool:
         if approval_policy is None:
             return False
@@ -7435,6 +7986,7 @@ def run_print_prompt(
 
     if orchestrate:
         from agentx.orchestrator import Orchestrator
+
         orch = Orchestrator(
             settings=settings,
             llm=ollama,
@@ -7451,7 +8003,9 @@ def run_print_prompt(
         # B1: 自動注入當前任務清單摘要，讓模型更容易維持長期任務狀態
         current_tasks = load_tasks(settings.workspace)
         task_summary = format_task_list_summary(current_tasks)
-        system_prompt = build_headless_agent_system_prompt(settings.persona, task_summary, model=settings.model)
+        system_prompt = build_headless_agent_system_prompt(
+            settings.persona, task_summary, model=settings.model
+        )
 
         agent_prompt = prompt
         plan_prompt = (
@@ -7497,12 +8051,20 @@ def run_print_prompt(
                 memory=memory,
             )
             session_path = None
-        if (save_session or session_output_path is not None) and not getattr(agent_loop.session, "_session_store", None):
+        if (save_session or session_output_path is not None) and not getattr(
+            agent_loop.session, "_session_store", None
+        ):
             agent_loop.session.enable_persistence(settings.workspace, path=session_output_path)
-            session_path = agent_loop.session._session_store.path if agent_loop.session._session_store else session_path
+            session_path = (
+                agent_loop.session._session_store.path
+                if agent_loop.session._session_store
+                else session_path
+            )
         try:
             if plan_then_execute:
-                plan_output = agent_loop.run(plan_prompt, namespace=namespace, plan_only=True, cancel_event=cancel_event)
+                plan_output = agent_loop.run(
+                    plan_prompt, namespace=namespace, plan_only=True, cancel_event=cancel_event
+                )
                 execute_prompt = (
                     "你已經完成上一步 headless planning。現在切換到 EXECUTE MODE。\n"
                     "請依照已產出的方案執行使用者任務；必要時使用工具，小步實作並驗證。\n"
@@ -7510,14 +8072,21 @@ def run_print_prompt(
                     f"上一階段計畫：\n{plan_output}\n\n"
                     f"使用者原始任務：{prompt}"
                 )
-                execute_output = agent_loop.run(execute_prompt, namespace=namespace, plan_only=False, cancel_event=cancel_event)
+                execute_output = agent_loop.run(
+                    execute_prompt, namespace=namespace, plan_only=False, cancel_event=cancel_event
+                )
                 output = f"## Plan\n{plan_output}\n\n## Execution\n{execute_output}"
                 phases = (
                     {"name": "plan", "output": plan_output},
                     {"name": "execution", "output": execute_output},
                 )
             else:
-                output = agent_loop.run(agent_prompt, namespace=namespace, plan_only=plan_mode, cancel_event=cancel_event)
+                output = agent_loop.run(
+                    agent_prompt,
+                    namespace=namespace,
+                    plan_only=plan_mode,
+                    cancel_event=cancel_event,
+                )
                 phases = ()
         except Exception as exc:
             active_store = getattr(agent_loop.session, "_session_store", None)
@@ -7555,7 +8124,12 @@ def run_print_prompt(
         return output
     output = ollama.chat(
         [
-            {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona, model=settings.model)},
+            {
+                "role": "system",
+                "content": build_chat_system_prompt(
+                    settings.workspace, settings.persona, model=settings.model
+                ),
+            },
             {"role": "user", "content": prompt},
         ],
         json_mode=False,
@@ -7615,18 +8189,12 @@ def _handoff_completed(tasks: list[dict] | None = None) -> str:
     done = [task for task in tasks if task.get("status") == "done"]
     if not done:
         return "- 未記錄完成項目"
-    return "\n".join(
-        f"- #{task.get('id')}: {task.get('description')} [done]"
-        for task in done[:8]
-    )
+    return "\n".join(f"- #{task.get('id')}: {task.get('description')} [done]" for task in done[:8])
 
 
 def _handoff_todo(tasks: list[dict] | None = None, task_summary: str | None = None) -> str:
     if tasks:
-        active = [
-            task for task in tasks
-            if task.get("status") not in {"done", "blocked"}
-        ]
+        active = [task for task in tasks if task.get("status") not in {"done", "blocked"}]
         if active:
             return "\n".join(
                 f"- #{task.get('id')}: {task.get('description')} [{task.get('status', 'pending')}]"
@@ -7645,8 +8213,7 @@ def _handoff_blockers(tasks: list[dict] | None = None) -> str:
     if not blocked:
         return "- 無明確阻塞"
     return "\n".join(
-        f"- #{task.get('id')}: {task.get('description')} [blocked]"
-        for task in blocked[:5]
+        f"- #{task.get('id')}: {task.get('description')} [blocked]" for task in blocked[:5]
     )
 
 
@@ -7707,27 +8274,84 @@ def write_handoff(
 def ask(
     prompt: str = typer.Argument(..., help="Task or question for agentX."),
     namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Run this headless task against a specific workspace directory."),
-    approval: str | None = typer.Option(None, "--approval", help="Override approval policy for this headless run: ask, auto, off, strict, auto-approve, or deny."),
-    backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for this headless run."),
-    base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL for this headless run."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Run this headless task against a specific workspace directory.",
+    ),
+    approval: str | None = typer.Option(
+        None,
+        "--approval",
+        help="Override approval policy for this headless run: ask, auto, off, strict, auto-approve, or deny.",
+    ),
+    backend: str | None = typer.Option(
+        None, "--backend", help="Override LLM backend for this headless run."
+    ),
+    base_url: str | None = typer.Option(
+        None, "--base-url", help="Override LLM backend base URL for this headless run."
+    ),
     model: str | None = typer.Option(None, "--model", help="Override model for this headless run."),
-    timeout: float | None = typer.Option(None, "--timeout", help="Override LLM request timeout seconds."),
-    run_timeout: float | None = typer.Option(None, "--run-timeout", help="Limit total headless run time in seconds; returns exit 124 on timeout."),
+    timeout: float | None = typer.Option(
+        None, "--timeout", help="Override LLM request timeout seconds."
+    ),
+    run_timeout: float | None = typer.Option(
+        None,
+        "--run-timeout",
+        help="Limit total headless run time in seconds; returns exit 124 on timeout.",
+    ),
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
-    plan_then_execute: bool = typer.Option(False, "--plan-then-execute", help="Plan first, then execute in the same headless run."),
-    json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result for automation."),
-    output_format: str = typer.Option("plain", "--output-format", help="Headless output format: plain, json, or jsonl."),
-    quiet: bool = typer.Option(False, "--quiet", help="Suppress plain stdout for automation; JSON output is still printed."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Validate options and print the normalized run configuration without calling the model."),
-    save_session: bool = typer.Option(False, "--save-session", help="Persist the headless agent session for later resume."),
-    resume_session: str | None = typer.Option(None, "--resume-session", help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl."),
-    session_output: str | None = typer.Option(None, "--session-output", help="Write the headless session JSONL artifact to a specific workspace path."),
-    result_output: str | None = typer.Option(None, "--result-output", help="Write the headless result JSON/JSONL payload to a specific workspace path."),
-    result_output_format: str = typer.Option("auto", "--result-output-format", help="Result artifact format: auto, json, or jsonl."),
-    handoff_briefing_output: str | None = typer.Option(None, "--handoff-briefing-output", help="Write a Markdown handoff briefing artifact to a specific workspace path."),
-    artifact_dir: str | None = typer.Option(None, "--artifact-dir", help="Write standard headless artifacts under this workspace directory."),
-    no_memory: bool = typer.Option(False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."),
+    plan_then_execute: bool = typer.Option(
+        False, "--plan-then-execute", help="Plan first, then execute in the same headless run."
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", help="Print a structured JSON result for automation."
+    ),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Headless output format: plain, json, or jsonl."
+    ),
+    quiet: bool = typer.Option(
+        False, "--quiet", help="Suppress plain stdout for automation; JSON output is still printed."
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Validate options and print the normalized run configuration without calling the model.",
+    ),
+    save_session: bool = typer.Option(
+        False, "--save-session", help="Persist the headless agent session for later resume."
+    ),
+    resume_session: str | None = typer.Option(
+        None,
+        "--resume-session",
+        help="Resume a saved headless session: latest, NAME, or NAME.session.jsonl.",
+    ),
+    session_output: str | None = typer.Option(
+        None,
+        "--session-output",
+        help="Write the headless session JSONL artifact to a specific workspace path.",
+    ),
+    result_output: str | None = typer.Option(
+        None,
+        "--result-output",
+        help="Write the headless result JSON/JSONL payload to a specific workspace path.",
+    ),
+    result_output_format: str = typer.Option(
+        "auto", "--result-output-format", help="Result artifact format: auto, json, or jsonl."
+    ),
+    handoff_briefing_output: str | None = typer.Option(
+        None,
+        "--handoff-briefing-output",
+        help="Write a Markdown handoff briefing artifact to a specific workspace path.",
+    ),
+    artifact_dir: str | None = typer.Option(
+        None,
+        "--artifact-dir",
+        help="Write standard headless artifacts under this workspace directory.",
+    ),
+    no_memory: bool = typer.Option(
+        False, "--no-memory", help="Disable Memory Hall/AMH reads and writes for this headless run."
+    ),
 ) -> None:
     structured_format = structured_output_format(json_output, output_format)
     structured_output = structured_format != "plain"
@@ -7741,14 +8365,25 @@ def ask(
         result_output=result_output,
         handoff_briefing_output=handoff_briefing_output,
     )
-    result_artifact_format = resolve_headless_result_output_format(result_output_format, stdout_format=structured_format)
-    bundle_session_output_path, bundle_result_output_path, bundle_handoff_briefing_output_path = artifact_bundle_paths(
-        artifact_dir_path,
-        result_output_format=result_artifact_format,
+    result_artifact_format = resolve_headless_result_output_format(
+        result_output_format, stdout_format=structured_format
     )
-    session_output_path = bundle_session_output_path or resolve_headless_session_output(settings_for_prompt.workspace, session_output)
-    result_output_path = bundle_result_output_path or resolve_headless_result_output(settings_for_prompt.workspace, result_output)
-    handoff_briefing_output_path = bundle_handoff_briefing_output_path or resolve_handoff_briefing_output(settings_for_prompt.workspace, handoff_briefing_output)
+    bundle_session_output_path, bundle_result_output_path, bundle_handoff_briefing_output_path = (
+        artifact_bundle_paths(
+            artifact_dir_path,
+            result_output_format=result_artifact_format,
+        )
+    )
+    session_output_path = bundle_session_output_path or resolve_headless_session_output(
+        settings_for_prompt.workspace, session_output
+    )
+    result_output_path = bundle_result_output_path or resolve_headless_result_output(
+        settings_for_prompt.workspace, result_output
+    )
+    handoff_briefing_output_path = (
+        bundle_handoff_briefing_output_path
+        or resolve_handoff_briefing_output(settings_for_prompt.workspace, handoff_briefing_output)
+    )
     ensure_distinct_headless_output_paths(
         ("--session-output", session_output_path),
         ("--result-output", result_output_path),
@@ -7782,7 +8417,9 @@ def ask(
             artifact_dir=artifact_dir_path,
             no_memory=no_memory,
         )
-        print_headless_dry_run(payload, json_output=structured_output, jsonl_output=jsonl_output, quiet=quiet)
+        print_headless_dry_run(
+            payload, json_output=structured_output, jsonl_output=jsonl_output, quiet=quiet
+        )
         raise typer.Exit(code=0)
     try:
         output = run_with_headless_timeout(
@@ -7819,18 +8456,29 @@ def ask(
         )
         write_headless_handoff_briefing_output(handoff_briefing_output_path, output, exit_code)
         if structured_output:
-            write_headless_result_output(result_output_path, output, exit_code, output_format=result_artifact_format)
+            write_headless_result_output(
+                result_output_path, output, exit_code, output_format=result_artifact_format
+            )
             print_headless_payload(output, exit_code, output_format=structured_format)
             raise typer.Exit(code=exit_code)
-        write_headless_result_output(result_output_path, output, exit_code, output_format=result_artifact_format)
+        write_headless_result_output(
+            result_output_path, output, exit_code, output_format=result_artifact_format
+        )
         if not quiet:
             print_raw(output.output)
         raise typer.Exit(code=exit_code)
     if structured_output:
         fallback_result = HeadlessRunResult(output=output)
         fallback_exit_code = headless_exit_code(output)
-        write_headless_handoff_briefing_output(handoff_briefing_output_path, fallback_result, fallback_exit_code)
-        write_headless_result_output(result_output_path, fallback_result, fallback_exit_code, output_format=result_artifact_format)
+        write_headless_handoff_briefing_output(
+            handoff_briefing_output_path, fallback_result, fallback_exit_code
+        )
+        write_headless_result_output(
+            result_output_path,
+            fallback_result,
+            fallback_exit_code,
+            output_format=result_artifact_format,
+        )
         print_headless_payload(
             fallback_result,
             fallback_exit_code,
@@ -7839,8 +8487,15 @@ def ask(
         raise typer.Exit(code=fallback_exit_code)
     fallback_exit_code = headless_exit_code(output)
     fallback_result = HeadlessRunResult(output=output)
-    write_headless_handoff_briefing_output(handoff_briefing_output_path, fallback_result, fallback_exit_code)
-    write_headless_result_output(result_output_path, fallback_result, fallback_exit_code, output_format=result_artifact_format)
+    write_headless_handoff_briefing_output(
+        handoff_briefing_output_path, fallback_result, fallback_exit_code
+    )
+    write_headless_result_output(
+        result_output_path,
+        fallback_result,
+        fallback_exit_code,
+        output_format=result_artifact_format,
+    )
     if not quiet:
         print_raw(output)
     raise typer.Exit(code=fallback_exit_code)
@@ -7849,54 +8504,87 @@ def ask(
 @app.command("backends")
 def backends(
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """List registered LLM backend keys."""
     structured_format = structured_output_format(json_output, output_format)
-    print_backend_list(json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_backend_list(
+        json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("commands")
 def commands_command(
-    query: str | None = typer.Argument(None, help="Optional command or keyword filter, e.g. /workflow or memory."),
+    query: str | None = typer.Argument(
+        None, help="Optional command or keyword filter, e.g. /workflow or memory."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """List or search slash command catalog entries."""
     structured_format = structured_output_format(json_output, output_format)
-    print_command_catalog(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_command_catalog(
+        query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("command-parity")
 def command_parity_command(
-    query: str | None = typer.Argument(None, help="Optional parity domain or keyword filter, e.g. memory, ace, gate."),
+    query: str | None = typer.Argument(
+        None, help="Optional parity domain or keyword filter, e.g. memory, ace, gate."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """List slash-command to runner JSON command parity mappings."""
     structured_format = structured_output_format(json_output, output_format)
-    print_command_parity(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_command_parity(
+        query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("workflows")
 def workflows_command(
-    query: str | None = typer.Argument(None, help="Optional workflow name or alias, e.g. headless, audit, commit."),
+    query: str | None = typer.Argument(
+        None, help="Optional workflow name or alias, e.g. headless, audit, commit."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """List or inspect practical workflow recipes."""
     structured_format = structured_output_format(json_output, output_format)
-    print_workflow_catalog(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_workflow_catalog(
+        query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("workflow-plan")
 def workflow_plan_command(
     query: str = typer.Argument(..., help="Workflow name or alias, e.g. memory, ace, headless."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for command policy resolution."),
-    input_items: list[str] = typer.Option(None, "--input", help="Placeholder substitution as KEY=VALUE. May be repeated."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for command policy resolution.",
+    ),
+    input_items: list[str] = typer.Option(
+        None, "--input", help="Placeholder substitution as KEY=VALUE. May be repeated."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
-    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when the workflow plan has blockers."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
+    fail_on_blocker: bool = typer.Option(
+        False, "--fail-on-blocker", help="Exit 1 when the workflow plan has blockers."
+    ),
 ) -> None:
     """Build a runnable workflow plan without executing any step."""
     structured_format = structured_output_format(json_output, output_format)
@@ -7907,29 +8595,64 @@ def workflow_plan_command(
         payload["blockers"] = [*payload.get("blockers", []), *input_blockers]
         payload["recommended_kind"] = "fix_workflow_inputs"
         payload["recommended_risk"] = "UNKNOWN"
-    print_workflow_plan_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_workflow_plan_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=1 if fail_on_blocker and payload.get("blockers") else 0)
 
 
 @app.command("workflow-run")
 def workflow_run_command(
     query: str = typer.Argument(..., help="Workflow name or alias, e.g. memory, ace, infra."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for command policy resolution and execution."),
-    input_items: list[str] = typer.Option(None, "--input", help="Placeholder substitution as KEY=VALUE. May be repeated."),
-    execute: bool = typer.Option(False, "--execute", help="Execute eligible GREEN agentx CLI steps. Omit for dry-run."),
-    allow_yellow_gates: bool = typer.Option(False, "--allow-yellow-gates", help="Allow YELLOW workflow gates when --execute is used. Requires --approval-reason."),
-    approval_reason: str | None = typer.Option(None, "--approval-reason", help="Human-readable reason recorded in approval receipts for allowed YELLOW gates."),
-    timeout: int = typer.Option(120, "--timeout", min=1, help="Per-command timeout in seconds when --execute is used."),
-    result_output: str | None = typer.Option(None, "--result-output", help="Write the workflow-run result JSON/JSONL payload to a specific workspace path."),
-    result_output_format: str = typer.Option("auto", "--result-output-format", help="Result artifact format: auto, json, or jsonl."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for command policy resolution and execution.",
+    ),
+    input_items: list[str] = typer.Option(
+        None, "--input", help="Placeholder substitution as KEY=VALUE. May be repeated."
+    ),
+    execute: bool = typer.Option(
+        False, "--execute", help="Execute eligible GREEN agentx CLI steps. Omit for dry-run."
+    ),
+    allow_yellow_gates: bool = typer.Option(
+        False,
+        "--allow-yellow-gates",
+        help="Allow YELLOW workflow gates when --execute is used. Requires --approval-reason.",
+    ),
+    approval_reason: str | None = typer.Option(
+        None,
+        "--approval-reason",
+        help="Human-readable reason recorded in approval receipts for allowed YELLOW gates.",
+    ),
+    timeout: int = typer.Option(
+        120, "--timeout", min=1, help="Per-command timeout in seconds when --execute is used."
+    ),
+    result_output: str | None = typer.Option(
+        None,
+        "--result-output",
+        help="Write the workflow-run result JSON/JSONL payload to a specific workspace path.",
+    ),
+    result_output_format: str = typer.Option(
+        "auto", "--result-output-format", help="Result artifact format: auto, json, or jsonl."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
-    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when the workflow run has blockers or stops at a gate."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
+    fail_on_blocker: bool = typer.Option(
+        False,
+        "--fail-on-blocker",
+        help="Exit 1 when the workflow run has blockers or stops at a gate.",
+    ),
 ) -> None:
     """Dry-run or execute GREEN-only workflow steps."""
     structured_format = structured_output_format(json_output, output_format)
     workspace_path = resolve_headless_workspace(workspace) or Settings().workspace
-    result_artifact_format = resolve_headless_result_output_format(result_output_format, stdout_format=structured_format)
+    result_artifact_format = resolve_headless_result_output_format(
+        result_output_format, stdout_format=structured_format
+    )
     result_output_path = resolve_headless_result_output(workspace_path, result_output)
     parsed_inputs, input_blockers = parse_workflow_inputs(input_items or [])
     payload = workflow_run_payload(
@@ -7954,24 +8677,56 @@ def workflow_run_command(
         output_format=result_artifact_format,
         event="workflow_run",
     )
-    print_workflow_run_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_workflow_run_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     blocked = bool(payload.get("blockers") or payload.get("stopped_at"))
     raise typer.Exit(code=1 if fail_on_blocker and blocked else 0)
 
 
 @app.command("workflow-inspect")
 def workflow_inspect_command(
-    source: str = typer.Argument(..., help="Workflow-run JSON/JSONL artifact file to inspect, or '-' for stdin."),
-    input_items: list[str] = typer.Option(None, "--input", help="Override or fill workflow placeholder as KEY=VALUE. May be repeated."),
-    workflow_execute: bool = typer.Option(False, "--workflow-execute", help="Generate a resume command that includes workflow-run --execute."),
-    allow_yellow_gates: bool = typer.Option(False, "--allow-yellow-gates", help="Include --allow-yellow-gates in the generated resume command."),
-    approval_reason: str | None = typer.Option(None, "--approval-reason", help="Include an approval reason in the generated resume command."),
-    result_output: str | None = typer.Option(None, "--result-output", help="Include a fresh workflow-run --result-output path in the generated resume command."),
-    resume_output_format: str = typer.Option("json", "--resume-output-format", help="Generated resume command output format: json or jsonl."),
-    field: str | None = typer.Option(None, "--field", help="Print one field, e.g. resume_command or missing_inputs."),
+    source: str = typer.Argument(
+        ..., help="Workflow-run JSON/JSONL artifact file to inspect, or '-' for stdin."
+    ),
+    input_items: list[str] = typer.Option(
+        None, "--input", help="Override or fill workflow placeholder as KEY=VALUE. May be repeated."
+    ),
+    workflow_execute: bool = typer.Option(
+        False,
+        "--workflow-execute",
+        help="Generate a resume command that includes workflow-run --execute.",
+    ),
+    allow_yellow_gates: bool = typer.Option(
+        False,
+        "--allow-yellow-gates",
+        help="Include --allow-yellow-gates in the generated resume command.",
+    ),
+    approval_reason: str | None = typer.Option(
+        None,
+        "--approval-reason",
+        help="Include an approval reason in the generated resume command.",
+    ),
+    result_output: str | None = typer.Option(
+        None,
+        "--result-output",
+        help="Include a fresh workflow-run --result-output path in the generated resume command.",
+    ),
+    resume_output_format: str = typer.Option(
+        "json",
+        "--resume-output-format",
+        help="Generated resume command output format: json or jsonl.",
+    ),
+    field: str | None = typer.Option(
+        None, "--field", help="Print one field, e.g. resume_command or missing_inputs."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
-    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when resume inputs are still required."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
+    fail_on_blocker: bool = typer.Option(
+        False, "--fail-on-blocker", help="Exit 1 when resume inputs are still required."
+    ),
 ) -> None:
     """Inspect a saved workflow-run artifact and build a rerun command."""
     parsed_inputs, input_blockers = parse_workflow_inputs(input_items or [])
@@ -7990,7 +8745,9 @@ def workflow_inspect_command(
     if field:
         field_payload = handoff_inspect_field_payload(payload, field)
         if structured_format != "plain":
-            print_structured_payload(field_payload, output_format=structured_format, event="workflow_inspect_field")
+            print_structured_payload(
+                field_payload, output_format=structured_format, event="workflow_inspect_field"
+            )
         else:
             sys.stdout.write(format_handoff_inspect_field_plain(field_payload))
         raise typer.Exit(code=1 if fail_on_blocker and not payload.get("resume_ready") else 0)
@@ -8003,17 +8760,47 @@ def workflow_inspect_command(
 
 @app.command("workflow-resume")
 def workflow_resume_command(
-    source: str = typer.Argument(..., help="Workflow-run JSON/JSONL artifact file to resume, or '-' for stdin."),
-    input_items: list[str] = typer.Option(None, "--input", help="Override or fill workflow placeholder as KEY=VALUE. May be repeated."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Print the generated workflow-run argv instead of executing it."),
-    execute: bool = typer.Option(False, "--execute", help="Execute the generated workflow-run command."),
-    workflow_execute: bool = typer.Option(False, "--workflow-execute", help="Generate a resume command that includes workflow-run --execute."),
-    allow_yellow_gates: bool = typer.Option(False, "--allow-yellow-gates", help="Include --allow-yellow-gates in the generated workflow-run command."),
-    approval_reason: str | None = typer.Option(None, "--approval-reason", help="Include an approval reason in the generated workflow-run command."),
-    result_output: str | None = typer.Option(None, "--result-output", help="Include a fresh workflow-run --result-output path in the generated command."),
-    resume_output_format: str = typer.Option("json", "--resume-output-format", help="Generated workflow-run output format: json or jsonl."),
+    source: str = typer.Argument(
+        ..., help="Workflow-run JSON/JSONL artifact file to resume, or '-' for stdin."
+    ),
+    input_items: list[str] = typer.Option(
+        None, "--input", help="Override or fill workflow placeholder as KEY=VALUE. May be repeated."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the generated workflow-run argv instead of executing it."
+    ),
+    execute: bool = typer.Option(
+        False, "--execute", help="Execute the generated workflow-run command."
+    ),
+    workflow_execute: bool = typer.Option(
+        False,
+        "--workflow-execute",
+        help="Generate a resume command that includes workflow-run --execute.",
+    ),
+    allow_yellow_gates: bool = typer.Option(
+        False,
+        "--allow-yellow-gates",
+        help="Include --allow-yellow-gates in the generated workflow-run command.",
+    ),
+    approval_reason: str | None = typer.Option(
+        None,
+        "--approval-reason",
+        help="Include an approval reason in the generated workflow-run command.",
+    ),
+    result_output: str | None = typer.Option(
+        None,
+        "--result-output",
+        help="Include a fresh workflow-run --result-output path in the generated command.",
+    ),
+    resume_output_format: str = typer.Option(
+        "json",
+        "--resume-output-format",
+        help="Generated workflow-run output format: json or jsonl.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Print or execute the rerun command from a saved workflow-run artifact."""
     parsed_inputs, input_blockers = parse_workflow_inputs(input_items or [])
@@ -8035,9 +8822,13 @@ def workflow_resume_command(
     if execute and payload.get("ok") is not True:
         raise typer.BadParameter("workflow resume inputs are required before --execute")
     if execute:
-        payload = execute_workflow_resume_payload(payload, cwd=workflow_resume_execution_cwd(inspect_payload))
+        payload = execute_workflow_resume_payload(
+            payload, cwd=workflow_resume_execution_cwd(inspect_payload)
+        )
         if structured_format != "plain":
-            print_structured_payload(payload, output_format=structured_format, event="workflow_resume")
+            print_structured_payload(
+                payload, output_format=structured_format, event="workflow_resume"
+            )
         else:
             if payload.get("stdout"):
                 sys.stdout.write(str(payload["stdout"]))
@@ -8057,25 +8848,47 @@ def workflow_resume_command(
 
 @app.command("tools")
 def tools_command(
-    query: str | None = typer.Argument(None, help="Optional tool, risk, or keyword filter, e.g. git, YELLOW, memory."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for tool discovery."),
+    query: str | None = typer.Argument(
+        None, help="Optional tool, risk, or keyword filter, e.g. git, YELLOW, memory."
+    ),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory for tool discovery."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """List or search available agent tools and risk metadata."""
     workspace_path = resolve_headless_workspace(workspace) or Settings().workspace
     registry = ToolRegistry(builtin_tools(workspace_path, NullMemoryClient()))
     structured_format = structured_output_format(json_output, output_format)
-    print_tool_catalog(registry, query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_tool_catalog(
+        registry,
+        query,
+        json_output=structured_format != "plain",
+        jsonl_output=structured_format == "jsonl",
+    )
 
 
 @app.command("infra")
 def infra_command(
-    map_key: str = typer.Argument("all", help="Map to read: all, quick, project, resource, home, vps, or resource-bundle."),
-    per_file_chars: int = typer.Option(5000, "--per-file-chars", min=100, help="Maximum characters to read from each selected source."),
-    max_chars: int = typer.Option(14000, "--max-chars", min=500, help="Maximum characters in the final context payload."),
+    map_key: str = typer.Argument(
+        "all", help="Map to read: all, quick, project, resource, home, vps, or resource-bundle."
+    ),
+    per_file_chars: int = typer.Option(
+        5000,
+        "--per-file-chars",
+        min=100,
+        help="Maximum characters to read from each selected source.",
+    ),
+    max_chars: int = typer.Option(
+        14000, "--max-chars", min=500, help="Maximum characters in the final context payload."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Read Maki's project/resource/home-AI/VPS maps as read-only context."""
     structured_format = structured_output_format(json_output, output_format)
@@ -8083,18 +8896,28 @@ def infra_command(
         payload = infra_payload(map_key, per_file_chars=per_file_chars, max_chars=max_chars)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
-    print_infra_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_infra_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("ace-init")
 def ace_init_command(
-    session_id: str = typer.Argument(..., help="ACE session id, used as the session directory name."),
+    session_id: str = typer.Argument(
+        ..., help="ACE session id, used as the session directory name."
+    ),
     goal: str = typer.Option(..., "--goal", help="ACE GOAL section content."),
     routing_decision: str = typer.Option("", "--route", help="Initial ROUTING DECISIONS content."),
-    root: str | None = typer.Option(None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."),
-    write: bool = typer.Option(False, "--write", help="Create the session directory and _manifest.md."),
+    root: str | None = typer.Option(
+        None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."
+    ),
+    write: bool = typer.Option(
+        False, "--write", help="Create the session directory and _manifest.md."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Create or preview an ACE session manifest."""
     payload = ace_init_payload(
@@ -8105,19 +8928,29 @@ def ace_init_command(
         write=write,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_ace_init_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_ace_init_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 
 @app.command("ace-append")
 def ace_append_command(
     session_id: str = typer.Argument(..., help="ACE session id."),
-    section: str = typer.Argument(..., help="Section: routing, sub-task, finding, decision, or question."),
+    section: str = typer.Argument(
+        ..., help="Section: routing, sub-task, finding, decision, or question."
+    ),
     text: str = typer.Argument(..., help="Text to append as a timestamped manifest bullet."),
-    root: str | None = typer.Option(None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."),
-    agent: str = typer.Option("agentx", "--agent", help="Agent label to include in the appended entry."),
+    root: str | None = typer.Option(
+        None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."
+    ),
+    agent: str = typer.Option(
+        "agentx", "--agent", help="Agent label to include in the appended entry."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Append one entry to an ACE session manifest."""
     payload = ace_append_payload(
@@ -8128,22 +8961,36 @@ def ace_append_command(
         agent=agent,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_ace_append_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_ace_append_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 
 @app.command("ace-briefing")
 def ace_briefing_command(
     session_id: str = typer.Argument(..., help="ACE session id."),
-    agent: str = typer.Option(..., "--agent", help="Agent slug, used in briefing metadata and default filename."),
+    agent: str = typer.Option(
+        ..., "--agent", help="Agent slug, used in briefing metadata and default filename."
+    ),
     role: str = typer.Option("Contributor", "--role", help="Role assigned to the target agent."),
     task: str = typer.Option("", "--task", help="Concrete task for the target agent."),
-    constraints: str = typer.Option("", "--constraints", help="Extra constraints for the target agent."),
-    output: str | None = typer.Option(None, "--output", help="Briefing filename inside the ACE session directory."),
-    root: str | None = typer.Option(None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."),
-    write: bool = typer.Option(False, "--write", help="Create the briefing file inside the ACE session directory."),
+    constraints: str = typer.Option(
+        "", "--constraints", help="Extra constraints for the target agent."
+    ),
+    output: str | None = typer.Option(
+        None, "--output", help="Briefing filename inside the ACE session directory."
+    ),
+    root: str | None = typer.Option(
+        None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."
+    ),
+    write: bool = typer.Option(
+        False, "--write", help="Create the briefing file inside the ACE session directory."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Create or preview a scoped briefing from an ACE manifest."""
     payload = ace_briefing_payload(
@@ -8157,7 +9004,9 @@ def ace_briefing_command(
         write=write,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_ace_briefing_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_ace_briefing_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 
@@ -8167,11 +9016,19 @@ def ace_answer_command(
     agent: str = typer.Option(..., "--agent", help="Agent slug for the answer author."),
     answer: str = typer.Option(..., "--answer", help="Raw answer text to preserve append-only."),
     summary: str = typer.Option("", "--summary", help="Short summary to append to the manifest."),
-    section: str = typer.Option("finding", "--section", help="Manifest section to append summary to."),
-    output: str | None = typer.Option(None, "--output", help="Answer filename inside the ACE session directory."),
-    root: str | None = typer.Option(None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."),
+    section: str = typer.Option(
+        "finding", "--section", help="Manifest section to append summary to."
+    ),
+    output: str | None = typer.Option(
+        None, "--output", help="Answer filename inside the ACE session directory."
+    ),
+    root: str | None = typer.Option(
+        None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Record one external agent answer and append its summary to the ACE manifest."""
     payload = ace_answer_payload(
@@ -8184,17 +9041,25 @@ def ace_answer_command(
         output=output,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_ace_answer_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_ace_answer_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 
 @app.command("ace-status")
 def ace_status_command(
     session_id: str = typer.Argument(..., help="ACE session id."),
-    root: str | None = typer.Option(None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."),
-    max_manifest_chars: int = typer.Option(12000, "--max-manifest-chars", min=0, help="Maximum manifest characters to include."),
+    root: str | None = typer.Option(
+        None, "--root", help="ACE root directory. Defaults to ~/Documents/agent-council."
+    ),
+    max_manifest_chars: int = typer.Option(
+        12000, "--max-manifest-chars", min=0, help="Maximum manifest characters to include."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Summarize one ACE session manifest, briefings, answers, and open questions."""
     payload = ace_status_payload(
@@ -8203,51 +9068,92 @@ def ace_status_command(
         max_manifest_chars=max_manifest_chars,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_ace_status_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_ace_status_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 
 @app.command("command-plan")
 def command_plan_command(
     command: str = typer.Argument(..., help="Shell command string to classify without executing."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for compose-file discovery."),
-    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 after printing the payload when blockers are present."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for compose-file discovery.",
+    ),
+    fail_on_blocker: bool = typer.Option(
+        False,
+        "--fail-on-blocker",
+        help="Exit 1 after printing the payload when blockers are present.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Classify a shell command against agentX command policy without executing it."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     payload = command_plan_payload(settings, command)
     structured_format = structured_output_format(json_output, output_format)
-    print_command_plan_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_command_plan_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(command_plan_exit_code(payload, fail_on_blocker=fail_on_blocker))
 
 
 @app.command("tool-plan")
 def tool_plan_command(
     tool: str = typer.Argument(..., help="Tool name or alias to classify without executing."),
-    args_json: str = typer.Option("{}", "--args-json", "--args", help="Tool args as a JSON object string."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for path/compose checks."),
-    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 after printing the payload when blockers are present."),
+    args_json: str = typer.Option(
+        "{}", "--args-json", "--args", help="Tool args as a JSON object string."
+    ),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for path/compose checks.",
+    ),
+    fail_on_blocker: bool = typer.Option(
+        False,
+        "--fail-on-blocker",
+        help="Exit 1 after printing the payload when blockers are present.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Classify an agentX tool call and args without executing it."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     payload = tool_plan_payload(settings, tool, args_json)
     structured_format = structured_output_format(json_output, output_format)
-    print_tool_plan_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_tool_plan_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(tool_plan_exit_code(payload, fail_on_blocker=fail_on_blocker))
 
 
 @app.command("config")
 def config_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for config resolution."),
-    namespace: str | None = typer.Option(None, "--namespace", help="Override namespace shown in the payload."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for config resolution.",
+    ),
+    namespace: str | None = typer.Option(
+        None, "--namespace", help="Override namespace shown in the payload."
+    ),
     mode: str | None = typer.Option(None, "--mode", help="Override mode shown in the payload."),
-    approval: str | None = typer.Option(None, "--approval", help="Override approval mode shown in the payload."),
+    approval: str | None = typer.Option(
+        None, "--approval", help="Override approval mode shown in the payload."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Show resolved agentX configuration without live probes."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -8256,7 +9162,9 @@ def config_command(
     resolved_mode = mode or project_config.mode or "chat"
     if resolved_mode == "ask":
         resolved_mode = "agent"
-    approval_mode = normalize_approval_mode(approval or project_config.approval or ApprovalMode.ASK.value).value
+    approval_mode = normalize_approval_mode(
+        approval or project_config.approval or ApprovalMode.ASK.value
+    ).value
     payload = config_payload(
         settings,
         namespace=resolved_namespace,
@@ -8264,17 +9172,32 @@ def config_command(
         approval=approval_mode,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_config_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_config_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("memory-status")
 def memory_status_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for config resolution."),
-    namespace: str | None = typer.Option(None, "--namespace", help="Override namespace shown in the payload."),
-    live_probe: bool = typer.Option(False, "--live-probe", help="Run a local AMH CLI availability probe."),
-    timeout: float = typer.Option(10.0, "--timeout", min=1.0, help="Live probe timeout in seconds."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for config resolution.",
+    ),
+    namespace: str | None = typer.Option(
+        None, "--namespace", help="Override namespace shown in the payload."
+    ),
+    live_probe: bool = typer.Option(
+        False, "--live-probe", help="Run a local AMH CLI availability probe."
+    ),
+    timeout: float = typer.Option(
+        10.0, "--timeout", min=1.0, help="Live probe timeout in seconds."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Show read-only Memory Hall / AMH backend status for runners."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -8292,18 +9215,29 @@ def memory_status_command(
         timeout=timeout,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_memory_status_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_memory_status_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 
 @app.command("memory-read")
 def memory_read_command(
     query: str = typer.Argument(..., help="Memory query text."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for config resolution."),
-    namespace: str | None = typer.Option(None, "--namespace", help="Override Memory Hall namespace."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for config resolution.",
+    ),
+    namespace: str | None = typer.Option(
+        None, "--namespace", help="Override Memory Hall namespace."
+    ),
     limit: int = typer.Option(5, "--limit", min=1, help="Maximum memory results."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Read/search Memory Hall through the configured backend."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -8316,20 +9250,33 @@ def memory_read_command(
         limit=limit,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_memory_read_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_memory_read_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 
 @app.command("memory-write")
 def memory_write_command(
     content: str = typer.Argument(..., help="Memory content to preview or write."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for config resolution."),
-    namespace: str | None = typer.Option(None, "--namespace", help="Override Memory Hall namespace."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for config resolution.",
+    ),
+    namespace: str | None = typer.Option(
+        None, "--namespace", help="Override Memory Hall namespace."
+    ),
     memory_type: str = typer.Option("note", "--type", "--memory-type", help="ACA memory type."),
     tier: str = typer.Option("llm_derived", "--tier", help="ACA source tier."),
-    write: bool = typer.Option(False, "--write", help="Actually write memory. Omit for dry-run preview."),
+    write: bool = typer.Option(
+        False, "--write", help="Actually write memory. Omit for dry-run preview."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Preview or write one ACA-shaped Memory Hall entry."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -8344,17 +9291,30 @@ def memory_write_command(
         write=write,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_memory_write_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_memory_write_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=0 if payload.get("ok") else 1)
 
 
 @app.command("init")
 def init_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for project profiling."),
-    namespace: str | None = typer.Option(None, "--namespace", help="Override namespace shown in the payload."),
-    write_memory: bool = typer.Option(False, "--write-memory", help="Write the generated project profile to Memory Hall."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for project profiling.",
+    ),
+    namespace: str | None = typer.Option(
+        None, "--namespace", help="Override namespace shown in the payload."
+    ),
+    write_memory: bool = typer.Option(
+        False, "--write-memory", help="Write the generated project profile to Memory Hall."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Scan the workspace and optionally write a project profile to memory."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -8393,18 +9353,26 @@ def init_command(
         memory_result=memory_result,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_init_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_init_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("capabilities")
 def capabilities_command(
-    query: str | None = typer.Argument(None, help="Optional capability filter, e.g. verify, tasks, headless, schema name."),
+    query: str | None = typer.Argument(
+        None, help="Optional capability filter, e.g. verify, tasks, headless, schema name."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """List machine-readable top-level CLI capabilities for runners."""
     structured_format = structured_output_format(json_output, output_format)
-    print_capabilities(query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_capabilities(
+        query, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 RECORDED_RELIABILITY_CASES: list[dict[str, object]] = [
@@ -8444,12 +9412,17 @@ RECORDED_RELIABILITY_CASES: list[dict[str, object]] = [
         "name": "recover_after_failure",
         "prompt": "Recover from one bad write path, then create RECOVERED.md.",
         "responses": [
-            json.dumps({"type": "tool_call", "tool": "write_file", "args": {"path": ".", "content": "bad"}}),
+            json.dumps(
+                {"type": "tool_call", "tool": "write_file", "args": {"path": ".", "content": "bad"}}
+            ),
             json.dumps(
                 {
                     "type": "tool_call",
                     "tool": "write_file",
-                    "args": {"path": "RECOVERED.md", "content": "# Recovered\n\nsecond attempt succeeded\n"},
+                    "args": {
+                        "path": "RECOVERED.md",
+                        "content": "# Recovered\n\nsecond attempt succeeded\n",
+                    },
                 }
             ),
             json.dumps({"type": "final", "content": "Recovered and created RECOVERED.md."}),
@@ -8529,12 +9502,32 @@ class RecordedReliabilityClient:
 def _git_fixture(workspace: Path) -> None:
     workspace.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init"], cwd=workspace, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=workspace, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "config", "user.name", "Test User"], cwd=workspace, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=workspace,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=workspace,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     (workspace / ".gitignore").write_text(".agentx/\n", encoding="utf-8")
     (workspace / "README.md").write_text("# Reliability Fixture\n", encoding="utf-8")
-    subprocess.run(["git", "add", ".gitignore", "README.md"], cwd=workspace, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=workspace, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "add", ".gitignore", "README.md"],
+        cwd=workspace,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "init"], cwd=workspace, check=True, capture_output=True, text=True
+    )
 
 
 def _run_reliability_case(
@@ -8563,7 +9556,9 @@ def _run_reliability_case(
         model_name = "recorded-reliability"
         register_llm_backend(
             backend_name,
-            lambda _base_url, _model, _timeout, case_responses=responses: RecordedReliabilityClient(list(case_responses)),
+            lambda _base_url, _model, _timeout, case_responses=responses: RecordedReliabilityClient(
+                list(case_responses)
+            ),
             source_id="agentx.reliability_suite",
         )
     else:
@@ -8604,7 +9599,9 @@ def _run_reliability_case(
     artifacts = artifacts_payload(Settings(workspace=workspace))
     next_step = next_payload(Settings(workspace=workspace))
     gate = gate_payload(Settings(workspace=workspace), run_verify=False)
-    artifact_complete = session_output.is_file() and result_output.is_file() and handoff_output.is_file()
+    artifact_complete = (
+        session_output.is_file() and result_output.is_file() and handoff_output.is_file()
+    )
     expected_dirty = bool(case.get("expect_dirty", False))
     expected_exit_code = int(case.get("expected_exit_code", 0))
     expected_termination = str(case.get("expected_termination", "final_success"))
@@ -8617,7 +9614,9 @@ def _run_reliability_case(
         raw_payload, default_prompt_file = load_handoff_resume_payload_source(str(artifact_dir))
         resume_payload = inspect_headless_handoff_payload(raw_payload)
         if default_prompt_file is not None:
-            resume_payload = apply_handoff_next_prompt_file(resume_payload, str(default_prompt_file))
+            resume_payload = apply_handoff_next_prompt_file(
+                resume_payload, str(default_prompt_file)
+            )
         handoff_payload = handoff_resume_command_payload(resume_payload)
     handoff_argv = list(handoff_payload.get("argv", [])) if handoff_payload else []
     checks = {
@@ -8657,26 +9656,32 @@ def _run_reliability_case(
         "gate_recommended_kind": gate.get("recommended_kind"),
         "artifacts_recommended_kind": artifacts.get("recommended_kind"),
         "handoff_resume": handoff_payload,
-        "recovery_recommendation": headless_payload(result, exit_code).get("log_summary", {}).get("handoff_summary", {}),
+        "recovery_recommendation": headless_payload(result, exit_code)
+        .get("log_summary", {})
+        .get("handoff_summary", {}),
         "checks": checks,
     }
 
 
-def reliability_target_bar_payload(cases: list[dict[str, object]], *, suite_kind: str = "recorded") -> dict[str, object]:
+def reliability_target_bar_payload(
+    cases: list[dict[str, object]], *, suite_kind: str = "recorded"
+) -> dict[str, object]:
     case_names = [str(case.get("name", "")) for case in cases]
     missing_required_cases = [
-        name for name in RELIABILITY_RECORDED_V1_REQUIRED_CASES
-        if name not in case_names
+        name for name in RELIABILITY_RECORDED_V1_REQUIRED_CASES if name not in case_names
     ]
     failed_cases = [str(case.get("name", "")) for case in cases if case.get("ok") is not True]
     failed_required_checks: dict[str, list[str]] = {}
     for case in cases:
         checks = case.get("checks")
         if not isinstance(checks, dict):
-            failed_required_checks[str(case.get("name", ""))] = list(RELIABILITY_RECORDED_V1_REQUIRED_CHECKS)
+            failed_required_checks[str(case.get("name", ""))] = list(
+                RELIABILITY_RECORDED_V1_REQUIRED_CHECKS
+            )
             continue
         missing_or_failed = [
-            check for check in RELIABILITY_RECORDED_V1_REQUIRED_CHECKS
+            check
+            for check in RELIABILITY_RECORDED_V1_REQUIRED_CHECKS
             if checks.get(check) is not True
         ]
         if missing_or_failed:
@@ -8739,7 +9744,8 @@ def reliability_suite_payload(
         raise typer.BadParameter("suite kind must be one of: recorded, live")
     resolved_backend = (backend_override or os.getenv("AGENTX_BACKEND", "ollama")).lower()
     selected = [
-        case for case in RECORDED_RELIABILITY_CASES
+        case
+        for case in RECORDED_RELIABILITY_CASES
         if not case_filter or case_filter.lower() in str(case["name"]).lower()
     ]
     if not selected:
@@ -8789,7 +9795,9 @@ def reliability_suite_payload(
     resolved_run_id = run_id or datetime.now().strftime("%Y%m%d-%H%M%S")
     root = settings.workspace / ".agentx" / "reliability" / resolved_run_id
     if root.exists():
-        raise typer.BadParameter(f"reliability run already exists: {root.relative_to(settings.workspace)}")
+        raise typer.BadParameter(
+            f"reliability run already exists: {root.relative_to(settings.workspace)}"
+        )
     root.mkdir(parents=True)
     cases = [
         _run_reliability_case(
@@ -8808,10 +9816,18 @@ def reliability_suite_payload(
     ok = failed == 0
     target_bar = reliability_target_bar_payload(cases, suite_kind=normalized_suite_kind)
     meets_proposed_threshold = target_bar.get("meets_proposed_threshold") is True
-    recommended_command = "agentx inspect --json" if ok and meets_proposed_threshold else "agentx reliability-suite --json"
-    recommended_kind = "inspect" if ok and meets_proposed_threshold else "run_full_reliability_suite"
+    recommended_command = (
+        "agentx inspect --json"
+        if ok and meets_proposed_threshold
+        else "agentx reliability-suite --json"
+    )
+    recommended_kind = (
+        "inspect" if ok and meets_proposed_threshold else "run_full_reliability_suite"
+    )
     if not ok:
-        recommended_command = "inspect failed reliability cases, then rerun agentx reliability-suite --json"
+        recommended_command = (
+            "inspect failed reliability cases, then rerun agentx reliability-suite --json"
+        )
         recommended_kind = "fix_reliability_failures"
     return {
         "schema": "agentx.reliability_suite.v1",
@@ -8835,7 +9851,9 @@ def reliability_suite_payload(
     }
 
 
-def print_reliability_suite_payload(payload: dict[str, object], *, json_output: bool = False, jsonl_output: bool = False) -> None:
+def print_reliability_suite_payload(
+    payload: dict[str, object], *, json_output: bool = False, jsonl_output: bool = False
+) -> None:
     if json_output:
         print_structured_payload(
             payload,
@@ -8861,17 +9879,36 @@ def print_reliability_suite_payload(payload: dict[str, object], *, json_output: 
 
 @app.command("reliability-suite")
 def reliability_suite_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for local reliability artifacts."),
-    run_id: str | None = typer.Option(None, "--run-id", help="Optional run id under .agentx/reliability; must not already exist."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for local reliability artifacts.",
+    ),
+    run_id: str | None = typer.Option(
+        None, "--run-id", help="Optional run id under .agentx/reliability; must not already exist."
+    ),
     case: str | None = typer.Option(None, "--case", help="Optional case name filter."),
-    suite_kind: str = typer.Option("recorded", "--suite-kind", help="Suite kind: recorded or live."),
-    backend: str | None = typer.Option(None, "--backend", help="Override LLM backend for --suite-kind live."),
-    base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL for --suite-kind live."),
+    suite_kind: str = typer.Option(
+        "recorded", "--suite-kind", help="Suite kind: recorded or live."
+    ),
+    backend: str | None = typer.Option(
+        None, "--backend", help="Override LLM backend for --suite-kind live."
+    ),
+    base_url: str | None = typer.Option(
+        None, "--base-url", help="Override LLM backend base URL for --suite-kind live."
+    ),
     model: str | None = typer.Option(None, "--model", help="Override model for --suite-kind live."),
-    timeout: float | None = typer.Option(None, "--timeout", help="Override LLM request timeout seconds for --suite-kind live."),
+    timeout: float | None = typer.Option(
+        None, "--timeout", help="Override LLM request timeout seconds for --suite-kind live."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
-    fail_on_failure: bool = typer.Option(False, "--fail-on-failure", help="Exit 1 when any reliability case fails."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
+    fail_on_failure: bool = typer.Option(
+        False, "--fail-on-failure", help="Exit 1 when any reliability case fails."
+    ),
 ) -> None:
     """Run the recorded or explicitly pinned live backend reliability suite."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -8886,21 +9923,38 @@ def reliability_suite_command(
         timeout_override=timeout,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_reliability_suite_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_reliability_suite_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=1 if fail_on_failure and not payload.get("ok") else 0)
 
 
 @app.command("reliability-profile")
 def reliability_profile_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for config resolution."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for config resolution.",
+    ),
     backend: str | None = typer.Option(None, "--backend", help="Override LLM backend."),
     base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL."),
-    model: str | None = typer.Option(None, "--model", help="Override model used to initialize the backend client."),
-    timeout: float | None = typer.Option(None, "--timeout", help="Override request timeout seconds."),
-    live_probe: bool = typer.Option(False, "--live-probe", help="Call the selected backend to verify model availability."),
-    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when the profile has blockers."),
+    model: str | None = typer.Option(
+        None, "--model", help="Override model used to initialize the backend client."
+    ),
+    timeout: float | None = typer.Option(
+        None, "--timeout", help="Override request timeout seconds."
+    ),
+    live_probe: bool = typer.Option(
+        False, "--live-probe", help="Call the selected backend to verify model availability."
+    ),
+    fail_on_blocker: bool = typer.Option(
+        False, "--fail-on-blocker", help="Exit 1 when the profile has blockers."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Inspect the pinned backend/model profile for live reliability evidence."""
     payload = reliability_profile_payload(
@@ -8912,24 +9966,46 @@ def reliability_profile_command(
         live_probe=live_probe,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_reliability_profile_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_reliability_profile_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=1 if fail_on_blocker and payload.get("blockers") else 0)
 
 
 @app.command("reliability-decision")
 def reliability_decision_command(
-    profile: str = typer.Option(..., "--profile", help="Reliability profile to decide: recorded-v1 or live-v1."),
-    decision: str = typer.Option(..., "--decision", help="Decision: ratified, accepted, rejected, or superseded."),
-    evidence: str | None = typer.Option(None, "--evidence", help="Reliability suite JSON/JSONL evidence file."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory."),
+    profile: str = typer.Option(
+        ..., "--profile", help="Reliability profile to decide: recorded-v1 or live-v1."
+    ),
+    decision: str = typer.Option(
+        ..., "--decision", help="Decision: ratified, accepted, rejected, or superseded."
+    ),
+    evidence: str | None = typer.Option(
+        None, "--evidence", help="Reliability suite JSON/JSONL evidence file."
+    ),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory."
+    ),
     decided_by: str = typer.Option("Maki", "--decided-by", help="Decision maker label."),
     note: str | None = typer.Option(None, "--note", help="Optional decision note."),
-    output: str | None = typer.Option(None, "--output", help="Decision output path inside workspace. Default: .agentx/reliability/decision.json"),
-    write: bool = typer.Option(False, "--write", help="Write the decision artifact. Omit for preview only."),
-    overwrite: bool = typer.Option(False, "--overwrite", help="Allow replacing an existing decision artifact."),
-    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when blockers are present."),
+    output: str | None = typer.Option(
+        None,
+        "--output",
+        help="Decision output path inside workspace. Default: .agentx/reliability/decision.json",
+    ),
+    write: bool = typer.Option(
+        False, "--write", help="Write the decision artifact. Omit for preview only."
+    ),
+    overwrite: bool = typer.Option(
+        False, "--overwrite", help="Allow replacing an existing decision artifact."
+    ),
+    fail_on_blocker: bool = typer.Option(
+        False, "--fail-on-blocker", help="Exit 1 when blockers are present."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Preview or write a reliability threshold decision artifact."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -8945,33 +10021,58 @@ def reliability_decision_command(
         overwrite=overwrite,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_reliability_decision_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_reliability_decision_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=1 if fail_on_blocker and payload.get("blockers") else 0)
 
 
 @app.command("objective-gate")
 def objective_gate_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory."),
-    decision: str | None = typer.Option(None, "--decision", help="Decision artifact path inside workspace. Default: .agentx/reliability/decision.json"),
-    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when completion blockers are present."),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory."
+    ),
+    decision: str | None = typer.Option(
+        None,
+        "--decision",
+        help="Decision artifact path inside workspace. Default: .agentx/reliability/decision.json",
+    ),
+    fail_on_blocker: bool = typer.Option(
+        False, "--fail-on-blocker", help="Exit 1 when completion blockers are present."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Read-only completion gate for the active agentX objective."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     payload = objective_gate_payload(settings, decision=decision)
     structured_format = structured_output_format(json_output, output_format)
-    print_objective_gate_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_objective_gate_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=1 if fail_on_blocker and payload.get("blockers") else 0)
 
 
 @app.command("instructions")
 def instructions_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory."),
-    per_file_chars: int = typer.Option(3000, "--per-file-chars", min=0, help="Maximum characters to include from each instruction file."),
-    max_chars: int = typer.Option(9000, "--max-chars", min=0, help="Maximum characters to include in the merged context."),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory."
+    ),
+    per_file_chars: int = typer.Option(
+        3000,
+        "--per-file-chars",
+        min=0,
+        help="Maximum characters to include from each instruction file.",
+    ),
+    max_chars: int = typer.Option(
+        9000, "--max-chars", min=0, help="Maximum characters to include in the merged context."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Inspect repo-local AGENTX.md / AGENTS.md / CLAUDE.md instruction files."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -8981,80 +10082,136 @@ def instructions_command(
         max_chars=max_chars,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_instructions_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_instructions_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("sessions")
 def sessions_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for session discovery."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for session discovery.",
+    ),
     limit: int = typer.Option(10, "--limit", min=1, help="Maximum number of sessions to return."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """List saved session transcripts."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     payload = sessions_payload(settings, limit=limit)
     structured_format = structured_output_format(json_output, output_format)
-    print_sessions_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_sessions_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("artifacts")
 def artifacts_command(
-    root: str = typer.Argument(".agentx/runs", help="Workspace-relative artifact root or a single artifact bundle directory."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for artifact discovery."),
-    limit: int = typer.Option(20, "--limit", min=1, help="Maximum number of artifact bundles to return."),
+    root: str = typer.Argument(
+        ".agentx/runs",
+        help="Workspace-relative artifact root or a single artifact bundle directory.",
+    ),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for artifact discovery.",
+    ),
+    limit: int = typer.Option(
+        20, "--limit", min=1, help="Maximum number of artifact bundles to return."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """List saved headless artifact bundles for external runners."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     payload = artifacts_payload(settings, root=root, limit=limit)
     structured_format = structured_output_format(json_output, output_format)
-    print_artifacts_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_artifacts_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("approvals")
 def approvals_command(
     session: str = typer.Argument("latest", help="Transcript name, file name, or latest."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for session discovery."),
-    denied_only: bool = typer.Option(False, "--denied", help="Only return denied approval receipts."),
-    limit: int = typer.Option(20, "--limit", min=1, help="Maximum number of approval receipts to return."),
-    fail_on_denied: bool = typer.Option(False, "--fail-on-denied", help="Exit 1 when returned receipts include a denied approval."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for session discovery.",
+    ),
+    denied_only: bool = typer.Option(
+        False, "--denied", help="Only return denied approval receipts."
+    ),
+    limit: int = typer.Option(
+        20, "--limit", min=1, help="Maximum number of approval receipts to return."
+    ),
+    fail_on_denied: bool = typer.Option(
+        False, "--fail-on-denied", help="Exit 1 when returned receipts include a denied approval."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """List approval receipts from saved transcripts for audit automation."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     payload = approvals_payload(settings, session=session, limit=limit, denied_only=denied_only)
     structured_format = structured_output_format(json_output, output_format)
-    print_approvals_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_approvals_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=approvals_exit_code(payload, fail_on_denied=fail_on_denied))
 
 
 @app.command("traces")
 def traces_command(
     session: str = typer.Argument("latest", help="Transcript name, file name, or latest."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for trace discovery."),
-    limit: int = typer.Option(20, "--limit", min=1, help="Maximum number of recent events to include."),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory for trace discovery."
+    ),
+    limit: int = typer.Option(
+        20, "--limit", min=1, help="Maximum number of recent events to include."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Summarize transcript events, tools, approvals, and error-like records."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     payload = traces_payload(settings, session=session, limit=limit)
     structured_format = structured_output_format(json_output, output_format)
-    print_traces_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_traces_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("diff")
 def diff_command(
     path: str | None = typer.Argument(None, help="Optional workspace-relative path to diff."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for diff inspection."),
-    staged: bool = typer.Option(False, "--staged", help="Inspect staged changes instead of the worktree diff."),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory for diff inspection."
+    ),
+    staged: bool = typer.Option(
+        False, "--staged", help="Inspect staged changes instead of the worktree diff."
+    ),
     patch: bool = typer.Option(False, "--patch", help="Include the git patch text in the payload."),
-    max_patch_chars: int = typer.Option(20000, "--max-patch-chars", min=0, help="Maximum patch characters to include."),
+    max_patch_chars: int = typer.Option(
+        20000, "--max-patch-chars", min=0, help="Maximum patch characters to include."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Summarize git diff for external runners without mutating the index."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -9066,38 +10223,59 @@ def diff_command(
         max_patch_chars=max_patch_chars,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_diff_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_diff_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("patch-check")
 def patch_check_command(
     patch_file: str = typer.Argument(..., help="Workspace-relative patch file to validate."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for patch inspection."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for patch inspection.",
+    ),
     timeout: int = typer.Option(20, "--timeout", min=1, help="git apply check timeout in seconds."),
-    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when patch blockers are present."),
+    fail_on_blocker: bool = typer.Option(
+        False, "--fail-on-blocker", help="Exit 1 when patch blockers are present."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Validate a workspace patch file without applying it."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     payload = patch_check_payload(settings, patch_file=patch_file, timeout=timeout)
     structured_format = structured_output_format(json_output, output_format)
-    print_patch_check_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_patch_check_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=patch_check_exit_code(payload, fail_on_blocker=fail_on_blocker))
 
 
 @app.command("tasks")
 def tasks_command(
-    status: str = typer.Argument("all", help="Task status filter: all, active, pending, in_progress, done, or blocked."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for task discovery."),
+    status: str = typer.Argument(
+        "all", help="Task status filter: all, active, pending, in_progress, done, or blocked."
+    ),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory for task discovery."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """List project tasks from .agentx/tasks.json."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     payload = tasks_payload(settings, status_filter=status)
     structured_format = structured_output_format(json_output, output_format)
-    print_tasks_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_tasks_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("task-update")
@@ -9105,60 +10283,101 @@ def task_update_command(
     task_id: int = typer.Argument(..., help="Task id to update."),
     status: str = typer.Argument(..., help="New status: pending, in_progress, done, or blocked."),
     notes: str | None = typer.Argument(None, help="Optional notes to store on the task."),
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for task discovery."),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory for task discovery."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Update one project task in .agentx/tasks.json."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     payload = task_update_payload(settings, task_id=task_id, status=status, notes=notes)
     structured_format = structured_output_format(json_output, output_format)
-    print_task_update_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_task_update_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=task_update_exit_code(payload))
 
 
 @app.command("verify")
 def verify_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for verification."),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory for verification."
+    ),
     timeout: int = typer.Option(120, "--timeout", min=1, help="Per-command timeout in seconds."),
-    fail_on_error: bool = typer.Option(False, "--fail-on-error", help="Exit 1 when any verification command fails."),
+    fail_on_error: bool = typer.Option(
+        False, "--fail-on-error", help="Exit 1 when any verification command fails."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Run default project verification commands and print an audit payload."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     payload = verify_payload(settings, timeout=timeout)
     structured_format = structured_output_format(json_output, output_format)
-    print_verify_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_verify_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=verify_exit_code(payload, fail_on_error=fail_on_error))
 
 
 @app.command("review")
 def review_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for review inspection."),
-    timeout: int = typer.Option(120, "--timeout", min=1, help="Per-verification-command timeout in seconds."),
-    skip_verify: bool = typer.Option(False, "--skip-verify", help="Skip verification commands and only summarize review posture."),
-    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when blockers prevent commit readiness."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for review inspection.",
+    ),
+    timeout: int = typer.Option(
+        120, "--timeout", min=1, help="Per-verification-command timeout in seconds."
+    ),
+    skip_verify: bool = typer.Option(
+        False, "--skip-verify", help="Skip verification commands and only summarize review posture."
+    ),
+    fail_on_blocker: bool = typer.Option(
+        False, "--fail-on-blocker", help="Exit 1 when blockers prevent commit readiness."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Run deterministic read-only review gate: diff summary plus verification posture."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     payload = review_payload(settings, timeout=timeout, run_verify=not skip_verify)
     structured_format = structured_output_format(json_output, output_format)
-    print_review_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_review_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=review_exit_code(payload, fail_on_blocker=fail_on_blocker))
 
 
 @app.command("commit-plan")
 def commit_plan_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for commit planning."),
-    message: str | None = typer.Option(None, "--message", "-m", help="Proposed commit message; required for ready_to_commit=true."),
-    timeout: int = typer.Option(120, "--timeout", min=1, help="Per-verification-command timeout in seconds."),
-    skip_verify: bool = typer.Option(False, "--skip-verify", help="Skip verification commands and only summarize commit posture."),
-    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when blockers prevent commit readiness."),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory for commit planning."
+    ),
+    message: str | None = typer.Option(
+        None, "--message", "-m", help="Proposed commit message; required for ready_to_commit=true."
+    ),
+    timeout: int = typer.Option(
+        120, "--timeout", min=1, help="Per-verification-command timeout in seconds."
+    ),
+    skip_verify: bool = typer.Option(
+        False, "--skip-verify", help="Skip verification commands and only summarize commit posture."
+    ),
+    fail_on_blocker: bool = typer.Option(
+        False, "--fail-on-blocker", help="Exit 1 when blockers prevent commit readiness."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Print a read-only commit plan without staging, committing, or pushing."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -9169,21 +10388,37 @@ def commit_plan_command(
         run_verify=not skip_verify,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_commit_plan_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_commit_plan_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=commit_plan_exit_code(payload, fail_on_blocker=fail_on_blocker))
 
 
 @app.command("gate")
 def gate_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for gate inspection."),
-    timeout: int = typer.Option(120, "--timeout", min=1, help="Per-verification-command timeout in seconds."),
-    skip_verify: bool = typer.Option(False, "--skip-verify", help="Skip verification commands inside the review gate."),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory for gate inspection."
+    ),
+    timeout: int = typer.Option(
+        120, "--timeout", min=1, help="Per-verification-command timeout in seconds."
+    ),
+    skip_verify: bool = typer.Option(
+        False, "--skip-verify", help="Skip verification commands inside the review gate."
+    ),
     skip_doctor: bool = typer.Option(False, "--skip-doctor", help="Skip static doctor checks."),
-    skip_approvals: bool = typer.Option(False, "--skip-approvals", help="Skip latest approval-denial audit."),
-    approvals_limit: int = typer.Option(20, "--approvals-limit", min=1, help="Maximum approval receipts to inspect."),
-    fail_on_blocker: bool = typer.Option(False, "--fail-on-blocker", help="Exit 1 when gate blockers are present."),
+    skip_approvals: bool = typer.Option(
+        False, "--skip-approvals", help="Skip latest approval-denial audit."
+    ),
+    approvals_limit: int = typer.Option(
+        20, "--approvals-limit", min=1, help="Maximum approval receipts to inspect."
+    ),
+    fail_on_blocker: bool = typer.Option(
+        False, "--fail-on-blocker", help="Exit 1 when gate blockers are present."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Run a deterministic aggregate gate for runner handoff and commit readiness."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -9196,18 +10431,33 @@ def gate_command(
         approvals_limit=approvals_limit,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_gate_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_gate_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=gate_exit_code(payload, fail_on_blocker=fail_on_blocker))
 
 
 @app.command("next")
 def next_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for next-step planning."),
-    artifacts_root: str = typer.Option(".agentx/runs", "--artifacts-root", help="Workspace-relative artifact root to inspect."),
-    artifacts_limit: int = typer.Option(5, "--artifacts-limit", min=1, help="Maximum artifact bundles to inspect."),
-    approvals_limit: int = typer.Option(20, "--approvals-limit", min=1, help="Maximum denied approval receipts to inspect."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for next-step planning.",
+    ),
+    artifacts_root: str = typer.Option(
+        ".agentx/runs", "--artifacts-root", help="Workspace-relative artifact root to inspect."
+    ),
+    artifacts_limit: int = typer.Option(
+        5, "--artifacts-limit", min=1, help="Maximum artifact bundles to inspect."
+    ),
+    approvals_limit: int = typer.Option(
+        20, "--approvals-limit", min=1, help="Maximum denied approval receipts to inspect."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Recommend the next runner command from local repo state."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -9218,19 +10468,33 @@ def next_command(
         approvals_limit=approvals_limit,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_next_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_next_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("inspect")
 def inspect_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for inspection."),
-    namespace: str | None = typer.Option(None, "--namespace", help="Override namespace shown in the payload."),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory for inspection."
+    ),
+    namespace: str | None = typer.Option(
+        None, "--namespace", help="Override namespace shown in the payload."
+    ),
     mode: str | None = typer.Option(None, "--mode", help="Override mode shown in the payload."),
-    approval: str | None = typer.Option(None, "--approval", help="Override approval mode shown in the payload."),
-    sessions_limit: int = typer.Option(5, "--sessions-limit", min=1, help="Maximum number of session summaries to include."),
-    approvals_limit: int = typer.Option(20, "--approvals-limit", min=1, help="Maximum number of approval receipts to include."),
+    approval: str | None = typer.Option(
+        None, "--approval", help="Override approval mode shown in the payload."
+    ),
+    sessions_limit: int = typer.Option(
+        5, "--sessions-limit", min=1, help="Maximum number of session summaries to include."
+    ),
+    approvals_limit: int = typer.Option(
+        20, "--approvals-limit", min=1, help="Maximum number of approval receipts to include."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Print a read-only aggregate preflight bundle for external runners."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -9239,7 +10503,9 @@ def inspect_command(
     resolved_mode = mode or project_config.mode or "chat"
     if resolved_mode == "ask":
         resolved_mode = "agent"
-    approval_mode = normalize_approval_mode(approval or project_config.approval or ApprovalMode.ASK.value).value
+    approval_mode = normalize_approval_mode(
+        approval or project_config.approval or ApprovalMode.ASK.value
+    ).value
     payload = inspect_payload(
         settings,
         namespace=resolved_namespace,
@@ -9249,17 +10515,30 @@ def inspect_command(
         approvals_limit=approvals_limit,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_inspect_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_inspect_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("status")
 def status_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for status resolution."),
-    namespace: str | None = typer.Option(None, "--namespace", help="Override namespace shown in the payload."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for status resolution.",
+    ),
+    namespace: str | None = typer.Option(
+        None, "--namespace", help="Override namespace shown in the payload."
+    ),
     mode: str | None = typer.Option(None, "--mode", help="Override mode shown in the payload."),
-    approval: str | None = typer.Option(None, "--approval", help="Override approval mode shown in the payload."),
+    approval: str | None = typer.Option(
+        None, "--approval", help="Override approval mode shown in the payload."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Show machine-readable workspace posture without network probes."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -9268,7 +10547,9 @@ def status_command(
     resolved_mode = mode or project_config.mode or "chat"
     if resolved_mode == "ask":
         resolved_mode = "agent"
-    approval_mode = normalize_approval_mode(approval or project_config.approval or ApprovalMode.ASK.value).value
+    approval_mode = normalize_approval_mode(
+        approval or project_config.approval or ApprovalMode.ASK.value
+    ).value
     payload = status_payload(
         settings,
         namespace=resolved_namespace,
@@ -9276,16 +10557,26 @@ def status_command(
         approval=approval_mode,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_status_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_status_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("doctor")
 def doctor_command(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for doctor checks."),
-    static: bool = typer.Option(False, "--static", help="Run only local static checks; skip Ollama and memory probes."),
-    fail_on_error: bool = typer.Option(False, "--fail-on-error", help="Exit 1 when any doctor check fails."),
+    workspace: str | None = typer.Option(
+        None, "--workspace", "--cwd", help="Use a specific workspace directory for doctor checks."
+    ),
+    static: bool = typer.Option(
+        False, "--static", help="Run only local static checks; skip Ollama and memory probes."
+    ),
+    fail_on_error: bool = typer.Option(
+        False, "--fail-on-error", help="Exit 1 when any doctor check fails."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Run agentX health checks for humans or automation."""
     settings = Settings(workspace=resolve_headless_workspace(workspace))
@@ -9314,19 +10605,32 @@ def doctor_command(
         finally:
             ollama.close()
     structured_format = structured_output_format(json_output, output_format)
-    print_doctor_payload(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_doctor_payload(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
     raise typer.Exit(code=doctor_exit_code(payload, fail_on_error=fail_on_error))
 
 
 @app.command("models")
 def models(
-    workspace: str | None = typer.Option(None, "--workspace", "--cwd", help="Use a specific workspace directory for config resolution."),
+    workspace: str | None = typer.Option(
+        None,
+        "--workspace",
+        "--cwd",
+        help="Use a specific workspace directory for config resolution.",
+    ),
     backend: str | None = typer.Option(None, "--backend", help="Override LLM backend."),
     base_url: str | None = typer.Option(None, "--base-url", help="Override LLM backend base URL."),
-    model: str | None = typer.Option(None, "--model", help="Override model used to initialize the backend client."),
-    timeout: float | None = typer.Option(None, "--timeout", help="Override request timeout seconds."),
+    model: str | None = typer.Option(
+        None, "--model", help="Override model used to initialize the backend client."
+    ),
+    timeout: float | None = typer.Option(
+        None, "--timeout", help="Override request timeout seconds."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """List models for the selected LLM backend."""
     payload = model_list_payload(
@@ -9337,27 +10641,49 @@ def models(
         timeout_override=timeout,
     )
     structured_format = structured_output_format(json_output, output_format)
-    print_model_list(payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_model_list(
+        payload, json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("version")
 def version_command(
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Show agentX and Python versions."""
     structured_format = structured_output_format(json_output, output_format)
-    print_version(json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl")
+    print_version(
+        json_output=structured_format != "plain", jsonl_output=structured_format == "jsonl"
+    )
 
 
 @app.command("handoff-inspect")
 def handoff_inspect(
-    source: str = typer.Argument(..., help="Headless JSON/JSONL payload file to inspect, or '-' for stdin."),
-    field: str | None = typer.Option(None, "--field", help="Print one takeover field, e.g. resume_command or recovery_checklist."),
-    next_prompt: str | None = typer.Option(None, "--next-prompt", help="Replace the resume command placeholder with this prompt."),
-    next_prompt_file: str | None = typer.Option(None, "--next-prompt-file", help="Replace the resume command placeholder with --prompt-file PATH."),
-    resume_output_format: str | None = typer.Option(None, "--resume-output-format", help="Rewrite resume_command output mode: json or jsonl."),
-    briefing_output: str | None = typer.Option(None, "--briefing-output", help="Write a Markdown handoff briefing inside the current workspace."),
+    source: str = typer.Argument(
+        ..., help="Headless JSON/JSONL payload file to inspect, or '-' for stdin."
+    ),
+    field: str | None = typer.Option(
+        None, "--field", help="Print one takeover field, e.g. resume_command or recovery_checklist."
+    ),
+    next_prompt: str | None = typer.Option(
+        None, "--next-prompt", help="Replace the resume command placeholder with this prompt."
+    ),
+    next_prompt_file: str | None = typer.Option(
+        None,
+        "--next-prompt-file",
+        help="Replace the resume command placeholder with --prompt-file PATH.",
+    ),
+    resume_output_format: str | None = typer.Option(
+        None, "--resume-output-format", help="Rewrite resume_command output mode: json or jsonl."
+    ),
+    briefing_output: str | None = typer.Option(
+        None,
+        "--briefing-output",
+        help="Write a Markdown handoff briefing inside the current workspace.",
+    ),
     use_payload_exit_code: bool = typer.Option(
         False,
         "--use-payload-exit-code",
@@ -9374,17 +10700,23 @@ def handoff_inspect(
         help=f"Exit 1 unless schema_version is {HEADLESS_PAYLOAD_SCHEMA_VERSION}.",
     ),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Inspect a headless payload and print takeover fields."""
     structured_format = structured_output_format(json_output, output_format)
     if next_prompt and next_prompt_file:
-        raise typer.BadParameter("use only one continuation source: --next-prompt or --next-prompt-file")
+        raise typer.BadParameter(
+            "use only one continuation source: --next-prompt or --next-prompt-file"
+        )
     payload = inspect_headless_handoff_payload(load_headless_payload_source(source))
     payload = apply_handoff_next_prompt(payload, next_prompt)
     payload = apply_handoff_next_prompt_file(payload, next_prompt_file)
     payload = apply_handoff_resume_output_format(payload, resume_output_format)
-    write_handoff_briefing_output(resolve_handoff_briefing_output(Path.cwd(), briefing_output), payload)
+    write_handoff_briefing_output(
+        resolve_handoff_briefing_output(Path.cwd(), briefing_output), payload
+    )
     exit_code = handoff_inspect_exit_code(payload, use_payload_exit_code=use_payload_exit_code)
     if require_handoff and not handoff_takeover_ready(payload):
         exit_code = 1
@@ -9393,7 +10725,9 @@ def handoff_inspect(
     if field:
         field_payload = handoff_inspect_field_payload(payload, field)
         if structured_format != "plain":
-            print_structured_payload(field_payload, output_format=structured_format, event="handoff_inspect_field")
+            print_structured_payload(
+                field_payload, output_format=structured_format, event="handoff_inspect_field"
+            )
             raise typer.Exit(code=exit_code)
         sys.stdout.write(format_handoff_inspect_field_plain(field_payload))
         sys.stdout.write("\n")
@@ -9410,32 +10744,57 @@ def handoff_inspect(
 
 @app.command("handoff-resume")
 def handoff_resume(
-    source: str = typer.Argument(..., help="Headless artifact directory or result JSON/JSONL payload file."),
-    next_prompt: str | None = typer.Option(None, "--next-prompt", help="Replace the resume command placeholder with this prompt."),
-    next_prompt_file: str | None = typer.Option(None, "--next-prompt-file", help="Replace the resume command placeholder with --prompt-file PATH."),
-    resume_output_format: str | None = typer.Option(None, "--resume-output-format", help="Rewrite resume_command output mode: json or jsonl."),
-    allow_missing_handoff: bool = typer.Option(False, "--allow-missing-handoff", help="Exit 0 even when the payload is not ready for takeover."),
+    source: str = typer.Argument(
+        ..., help="Headless artifact directory or result JSON/JSONL payload file."
+    ),
+    next_prompt: str | None = typer.Option(
+        None, "--next-prompt", help="Replace the resume command placeholder with this prompt."
+    ),
+    next_prompt_file: str | None = typer.Option(
+        None,
+        "--next-prompt-file",
+        help="Replace the resume command placeholder with --prompt-file PATH.",
+    ),
+    resume_output_format: str | None = typer.Option(
+        None, "--resume-output-format", help="Rewrite resume_command output mode: json or jsonl."
+    ),
+    allow_missing_handoff: bool = typer.Option(
+        False,
+        "--allow-missing-handoff",
+        help="Exit 0 even when the payload is not ready for takeover.",
+    ),
     require_schema_version: bool = typer.Option(
         False,
         "--require-schema-version",
         help=f"Exit 1 unless schema_version is {HEADLESS_PAYLOAD_SCHEMA_VERSION}.",
     ),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Print the command and argv that would be executed."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the command and argv that would be executed."
+    ),
     execute: bool = typer.Option(False, "--execute", help="Execute the generated resume command."),
     json_output: bool = typer.Option(False, "--json", help="Print a structured JSON result."),
-    output_format: str = typer.Option("plain", "--output-format", help="Output format: plain, json, or jsonl."),
+    output_format: str = typer.Option(
+        "plain", "--output-format", help="Output format: plain, json, or jsonl."
+    ),
 ) -> None:
     """Print a resume command from a headless artifact bundle or result payload."""
     structured_format = structured_output_format(json_output, output_format)
     if next_prompt and next_prompt_file:
-        raise typer.BadParameter("use only one continuation source: --next-prompt or --next-prompt-file")
+        raise typer.BadParameter(
+            "use only one continuation source: --next-prompt or --next-prompt-file"
+        )
     if dry_run and execute:
         raise typer.BadParameter("use only one resume action: --dry-run or --execute")
 
     raw_payload, default_prompt_file = load_handoff_resume_payload_source(source)
     payload = inspect_headless_handoff_payload(raw_payload)
     prompt_file = next_prompt_file
-    if prompt_file is None and next_prompt is None and default_prompt_file is not None and default_prompt_file.is_file():
+    if (
+        prompt_file is None
+        and next_prompt is None
+        and default_prompt_file is not None
+        and default_prompt_file.is_file()
+    ):
         prompt_file = str(default_prompt_file)
     payload = apply_handoff_next_prompt(payload, next_prompt)
     payload = apply_handoff_next_prompt_file(payload, prompt_file)
@@ -9450,7 +10809,9 @@ def handoff_resume(
     field_payload = handoff_resume_command_payload(payload)
     if dry_run:
         if structured_format != "plain":
-            print_structured_payload(field_payload, output_format=structured_format, event="handoff_resume_dry_run")
+            print_structured_payload(
+                field_payload, output_format=structured_format, event="handoff_resume_dry_run"
+            )
             raise typer.Exit(code=exit_code)
         print_command_preview([str(item) for item in field_payload["argv"]])
         raise typer.Exit(code=exit_code)
@@ -9458,7 +10819,9 @@ def handoff_resume(
     if execute:
         if exit_code != 0:
             if structured_format != "plain":
-                print_structured_payload(field_payload, output_format=structured_format, event="handoff_resume")
+                print_structured_payload(
+                    field_payload, output_format=structured_format, event="handoff_resume"
+                )
             else:
                 sys.stdout.write(format_handoff_inspect_field_plain(field_payload))
                 sys.stdout.write("\n")
@@ -9471,7 +10834,9 @@ def handoff_resume(
         raise typer.Exit(code=int(completed.returncode))
 
     if structured_format != "plain":
-        print_structured_payload(field_payload, output_format=structured_format, event="handoff_resume")
+        print_structured_payload(
+            field_payload, output_format=structured_format, event="handoff_resume"
+        )
         raise typer.Exit(code=exit_code)
     sys.stdout.write(format_handoff_inspect_field_plain(field_payload))
     sys.stdout.write("\n")
@@ -9491,7 +10856,12 @@ def chat(
     ollama, _, _ = build_runtime(settings)
     answer = ollama.chat(
         [
-            {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona, model=settings.model)},
+            {
+                "role": "system",
+                "content": build_chat_system_prompt(
+                    settings.workspace, settings.persona, model=settings.model
+                ),
+            },
             {"role": "user", "content": prompt},
         ],
         json_mode=False,
@@ -9526,7 +10896,9 @@ def shell(
     # Phase A (MT22): 優先使用新多任務系統作為真相來源
     migrate_single_task_if_needed(settings.workspace)
     approval_policy = ApprovalPolicy(
-        mode=normalize_approval_mode(project_config.approval) if project_config.approval else ApprovalMode.ASK
+        mode=normalize_approval_mode(project_config.approval)
+        if project_config.approval
+        else ApprovalMode.ASK
     )
     transcript = Transcript(settings.workspace, model=settings.model, namespace=namespace)
 
@@ -9558,7 +10930,12 @@ def shell(
     state.agent_session = agent_session
     state.memory = memory  # for hot-reload support (ACA amh backend)
     chat_messages = [
-        {"role": "system", "content": build_chat_system_prompt(settings.workspace, settings.persona, model=settings.model)}
+        {
+            "role": "system",
+            "content": build_chat_system_prompt(
+                settings.workspace, settings.persona, model=settings.model
+            ),
+        }
     ]
     history: list[tuple[str, str]] = []
     job_queue = PromptJobQueue()
@@ -9727,6 +11104,7 @@ def shell(
 
     def handle_status(state: ShellState, prompt: str):
         """顯示目前 shell 狀態（含安全姿勢）— delegates to runtime handler."""
+
         def _status_panel(content: str, title: str) -> None:
             console.print(Panel(content, title=title, border_style="cyan"))
 
@@ -9926,9 +11304,13 @@ def shell(
         try:
             learnings = state.agent_session.reflect_and_learn()
             if learnings:
-                print_raw(f"Generated {len(learnings)} learning proposals. Check .agentx/learning/proposals/ and review/approve before applying (per AGENTX.md Self-Improvement Protocol + ai-tetsu proposal gate).")
+                print_raw(
+                    f"Generated {len(learnings)} learning proposals. Check .agentx/learning/proposals/ and review/approve before applying (per AGENTX.md Self-Improvement Protocol + ai-tetsu proposal gate)."
+                )
                 for proposal in learnings:
-                    print_raw(f"  - {proposal['id']}: {proposal['title']} ({proposal['type']}) status={proposal.get('status')}")
+                    print_raw(
+                        f"  - {proposal['id']}: {proposal['title']} ({proposal['type']}) status={proposal.get('status')}"
+                    )
             else:
                 print_raw("No new learning proposals generated (or learning disabled).")
         except Exception as e:
@@ -9952,7 +11334,9 @@ def shell(
         chat_messages[:] = [
             {
                 "role": "system",
-                "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona, model=state.settings.model),
+                "content": build_chat_system_prompt(
+                    state.settings.workspace, state.settings.persona, model=state.settings.model
+                ),
             }
         ]
         transcript.write("slash_command", {"command": prompt})
@@ -10196,7 +11580,10 @@ def shell(
         path = prompt.removeprefix("/apply ").strip()
         # 基本安全檢查（與舊邏輯一致）
         patch_path = (state.settings.workspace / path).resolve()
-        if state.settings.workspace != patch_path and state.settings.workspace not in patch_path.parents:
+        if (
+            state.settings.workspace != patch_path
+            and state.settings.workspace not in patch_path.parents
+        ):
             print_raw("patch path escapes workspace")
             return
         if not patch_path.is_file():
@@ -10244,7 +11631,9 @@ def shell(
         except ValueError:
             print_raw("usage: /approval ask|auto|off|strict|auto-approve|deny")
             return
-        transcript.write("slash_command", {"command": prompt, "approval": approval_policy.mode.value})
+        transcript.write(
+            "slash_command", {"command": prompt, "approval": approval_policy.mode.value}
+        )
         print_approval(approval_policy)
 
     register_handler("/approval", handle_approval)
@@ -10319,6 +11708,7 @@ def shell(
         # Use registry so AGENTX_BACKEND=llama_cpp continues to work.
         register_builtin_backends()
         import os as _os
+
         backend = _os.getenv("AGENTX_BACKEND", "ollama").lower()
         nonlocal ollama
         ollama = get_llm_client(
@@ -10338,7 +11728,9 @@ def shell(
     def handle_persona(state: ShellState, prompt: str):
         """查看或切換人格（default / tutor）"""
         if prompt == "/persona":
-            transcript.write("slash_command", {"command": prompt, "persona": state.settings.persona})
+            transcript.write(
+                "slash_command", {"command": prompt, "persona": state.settings.persona}
+            )
             console.print(f"persona={state.settings.persona}")
             print_raw(list_personas())
             return
@@ -10359,7 +11751,9 @@ def shell(
         chat_messages = [
             {
                 "role": "system",
-                "content": build_chat_system_prompt(state.settings.workspace, state.settings.persona, model=state.settings.model),
+                "content": build_chat_system_prompt(
+                    state.settings.workspace, state.settings.persona, model=state.settings.model
+                ),
             }
         ]
 
@@ -10377,7 +11771,12 @@ def shell(
         # /remember is explicit human input → human_confirmed (ACA L2 Trust)
         result = tools.run(
             "memory_write",
-            {"content": content, "namespace": state.namespace, "tier": "human_confirmed", "memory_type": "note"},
+            {
+                "content": content,
+                "namespace": state.namespace,
+                "tier": "human_confirmed",
+                "memory_type": "note",
+            },
         )
         transcript.write("tool", {"command": "/remember", "ok": result.ok, "content": content})
         if result.ok:
@@ -10413,7 +11812,13 @@ def shell(
         """查看或設定專案 config"""
         if prompt == "/config":
             transcript.write("slash_command", {"command": prompt})
-            print_config(state.settings, state.namespace, state.mode, approval_policy, memory=getattr(state, "memory", None))
+            print_config(
+                state.settings,
+                state.namespace,
+                state.mode,
+                approval_policy,
+                memory=getattr(state, "memory", None),
+            )
             return
 
         if prompt.startswith("/config set "):
@@ -10436,6 +11841,7 @@ def shell(
                 project_config = load_project_config(state.settings.workspace)
                 if (project_config.memory_backend or "memhall").lower() == "amh":
                     from agentx.memory_hall import AmhClient
+
                     new_memory = AmhClient(
                         store=project_config.memory_amh_store or "json",
                         store_path=project_config.memory_amh_path,
@@ -10452,14 +11858,21 @@ def shell(
                     memory_amh_path=project_config.memory_amh_path,
                 )
                 # Patch the live tool instances (the ones bound to current tools registry)
-                for mem_name in ("memory_search", "memory_write", "memory_tier_upgrade", "memory_audit"):
+                for mem_name in (
+                    "memory_search",
+                    "memory_write",
+                    "memory_tier_upgrade",
+                    "memory_audit",
+                ):
                     t = tools.get(mem_name)
                     if t is not None and hasattr(t, "memory"):
                         t.memory = new_memory
                 state.memory = new_memory
                 if state.agent_session is not None:
                     state.agent_session.memory = new_memory
-                console.print("memory client hot-swapped (immediate effect for memory commands, no restart)")
+                console.print(
+                    "memory client hot-swapped (immediate effect for memory commands, no restart)"
+                )
 
             return
 
@@ -10545,7 +11958,9 @@ def shell(
 
                     valid_status = {"pending", "in_progress", "done"}
                     if new_status not in valid_status:
-                        console.print(f"[yellow]無效的 status '{new_status}'，允許值：{valid_status}[/yellow]")
+                        console.print(
+                            f"[yellow]無效的 status '{new_status}'，允許值：{valid_status}[/yellow]"
+                        )
                         return
 
                     found = False
@@ -10606,7 +12021,9 @@ def shell(
             }
             tasks.append(new_task)
             save_tasks(state.settings.workspace, tasks)
-            console.print(f"[green]已新增任務 #{new_task['id']}: {value}[/green]（建議之後用 /task add 或 /task update 管理）")
+            console.print(
+                f"[green]已新增任務 #{new_task['id']}: {value}[/green]（建議之後用 /task add 或 /task update 管理）"
+            )
             return
 
     register_handler("/task", handle_task)
@@ -10643,7 +12060,9 @@ def shell(
                         print_raw(f"\nforce exiting; cancelled queued jobs: {ids}")
                     else:
                         print_raw("\nforce exiting; running job was already cancelling")
-                    transcript.write("session_end", {"reason": "keyboard_interrupt", "forced": True})
+                    transcript.write(
+                        "session_end", {"reason": "keyboard_interrupt", "forced": True}
+                    )
                     console.print("\nbye")
                     break
                 interrupt_message = handle_keyboard_interrupt(job_queue, current_cancel)
@@ -10714,7 +12133,15 @@ def shell(
                         )
                         transcript.write("handoff", {"auto": True, "result": message})
                         print_raw(message)
-                transcript.write("session_end", {"reason": prompt, "forced": bool(job_queue.current is not None or job_queue.pending_count() > 0)})
+                transcript.write(
+                    "session_end",
+                    {
+                        "reason": prompt,
+                        "forced": bool(
+                            job_queue.current is not None or job_queue.pending_count() > 0
+                        ),
+                    },
+                )
                 console.print("\nbye")
                 break
 
@@ -10733,14 +12160,18 @@ def shell(
             # Natural language trigger for execute when in plan mode
             if state.plan_mode and is_natural_execute_trigger(prompt):
                 state.set_plan_mode(False)
-                transcript.write("slash_command", {"command": "natural_execute", "original": prompt})
+                transcript.write(
+                    "slash_command", {"command": "natural_execute", "original": prompt}
+                )
 
                 execute_message = (
                     "使用者已透過自然語言要求開始執行。\n"
                     "規劃階段結束，現在切換至執行模式。請使用工具逐步完成方案。"
                 )
                 if state.agent_session:
-                    state.agent_session.messages.append({"role": "system", "content": execute_message})
+                    state.agent_session.messages.append(
+                        {"role": "system", "content": execute_message}
+                    )
                 chat_messages.append({"role": "system", "content": execute_message})
 
                 console.print("已透過自然語言切換至執行模式。後續將可使用工具實際執行。")

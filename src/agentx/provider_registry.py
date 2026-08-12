@@ -29,7 +29,6 @@ from __future__ import annotations
 from typing import Callable, Dict, Protocol, Sequence
 
 
-
 class LLMClient(Protocol):
     """Common protocol that all LLM backends must satisfy.
 

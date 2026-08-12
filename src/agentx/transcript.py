@@ -53,7 +53,11 @@ def find_transcript(
         return direct
 
     with_suffix = (directory / f"{name}.jsonl").resolve()
-    if with_suffix.is_file() and directory.resolve() in with_suffix.parents and with_suffix != excluded:
+    if (
+        with_suffix.is_file()
+        and directory.resolve() in with_suffix.parents
+        and with_suffix != excluded
+    ):
         return with_suffix
     return None
 
@@ -118,7 +122,9 @@ def transcript_overview(path: Path) -> dict[str, str | int]:
                 last_text = str(record.get("content", "")).replace("\n", " ")[:120]
             elif event in {"handoff", "resume", "compact"}:
                 last_event = event
-                last_text = str(record.get("result") or record.get("summary") or "").replace("\n", " ")[:120]
+                last_text = str(record.get("result") or record.get("summary") or "").replace(
+                    "\n", " "
+                )[:120]
             elif event == "approval":
                 approval_count += 1
                 if record.get("allowed") is False:
@@ -145,7 +151,9 @@ def _format_approval_overview(total: int, denied: int) -> str:
     return f"{total}/{denied} denied"
 
 
-def approval_receipts(path: Path, limit: int = 20, *, denied_only: bool = False) -> list[dict[str, Any]]:
+def approval_receipts(
+    path: Path, limit: int = 20, *, denied_only: bool = False
+) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     with path.open(encoding="utf-8") as handle:
         for line in handle:

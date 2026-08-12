@@ -41,7 +41,9 @@ def _write_denied_session(path: Path) -> None:
     )
 
 
-def _write_artifact_bundle(root: Path, name: str, *, needs_handoff: bool = True, mtime: int = 1) -> Path:
+def _write_artifact_bundle(
+    root: Path, name: str, *, needs_handoff: bool = True, mtime: int = 1
+) -> Path:
     bundle = root / name
     bundle.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -62,7 +64,9 @@ def _write_artifact_bundle(root: Path, name: str, *, needs_handoff: bool = True,
     return bundle
 
 
-def _write_workflow_run_artifact(root: Path, name: str, *, ok: bool = False, mtime: int = 10) -> Path:
+def _write_workflow_run_artifact(
+    root: Path, name: str, *, ok: bool = False, mtime: int = 10
+) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     target = root / name
     payload = {
@@ -108,7 +112,9 @@ def test_next_payload_prioritizes_denied_approval(tmp_path: Path) -> None:
 
     assert payload["signals"]["denied_approval_count"] == 1  # type: ignore[index]
     assert payload["recommendations"][0]["kind"] == "approval_audit"  # type: ignore[index]
-    assert payload["recommended_command"] == "agentx approvals latest --denied --json --fail-on-denied"
+    assert (
+        payload["recommended_command"] == "agentx approvals latest --denied --json --fail-on-denied"
+    )
     assert payload["recommended_kind"] == "approval_audit"
 
 
@@ -137,7 +143,10 @@ def test_next_payload_recommends_latest_workflow_run_artifact_when_clean(tmp_pat
     assert payload["signals"]["latest_workflow_resume_ready"] is True  # type: ignore[index]
     assert payload["signals"]["latest_workflow_missing_input_count"] == 0  # type: ignore[index]
     assert payload["recommendations"][0]["kind"] == "workflow_artifact_inspect"  # type: ignore[index]
-    assert payload["recommendations"][0]["command"] == "agentx workflow-inspect .agentx/runs/workflow-memory.json --json"  # type: ignore[index]
+    assert (
+        payload["recommendations"][0]["command"]
+        == "agentx workflow-inspect .agentx/runs/workflow-memory.json --json"
+    )  # type: ignore[index]
     assert payload["recommended_kind"] == "workflow_artifact_inspect"
     assert payload["recommended_risk"] == "GREEN"
 
@@ -153,21 +162,31 @@ def test_next_payload_recommends_workflow_resume_for_ready_artifact(tmp_path: Pa
     assert payload["signals"]["latest_workflow_run_stopped"] is False  # type: ignore[index]
     assert payload["signals"]["latest_workflow_resume_ready"] is True  # type: ignore[index]
     assert payload["signals"]["latest_workflow_chain_status"] == "ready"  # type: ignore[index]
-    assert payload["signals"]["latest_workflow_next_result_output"] == ".agentx/runs/workflow-memory-next.json"  # type: ignore[index]
+    assert (
+        payload["signals"]["latest_workflow_next_result_output"]
+        == ".agentx/runs/workflow-memory-next.json"
+    )  # type: ignore[index]
     assert payload["recommendations"][0]["kind"] == "workflow_resume"  # type: ignore[index]
-    assert payload["recommendations"][0]["command"] == "agentx workflow-resume .agentx/runs/workflow-memory.json --result-output auto --dry-run --json"  # type: ignore[index]
+    assert (
+        payload["recommendations"][0]["command"]
+        == "agentx workflow-resume .agentx/runs/workflow-memory.json --result-output auto --dry-run --json"
+    )  # type: ignore[index]
     assert payload["recommendations"][0]["command_plan"]["risk"] == "GREEN"  # type: ignore[index]
     assert payload["recommended_kind"] == "workflow_resume"
 
 
-def test_next_workflow_resume_auto_result_output_chain_is_discoverable(tmp_path: Path, monkeypatch) -> None:
+def test_next_workflow_resume_auto_result_output_chain_is_discoverable(
+    tmp_path: Path, monkeypatch
+) -> None:
     _git_repo(tmp_path)
     runs = tmp_path / ".agentx" / "runs"
     runs.mkdir(parents=True, exist_ok=True)
     source = runs / "workflow-memory.json"
     source.write_text(
         json.dumps(
-            workflow_run_payload("memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}),
+            workflow_run_payload(
+                "memory", workspace=tmp_path, inputs={"完成與待辦": "完成 AMH 交接"}
+            ),
             ensure_ascii=False,
         ),
         encoding="utf-8",
@@ -202,7 +221,10 @@ def test_next_workflow_resume_auto_result_output_chain_is_discoverable(tmp_path:
     assert artifacts_result.exit_code == 0, artifacts_result.output
     artifacts_payload = json.loads(artifacts_result.output)
     assert artifacts_payload["latest_artifact"]["artifact_type"] == "workflow_run"
-    assert artifacts_payload["latest_artifact"]["relative_path"] == ".agentx/runs/workflow-memory-next.json"
+    assert (
+        artifacts_payload["latest_artifact"]["relative_path"]
+        == ".agentx/runs/workflow-memory-next.json"
+    )
     assert artifacts_payload["latest_artifact"]["workflow_query"] == "memory"
 
 
@@ -251,7 +273,10 @@ def test_next_payload_defaults_to_inspect_when_idle(tmp_path: Path) -> None:
     assert payload["signals"]["workflow_recommendation_count"] == 2  # type: ignore[index]
     assert payload["recommended_kind"] == "inspect"
     assert payload["recommended_risk"] == "GREEN"
-    assert payload["recommendations"][0]["reason"] == "workspace is clean and no active runner handoff was detected"  # type: ignore[index]
+    assert (
+        payload["recommendations"][0]["reason"]
+        == "workspace is clean and no active runner handoff was detected"
+    )  # type: ignore[index]
     assert payload["recommendations"][0]["risk"] == "GREEN"  # type: ignore[index]
     assert payload["recommendations"][0]["command_plan"]["schema"] == "agentx.command_plan.v1"  # type: ignore[index]
 
@@ -270,7 +295,9 @@ def test_next_json_outputs_payload(tmp_path: Path) -> None:
 def test_next_jsonl_outputs_event_envelope(tmp_path: Path) -> None:
     _git_repo(tmp_path)
 
-    result = CliRunner().invoke(app, ["next", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["next", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)

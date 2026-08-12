@@ -71,7 +71,9 @@ def test_tasks_json_outputs_filtered_tasks(tmp_path) -> None:  # noqa: ANN001
 def test_tasks_jsonl_outputs_event_envelope(tmp_path) -> None:  # noqa: ANN001
     _write_tasks(tmp_path)
 
-    result = CliRunner().invoke(app, ["tasks", "--workspace", str(tmp_path), "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["tasks", "--workspace", str(tmp_path), "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)
@@ -157,7 +159,9 @@ def test_task_update_jsonl_outputs_event(tmp_path) -> None:  # noqa: ANN001
 def test_task_update_blocks_missing_task(tmp_path) -> None:  # noqa: ANN001
     _write_tasks(tmp_path)
 
-    result = CliRunner().invoke(app, ["task-update", "99", "done", "--workspace", str(tmp_path), "--json"])
+    result = CliRunner().invoke(
+        app, ["task-update", "99", "done", "--workspace", str(tmp_path), "--json"]
+    )
 
     assert result.exit_code == 1
     payload = json.loads(result.output)
@@ -169,7 +173,9 @@ def test_task_update_blocks_missing_task(tmp_path) -> None:  # noqa: ANN001
 def test_task_update_blocks_invalid_status(tmp_path) -> None:  # noqa: ANN001
     _write_tasks(tmp_path)
 
-    result = CliRunner().invoke(app, ["task-update", "1", "weird", "--workspace", str(tmp_path), "--json"])
+    result = CliRunner().invoke(
+        app, ["task-update", "1", "weird", "--workspace", str(tmp_path), "--json"]
+    )
 
     assert result.exit_code == 1
     payload = json.loads(result.output)

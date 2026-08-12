@@ -36,11 +36,14 @@ def test_transcript_overview_returns_session_metadata(tmp_path: Path) -> None:
     session = tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl"
     session.parent.mkdir(parents=True)
     session.write_text(
-        "\n".join([
-            '{"ts":"2026-01-02T00:00:00","event":"session_start","model":"gemma4:31b","namespace":"project:agentX"}',
-            '{"ts":"2026-01-02T00:00:01","event":"user","content":"請看 README"}',
-            '{"ts":"2026-01-02T00:00:02","event":"assistant","content":"已整理重點"}',
-        ]) + "\n",
+        "\n".join(
+            [
+                '{"ts":"2026-01-02T00:00:00","event":"session_start","model":"gemma4:31b","namespace":"project:agentX"}',
+                '{"ts":"2026-01-02T00:00:01","event":"user","content":"請看 README"}',
+                '{"ts":"2026-01-02T00:00:02","event":"assistant","content":"已整理重點"}',
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -61,12 +64,15 @@ def test_transcript_overview_counts_approval_receipts(tmp_path: Path) -> None:
     session = tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl"
     session.parent.mkdir(parents=True)
     session.write_text(
-        "\n".join([
-            '{"ts":"2026-01-02T00:00:00","event":"session_start","model":"gemma4:31b","namespace":"project:agentX"}',
-            '{"ts":"2026-01-02T00:00:01","event":"approval","tool":"memory_write","risk":"YELLOW","source":"auto_approved","allowed":true}',
-            '{"ts":"2026-01-02T00:00:02","event":"approval","tool":"apply_patch","risk":"YELLOW","source":"manual_denied","allowed":false}',
-            '{"ts":"2026-01-02T00:00:03","event":"assistant","content":"done"}',
-        ]) + "\n",
+        "\n".join(
+            [
+                '{"ts":"2026-01-02T00:00:00","event":"session_start","model":"gemma4:31b","namespace":"project:agentX"}',
+                '{"ts":"2026-01-02T00:00:01","event":"approval","tool":"memory_write","risk":"YELLOW","source":"auto_approved","allowed":true}',
+                '{"ts":"2026-01-02T00:00:02","event":"approval","tool":"apply_patch","risk":"YELLOW","source":"manual_denied","allowed":false}',
+                '{"ts":"2026-01-02T00:00:03","event":"assistant","content":"done"}',
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -82,10 +88,13 @@ def test_format_approval_receipts_lists_recent_decisions(tmp_path: Path) -> None
     session = tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl"
     session.parent.mkdir(parents=True)
     session.write_text(
-        "\n".join([
-            '{"ts":"2026-01-02T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}',
-            '{"ts":"2026-01-02T00:00:01","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}',
-        ]) + "\n",
+        "\n".join(
+            [
+                '{"ts":"2026-01-02T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}',
+                '{"ts":"2026-01-02T00:00:01","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}',
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -102,10 +111,13 @@ def test_format_approval_receipts_can_filter_denied_decisions(tmp_path: Path) ->
     session = tmp_path / ".agentx" / "sessions" / "20260102-000000.jsonl"
     session.parent.mkdir(parents=True)
     session.write_text(
-        "\n".join([
-            '{"ts":"2026-01-02T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}',
-            '{"ts":"2026-01-02T00:00:01","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}',
-        ]) + "\n",
+        "\n".join(
+            [
+                '{"ts":"2026-01-02T00:00:00","event":"approval","tool":"memory_write","risk":"YELLOW","approval_mode":"auto","source":"auto_approved","allowed":true}',
+                '{"ts":"2026-01-02T00:00:01","event":"approval","tool":"apply_patch","risk":"YELLOW","approval_mode":"ask","source":"manual_denied","allowed":false}',
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
 

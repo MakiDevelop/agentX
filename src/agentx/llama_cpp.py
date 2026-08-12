@@ -45,7 +45,8 @@ class LlamaCppClient:
         for attempt in range(3):
             try:
                 response = self._client.post(
-                    f"{self.base_url}/v1/chat/completions", json=payload,
+                    f"{self.base_url}/v1/chat/completions",
+                    json=payload,
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -54,7 +55,8 @@ class LlamaCppClient:
                 if attempt == 2:
                     raise
                 import time
-                time.sleep(2 ** attempt)
+
+                time.sleep(2**attempt)
         return ""
 
     def _chat_stream(
@@ -75,12 +77,15 @@ class LlamaCppClient:
         """
         chunks: list[str] = []
         with self._client.stream(
-            "POST", f"{self.base_url}/v1/chat/completions", json=payload,
+            "POST",
+            f"{self.base_url}/v1/chat/completions",
+            json=payload,
         ) as response:
             response.raise_for_status()
             for event in iterate_sse_messages(response.iter_lines()):
                 if cancel_event is not None and cancel_event.is_set():
                     from agentx.ollama import OllamaCancelledError
+
                     raise OllamaCancelledError("Request cancelled")
                 data_str = event.get("data", "").strip()
                 if not data_str:
@@ -123,6 +128,7 @@ class LlamaCppClient:
 # Self-register with the provider registry so that simply importing
 # agentx.llama_cpp makes the "llama_cpp" backend available.
 register_llm_backend("llama_cpp", LlamaCppClient)
+
 
 def _extract_content(data: dict[str, Any]) -> str:
     choices = data.get("choices", [])

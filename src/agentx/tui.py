@@ -71,7 +71,6 @@ class AgentXTui:
 
         # 注意：不要對包含 Frame 的容器強制小 height，否則 terminal 太小時會報 "Window too small..."
 
-
         key_bindings = KeyBindings()
 
         @key_bindings.add("c-c")
@@ -88,7 +87,7 @@ class AgentXTui:
                     [
                         self.output,
                         status,
-                        Window(height=1),   # 額外 margin-up，讓輸入框跟狀態列有呼吸空間
+                        Window(height=1),  # 額外 margin-up，讓輸入框跟狀態列有呼吸空間
                         input_frame,
                     ]
                 ),

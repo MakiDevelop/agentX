@@ -60,19 +60,19 @@ def _fix_invalid_escapes(s: str) -> str:
     in_string = False
     while i < len(s):
         ch = s[i]
-        if ch == '"' and (i == 0 or s[i - 1] != '\\'):
+        if ch == '"' and (i == 0 or s[i - 1] != "\\"):
             in_string = not in_string
             result.append(ch)
-        elif ch == '\\' and in_string and i + 1 < len(s):
+        elif ch == "\\" and in_string and i + 1 < len(s):
             next_ch = s[i + 1]
             if next_ch in valid_escapes:
                 result.append(ch)
             else:
-                result.append('\\\\')
+                result.append("\\\\")
         else:
             result.append(ch)
         i += 1
-    return ''.join(result)
+    return "".join(result)
 
 
 def _first_balanced_object(raw: str) -> str | None:

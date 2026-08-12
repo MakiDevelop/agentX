@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from agentx.infrastructure_context import build_infrastructure_context, infrastructure_context_metadata, infrastructure_maps
+from agentx.infrastructure_context import (
+    build_infrastructure_context,
+    infrastructure_context_metadata,
+    infrastructure_maps,
+)
 
 
 def test_infrastructure_maps_point_to_expected_files(tmp_path: Path) -> None:
@@ -270,7 +274,9 @@ def test_build_infrastructure_context_respects_caps(tmp_path: Path) -> None:
     infra.mkdir()
     (infra / "project-map.md").write_text("A" * 200, encoding="utf-8")
 
-    context = build_infrastructure_context("project", home=tmp_path, per_file_chars=10, max_chars=1000)
+    context = build_infrastructure_context(
+        "project", home=tmp_path, per_file_chars=10, max_chars=1000
+    )
 
     assert len(context) <= 1000
     assert "A" * 10 in context

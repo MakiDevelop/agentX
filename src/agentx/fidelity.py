@@ -38,7 +38,7 @@ def run_fidelity_probe(workspace: Path) -> list[FidelityCheck]:
             "bootstrap-loads-agentx-first",
             bool(
                 bootstrap
-                and 'LOCAL_INSTRUCTION_FILES = (' in bootstrap
+                and "LOCAL_INSTRUCTION_FILES = (" in bootstrap
                 and 'BootstrapFile("AGENTX.md"' in bootstrap
                 and bootstrap.find('BootstrapFile("AGENTX.md"')
                 < bootstrap.find('BootstrapFile("AGENTS.md"')

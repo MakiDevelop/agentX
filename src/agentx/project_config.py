@@ -10,7 +10,17 @@ from agentx.approval import normalize_approval_mode
 from agentx.persona import normalize_persona
 
 
-CONFIG_KEYS = {"model", "namespace", "mode", "auto_handoff", "approval", "persona", "memory_backend", "memory_amh_store", "memory_amh_path"}
+CONFIG_KEYS = {
+    "model",
+    "namespace",
+    "mode",
+    "auto_handoff",
+    "approval",
+    "persona",
+    "memory_backend",
+    "memory_amh_store",
+    "memory_amh_path",
+}
 
 
 @dataclass(frozen=True)
@@ -82,7 +92,16 @@ def write_project_config(workspace: Path, config: ProjectConfig) -> None:
     path = config_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = ["[agentx]"]
-    for key in ("model", "namespace", "mode", "approval", "persona", "memory_backend", "memory_amh_store", "memory_amh_path"):
+    for key in (
+        "model",
+        "namespace",
+        "mode",
+        "approval",
+        "persona",
+        "memory_backend",
+        "memory_amh_store",
+        "memory_amh_path",
+    ):
         value = getattr(config, key)
         if value is not None:
             lines.append(f"{key} = {json.dumps(value)}")
@@ -110,7 +129,9 @@ def _parse_value(key: str, value: str) -> str | bool:
         try:
             return normalize_approval_mode(value).value
         except ValueError as exc:
-            raise ValueError("approval must be ask, auto, off, strict, auto-approve, or deny") from exc
+            raise ValueError(
+                "approval must be ask, auto, off, strict, auto-approve, or deny"
+            ) from exc
     if key == "auto_handoff":
         normalized = value.lower()
         if normalized in {"1", "true", "yes", "on"}:

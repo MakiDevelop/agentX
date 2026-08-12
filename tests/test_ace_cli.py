@@ -3,7 +3,13 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from agentx.ace import ace_answer_payload, ace_append_payload, ace_briefing_payload, ace_init_payload, ace_status_payload
+from agentx.ace import (
+    ace_answer_payload,
+    ace_append_payload,
+    ace_briefing_payload,
+    ace_init_payload,
+    ace_status_payload,
+)
 from agentx.cli import app
 
 

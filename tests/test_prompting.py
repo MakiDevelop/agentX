@@ -44,7 +44,9 @@ def test_slash_completer_uses_catalog_metadata():
     completer = SlashCommandCompleter(catalog=COMMAND_CATALOG)
 
     completions = list(completer.get_completions(Document("/workflow"), object()))
-    workflow = next(completion for completion in completions if completion.display_text == "/workflow NAME")
+    workflow = next(
+        completion for completion in completions if completion.display_text == "/workflow NAME"
+    )
 
     assert workflow.text == "/workflow "
     assert "GREEN" in workflow.display_meta_text

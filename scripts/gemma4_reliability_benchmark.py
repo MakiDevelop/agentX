@@ -12,6 +12,7 @@ Usage (when ollama gemma4 available):
 
 Expected: high success on small verifiable tasks, low invalid reflection, use of task list + verification.
 """
+
 import sys
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from agentx.runtime_prompt import (
 )
 from agentx.persona import persona_prompt, normalize_persona
 
+
 def has_gemma_scaffolding(text: str) -> bool:
     """Check if the gemma4 compensation layer or persona is present."""
     keywords = [
@@ -37,10 +39,11 @@ def has_gemma_scaffolding(text: str) -> bool:
     ]
     return any(kw in text for kw in keywords)
 
+
 def run_mock_benchmark():
     print("=== Gemma4 Reliability Benchmark (MOCK mode) ===")
     print("Verifying that gemma4-specific intelligence scaffolding is correctly wired.")
-    
+
     # 1. Prompt builders with gemma model
     for name, builder in [
         ("agent", build_agent_system_prompt),
@@ -58,29 +61,34 @@ def run_mock_benchmark():
             p = builder(model="gemma4:31b")
         assert has_gemma_scaffolding(p), f"{name} prompt missing gemma scaffolding"
         print(f"  - {name} prompt: has gemma scaffolding PASS")
-    
+
     # 2. Persona auto for gemma model + default persona
     p = persona_prompt("default", model="gemma4:e2b")
     assert "gemma4" in normalize_persona("default") or "Gemma4" in p, "persona not auto gemma4"
     print("  - persona auto-switch for gemma model: PASS")
-    
+
     # 3. LLM compactor is instantiable (even without real llm for mock)
     # We just check the class exists and can be mentioned
     print("  - LLMContextCompactor class available for gemma: PASS")
-    
+
     # 4. Simulate a session with gemma model would get compactor (via the logic we wired)
     # (we don't instantiate full here to avoid ollama dep)
     print("  - compactor wiring in loop/coordinator/orchestrator/cli: (verified in code) PASS")
-    
+
     print("\n=== MOCK BENCHMARK: ALL CHECKS PASSED ===")
     print("When real gemma4 model is available, extend this script to run actual headless tasks")
     print("and assert e.g. success_rate > 0.8, max_reflections_per_task < 3, etc.")
     return True
 
+
 if __name__ == "__main__":
     if "--real" in sys.argv:
-        print("Real mode not implemented in this skeleton (would require running ollama gemma4 and AgentLoop with real tasks).")
-        print("See previous Gemma4 optimizations for the hooks (prompts, compactor, verify injection, MH lessons).")
+        print(
+            "Real mode not implemented in this skeleton (would require running ollama gemma4 and AgentLoop with real tasks)."
+        )
+        print(
+            "See previous Gemma4 optimizations for the hooks (prompts, compactor, verify injection, MH lessons)."
+        )
         sys.exit(0)
     else:
         success = run_mock_benchmark()

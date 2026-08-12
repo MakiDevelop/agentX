@@ -13,10 +13,11 @@
 # 此檔案中的測試**不會**被視為新功能覆蓋的一部分。
 
 import pytest
+
 pytest.importorskip(
     "agentx.task",
     reason="task.py is legacy (MT22); this test file is kept ONLY for historical compatibility verification. "
-           "All new tests should use tests/test_tasks.py . Module will be removed when checklist conditions met.",
+    "All new tests should use tests/test_tasks.py . Module will be removed when checklist conditions met.",
 )
 
 from agentx.task import clear_task, finish_task, load_task, start_task

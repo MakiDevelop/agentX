@@ -138,7 +138,9 @@ class Coordinator:
         step: PlanStep,
         completed: list[StepResult],
     ) -> StepResult:
-        compactor = LLMContextCompactor(self.ollama) if "gemma" in self.settings.model.lower() else None
+        compactor = (
+            LLMContextCompactor(self.ollama) if "gemma" in self.settings.model.lower() else None
+        )
         session = AgentSession(
             settings=self.settings,
             ollama=self.ollama,
@@ -156,9 +158,7 @@ class Coordinator:
             )
             or "（尚未有完成的子任務）"
         )
-        upcoming_block = "\n".join(
-            f"  {i}. {s.title}" for i, s in enumerate(plan.steps, start=1)
-        )
+        upcoming_block = "\n".join(f"  {i}. {s.title}" for i, s in enumerate(plan.steps, start=1))
         prompt = (
             f"整體目標：\n{goal}\n\n"
             f"完整計畫：\n{upcoming_block}\n\n"
@@ -185,9 +185,7 @@ class Coordinator:
             f"成功={r.success}\n摘要：{_truncate(r.summary, 800)}"
             for i, r in enumerate(results, start=1)
         )
-        plan_block = "\n".join(
-            f"  {i}. {s.title}" for i, s in enumerate(plan.steps, start=1)
-        )
+        plan_block = "\n".join(f"  {i}. {s.title}" for i, s in enumerate(plan.steps, start=1))
         messages = [
             {"role": "system", "content": MERGE_SYSTEM_PROMPT},
             {

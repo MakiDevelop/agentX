@@ -8,8 +8,11 @@ from agentx.session_store import SessionEntry, SessionStore, fork_session
 
 def test_session_entry_roundtrip() -> None:
     entry = SessionEntry(
-        id="000001", role="user", content="hello",
-        parent_id="000000", metadata={"key": "val"},
+        id="000001",
+        role="user",
+        content="hello",
+        parent_id="000000",
+        metadata={"key": "val"},
     )
     d = entry.to_dict()
     restored = SessionEntry.from_dict(d)
@@ -72,7 +75,9 @@ def test_session_store_append_and_replay(tmp_path: Path) -> None:
 def test_session_store_load_existing(tmp_path: Path) -> None:
     path = tmp_path / "test.jsonl"
     lines = [
-        json.dumps({"id": "000000", "ts": "2026-01-01T00:00:00", "role": "system", "content": "start"}),
+        json.dumps(
+            {"id": "000000", "ts": "2026-01-01T00:00:00", "role": "system", "content": "start"}
+        ),
         json.dumps({"id": "000001", "ts": "2026-01-01T00:00:01", "role": "user", "content": "hi"}),
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -156,12 +161,14 @@ def test_persistence_in_agent_session(tmp_path: Path) -> None:
 
     class FakeOllama:
         model = "fake"
+
         def chat(self, messages, *, json_mode=False, on_delta=None, cancel_event=None):
             return '{"type":"final","content":"done"}'
 
     class FakeMemory:
         def search(self, query, namespace="shared", limit=5):
             return "[]"
+
         def write(self, content, namespace="agent:agentx"):
             return "ok"
 
@@ -170,7 +177,9 @@ def test_persistence_in_agent_session(tmp_path: Path) -> None:
     memory = FakeMemory()
     registry = ToolRegistry(builtin_tools(tmp_path, memory))  # type: ignore[arg-type]
     session = AgentSession(
-        settings=settings, ollama=ollama, tools=registry,  # type: ignore[arg-type]
+        settings=settings,
+        ollama=ollama,
+        tools=registry,  # type: ignore[arg-type]
         memory=memory,  # type: ignore[arg-type]
     )
     session.enable_persistence()

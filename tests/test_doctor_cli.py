@@ -93,8 +93,14 @@ def test_doctor_static_warns_for_workflow_artifact_needing_inspect(tmp_path) -> 
     assert payload["ok"] is True
     assert payload["warnings"] == ["workflow_artifact_needs_inspect"]
     assert payload["workflow_artifact_health"]["status"] == "needs_inspect"
-    assert payload["workflow_artifact_health"]["latest_artifact"] == ".agentx/runs/workflow-memory.json"
-    assert payload["workflow_artifact_health"]["recommended_command"] == "agentx workflow-inspect .agentx/runs/workflow-memory.json --json"
+    assert (
+        payload["workflow_artifact_health"]["latest_artifact"]
+        == ".agentx/runs/workflow-memory.json"
+    )
+    assert (
+        payload["workflow_artifact_health"]["recommended_command"]
+        == "agentx workflow-inspect .agentx/runs/workflow-memory.json --json"
+    )
 
 
 def test_doctor_static_fail_on_error_exits_one_but_prints_payload(tmp_path) -> None:  # noqa: ANN001
@@ -112,7 +118,9 @@ def test_doctor_static_fail_on_error_exits_one_but_prints_payload(tmp_path) -> N
 
 
 def test_doctor_static_jsonl_outputs_event_envelope(tmp_path) -> None:  # noqa: ANN001
-    result = CliRunner().invoke(app, ["doctor", "--workspace", str(tmp_path), "--static", "--output-format", "jsonl"])
+    result = CliRunner().invoke(
+        app, ["doctor", "--workspace", str(tmp_path), "--static", "--output-format", "jsonl"]
+    )
 
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)

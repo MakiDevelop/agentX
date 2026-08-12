@@ -66,7 +66,10 @@ def test_patch_check_payload_blocks_workspace_escape_patch_file(tmp_path: Path) 
 
     assert payload["ok"] is False
     assert payload["blockers"] == ["patch_file_escapes_workspace"]
-    assert payload["recommended_command"] == "fix patch blockers, then rerun agentx patch-check PATCH --json"
+    assert (
+        payload["recommended_command"]
+        == "fix patch blockers, then rerun agentx patch-check PATCH --json"
+    )
     assert payload["recommended_kind"] == "fix_patch_blockers"
     assert payload["recommended_risk"] == "UNKNOWN"
     assert patch_check_exit_code(payload, fail_on_blocker=True) == 1
@@ -112,14 +115,18 @@ def test_patch_check_payload_blocks_protected_patch_target(tmp_path: Path) -> No
 
     assert payload["ok"] is False
     assert "unsafe_patch_paths" in payload["blockers"]
-    assert any(item["path"] == ".agentx/state.json" and item["safe"] is False for item in payload["files"])  # type: ignore[index]
+    assert any(
+        item["path"] == ".agentx/state.json" and item["safe"] is False for item in payload["files"]
+    )  # type: ignore[index]
 
 
 def test_patch_check_json_outputs_payload(tmp_path: Path) -> None:
     _git_repo_with_file(tmp_path)
     (tmp_path / "fix.patch").write_text(_valid_patch(), encoding="utf-8")
 
-    result = CliRunner().invoke(app, ["patch-check", "fix.patch", "--workspace", str(tmp_path), "--json"])
+    result = CliRunner().invoke(
+        app, ["patch-check", "fix.patch", "--workspace", str(tmp_path), "--json"]
+    )
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -147,7 +154,14 @@ def test_patch_check_jsonl_outputs_event_envelope(tmp_path: Path) -> None:
 def test_patch_check_fail_on_blocker_exits_one_but_prints_payload(tmp_path: Path) -> None:
     result = CliRunner().invoke(
         app,
-        ["patch-check", "missing.patch", "--workspace", str(tmp_path), "--json", "--fail-on-blocker"],
+        [
+            "patch-check",
+            "missing.patch",
+            "--workspace",
+            str(tmp_path),
+            "--json",
+            "--fail-on-blocker",
+        ],
     )
 
     assert result.exit_code == 1, result.output

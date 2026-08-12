@@ -94,14 +94,28 @@ def main() -> None:
     print(f"{LOCKFILE} is staged.", file=sys.stderr)
     print("", file=sys.stderr)
     print("Review lockfile changes before committing:", file=sys.stderr)
-    print("  - confirm every new/updated package (direct + transitive) is intentional", file=sys.stderr)
-    print("  - confirm you are not pulling in brand-new same-day releases (age gate):", file=sys.stderr)
-    print("      the lockfile must have been produced with  UV_EXCLUDE_NEWER=2d uv lock", file=sys.stderr)
+    print(
+        "  - confirm every new/updated package (direct + transitive) is intentional",
+        file=sys.stderr,
+    )
+    print(
+        "  - confirm you are not pulling in brand-new same-day releases (age gate):",
+        file=sys.stderr,
+    )
+    print(
+        "      the lockfile must have been produced with  UV_EXCLUDE_NEWER=2d uv lock",
+        file=sys.stderr,
+    )
     print("      (CI cannot enforce this — it only verifies the frozen lockfile)", file=sys.stderr)
-    print("  - review any new packages that may execute code at build/install time", file=sys.stderr)
+    print(
+        "  - review any new packages that may execute code at build/install time", file=sys.stderr
+    )
     print("  - run: python scripts/check-pinned-deps.py  &&  uv lock --check", file=sys.stderr)
     print("  - consider running a vulnerability audit (pip-audit / uvx pip-audit)", file=sys.stderr)
-    print("  - if this affects published artifacts later, plan constraints / export update", file=sys.stderr)
+    print(
+        "  - if this affects published artifacts later, plan constraints / export update",
+        file=sys.stderr,
+    )
     print("", file=sys.stderr)
 
     diff = get_staged_lock_diff()

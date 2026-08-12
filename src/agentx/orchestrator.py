@@ -55,7 +55,9 @@ class Orchestrator:
         self.llm = llm
         self.memory = memory
         self.tools = tools
-        self.worker_max_steps = worker_max_steps or int(os.getenv("AGENTX_ORCHESTRATOR_WORKER_STEPS", "8"))
+        self.worker_max_steps = worker_max_steps or int(
+            os.getenv("AGENTX_ORCHESTRATOR_WORKER_STEPS", "8")
+        )
         self.max_retries = max_retries
         self.trace = trace
 
@@ -85,7 +87,11 @@ class Orchestrator:
             entry_type="plan",
             summary=f"Plan: {goal[:120]}",
             tags=["orchestration", "plan"],
-            metadata={"run_id": run_id, "original_prompt": prompt[:500], "subtask_count": len(subtasks)},
+            metadata={
+                "run_id": run_id,
+                "original_prompt": prompt[:500],
+                "subtask_count": len(subtasks),
+            },
         )
 
         # Store individual subtasks
@@ -183,13 +189,15 @@ class Orchestrator:
                 references=[subtask_entries.get(sid, "")],
             )
 
-            result.subtask_results.append(SubtaskResult(
-                subtask_id=sid,
-                description=desc,
-                status=status,
-                result=worker_answer or "",
-                entry_id=result_entry_id,
-            ))
+            result.subtask_results.append(
+                SubtaskResult(
+                    subtask_id=sid,
+                    description=desc,
+                    status=status,
+                    result=worker_answer or "",
+                    entry_id=result_entry_id,
+                )
+            )
 
         # Phase 4: Final integration build check
         final_build = self._run_build_check()
@@ -242,13 +250,17 @@ class Orchestrator:
             references=[plan_entry_id] + [r.entry_id for r in result.subtask_results if r.entry_id],
         )
 
-        self._trace(f"orchestrator done: {done}/{total} completed, build={'pass' if final_passed else 'FAIL'}")
+        self._trace(
+            f"orchestrator done: {done}/{total} completed, build={'pass' if final_passed else 'FAIL'}"
+        )
         return result
 
     def _plan(self, prompt: str) -> dict[str, Any] | None:
         """Use LLM to decompose prompt into a structured plan."""
         plan_settings = self.settings.with_updates(max_steps=6)
-        compactor = LLMContextCompactor(self.llm) if "gemma" in self.settings.model.lower() else None
+        compactor = (
+            LLMContextCompactor(self.llm) if "gemma" in self.settings.model.lower() else None
+        )
         planner = AgentLoop(
             settings=plan_settings,
             ollama=self.llm,
@@ -281,7 +293,9 @@ class Orchestrator:
     def _run_worker(self, subtask_description: str, dependency_context: str) -> str:
         """Spawn a fresh AgentSession for a single subtask."""
         worker_settings = self.settings.with_updates(max_steps=self.worker_max_steps)
-        system_prompt = build_worker_system_prompt(subtask_description, dependency_context, model=self.settings.model)
+        system_prompt = build_worker_system_prompt(
+            subtask_description, dependency_context, model=self.settings.model
+        )
 
         worker = AgentLoop(
             settings=worker_settings,
@@ -296,10 +310,14 @@ class Orchestrator:
             self._trace(f"worker error: {e}")
             return f"Worker 執行失敗: {e}"
 
-    def _fallback_single_agent(self, prompt: str, namespace: str, run_id: str) -> OrchestratorResult:
+    def _fallback_single_agent(
+        self, prompt: str, namespace: str, run_id: str
+    ) -> OrchestratorResult:
         """Fallback: run as single agent when planning fails."""
         self._trace("running fallback single agent")
-        compactor = LLMContextCompactor(self.llm) if "gemma" in self.settings.model.lower() else None
+        compactor = (
+            LLMContextCompactor(self.llm) if "gemma" in self.settings.model.lower() else None
+        )
         worker = AgentLoop(
             settings=self.settings,
             ollama=self.llm,
@@ -315,12 +333,14 @@ class Orchestrator:
         result = OrchestratorResult(
             run_id=run_id,
             goal=prompt[:100],
-            subtask_results=[SubtaskResult(
-                subtask_id="fallback",
-                description=prompt[:200],
-                status="done",
-                result=answer,
-            )],
+            subtask_results=[
+                SubtaskResult(
+                    subtask_id="fallback",
+                    description=prompt[:200],
+                    status="done",
+                    result=answer,
+                )
+            ],
             summary=answer,
         )
         return result
@@ -365,7 +385,12 @@ class Orchestrator:
 
         try:
             completed = subprocess.run(
-                cmd, cwd=ws, text=True, capture_output=True, timeout=60, check=False,
+                cmd,
+                cwd=ws,
+                text=True,
+                capture_output=True,
+                timeout=60,
+                check=False,
             )
             output = (completed.stdout + "\n" + completed.stderr).strip()
             return completed.returncode == 0, output

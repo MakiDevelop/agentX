@@ -97,8 +97,7 @@ def test_command_catalog_generates_help_surfaces() -> None:
 
     assert len(usages) == len(set(usages))
     assert SLASH_COMMANDS == [
-        (str(item["usage"]), str(item["description"]))
-        for item in COMMAND_CATALOG
+        (str(item["usage"]), str(item["description"])) for item in COMMAND_CATALOG
     ]
     assert set(COMMAND_EXAMPLES) == set(catalog_keys)
     assert set(COMMAND_RELATED) == set(catalog_keys)
@@ -144,10 +143,7 @@ def test_print_guide_renders_orientation() -> None:
         print_guide()
 
     printed = [call.args[0] for call in fake_console.print.call_args_list if call.args]
-    rendered = "\n".join(
-        str(getattr(item, "renderable", item))
-        for item in printed
-    )
+    rendered = "\n".join(str(getattr(item, "renderable", item)) for item in printed)
 
     assert "agentX 60 秒導覽" in rendered
     assert "下一步" in rendered

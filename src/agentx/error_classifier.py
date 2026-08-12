@@ -104,7 +104,7 @@ class ErrorClassifier:
         return match.group(1) if match else ""
 
     def _extract_http_status(self, content: Optional[str]) -> Optional[int]:
-        """從 HTTPStatusError 訊息中提取狀態碼，例如 'Client error \\'403 Forbidden\\'' """
+        """從 HTTPStatusError 訊息中提取狀態碼，例如 'Client error \\'403 Forbidden\\''"""
         if not content:
             return None
         # 匹配 '403 Forbidden' 或 "404 Not Found" 或類似

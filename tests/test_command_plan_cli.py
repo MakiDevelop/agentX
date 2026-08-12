@@ -46,14 +46,19 @@ def test_command_plan_payload_blocks_destructive_command(tmp_path) -> None:  # n
     assert payload["risk"] == "RED"
     assert "destructive_git_clean" in payload["blockers"]
     assert "command_not_allowlisted" not in payload["blockers"]
-    assert payload["recommended_command"] == "Do not execute this command; ask Maki for a safer plan or human-run deletion path"
+    assert (
+        payload["recommended_command"]
+        == "Do not execute this command; ask Maki for a safer plan or human-run deletion path"
+    )
     assert payload["recommended_kind"] == "do_not_execute"
     assert payload["recommended_risk"] == "RED"
 
 
 def test_command_plan_payload_blocks_destructive_flags(tmp_path) -> None:  # noqa: ANN001
     rsync_payload = command_plan_payload(Settings(workspace=tmp_path), "rsync --delete src dst")
-    git_payload = command_plan_payload(Settings(workspace=tmp_path), "git push origin main --force-with-lease=main")
+    git_payload = command_plan_payload(
+        Settings(workspace=tmp_path), "git push origin main --force-with-lease=main"
+    )
 
     assert rsync_payload["risk"] == "RED"
     assert "destructive_transfer_flag" in rsync_payload["blockers"]
@@ -75,7 +80,9 @@ def test_command_plan_payload_blocks_unknown_command(tmp_path) -> None:  # noqa:
 
 
 def test_command_plan_payload_allows_agentx_capability(tmp_path) -> None:  # noqa: ANN001
-    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx gate --json --fail-on-blocker")
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path), "agentx gate --json --fail-on-blocker"
+    )
 
     assert payload["ok"] is True
     assert payload["allowed"] is True
@@ -85,27 +92,43 @@ def test_command_plan_payload_allows_agentx_capability(tmp_path) -> None:  # noq
     assert payload["tool_args"]["capability_command"] == "agentx gate"  # type: ignore[index]
     assert payload["tool_args"]["schemas"] == ["agentx.gate.v1"]  # type: ignore[index]
     assert payload["tool_args"]["jsonl_event"] == "gate"  # type: ignore[index]
-    assert payload["recommended_command"] == "Run through agentX CLI policy; do not bypass approval gates"
+    assert (
+        payload["recommended_command"]
+        == "Run through agentX CLI policy; do not bypass approval gates"
+    )
     assert payload["recommended_kind"] == "agentx_cli"
     assert payload["recommended_risk"] == "GREEN"
 
 
 def test_command_plan_payload_includes_agentx_infra_capability_metadata(tmp_path) -> None:  # noqa: ANN001
-    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx infra resource-bundle --json")
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path), "agentx infra resource-bundle --json"
+    )
 
     assert payload["ok"] is True
     assert payload["matched_policy"] == "agentx_cli_capability"
     assert payload["tool_args"]["capability_command"] == "agentx infra"  # type: ignore[index]
-    assert payload["tool_args"]["usage"] == "agentx infra [all|quick|project|resource|home|vps|resource-bundle] --json"  # type: ignore[index]
+    assert (
+        payload["tool_args"]["usage"]
+        == "agentx infra [all|quick|project|resource|home|vps|resource-bundle] --json"
+    )  # type: ignore[index]
     assert payload["tool_args"]["schemas"] == ["agentx.infrastructure_context.v1"]  # type: ignore[index]
     assert payload["tool_args"]["jsonl_event"] == "infra"  # type: ignore[index]
 
 
 def test_command_plan_payload_marks_option_sensitive_agentx_cli_risk(tmp_path) -> None:  # noqa: ANN001
-    memory_preview = command_plan_payload(Settings(workspace=tmp_path), "agentx memory-write 'handoff' --type handoff --json")
-    memory_write = command_plan_payload(Settings(workspace=tmp_path), "agentx memory-write 'handoff' --type handoff --write --json")
-    workflow_preview = command_plan_payload(Settings(workspace=tmp_path), "agentx workflow-run memory --json")
-    workflow_execute = command_plan_payload(Settings(workspace=tmp_path), "agentx workflow-run memory --execute --json")
+    memory_preview = command_plan_payload(
+        Settings(workspace=tmp_path), "agentx memory-write 'handoff' --type handoff --json"
+    )
+    memory_write = command_plan_payload(
+        Settings(workspace=tmp_path), "agentx memory-write 'handoff' --type handoff --write --json"
+    )
+    workflow_preview = command_plan_payload(
+        Settings(workspace=tmp_path), "agentx workflow-run memory --json"
+    )
+    workflow_execute = command_plan_payload(
+        Settings(workspace=tmp_path), "agentx workflow-run memory --execute --json"
+    )
 
     assert memory_preview["risk"] == "GREEN"
     assert memory_preview["approval_required"] is False
@@ -236,7 +259,9 @@ def test_command_plan_payload_blocks_agentx_artifact_output_conflicts(tmp_path) 
 
 
 def test_command_plan_payload_blocks_agentx_artifact_requires_agent(tmp_path) -> None:  # noqa: ANN001
-    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx -p x --artifact-dir .agentx/runs/latest --json")
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path), "agentx -p x --artifact-dir .agentx/runs/latest --json"
+    )
 
     assert payload["ok"] is False
     assert payload["allowed"] is False
@@ -277,7 +302,9 @@ def test_command_plan_payload_blocks_agentx_session_result_path_conflict(tmp_pat
 
 
 def test_command_plan_payload_blocks_agentx_output_path_escape(tmp_path) -> None:  # noqa: ANN001
-    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx -p x --agent --result-output ../outside.json --json")
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path), "agentx -p x --agent --result-output ../outside.json --json"
+    )
 
     assert payload["ok"] is False
     assert payload["allowed"] is False
@@ -285,7 +312,9 @@ def test_command_plan_payload_blocks_agentx_output_path_escape(tmp_path) -> None
 
 
 def test_command_plan_payload_blocks_agentx_artifact_dir_escape(tmp_path) -> None:  # noqa: ANN001
-    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx -p x --agent --artifact-dir ../runs/latest --json")
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path), "agentx -p x --agent --artifact-dir ../runs/latest --json"
+    )
 
     assert payload["ok"] is False
     assert payload["allowed"] is False
@@ -293,7 +322,9 @@ def test_command_plan_payload_blocks_agentx_artifact_dir_escape(tmp_path) -> Non
 
 
 def test_command_plan_payload_blocks_agentx_prompt_file_escape(tmp_path) -> None:  # noqa: ANN001
-    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx --prompt-file ../outside.md --agent --json")
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path), "agentx --prompt-file ../outside.md --agent --json"
+    )
 
     assert payload["ok"] is False
     assert payload["allowed"] is False
@@ -302,7 +333,9 @@ def test_command_plan_payload_blocks_agentx_prompt_file_escape(tmp_path) -> None
 
 
 def test_command_plan_payload_blocks_agentx_prompt_source_conflict(tmp_path) -> None:  # noqa: ANN001
-    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx -p x --prompt-file briefing.md --agent --json")
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path), "agentx -p x --prompt-file briefing.md --agent --json"
+    )
 
     assert payload["ok"] is False
     assert payload["allowed"] is False
@@ -313,7 +346,9 @@ def test_command_plan_payload_blocks_agentx_prompt_source_conflict(tmp_path) -> 
 
 
 def test_command_plan_payload_marks_agentx_stdin_prompt_source(tmp_path) -> None:  # noqa: ANN001
-    payload = command_plan_payload(Settings(workspace=tmp_path), "agentx --stdin --agent --output-format=jsonl")
+    payload = command_plan_payload(
+        Settings(workspace=tmp_path), "agentx --stdin --agent --output-format=jsonl"
+    )
 
     assert payload["ok"] is True
     assert payload["risk"] == "YELLOW"
@@ -345,7 +380,9 @@ def test_command_plan_jsonl_outputs_event_envelope() -> None:
 
 
 def test_command_plan_fail_on_blocker_exits_one_but_prints_payload() -> None:
-    result = CliRunner().invoke(app, ["command-plan", "python manage.py migrate", "--json", "--fail-on-blocker"])
+    result = CliRunner().invoke(
+        app, ["command-plan", "python manage.py migrate", "--json", "--fail-on-blocker"]
+    )
 
     assert result.exit_code == 1, result.output
     payload = json.loads(result.output)

@@ -3,7 +3,11 @@ import json
 from typer.testing import CliRunner
 
 from agentx.cli import app
-from agentx.command_catalog import COMMAND_CATALOG, command_catalog_payload, filtered_command_catalog_payload
+from agentx.command_catalog import (
+    COMMAND_CATALOG,
+    command_catalog_payload,
+    filtered_command_catalog_payload,
+)
 
 
 def test_command_catalog_payload_is_machine_readable() -> None:
@@ -45,7 +49,8 @@ def test_command_catalog_payload_filters_by_keyword() -> None:
     assert payload["count"] > 0
     assert any(command["command"] == "/handoff" for command in payload["commands"])
     assert all(
-        "memory" in " ".join(
+        "memory"
+        in " ".join(
             [
                 command["command"],
                 command["usage"],
