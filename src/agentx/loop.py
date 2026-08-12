@@ -43,6 +43,7 @@ from agentx.recovery import RecoveryPlaybook
 from agentx.runtime_prompt import build_agent_system_prompt
 from agentx.session_store import SessionStore
 from agentx.tasks import format_task_list_summary, get_next_task_id, load_tasks, save_tasks
+from agentx.tokens import TokenCounter
 from agentx.tools import ToolRegistry
 
 EDITING_TOOLS = {"edit_file", "write_file", "search_replace", "insert_code", "apply_patch"}
@@ -104,6 +105,7 @@ class AgentSession:
         self.namespace = namespace
         self.trace = trace
         self.compaction_count = 0
+        self.token_counter = TokenCounter()
         self.plan_only: bool = False
         self._custom_system_prompt = system_prompt
         self._has_completed_planning: bool = False
@@ -490,7 +492,18 @@ class AgentSession:
                 )
 
             self.model_turn_count += 1
+            estimated_before = self.context_tokens_estimate
             raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
+            # Calibrate the budget against the tokenizer that actually ran.
+            # Backends that report nothing return 0 and are ignored.
+            actual_prompt_tokens = getattr(self.ollama, "last_prompt_tokens", 0)
+            if actual_prompt_tokens:
+                self.token_counter.observe(self.messages, actual_prompt_tokens)
+                self._emit_trace(
+                    f"token_calibration estimate={estimated_before} "
+                    f"actual={actual_prompt_tokens} "
+                    f"factor={self.token_counter.calibration:.2f}"
+                )
             action = self._parse_action(raw)
             if isinstance(action, InvalidAction):
                 self.messages.append({"role": "assistant", "content": raw})
@@ -991,7 +1004,14 @@ class AgentSession:
 
     @property
     def context_tokens_estimate(self) -> int:
-        return self.context_chars // 4
+        """Tokens currently in context.
+
+        Script-aware and calibrated against counts the model reports (see
+        agentx.tokens). The previous `chars // 4` under-counted Traditional
+        Chinese by ~2.6x, which meant auto-compaction fired only after the real
+        context had already exceeded the limit it was meant to protect.
+        """
+        return self.token_counter.estimate_messages(self.messages)
 
     def context_report(self) -> dict[str, int | str]:
         return {
@@ -1000,6 +1020,7 @@ class AgentSession:
             "chars": self.context_chars,
             "tokens_estimate": self.context_tokens_estimate,
             "compactions": self.compaction_count,
+            **{f"token_{k}": v for k, v in self.token_counter.report().items()},
         }
 
     @property

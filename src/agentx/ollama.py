@@ -21,6 +21,12 @@ class OllamaClient:
         self.model = model
         self.timeout = timeout
         self._client = httpx.Client(timeout=timeout)
+        # Ollama reports how many tokens its own tokenizer produced for the
+        # prompt it just processed. That is exact, free, and was previously
+        # thrown away while the context budget guessed from character counts.
+        # 0 means "not reported by this response", never "the prompt was empty".
+        self.last_prompt_tokens: int = 0
+        self.last_completion_tokens: int = 0
 
     def chat(
         self,
@@ -41,7 +47,9 @@ class OllamaClient:
             return self._chat_stream(payload, on_delta, cancel_event)
         response = self._client.post(f"{self.base_url}/api/chat", json=payload)
         response.raise_for_status()
-        return _message_content(response.json()).strip()
+        data = response.json()
+        self._record_usage(data)
+        return _message_content(data).strip()
 
     def _chat_stream(
         self,
@@ -64,8 +72,14 @@ class OllamaClient:
                     if on_delta is not None:
                         on_delta(delta)
                 if data.get("done"):
+                    # Usage counts only appear on the final streamed chunk.
+                    self._record_usage(data)
                     break
         return "".join(chunks).strip()
+
+    def _record_usage(self, data: dict[str, Any]) -> None:
+        self.last_prompt_tokens = _int_or_zero(data.get("prompt_eval_count"))
+        self.last_completion_tokens = _int_or_zero(data.get("eval_count"))
 
     def list_models(self) -> list[str]:
         response = self._client.get(f"{self.base_url}/api/tags")
@@ -90,6 +104,14 @@ class OllamaClient:
 
 def _message_content(data: dict[str, Any]) -> str:
     return str(data.get("message", {}).get("content", ""))
+
+
+def _int_or_zero(value: object) -> int:
+    """Usage fields are absent on some responses and on older Ollama builds."""
+    try:
+        return max(0, int(value))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
 
 
 # Self-register with the provider registry so that simply importing
