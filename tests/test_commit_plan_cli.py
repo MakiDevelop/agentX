@@ -49,7 +49,7 @@ def _failing_review(workspace: Path) -> dict[str, object]:
 def test_commit_plan_payload_reports_ready_with_message(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
     monkeypatch.setattr(
-        "agentx.cli.review_payload",
+        "agentx.cli_verify.review_payload",
         lambda settings, timeout=120, run_verify=True: _passing_review(settings.workspace),
     )
 
@@ -71,7 +71,7 @@ def test_commit_plan_payload_reports_ready_with_message(tmp_path: Path, monkeypa
 def test_commit_plan_payload_blocks_without_message(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
     monkeypatch.setattr(
-        "agentx.cli.review_payload",
+        "agentx.cli_verify.review_payload",
         lambda settings, timeout=120, run_verify=True: _passing_review(settings.workspace),
     )
 
@@ -93,7 +93,7 @@ def test_commit_plan_payload_blocks_without_message(tmp_path: Path, monkeypatch)
 def test_commit_plan_payload_carries_review_blockers(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
     monkeypatch.setattr(
-        "agentx.cli.review_payload",
+        "agentx.cli_verify.review_payload",
         lambda settings, timeout=120, run_verify=True: _failing_review(settings.workspace),
     )
 
@@ -108,7 +108,7 @@ def test_commit_plan_payload_carries_review_blockers(tmp_path: Path, monkeypatch
 def test_commit_plan_json_outputs_payload(tmp_path: Path, monkeypatch) -> None:
     _git_repo_with_change(tmp_path)
     monkeypatch.setattr(
-        "agentx.cli.review_payload",
+        "agentx.cli_verify.review_payload",
         lambda settings, timeout=120, run_verify=True: _passing_review(settings.workspace),
     )
 

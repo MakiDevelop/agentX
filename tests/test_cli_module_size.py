@@ -22,8 +22,9 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "agentx"
 
-#: Measured after extracting cli_git.py. Only ever revise downward.
-MAX_CLI_LINES = 11_700
+#: Measured after extracting cli_git.py, cli_output.py and cli_verify.py.
+#: Only ever revise downward.
+MAX_CLI_LINES = 11_400
 
 #: No other module should become the new dumping ground. Set just above the
 #: largest legitimate module (loop.py, 1,508 lines — the agent loop itself),
@@ -61,8 +62,11 @@ def test_no_new_oversized_modules() -> None:
     )
 
 
+EXTRACTED_MODULES = ("cli_git.py", "cli_output.py", "cli_verify.py")
+
+
 def test_extracted_git_module_stays_closed() -> None:
-    """cli_git.py was extracted precisely because it imports nothing from cli.py.
+    """Extracted modules must not import back into cli.py.
 
     If that stops being true the module has to be re-entangled, and the next
     extraction loses its worked example.
@@ -72,12 +76,13 @@ def test_extracted_git_module_stays_closed() -> None:
     """
     import ast
 
-    tree = ast.parse((SRC / "cli_git.py").read_text(encoding="utf-8"))
-    imported: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            imported.add(node.module)
-        elif isinstance(node, ast.Import):
-            imported.update(alias.name for alias in node.names)
+    for module in EXTRACTED_MODULES:
+        tree = ast.parse((SRC / module).read_text(encoding="utf-8"))
+        imported: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module)
+            elif isinstance(node, ast.Import):
+                imported.update(alias.name for alias in node.names)
 
-    assert "agentx.cli" not in imported, f"cli_git.py imports back into cli.py: {sorted(imported)}"
+        assert "agentx.cli" not in imported, f"{module} imports back into cli.py"
