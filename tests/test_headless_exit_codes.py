@@ -3560,6 +3560,7 @@ def test_build_runtime_uses_base_url_from_settings(tmp_path: Path, monkeypatch) 
 
 def test_build_runtime_no_memory_uses_null_memory_client(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
     from helpers import make_settings
+
     from agentx.memory_hall import NullMemoryClient
 
     monkeypatch.setattr(cli, "register_builtin_backends", lambda: None)
@@ -3576,6 +3577,7 @@ def test_build_runtime_no_memory_uses_null_memory_client(tmp_path: Path, monkeyp
 
 def test_build_runtime_records_yellow_approval_audit(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
     from helpers import make_settings
+
     from agentx.approval import ApprovalMode, ApprovalPolicy
 
     receipts: list[dict[str, object]] = []
@@ -3605,6 +3607,7 @@ def test_build_runtime_records_yellow_approval_audit(tmp_path: Path, monkeypatch
 
 def test_build_runtime_can_write_approval_audit_to_transcript(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
     from helpers import make_settings
+
     from agentx.approval import ApprovalMode, ApprovalPolicy
     from agentx.transcript import Transcript
 

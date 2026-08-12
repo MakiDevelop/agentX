@@ -26,7 +26,8 @@ return a fresh client instance). This avoids holding live client state in the re
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Protocol, Sequence
+from collections.abc import Callable, Sequence
+from typing import Protocol
 
 
 class LLMClient(Protocol):
@@ -59,12 +60,12 @@ class LLMClient(Protocol):
         ...
 
     # Context manager support is nice-to-have and implemented by current backends.
-    def __enter__(self) -> "LLMClient": ...
+    def __enter__(self) -> LLMClient: ...
     def __exit__(self, *args: object) -> None: ...
 
 
 # Internal registry: backend_name -> factory(base_url, model, timeout) -> LLMClient
-_registry: Dict[str, Callable[[str, str, float], LLMClient]] = {}
+_registry: dict[str, Callable[[str, str, float], LLMClient]] = {}
 
 
 def register_llm_backend(
@@ -121,8 +122,8 @@ def register_builtin_backends() -> None:
     "ollama" and "llama_cpp" are always available via get_llm_client() even
     in environments that only import specific submodules.
     """
-    import agentx.ollama  # noqa: F401
     import agentx.llama_cpp  # noqa: F401
+    import agentx.ollama  # noqa: F401
 
 
 # Self-registration is done at the bottom of ollama.py and llama_cpp.py so that

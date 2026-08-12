@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pypdf import PdfReader
-from agentx.proc import run_process
 
+from agentx.proc import run_process
 
 SENSITIVE_PARTS = {".ssh", ".gnupg", ".secrets"}
 TEXT_EXTENSIONS = {
@@ -47,15 +47,11 @@ def extract_file_paths(text: str, workspace: Path, *, limit: int = 5) -> list[Pa
         candidate = _clean_token(token)
         if not candidate:
             continue
-        if candidate.startswith("@"):
-            candidate = candidate[1:]
+        candidate = candidate.removeprefix("@")
         if not _looks_like_path(candidate) and not (workspace / candidate).is_file():
             continue
         path = Path(candidate).expanduser()
-        if not path.is_absolute():
-            path = (workspace / path).resolve()
-        else:
-            path = path.resolve()
+        path = (workspace / path).resolve() if not path.is_absolute() else path.resolve()
         if path.is_file() and not _is_sensitive(path) and path not in paths:
             paths.append(path)
         if len(paths) >= limit:
@@ -162,9 +158,7 @@ def _looks_textual(path: Path) -> bool:
         chunk = path.read_bytes()[:2048]
     except OSError:
         return False
-    if b"\0" in chunk:
-        return False
-    return True
+    return b"\x00" not in chunk
 
 
 def _image_dimensions(path: Path) -> tuple[int, int] | None:

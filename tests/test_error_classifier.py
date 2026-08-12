@@ -1,8 +1,8 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from agentx.errors import ErrorContext, ErrorType
 from agentx.error_classifier import ErrorClassifier
+from agentx.errors import ErrorContext, ErrorType
 from agentx.loop import AgentSession
 from agentx.protocol import ToolResult
 

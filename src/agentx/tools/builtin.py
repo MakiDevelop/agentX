@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import re
 import tempfile
 from pathlib import Path
@@ -305,8 +306,7 @@ class FindFilesTool(_WorkspaceTool):
         _, output = run_subprocess(cmd, cwd=self.workspace)
         lines: list[str] = []
         for line in output.splitlines():
-            if line.startswith("./"):
-                line = line[2:]
+            line = line.removeprefix("./")
             if line:
                 lines.append(line)
             if len(lines) >= limit:
@@ -814,10 +814,8 @@ class ApplyPatchTool(_WorkspaceTool):
                 return f"git apply failed\n{output}".strip()
             return output or "patch applied"
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 patch_path.unlink(missing_ok=True)
-            except Exception:
-                pass
 
 
 class _DockerComposeTool(_WorkspaceTool):

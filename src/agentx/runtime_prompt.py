@@ -160,7 +160,7 @@ def _maybe_gemma_delta(model: str | None) -> str:
     4. Record in task list: "已讀: [files]", "關鍵函數: ...", "相關測試: [test files]".
     Summarize "what this area does + current state" before proceeding to write or test.
   - **寫 Code (Writing)**: Strict ritual — (1) Before any edit, explicitly list your current "read set" (recently read files + key sections) in your internal reasoning or task list. Confirm the read set covers the edit target + tests. (2) Read the exact region + surrounding code + related tests first (per Mini Exploration Protocol) if not fresh. (3) Make ONE tiny, precise edit with search_replace or insert_code using a unique marker. (4) Immediately use the hook-provided read-back snippet + targeted ruff/pytest results to self-verify. Never move on while there is still uncertainty in the changed area or read set is insufficient.
-  - **測 Code (Testing)**: Treat targeted results (per-path ruff + pytest -k or direct test file) as your primary feedback. 
+  - **測 Code (Testing)**: Treat targeted results (per-path ruff + pytest -k or direct test file) as your primary feedback.
     - Before any edit that might affect tests, use search_text or list_files to find covering tests for the module/function, and record them in task list ("covering tests: ...").
     - After edit, always check the hook's targeted pytest output first.
     - Only call the full run_tests tool when most pending_verifies are cleared and you are confident the batch is ready.
@@ -303,10 +303,7 @@ def build_agent_system_prompt(
     else:
         try:
             lines = [tool_prompt_line(tool) for tool in tools.tools()]
-            if lines:
-                tool_section = "\n".join(lines)
-            else:
-                tool_section = "(no tools registered)"
+            tool_section = "\n".join(lines) if lines else "(no tools registered)"
         except Exception:
             tool_section = _base_tools_section()
     gemma = _maybe_gemma_delta(model)

@@ -8,13 +8,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from agentx.config import Settings
+from agentx.context_compactor import LLMContextCompactor
 from agentx.json_repair import extract_json_object
 from agentx.loop import AgentLoop
 from agentx.memory_hall import MemoryHallClient
-from agentx.context_compactor import LLMContextCompactor
+from agentx.proc import run_process
 from agentx.runtime_prompt import PLANNING_SYSTEM_PROMPT, build_worker_system_prompt
 from agentx.tools import ToolRegistry
-from agentx.proc import run_process
 
 
 @dataclass
@@ -330,7 +330,7 @@ class Orchestrator:
         except Exception as e:
             answer = f"執行失敗: {e}"
 
-        result = OrchestratorResult(
+        return OrchestratorResult(
             run_id=run_id,
             goal=prompt[:100],
             subtask_results=[
@@ -343,7 +343,6 @@ class Orchestrator:
             ],
             summary=answer,
         )
-        return result
 
     def _mh_write(self, **kwargs: Any) -> str:
         """Write to Memory Hall, return entry_id. Fail silently."""

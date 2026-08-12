@@ -22,6 +22,7 @@ from agentx.hooks import (
     TurnEndContext,
     TurnStartContext,
 )
+from agentx.learning import LearningManager, load_learning_manager
 from agentx.protocol import Tool, ToolResult
 from agentx.provider_registry import (
     LLMClient,
@@ -30,11 +31,10 @@ from agentx.provider_registry import (
     register_llm_backend,
     resolve_llm_backend,
 )
-from agentx.sse import iterate_sse_messages, parse_sse  # LOW reference (SSE parser)
 from agentx.safety import Risk
-from agentx.tools import ApprovalCallback, ToolRegistry, builtin_tools
-from agentx.learning import LearningManager, load_learning_manager
 from agentx.session_store import SessionEntry, SessionStore, fork_session
+from agentx.sse import iterate_sse_messages, parse_sse  # LOW reference (SSE parser)
+from agentx.tools import ApprovalCallback, ToolRegistry, builtin_tools
 
 __all__ = [
     "__version__",

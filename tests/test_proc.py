@@ -21,7 +21,6 @@ from agentx.cli import git_status_payload
 from agentx.git_workflow import build_commit_plan
 from agentx.proc import STABLE_ENV_OVERRIDES, run_process, stable_env
 
-
 SRC_ROOT = Path(__file__).resolve().parents[1] / "src" / "agentx"
 
 #: Call sites allowed to use raw `subprocess.run`. Everything else must route
@@ -153,9 +152,10 @@ def test_commit_plan_parses_files_under_translated_locale(tmp_path: Path, monkey
 def _enclosing_function(tree: ast.Module, lineno: int) -> str:
     best = "<module>"
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if node.lineno <= lineno <= (node.end_lineno or node.lineno):
-                best = node.name
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.lineno <= lineno <= (
+            node.end_lineno or node.lineno
+        ):
+            best = node.name
     return best
 
 

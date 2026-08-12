@@ -4,7 +4,6 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-
 ACE_SCHEMA = "agentx.ace_session.v1"
 ACE_APPEND_SCHEMA = "agentx.ace_append.v1"
 ACE_BRIEFING_SCHEMA = "agentx.ace_briefing.v1"

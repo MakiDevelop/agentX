@@ -7,7 +7,6 @@ import ast
 import sys
 from pathlib import Path
 
-
 DEFAULT_ROOT = Path("src")
 LEGACY_MODULE = "agentx.task"
 
@@ -61,7 +60,7 @@ def main() -> None:
     print("Legacy task module guard failed:", file=sys.stderr)
     for violation in violations:
         print(f"  {violation}", file=sys.stderr)
-    print("", file=sys.stderr)
+    print(file=sys.stderr)
     print("Use agentx.tasks instead. src/agentx/task.py was removed in MT22.", file=sys.stderr)
     sys.exit(1)
 

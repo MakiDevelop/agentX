@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 PERSONAS: dict[str, str] = {
     "default": (
         "預設 agentX 工程助手。直接、務實、以完成任務與驗證為優先。"

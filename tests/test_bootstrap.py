@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from helpers import make_settings
 from typer.testing import CliRunner
 
 from agentx.bootstrap import (
@@ -12,7 +13,6 @@ from agentx.bootstrap import (
 from agentx.cli import app
 from agentx.loop import AgentSession
 from agentx.tools import ToolRegistry, builtin_tools
-from helpers import make_settings
 
 
 class FakeOllama:

@@ -39,5 +39,55 @@ exclude-newer = "2026-08-10T00:00:00Z"
 line-length = 100
 target-version = "py311"
 
+[tool.ruff.lint]
+# Without an explicit `select`, ruff runs only its default set (E4, E7, E9, F).
+# That is close to "syntax errors and undefined names" — it will not catch a
+# mutable default, a loop-variable closure, an unsorted import block, or a
+# 160-branch function. The set below is chosen to catch *bugs and drift*, not to
+# enforce taste; every rule here was driven to zero before being switched on.
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "W",     # pycodestyle warnings
+    "B",     # flake8-bugbear — real bug patterns (mutable defaults, loop closures)
+    "SIM",   # flake8-simplify
+    "I",     # isort — deterministic import order
+    "UP",    # pyupgrade — keep pace with requires-python
+    "C90",   # mccabe complexity (see the ratchet below)
+    "RET",   # flake8-return
+    "PIE",   # flake8-pie
+    "RSE",   # flake8-raise
+    "ISC",   # implicit string concat
+    "FURB",  # refurb
+]
+ignore = [
+    # Line length is the formatter's job; `ruff format` already runs in CI and
+    # enforcing it twice only flags comments and URLs it deliberately left alone.
+    "E501",
+    # `typer.Option(...)` in a parameter default is the framework's documented
+    # idiom, not an accidental shared-mutable-default. 335 call sites depend on it.
+    "B008",
+    # `class Risk(str, Enum)` -> `StrEnum` is NOT behaviour-preserving:
+    # str(Risk.GREEN) is "Risk.GREEN" under the mixin and "GREEN" under StrEnum.
+    # Risk / ErrorType / RecoveryAction / HookEvent / ApprovalMode all cross the
+    # JSON boundary into runner payloads, so this migration needs its own change
+    # with contract tests, not a lint autofix.
+    "UP042",
+]
+
+[tool.ruff.lint.mccabe]
+# Ratchet, not an aspiration. Three functions predate this limit and carry an
+# explicit `# noqa: C901` naming their complexity:
+#   cli.shell            160   <- the cli.py split (docs/CLI_DISPATCH_REFACTOR_HANDOFF.md)
+#   loop.AgentSession.ask 37
+#   cli.run_print_prompt  30
+# Everything else is already under 25. Lower this number as those three come
+# down; never raise it to make a new function pass.
+max-complexity = 25
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert; that is the point.
+"tests/**" = ["S101"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -9,7 +9,6 @@ from typing import Any
 from agentx.approval import normalize_approval_mode
 from agentx.persona import normalize_persona
 
-
 CONFIG_KEYS = {
     "model",
     "namespace",

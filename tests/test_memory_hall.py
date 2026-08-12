@@ -357,8 +357,8 @@ class TestAmhClient:
         for store, path, expected in test_cases:
             captured = {}
 
-            def fake_run(cmd, **kwargs):
-                captured["cmd"] = cmd
+            def fake_run(cmd, _captured=captured, **kwargs):  # noqa: ANN003
+                _captured["cmd"] = cmd
 
                 class R:
                     returncode = 0

@@ -92,7 +92,7 @@ def main() -> None:
         sys.exit(0)
 
     print(f"{LOCKFILE} is staged.", file=sys.stderr)
-    print("", file=sys.stderr)
+    print(file=sys.stderr)
     print("Review lockfile changes before committing:", file=sys.stderr)
     print(
         "  - confirm every new/updated package (direct + transitive) is intentional",
@@ -120,7 +120,7 @@ def main() -> None:
         "  - if this affects published artifacts later, plan constraints / export update",
         file=sys.stderr,
     )
-    print("", file=sys.stderr)
+    print(file=sys.stderr)
 
     diff = get_staged_lock_diff()
     summary = summarize_changes(diff)
@@ -134,10 +134,10 @@ def main() -> None:
         print("Run this for a full human-readable diff:", file=sys.stderr)
         print(f"  git diff --cached -- {LOCKFILE} | less", file=sys.stderr)
 
-    print("", file=sys.stderr)
+    print(file=sys.stderr)
     print("If the lockfile change is intentional AND reviewed, commit with:", file=sys.stderr)
     print(f"  {ALLOW_ENV}=1 git commit ...", file=sys.stderr)
-    print("", file=sys.stderr)
+    print(file=sys.stderr)
     print("Never bypass just to make the commit green.", file=sys.stderr)
 
     sys.exit(1)

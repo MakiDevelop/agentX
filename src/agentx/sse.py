@@ -64,8 +64,7 @@ def decode_sse_line(line: str) -> tuple[str, str] | None:
     if ":" not in line:
         return (line, "")
     field, value = line.split(":", 1)
-    if value.startswith(" "):
-        value = value[1:]
+    value = value.removeprefix(" ")
     return (field, value)
 
 

@@ -69,7 +69,7 @@ class Settings:
         persona: str,
         workspace: Path,
         learning_enabled: bool = True,
-    ) -> "Settings":
+    ) -> Settings:
         settings = cls.__new__(cls)
         settings._set_values(
             model=model,
@@ -89,7 +89,7 @@ class Settings:
         )
         return settings
 
-    def with_updates(self, **changes: object) -> "Settings":
+    def with_updates(self, **changes: object) -> Settings:
         values = {
             "model": self.model,
             "ollama_url": self.ollama_url,

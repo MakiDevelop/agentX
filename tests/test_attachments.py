@@ -1,5 +1,6 @@
-from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from pypdf import PdfWriter
+
+from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 
 
 def test_extract_dragged_absolute_path(tmp_path):

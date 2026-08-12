@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from agentx.errors import ErrorType
 from agentx.protocol import ToolResult
@@ -95,7 +94,7 @@ class ErrorClassifier:
         # 4. 預設未知
         return ErrorType.UNKNOWN
 
-    def _extract_exception_name(self, content: Optional[str]) -> str:
+    def _extract_exception_name(self, content: str | None) -> str:
         """從錯誤訊息中嘗試提取 Exception 名稱，例如 'TimeoutError: ...'"""
         if not content:
             return ""
@@ -103,7 +102,7 @@ class ErrorClassifier:
         match = re.match(r"^([A-Za-z]+Error)", content.strip())
         return match.group(1) if match else ""
 
-    def _extract_http_status(self, content: Optional[str]) -> Optional[int]:
+    def _extract_http_status(self, content: str | None) -> int | None:
         """從 HTTPStatusError 訊息中提取狀態碼，例如 'Client error \\'403 Forbidden\\''"""
         if not content:
             return None

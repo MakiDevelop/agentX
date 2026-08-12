@@ -15,19 +15,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from helpers import make_settings
+
 from agentx.cli import ShellState, format_plan_status
 from agentx.cli_runtime_handlers import (
     EXECUTE_SYSTEM_MESSAGE,
+    handle_commands,
     handle_context,
     handle_diff,
     handle_execute,
     handle_fetch,
-    handle_find,
     handle_files,
+    handle_find,
     handle_git,
     handle_grep,
     handle_guide,
-    handle_commands,
     handle_help,
     handle_history,
     handle_infra,
@@ -42,8 +44,8 @@ from agentx.cli_runtime_handlers import (
     handle_run,
     handle_search,
     handle_sessions,
-    handle_status,
     handle_stage,
+    handle_status,
     handle_task_readonly,
     handle_test,
     handle_tools,
@@ -54,7 +56,6 @@ from agentx.cli_runtime_handlers import (
     handle_workflows,
 )
 from agentx.protocol import ToolResult
-from helpers import make_settings
 
 
 @dataclass

@@ -52,9 +52,7 @@ def is_non_registry_specifier(spec: str) -> bool:
     if any(s.startswith(p) for p in NON_REGISTRY_PREFIXES):
         return True
     # "name @ git+..." or "name @ https://..."
-    if " @" in spec and any(x in s for x in ("git+", "http", "file:", "path:")):
-        return True
-    return False
+    return bool(" @" in spec and any(x in s for x in ("git+", "http", "file:", "path:")))
 
 
 def is_exact_pinned_version_spec(version_part: str) -> bool:
@@ -72,9 +70,7 @@ def is_exact_pinned_version_spec(version_part: str) -> bool:
     if LOOSE_OPS_RE.search(v):
         return False
     # Must be exactly one == (not ===) followed by a concrete version token.
-    if not re.match(r"^==\s*[0-9v][\w.+-]*$", v):
-        return False
-    return True
+    return re.match(r"^==\s*[0-9v][\w.+-]*$", v)
 
 
 def parse_requirement_string(req: str) -> tuple[str, str] | None:

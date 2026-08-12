@@ -6,14 +6,14 @@ from datetime import datetime, timedelta
 from agentx.config import Settings
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
-from agentx.tasks import get_task_migration_status
 from agentx.proc import run_process
+from agentx.tasks import get_task_migration_status
 
 
 def run_doctor(
     settings: Settings, memory: MemoryHallClient, ollama: OllamaClient
 ) -> list[tuple[str, bool, str]]:
-    checks = [
+    return [
         _check_command("uv", ["uv", "--version"]),
         _check_command("git", ["git", "status", "--short", "--branch"], cwd=settings.workspace),
         _check_ollama(settings, ollama),
@@ -22,7 +22,6 @@ def run_doctor(
         _check_memory_search(memory),
         _check_task_migration(settings),
     ]
-    return checks
 
 
 def run_static_doctor(settings: Settings) -> list[tuple[str, bool, str]]:

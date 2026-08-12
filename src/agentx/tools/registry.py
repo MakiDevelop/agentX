@@ -7,7 +7,6 @@ from agentx.hooks import HookEvent, HookManager, ToolCallContext, ToolResultCont
 from agentx.protocol import Tool, ToolResult
 from agentx.safety import Risk
 
-
 ApprovalCallback = Callable[[str, dict[str, Any], Risk], bool]
 
 

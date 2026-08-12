@@ -32,7 +32,7 @@ def main():
 
         # 2. 模擬第一次 headless 建立任務
         print("\n[2] 第一次 headless session（模擬）...")
-        from agentx.tasks import load_tasks, save_tasks, get_next_task_id
+        from agentx.tasks import get_next_task_id, load_tasks, save_tasks
 
         tasks = []
         tasks.append(

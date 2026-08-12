@@ -1,5 +1,14 @@
 from unittest.mock import MagicMock, patch
 
+from agentx.cli import (
+    GUIDE_MODE_ROWS,
+    GUIDE_WORKFLOW_ROWS,
+    WORKFLOW_ROWS,
+    ShellState,
+    format_workflow_recipe,
+    print_guide,
+    workflow_recipe,
+)
 from agentx.command_catalog import (
     COMMAND_CATALOG,
     COMMAND_EXAMPLES,
@@ -9,15 +18,6 @@ from agentx.command_catalog import (
     format_unknown_slash_command,
     slash_command_help,
     slash_command_suggestions,
-)
-from agentx.cli import (
-    GUIDE_MODE_ROWS,
-    GUIDE_WORKFLOW_ROWS,
-    WORKFLOW_ROWS,
-    ShellState,
-    format_workflow_recipe,
-    print_guide,
-    workflow_recipe,
 )
 
 
@@ -96,9 +96,9 @@ def test_command_catalog_generates_help_surfaces() -> None:
     catalog_keys = [str(item["usage"]).split()[0] for item in COMMAND_CATALOG]
 
     assert len(usages) == len(set(usages))
-    assert SLASH_COMMANDS == [
+    assert [
         (str(item["usage"]), str(item["description"])) for item in COMMAND_CATALOG
-    ]
+    ] == SLASH_COMMANDS
     assert set(COMMAND_EXAMPLES) == set(catalog_keys)
     assert set(COMMAND_RELATED) == set(catalog_keys)
     for item in COMMAND_CATALOG:

@@ -176,7 +176,7 @@ def test_build_status_line_shows_plan_marker() -> None:
 
     assert "PLAN" not in normal
     assert "PLAN" in plan
-    assert "gemma4:31b | PLAN | context 45%" == plan
+    assert plan == "gemma4:31b | PLAN | context 45%"
     assert "context 45%" in normal
     assert "context 45%" in plan
 
@@ -253,7 +253,7 @@ def test_plan_mode_prompt_includes_execute_suggestion() -> None:
 
     from agentx import cli
 
-    cli_source = open(cli.__file__, encoding="utf-8").read()
+    cli_source = Path(cli.__file__).read_text(encoding="utf-8")
     assert planning_guidance in cli_source
 
 

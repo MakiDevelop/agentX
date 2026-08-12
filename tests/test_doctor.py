@@ -1,5 +1,5 @@
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
 from agentx.doctor import _check_command, _check_task_migration
 from agentx.tasks import save_tasks

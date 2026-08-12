@@ -4,6 +4,8 @@ import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from helpers import make_settings
+
 from agentx.config import Settings
 from agentx.hooks import (
     CompactContext,
@@ -17,8 +19,6 @@ from agentx.hooks import (
 )
 from agentx.loop import AgentSession
 from agentx.tools import ToolRegistry, builtin_tools
-
-from helpers import make_settings
 
 
 class FakeOllama:

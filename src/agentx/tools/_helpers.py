@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 
 from agentx.proc import run_process
 
-
 SKIPPED_DIRS = {
     ".git",
     ".mypy_cache",
@@ -228,8 +227,7 @@ def extract_web_text(html: str, content_type: str = "") -> str:
     # Remove all other tags
     text = re.sub(r"<[^>]+>", " ", text)
     # Collapse whitespace
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def validate_external_url(url: str) -> None:

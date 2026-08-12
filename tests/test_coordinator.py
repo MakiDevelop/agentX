@@ -4,13 +4,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from helpers import make_settings
 
 from agentx.config import Settings
 from agentx.coordinator import Coordinator, CoordinatorError
 from agentx.protocol import Risk
 from agentx.tools import ToolRegistry
-
-from helpers import make_settings
 
 
 class FakeOllama:

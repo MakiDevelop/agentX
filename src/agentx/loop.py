@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 import re
 import threading
 from collections.abc import Callable
+from dataclasses import asdict
 from enum import Enum
 from pathlib import Path
 from typing import Any
-
-from dataclasses import asdict
 
 from pydantic import ValidationError
 
@@ -18,32 +18,32 @@ from agentx.context_compactor import (
     HeuristicContextCompactor,
     LLMContextCompactor,
 )
-from agentx.recovery import RecoveryPlaybook
-from agentx.json_repair import extract_json_object
-from agentx.ollama import OllamaClient
-from agentx.errors import ErrorContext, ErrorType, RecoverySuggestion
 from agentx.error_classifier import ErrorClassifier
-from agentx.protocol import FinalAnswer, Reflect, ToolCall, ToolResult
-from agentx.runtime_prompt import build_agent_system_prompt
-from agentx.tasks import format_task_list_summary, get_next_task_id, load_tasks, save_tasks
+from agentx.errors import ErrorContext, ErrorType, RecoverySuggestion
 from agentx.hooks import (
+    CompactContext,
+    ErrorHookContext,
+    FinalAnswerContext,
     HookEvent,
     HookManager,
     HookResult,
-    SessionStartContext,
     SessionEndContext,
-    FinalAnswerContext,
-    TurnStartContext,
-    TurnEndContext,
-    CompactContext,
-    ErrorHookContext,
+    SessionStartContext,
     ToolResultContext,
+    TurnEndContext,
+    TurnStartContext,
 )
+from agentx.json_repair import extract_json_object
+from agentx.learning import LearningManager, load_learning_manager
 from agentx.memory_hall import MemoryHallClient
-from agentx.tools import ToolRegistry
-from agentx.learning import load_learning_manager, LearningManager
-from agentx.session_store import SessionStore
+from agentx.ollama import OllamaClient
 from agentx.proc import run_process
+from agentx.protocol import FinalAnswer, Reflect, ToolCall, ToolResult
+from agentx.recovery import RecoveryPlaybook
+from agentx.runtime_prompt import build_agent_system_prompt
+from agentx.session_store import SessionStore
+from agentx.tasks import format_task_list_summary, get_next_task_id, load_tasks, save_tasks
+from agentx.tools import ToolRegistry
 
 EDITING_TOOLS = {"edit_file", "write_file", "search_replace", "insert_code", "apply_patch"}
 
@@ -257,10 +257,8 @@ class AgentSession:
     def _on_session_end_learning(self, ctx: SessionEndContext) -> None:
         if ctx.termination != "max_steps_exceeded":
             return
-        try:
+        with contextlib.suppress(Exception):
             self.reflect_and_learn("session ended without final answer (max_steps reached)")
-        except Exception:
-            pass
 
     _RESTORE_SENTINEL = "__restore__"
 
@@ -351,10 +349,8 @@ class AgentSession:
                 self.tool_call_count = int(counters.get("tool_call_count") or 0)
                 self.reflection_count = int(counters.get("reflection_count") or 0)
         elif name == "compaction_count":
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 self.compaction_count = int(data)
-            except (TypeError, ValueError):
-                pass
         elif name == "pending_verifies":
             self.pending_verifies = set(data or [])
 
@@ -409,11 +405,11 @@ class AgentSession:
     def from_session_store(
         cls,
         store_path: Path,
-        settings: "Settings",
+        settings: Settings,
         ollama: Any,
-        tools: "ToolRegistry",
+        tools: ToolRegistry,
         **kwargs: Any,
-    ) -> "AgentSession":
+    ) -> AgentSession:
         store = SessionStore.load(store_path)
         kwargs.setdefault("system_prompt", cls._RESTORE_SENTINEL)
         session = cls(settings=settings, ollama=ollama, tools=tools, **kwargs)
@@ -424,7 +420,7 @@ class AgentSession:
             session._restore_state_event(name, data)
         return session
 
-    def ask(
+    def ask(  # noqa: C901  (complexity 37; the agent loop itself — see docs/OPTIMIZATION_ROADMAP.md)
         self,
         prompt: str,
         namespace: str = "project:agentX",
@@ -909,7 +905,7 @@ class AgentSession:
                 "這看起來是暫時性問題（例如超時、連線問題）。\n"
                 "建議：稍等一下或直接重試同樣參數。如果連續失敗，請考慮改用其他方式或進行 Reflection。"
             )
-        elif error_type == ErrorType.CALL_ERROR:
+        if error_type == ErrorType.CALL_ERROR:
             return (
                 f"【呼叫錯誤】工具 `{tool_name}` 執行失敗：{error_message}\n"
                 "這通常是因為參數有誤（路徑不存在、參數型別錯誤等）。\n"
@@ -1106,7 +1102,7 @@ class AgentSession:
             )
         return content
 
-    def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | Reflect | "InvalidAction":
+    def _parse_action(self, raw: str) -> ToolCall | FinalAnswer | Reflect | InvalidAction:
         data = extract_json_object(raw)
         if data is None:
             return InvalidAction.NON_JSON
@@ -1138,9 +1134,7 @@ class AgentSession:
         summary = result.content.replace("\n", "\\n")[:240]
         self._emit_trace(f"tool_result {action.tool} ok={result.ok} content={summary}")
         self._track_file_op_from_args(action.tool, effective_args)
-        if not result.ok:
-            self._tool_outcomes[action.tool] = False
-        elif result.ok and re.search(r"\bexit=([1-9]\d*)\b", result.content or ""):
+        if not result.ok or result.ok and re.search(r"\bexit=([1-9]\d*)\b", result.content or ""):
             self._tool_outcomes[action.tool] = False
         else:
             self._tool_outcomes[action.tool] = True
@@ -1222,31 +1216,26 @@ class AgentSession:
                 task = self.add_task(desc, notes)
                 return ToolResult(tool=tool, ok=True, content=f"Task added: {task}")
 
-            elif tool == "task_update":
+            if tool == "task_update":
                 task_id = args.get("task_id")
                 status = args.get("status")
                 notes = args.get("notes")
                 task = self.update_task(task_id, status, notes)
                 if task:
                     return ToolResult(tool=tool, ok=True, content=f"Task updated: {task}")
-                else:
-                    return ToolResult(tool=tool, ok=False, content=f"Task {task_id} not found")
+                return ToolResult(tool=tool, ok=False, content=f"Task {task_id} not found")
 
-            elif tool == "task_list":
+            if tool == "task_list":
                 status = args.get("status")
                 tasks = self.get_tasks(status)
                 # B2: 回傳結構化、易讀的任務摘要，而不是原始 dict list
                 # 讓本地模型更容易理解目前任務狀態
-                if tasks:
-                    content = format_task_list_summary(tasks)
-                else:
-                    content = "目前沒有任何任務。"
+                content = format_task_list_summary(tasks) if tasks else "目前沒有任何任務。"
                 if status:
                     content = f"篩選條件: status={status}\n{content}"
                 return ToolResult(tool=tool, ok=True, content=content)
 
-            else:
-                return ToolResult(tool=tool, ok=False, content=f"Unknown task tool: {tool}")
+            return ToolResult(tool=tool, ok=False, content=f"Unknown task tool: {tool}")
 
         except Exception as e:
             return ToolResult(tool=tool, ok=False, content=str(e))
@@ -1401,9 +1390,10 @@ class AgentSession:
         write_keywords = ("write_file", "建立", "實作", "寫", "create", "implement")
         if any(kw in normalized for kw in write_keywords):
             return None
-        if any(keyword in normalized for keyword in ("列出", "list files")):
-            if any(keyword in normalized for keyword in ("repo", "目錄", "directory", "workspace")):
-                return ToolCall(type="tool_call", tool="list_files", args={"path": "."})
+        if any(keyword in normalized for keyword in ("列出", "list files")) and any(
+            keyword in normalized for keyword in ("repo", "目錄", "directory", "workspace")
+        ):
+            return ToolCall(type="tool_call", tool="list_files", args={"path": "."})
         if normalized.strip() == "git status":
             return ToolCall(type="tool_call", tool="git_status", args={})
         return None

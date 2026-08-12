@@ -9,7 +9,6 @@ from typing import Any
 
 from agentx.config import Settings
 
-
 PROPOSAL_STATUSES = ("proposed", "under_review", "approved", "applied", "rejected")
 PROPOSAL_STATUS_TRANSITIONS = {
     "proposed": {"under_review", "approved", "rejected"},
@@ -67,7 +66,7 @@ class LearningManager:
     def _load_index(self):
         if self._index_path.exists():
             try:
-                with open(self._index_path, "r", encoding="utf-8") as f:
+                with open(self._index_path, encoding="utf-8") as f:
                     self.index = json.load(f)
             except (json.JSONDecodeError, ValueError):
                 self.index = {"proposals": []}
@@ -181,7 +180,7 @@ class LearningManager:
             if p["id"] == proposal_id:
                 json_path = self.workspace / p["json"]
                 if json_path.exists():
-                    with open(json_path, "r", encoding="utf-8") as f:
+                    with open(json_path, encoding="utf-8") as f:
                         data = json.load(f)
                     return LearningProposal(**data)
         return None

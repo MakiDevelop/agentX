@@ -18,13 +18,12 @@ MT22 遷移相容性測試（歷史 + 驗證）。
 - src/agentx/tasks.py 中的 has_legacy_single_task / get_task_migration_status（僅供 doctor 診斷）
 """
 
-from pathlib import Path
-from typing import Any
-
 import json
 import os
 import subprocess
 import sys
+from pathlib import Path
+from typing import Any
 
 from agentx.tasks import (
     find_task,

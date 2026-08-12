@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import queue
 import re
@@ -7,12 +8,12 @@ import shlex
 import subprocess
 import sys
 import threading
-import json
-from collections.abc import Callable
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from importlib.metadata import PackageNotFoundError, version as package_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -43,19 +44,19 @@ from agentx.approval import (
 )
 from agentx.attachments import extract_file_paths, format_attachment_context, read_attachments
 from agentx.bootstrap import local_instructions_payload
-from agentx.config import Settings
 from agentx.command_catalog import (
     COMMAND_CATALOG,
     SLASH_COMMANDS,
     capabilities_payload,
-    command_parity_payload,
     command_catalog_payload,
+    command_parity_payload,
     filtered_command_catalog_payload,
     format_unknown_slash_command,
     normalize_slash_command_topic,
     slash_command_help,
     slash_command_suggestions,
 )
+from agentx.config import Settings
 from agentx.context_compactor import LLMContextCompactor
 from agentx.doctor import run_doctor, run_static_doctor
 from agentx.git_workflow import build_commit_plan, commit_and_push
@@ -65,7 +66,6 @@ from agentx.infrastructure_context import (
 )
 from agentx.intent import plan_task_items
 from agentx.jobs import PromptJobQueue
-from agentx.proc import run_process
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import (
     MemoryHallClient,
@@ -75,18 +75,19 @@ from agentx.memory_hall import (
     memory_write_payload,
 )
 from agentx.ollama import OllamaCancelledError, OllamaClient
-from agentx.provider_registry import (
-    get_llm_client,
-    list_registered_backends,
-    LLMClient,
-    register_builtin_backends,
-    register_llm_backend,
-)
 from agentx.persona import list_personas, normalize_persona
+from agentx.proc import run_process
 from agentx.project_config import load_project_config, set_project_config
 from agentx.project_profile import build_project_profile, build_project_profile_payload
 from agentx.project_state import mark_guide_hint_seen, should_show_guide_hint
 from agentx.prompting import SlashCommandCompleter
+from agentx.provider_registry import (
+    LLMClient,
+    get_llm_client,
+    list_registered_backends,
+    register_builtin_backends,
+    register_llm_backend,
+)
 from agentx.runtime_prompt import build_chat_system_prompt, build_headless_agent_system_prompt
 from agentx.safety import Risk
 from agentx.tasks import (
@@ -137,9 +138,9 @@ HEADLESS_PAYLOAD_SCHEMA_VERSION = "agentx.headless_result.v1"
 class ShellState:
     """管理互動式 shell 的狀態（階段一基礎版）"""
 
-    settings: "Settings"
-    agent_session: "AgentSession | None" = None
-    memory: "MemoryHallClient | None" = None  # for hot-reload of ACA amh backend
+    settings: Settings
+    agent_session: AgentSession | None = None
+    memory: MemoryHallClient | None = None  # for hot-reload of ACA amh backend
     plan_mode: bool = False
     mode: str = "chat"  # "chat" 或 "agent"
     namespace: str = "project:agentX"
@@ -161,7 +162,7 @@ class ShellState:
             raise ValueError("mode must be 'chat' or 'agent'")
         self.mode = new_mode
 
-    def update_settings(self, **kwargs) -> "Settings":
+    def update_settings(self, **kwargs) -> Settings:
         """更新 settings 並回傳新設定（同時更新 agent_session 上的引用）。"""
         new_settings = self.settings.with_updates(**kwargs)
         self.settings = new_settings
@@ -3074,7 +3075,7 @@ def print_config(
     namespace: str,
     mode: str,
     approval_policy: ApprovalPolicy,
-    memory: "MemoryHallClient | None" = None,
+    memory: MemoryHallClient | None = None,
 ) -> None:
     # Use shared collector so /status, /config and /doctor all see the same live ACA signals
     # (incl. the complete post-gov audit event list for the probe governance record).
@@ -3432,9 +3433,7 @@ def _parse_diff_name_status(output: str) -> list[dict[str, object]]:
         if len(parts) < 2:
             continue
         status = parts[0]
-        if status.startswith("R") and len(parts) >= 3:
-            files.append({"status": status, "path": parts[2], "old_path": parts[1]})
-        elif status.startswith("C") and len(parts) >= 3:
+        if status.startswith("R") and len(parts) >= 3 or status.startswith("C") and len(parts) >= 3:
             files.append({"status": status, "path": parts[2], "old_path": parts[1]})
         else:
             files.append({"status": status, "path": parts[1]})
@@ -5142,7 +5141,7 @@ def doctor_exit_code(payload: dict[str, object], *, fail_on_error: bool = False)
     return 0 if payload.get("ok") is True else 1
 
 
-def _collect_aca_probe_info(settings: Settings, memory: "MemoryHallClient | None") -> dict:
+def _collect_aca_probe_info(settings: Settings, memory: MemoryHallClient | None) -> dict:
     """Collect live ACA probe/governance/audit signals for /status, /config and /doctor.
 
     This enables /status to also display the complete post-governance-record audit event list
@@ -5743,7 +5742,7 @@ def headless_timeout_result(
 
 
 def run_with_headless_timeout(
-    runner: "Callable[[threading.Event | None], str | HeadlessRunResult]",
+    runner: Callable[[threading.Event | None], str | HeadlessRunResult],
     *,
     run_timeout: float | None,
     session_output_path: Path | None = None,
@@ -7893,7 +7892,7 @@ def build_cli_memory_client(settings: Settings) -> MemoryHallClient | NullMemory
     )
 
 
-def run_print_prompt(
+def run_print_prompt(  # noqa: C901  (complexity 30; headless entrypoint, split tracked with cli.py)
     prompt: str,
     namespace: str | None,
     agent_mode: bool = False,
@@ -8163,7 +8162,7 @@ def build_handoff(
         f"完成：\n{completed}\n"
         f"待辦：\n{todo}\n"
         f"阻塞：\n{blockers}\n"
-        f"最近互動：\n{recent if recent else '- 無使用者任務'}\n"
+        f"最近互動：\n{recent or '- 無使用者任務'}\n"
         f"下一輪建議：\n{next_steps}"
     )
 
@@ -9477,7 +9476,7 @@ class RecordedReliabilityClient:
     def close(self) -> None:
         return None
 
-    def __enter__(self) -> "RecordedReliabilityClient":
+    def __enter__(self) -> RecordedReliabilityClient:
         return self
 
     def __exit__(self, *args: object) -> None:
@@ -10835,7 +10834,12 @@ def chat(
 
 
 @app.command()
-def shell(
+def shell(  # noqa: C901
+    # Cyclomatic complexity 160 — by far the largest single source of risk in
+    # this file. Every slash command still lives here as a closure over local
+    # state, which is why ShellState is not yet a single source of truth
+    # (see docs/CLI_DISPATCH_REFACTOR_HANDOFF.md, Codex P1). Bringing this down
+    # is the point of the cli/ package split; do not add branches here.
     namespace: str | None = typer.Option(None, help="Default Memory Hall namespace."),
     mode: str | None = typer.Option(None, help="Start mode: chat or agent."),
     max_steps: int | None = typer.Option(None, help="Override max agent loop steps."),
@@ -10991,8 +10995,11 @@ def shell(
                 streamed: list[str] = []
                 print_raw(format_assistant_header() if tui is not None else "")
 
-                def on_delta(delta: str) -> None:
-                    streamed.append(delta)
+                def on_delta(delta: str, _sink: list[str] = streamed) -> None:
+                    # _sink bound at definition time: ollama.chat() consumes this
+                    # callback before the next loop iteration rebinds `streamed`,
+                    # but binding explicitly keeps the guarantee local (B023).
+                    _sink.append(delta)
                     print_delta(delta)
 
                 answer = ollama.chat(
@@ -12083,21 +12090,24 @@ def shell(
                     current_cancel.set()  # 強制取消目前進行中的 agent 工作，讓 /exit 能真正退出
                 job_queue.stop()  # 立即發送 sentinel 喚醒 worker thread，不阻塞使用者
                 # 只在沒有進行中 job 時才嘗試 auto handoff，避免無限等待
-                if not (job_queue.current is not None or job_queue.pending_count() > 0):
-                    if history and state.settings.auto_handoff:
-                        fresh_tasks, fresh_task_summary = task_snapshot()
-                        message = write_handoff(
-                            tools,
-                            settings=state.settings,
-                            namespace=state.namespace,
-                            mode=state.mode,
-                            history=history,
-                            transcript=transcript,
-                            tasks=fresh_tasks,
-                            task_summary=fresh_task_summary,
-                        )
-                        transcript.write("handoff", {"auto": True, "result": message})
-                        print_raw(message)
+                if (
+                    not (job_queue.current is not None or job_queue.pending_count() > 0)
+                    and history
+                    and state.settings.auto_handoff
+                ):
+                    fresh_tasks, fresh_task_summary = task_snapshot()
+                    message = write_handoff(
+                        tools,
+                        settings=state.settings,
+                        namespace=state.namespace,
+                        mode=state.mode,
+                        history=history,
+                        transcript=transcript,
+                        tasks=fresh_tasks,
+                        task_summary=fresh_task_summary,
+                    )
+                    transcript.write("handoff", {"auto": True, "result": message})
+                    print_raw(message)
                 transcript.write(
                     "session_end",
                     {

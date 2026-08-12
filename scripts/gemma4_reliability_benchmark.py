@@ -18,13 +18,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from agentx.persona import normalize_persona, persona_prompt
 from agentx.runtime_prompt import (
     build_agent_system_prompt,
+    build_chat_system_prompt,
     build_headless_agent_system_prompt,
     build_worker_system_prompt,
-    build_chat_system_prompt,
 )
-from agentx.persona import persona_prompt, normalize_persona
 
 
 def has_gemma_scaffolding(text: str) -> bool:

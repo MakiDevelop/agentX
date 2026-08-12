@@ -113,7 +113,7 @@ class LlamaCppClient:
     def close(self) -> None:
         self._client.close()
 
-    def __enter__(self) -> "LlamaCppClient":
+    def __enter__(self) -> LlamaCppClient:
         return self
 
     def __exit__(

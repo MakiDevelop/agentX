@@ -32,7 +32,6 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-
 #: Environment overrides applied to every managed subprocess.
 #:
 #: - ``LC_ALL`` / ``LANG`` / ``LANGUAGE``: force the C locale so tool output is

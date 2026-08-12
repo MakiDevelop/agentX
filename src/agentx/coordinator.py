@@ -14,14 +14,13 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel, Field, ValidationError
 
 from agentx.config import Settings
+from agentx.context_compactor import LLMContextCompactor
 from agentx.hooks import HookManager
 from agentx.json_repair import extract_json_object
 from agentx.loop import AgentSession
-from agentx.context_compactor import LLMContextCompactor
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
 from agentx.tools import ToolRegistry
-
 
 PLAN_SYSTEM_PROMPT = """你是 agentX 的計畫員。
 

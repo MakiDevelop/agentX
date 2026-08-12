@@ -1,16 +1,16 @@
 import threading
-import pytest
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
+
+import pytest
+from helpers import make_settings
 
 from agentx.config import Settings
 from agentx.hooks import HookEvent, HookManager, ToolCallContext
 from agentx.loop import AgentSession
 from agentx.protocol import Risk, ToolResult
 from agentx.tools import ToolRegistry, builtin_tools
-
-from helpers import make_settings
 
 
 class FakeOllama:
@@ -617,10 +617,9 @@ def test_duplicate_hook_registration_guard(tmp_path: Path) -> None:
     )
 
     # Re-trigger the registration logic (as if re-init hooks)
-    if session.hooks is not None:
-        if not getattr(session, "_post_edit_verify_registered", False):
-            session.hooks.add("PostToolUse", session._on_post_edit_verify)
-            session._post_edit_verify_registered = True
+    if session.hooks is not None and not getattr(session, "_post_edit_verify_registered", False):
+        session.hooks.add("PostToolUse", session._on_post_edit_verify)
+        session._post_edit_verify_registered = True
 
     post_listeners_after = (
         len(session.hooks.listeners("PostToolUse")) if hasattr(session.hooks, "listeners") else 0
@@ -682,8 +681,7 @@ def test_integration_full_ask_with_edit_triggers_hook_verify_and_clear(tmp_path:
     def success_side_effect(cmd, **kwargs):
         if "ruff" in " ".join(cmd):
             return type("R", (), {"stdout": "", "stderr": "", "returncode": 0})()
-        else:
-            return type("R", (), {"stdout": "collected 0 items", "stderr": "", "returncode": 5})()
+        return type("R", (), {"stdout": "collected 0 items", "stderr": "", "returncode": 5})()
 
     with patch.object(_sp, "run", side_effect=success_side_effect):
         result = session.ask(
@@ -730,8 +728,8 @@ def test_ruff_failure_does_not_clear_pending(tmp_path: Path) -> None:
     """Test coverage for ruff failure: on targeted ruff fail (returncode !=0), path remains in pending_verifies, failure reported, no clear.
     Uses monkeypatch to simulate ruff failure reliably.
     """
-    from unittest.mock import patch
     import json as _json
+    from unittest.mock import patch
 
     edit_call = _json.dumps(
         {
@@ -776,8 +774,8 @@ def test_ruff_failure_does_not_clear_pending(tmp_path: Path) -> None:
 )
 def test_pytest_failure_keeps_pending_after_ruff_success(tmp_path: Path) -> None:
     """Negative test for pytest failure after ruff success (ruff 0, pytest 1): assert path remains in pending, failure reported."""
-    from unittest.mock import patch
     import json as _json
+    from unittest.mock import patch
 
     edit_call = _json.dumps(
         {
@@ -810,8 +808,7 @@ def test_pytest_failure_keeps_pending_after_ruff_success(tmp_path: Path) -> None
     def side_effect(cmd, **kwargs):
         if "ruff" in " ".join(cmd):
             return type("R", (), {"stdout": "", "stderr": "", "returncode": 0})()
-        else:
-            return type("R", (), {"stdout": "FAILED", "stderr": "", "returncode": 1})()
+        return type("R", (), {"stdout": "FAILED", "stderr": "", "returncode": 1})()
 
     with patch.object(_sp, "run", side_effect=side_effect):
         session.ask(

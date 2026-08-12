@@ -3,6 +3,8 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from helpers import make_settings
+
 from agentx.approval import ApprovalMode, ApprovalPolicy
 from agentx.cli import NON_BLOCKING_COMMANDS, SLASH_COMMANDS, ShellState
 from agentx.cli_slash_shims import (
@@ -17,8 +19,6 @@ from agentx.cli_slash_shims import (
 from agentx.config import Settings
 from agentx.jobs import PromptJobQueue
 from agentx.protocol import ToolResult
-
-from helpers import make_settings
 
 _CLI_SOURCE = Path(__file__).resolve().parents[1] / "src" / "agentx" / "cli.py"
 
@@ -193,7 +193,7 @@ def test_zero_arg_commands_reject_extra_args(tmp_path: Path) -> None:
 
 
 def test_non_blocking_commands_set() -> None:
-    assert NON_BLOCKING_COMMANDS == {"/jobs", "/cancel"}
+    assert {"/jobs", "/cancel"} == NON_BLOCKING_COMMANDS
 
 
 def test_all_slash_commands_have_handlers() -> None:

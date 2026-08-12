@@ -7,7 +7,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from agentx.fidelity import fidelity_passed, format_fidelity_report, run_fidelity_probe  # noqa: E402
+from agentx.fidelity import (  # noqa: E402
+    fidelity_passed,
+    format_fidelity_report,
+    run_fidelity_probe,
+)
 
 
 def main() -> None:

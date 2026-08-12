@@ -154,10 +154,10 @@ def test_session_store_handles_corrupt_lines(tmp_path: Path) -> None:
 
 
 def test_persistence_in_agent_session(tmp_path: Path) -> None:
+    from helpers import make_settings
+
     from agentx.loop import AgentSession
     from agentx.tools import ToolRegistry, builtin_tools
-
-    from helpers import make_settings
 
     class FakeOllama:
         model = "fake"

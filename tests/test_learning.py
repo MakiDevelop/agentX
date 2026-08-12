@@ -1,9 +1,9 @@
 from pathlib import Path
 
 import pytest
+from helpers import make_settings
 
 from agentx.learning import LearningManager, LearningProposal
-from helpers import make_settings
 
 
 def _manager(workspace: Path) -> LearningManager:

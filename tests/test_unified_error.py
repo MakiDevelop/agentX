@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from agentx.protocol import ToolResult
-from agentx.tools.registry import ToolRegistry
 from agentx.safety import Risk
+from agentx.tools.registry import ToolRegistry
 
 
 class _FailingTool:

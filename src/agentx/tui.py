@@ -7,9 +7,9 @@ from collections.abc import Callable, Mapping
 from prompt_toolkit.application import Application
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import HSplit, Layout, Window
-from prompt_toolkit.widgets.base import Frame
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.widgets import TextArea
+from prompt_toolkit.widgets.base import Frame
 
 from agentx.prompting import SlashCommandCompleter
 
@@ -23,7 +23,7 @@ def format_assistant_header() -> str:
 
 
 class AgentXTuiWriter:
-    def __init__(self, tui: "AgentXTui") -> None:
+    def __init__(self, tui: AgentXTui) -> None:
         self.tui = tui
 
     def write(self, data: str) -> int:
@@ -124,7 +124,7 @@ class AgentXTui:
 
     def _accept_input(self, buffer: object) -> bool:
         text = getattr(buffer, "text", "").strip()
-        getattr(buffer, "reset")()
+        buffer.reset()
         if text:
             self.write(format_user_message(text))
             self._input_queue.put(text)

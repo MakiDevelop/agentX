@@ -4,7 +4,6 @@ import json
 import re
 from typing import Any
 
-
 JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
 
 
@@ -49,8 +48,7 @@ def _fix_common_malformed_json(s: str) -> str:
     # Best-effort single to double quotes for keys and string values
     s = re.sub(r"'([^'\\]*(?:\\.[^'\\]*)*)'", r'"\1"', s)
     # Fix invalid escape sequences inside JSON strings (common with code-in-JSON)
-    s = _fix_invalid_escapes(s)
-    return s
+    return _fix_invalid_escapes(s)
 
 
 def _fix_invalid_escapes(s: str) -> str:
