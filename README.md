@@ -781,12 +781,34 @@ denylist 可以被引號、alias、字串變形繞過，allowlist 不行；留�
 denylist 只會製造安全幻覺，因此已於 2026-08 移除。相關保證見
 `tests/test_safety.py`。
 
+## 可靠性與目標門檻
+
+這組命令服務「弱模型也要能可靠承接任務」這條主線：先量測、再宣告完成。
+
+| 命令 | 用途 |
+|------|------|
+| `agentx reliability-suite --json` | 執行 recorded（或明確 pin 的 live）後端可靠性套件，輸出各 case 的 artifact 完整度、終止原因與恢復建議 |
+| `agentx reliability-profile --json` | 檢視目前 pin 住的 backend/model profile —— live 證據必須綁定明確的模型版本，否則跨模型的數字不可比較 |
+| `agentx reliability-decision --json` | 預覽或寫入可靠性門檻的決策 artifact（哪個 bar、依據什麼證據、由誰 ratify） |
+| `agentx objective-gate --json` | 唯讀的目標完成閘門：檢查目前 objective 的完成條件是否都有證據支撐，不會修改任何狀態 |
+| `agentx command-parity --json` | 列出 slash command 與 runner JSON 命令的對照表，確認互動式流程與外部 runner 介面沒有分岔 |
+
+`objective-gate` 與 `command-parity` 都是**唯讀**的，可以安全地放進 CI 或 preflight。
+
 ## 開發驗證
 
 ```bash
 uv run ruff check .
+uv run ruff format --check .
 uv run pytest -q
+python scripts/check-docs-drift.py
 ```
+
+`check-docs-drift.py` 會比對 `agentx --help` 的實際命令清單與本 README，
+任何一邊漏掉就 fail。這個檢查存在的原因很具體：這個 repo 已經被
+「手寫文件與機器可讀真相脫節」咬過三次 —— `safety.py` 的死風險表、
+system prompt 的工具清單、以及本 README 漏掉的 5 個命令。
+修法不是「下次記得更新」，是讓忘記這件事會當場紅燈。
 
 ## 下一步
 

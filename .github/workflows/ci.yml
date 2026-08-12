@@ -61,6 +61,9 @@ jobs:
         # We keep the call so the step is visible and for future "PR diff mode".
         run: python scripts/check-lockfile-commit.py || true
 
+      - name: Docs drift (README vs actual CLI commands)
+        run: python scripts/check-docs-drift.py
+
       - name: No legacy task module guard
         run: python scripts/check_no_legacy_task.py
 

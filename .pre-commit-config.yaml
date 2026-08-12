@@ -56,6 +56,17 @@ repos:
           lockfile change (direct or transitive) to be a deliberate reviewed
           action. See scripts/check-lockfile-commit.py and pi's equivalent.
 
+      - id: check-docs-drift
+        name: check-docs-drift (README vs actual CLI commands)
+        entry: uv run --frozen python scripts/check-docs-drift.py
+        language: system
+        pass_filenames: false
+        files: ^(README\.md|src/agentx/cli\.py)$
+        description: >
+          Fail if README documents a command that does not exist, or misses one
+          that does. Hand-maintained duplicates of machine-readable truth have
+          drifted three times in this repo; this makes forgetting fail loudly.
+
       - id: check-no-legacy-task
         name: check-no-legacy-task (MT22 task.py guard)
         entry: uv run --frozen python scripts/check_no_legacy_task.py
