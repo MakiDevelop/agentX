@@ -8,10 +8,24 @@ on:
 
 env:
   UV_PYTHON_PREFERENCE: only-managed
-  # 2-day "exclude newer" gate (pi's min-release-age=2 equivalent).
-  # See uv docs for --exclude-newer / UV_EXCLUDE_NEWER (supports "2d" relative form
-  # in recent uv). This is the age gate, not a minimum-age env var.
-  UV_EXCLUDE_NEWER: "2d"
+  # NOTE: do NOT set UV_EXCLUDE_NEWER at workflow level.
+  #
+  # It reads as a resolver setting, so uv treats its presence as a change to how
+  # the lockfile was produced and re-resolves ("Resolving despite existing
+  # lockfile due to addition of global exclude newer ..."). Every `--frozen` /
+  # `--check` step below then fails with "lockfile needs to be updated", which is
+  # exactly what happened: CI was red on every push from 2026-07-15 onward and
+  # died at ~13s, so the test suite never ran.
+  #
+  # The 2-day age gate (pi's min-release-age=2 equivalent) belongs at *resolution*
+  # time, not verification time. CI never resolves — it only verifies an
+  # already-committed lockfile. The gate is applied by whoever runs `uv lock`:
+  #
+  #     UV_EXCLUDE_NEWER=2d uv lock
+  #
+  # enforced socially by scripts/check-lockfile-commit.py, which blocks any commit
+  # touching uv.lock unless AGENTX_ALLOW_LOCKFILE_CHANGE=1 is set deliberately.
+  # See docs/BORROW-FROM-PI.md.
 
 jobs:
   lint-and-supply-chain:

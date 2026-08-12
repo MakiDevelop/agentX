@@ -36,7 +36,17 @@ agentX 目前未發布到 PyPI，但若未來發布，這套防禦值得移植�
   - ruff（lint + format）— 實現 AGENTX.md 原本的承諾。
   - 兩個 local hook 綁定上述兩個 check 腳本。
 - **.github/workflows/ci.yml**：push / PR 執行 pinned check、uv lock --check、lock guard script、uvx pip-audit（等同 audit 層）、ruff、快速測試。
-- **min-release-age / age gate**：CI 設定 `UV_EXCLUDE_NEWER=2d`（uv 的 --exclude-newer 相對形式，等同 pi 的 min-release-age=2）。本地更新時可 `export UV_EXCLUDE_NEWER=2d; uv lock`。注意 uv 使用的是 exclude-newer 而非 minimum-age 變數。
+- **min-release-age / age gate**：等同 pi 的 `min-release-age=2`，用 uv 的 `--exclude-newer` 相對形式。
+  **這個 gate 只能在 resolution 時套用，不能放進 CI。**
+  更新依賴時執行：`UV_EXCLUDE_NEWER=2d uv lock`。
+  由 `scripts/check-lockfile-commit.py` 的 review checklist 提醒（CI 無法驗證）。
+
+  > **踩過的坑（2026-08 修正）**：原本在 `ci.yml` 的 workflow-level `env:` 設
+  > `UV_EXCLUDE_NEWER: "2d"`。uv 把它當成 resolver setting，一旦出現就會忽略既有
+  > lockfile 重新 resolve（`Resolving despite existing lockfile due to addition of
+  > global exclude newer ...`），導致所有 `--frozen` / `--check` 步驟必定失敗。
+  > 結果是 2026-07-15 起每一次 push 的 CI 都在 13 秒紅掉，測試從未跑過。
+  > CI 的職責是**驗證**已 commit 的 lockfile，不是重新 resolve —— 兩者不能混用同一個變數。
 - **allowlist / lifecycle (layer 3)**：目前以「任何觸及 uv.lock 的變更都強制 review」+「新包若只有 sdist 無 wheel 需特別注意」機制近似涵蓋。這比 pi 的自動 shrinkwrap 驗證 + 明確 allowlist 稍弱（見 Codex review 回饋）。未來可擴充 check-pinned 或新增 check-build-allowlist.py 做自動偵測 + 清單。
 - **未來 PyPI 路徑**（保留）：`uv export --format requirements-txt --frozen --no-dev -o constraints.txt` + `--require-hashes` 安裝，等同 shrinkwrap 層。發布前可加 generate 腳本 + 驗證。
 
