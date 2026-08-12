@@ -758,11 +758,28 @@ mini2 主路徑 `http://100.89.41.50:9100`。詳細見 AGENTX.md Lab Notes 與 `
 
 ## 安全模型
 
-- GREEN：唯讀操作，自動執行
-- YELLOW：可逆變更，後續會接 approval gate
-- RED：破壞性或敏感操作，禁止或必須 Maki 確認
+風險由每個 Tool 以 `risk` class attribute 宣告，並且**只在一個地方**執行：
+`ToolRegistry.run()`（`src/agentx/tools/registry.py`）。沒有第二份風險表。
 
-目前不支援任意 shell command；`/run` 只允許固定 allowlist，`/docker` 只允許固定 Docker Compose allowlist。
+- **GREEN**：唯讀操作，直接執行，不經 approval。
+- **YELLOW**：可逆變更，必須通過 approval gate。**fail-closed** —— 若沒有設定
+  approver 也沒有 `auto_approve_yellow`，工具不會執行而是回傳錯誤。
+- **RED**：registry 一律不執行，沒有「確認後放行」的路徑。
+
+### 命令層：allowlist，不是 denylist
+
+agentX **不支援任意 shell command**。`/run`（`run_command`，GREEN）與
+`run_build_command`（YELLOW）都只接受**字面完全相符**的 allowlist 條目
+（`ALLOWED_COMMANDS` / `BUILD_COMMANDS`，定義在 `src/agentx/tools/_helpers.py`），
+`/docker` 同理只允許固定的 Docker Compose 動作。命令以 argv 陣列執行（`shell=False`），
+所以 `ls; rm -rf .` 這類拼接不會被展開 —— 它單純不在表內，直接 `PermissionError`。
+
+這裡刻意**不做** pattern matching。早期版本另有一份 `rm -rf` / `~/.ssh` 的字串
+denylist，但它從未被任何 production 路徑呼叫，而且已經和真實的 tool 宣告漂移
+（33 個工具裡有 6 個分類不符，`write_file` / `edit_file` 在該表被標成 RED）。
+denylist 可以被引號、alias、字串變形繞過，allowlist 不行；留著一份不會執行的
+denylist 只會製造安全幻覺，因此已於 2026-08 移除。相關保證見
+`tests/test_safety.py`。
 
 ## 開發驗證
 
