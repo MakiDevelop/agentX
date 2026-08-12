@@ -22,9 +22,9 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "agentx"
 
-#: Measured after extracting cli_git.py, cli_output.py and cli_verify.py.
+#: Measured after extracting cli_git, cli_output, cli_verify and cli_artifacts.
 #: Only ever revise downward.
-MAX_CLI_LINES = 11_400
+MAX_CLI_LINES = 10_900
 
 #: No other module should become the new dumping ground. Set just above the
 #: largest legitimate module (loop.py, 1,508 lines — the agent loop itself),
@@ -62,7 +62,7 @@ def test_no_new_oversized_modules() -> None:
     )
 
 
-EXTRACTED_MODULES = ("cli_git.py", "cli_output.py", "cli_verify.py")
+EXTRACTED_MODULES = ("cli_git.py", "cli_output.py", "cli_verify.py", "cli_artifacts.py")
 
 
 def test_extracted_git_module_stays_closed() -> None:
