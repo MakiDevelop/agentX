@@ -159,16 +159,44 @@ def _patch_path(raw: str, *, strip: int) -> str | None:
     return "/".join(parts[strip:])
 
 
+#: External binaries agentX shells out to, with an actionable install hint.
+#: `search_text`, `find_files` and `locate_topic` are the model's primary way of
+#: seeing a repo, so "rg not on PATH" is a capability outage, not a stack trace.
+REQUIRED_BINARY_HINTS = {
+    "rg": (
+        "ripgrep (rg) is required for search_text / find_files / locate_topic. "
+        "Install it with: brew install ripgrep | apt install ripgrep | "
+        "cargo install ripgrep. Check with: agentx doctor"
+    ),
+}
+
+
+class MissingBinaryError(RuntimeError):
+    """Raised when a required external tool is not on PATH.
+
+    Distinct from a bare FileNotFoundError so callers (and the model reading the
+    tool result) can tell "this environment lacks a tool" apart from "the file
+    you asked for does not exist".
+    """
+
+
 def run_subprocess(
     cmd: list[str],
     cwd: Path,
     timeout: float = 20.0,
 ) -> tuple[int, str]:
-    completed = run_process(
-        cmd,
-        cwd=cwd,
-        timeout=timeout,
-    )
+    try:
+        completed = run_process(
+            cmd,
+            cwd=cwd,
+            timeout=timeout,
+        )
+    except FileNotFoundError as exc:
+        program = cmd[0] if cmd else ""
+        hint = REQUIRED_BINARY_HINTS.get(program)
+        if hint is None:
+            raise
+        raise MissingBinaryError(hint) from exc
     output = completed.stdout or completed.stderr
     return completed.returncode, output
 

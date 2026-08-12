@@ -79,7 +79,7 @@ def test_doctor_static_json_outputs_local_checks(tmp_path) -> None:  # noqa: ANN
     assert payload["workflow_artifact_health"]["schema"] == "agentx.workflow_artifact_health.v1"
     assert payload["workflow_artifact_health"]["status"] == "no_workflow_artifact"
     names = {check["name"] for check in payload["checks"]}
-    assert names == {"uv", "git", "task_migration (MT22)"}
+    assert names == {"uv", "git", "rg", "task_migration (MT22)"}
 
 
 def test_doctor_static_warns_for_workflow_artifact_needing_inspect(tmp_path) -> None:  # noqa: ANN001

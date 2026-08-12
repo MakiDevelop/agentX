@@ -37,6 +37,12 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
+      - name: Install ripgrep
+        # search_text / find_files / locate_topic shell out to `rg`. Without it
+        # those tests fail with FileNotFoundError rather than exercising the code
+        # (8 of the 13 failures seen the first time CI actually reached pytest).
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
       - name: Install the project (dev)
         run: uv sync --all-extras --dev --frozen
 

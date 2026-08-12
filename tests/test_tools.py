@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,14 @@ from agentx.tools import (
     docker_compose_command,
     extract_web_text,
     validate_external_url,
+)
+
+#: search_text / find_files / locate_topic shell out to ripgrep. Skipping is
+#: honest ("we did not test this here") where failing would be a lie about the
+#: code. CI installs ripgrep so these never skip there — see .github/workflows.
+requires_ripgrep = pytest.mark.skipif(
+    shutil.which("rg") is None,
+    reason="ripgrep (rg) not installed; see `agentx doctor`",
 )
 
 
@@ -73,6 +82,7 @@ def test_plan_task_tool_returns_read_only_checklist(tmp_path: Path) -> None:
     assert "新增 workflow 測試" in result.content
 
 
+@requires_ripgrep
 def test_find_files_path_match_without_content_match(tmp_path: Path) -> None:
     (tmp_path / "approval_policy.md").write_text("unrelated", encoding="utf-8")
     registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
@@ -86,6 +96,7 @@ def test_find_files_path_match_without_content_match(tmp_path: Path) -> None:
     assert "- /read approval_policy.md" in result.content
 
 
+@requires_ripgrep
 def test_find_files_content_match_and_no_result(tmp_path: Path) -> None:
     src = tmp_path / "src"
     src.mkdir()
@@ -104,6 +115,7 @@ def test_find_files_content_match_and_no_result(tmp_path: Path) -> None:
     assert "No matches for 'not-present'" in missing.content
 
 
+@requires_ripgrep
 def test_find_files_respects_path_and_result_limits(tmp_path: Path) -> None:
     (tmp_path / "src").mkdir()
     (tmp_path / "docs").mkdir()
@@ -125,6 +137,7 @@ def test_find_files_respects_path_and_result_limits(tmp_path: Path) -> None:
     assert result.content.count("/read ") == 2
 
 
+@requires_ripgrep
 def test_locate_topic_ranks_path_stem_entry_point(tmp_path: Path) -> None:
     src = tmp_path / "src" / "agentx"
     src.mkdir(parents=True)
@@ -140,6 +153,7 @@ def test_locate_topic_ranks_path_stem_entry_point(tmp_path: Path) -> None:
     assert "- /read src/agentx/approval.py" in result.content
 
 
+@requires_ripgrep
 def test_locate_topic_prefers_multi_term_matches(tmp_path: Path) -> None:
     src = tmp_path / "src"
     src.mkdir()
@@ -155,6 +169,7 @@ def test_locate_topic_prefers_multi_term_matches(tmp_path: Path) -> None:
     assert "multi-term" in locations.splitlines()[0]
 
 
+@requires_ripgrep
 def test_locate_topic_strips_question_noise_and_handles_no_results(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
     docs.mkdir()
@@ -172,6 +187,7 @@ def test_locate_topic_strips_question_noise_and_handles_no_results(tmp_path: Pat
     assert "No locations for" in missing.content
 
 
+@requires_ripgrep
 def test_locate_topic_rejects_empty_topic_and_limits_output(tmp_path: Path) -> None:
     src = tmp_path / "src"
     src.mkdir()
@@ -189,6 +205,7 @@ def test_locate_topic_rejects_empty_topic_and_limits_output(tmp_path: Path) -> N
     assert result.content.count("/read ") == 2
 
 
+@requires_ripgrep
 def test_locate_topic_skips_local_memory_store(tmp_path: Path) -> None:
     (tmp_path / ".amh").mkdir()
     (tmp_path / ".amh" / "handoff.json").write_text("handoff\n", encoding="utf-8")
@@ -738,3 +755,55 @@ def test_insert_code_registry_name_resolution(tmp_path: Path) -> None:
     tool = registry.get("insert_code")
     assert tool is not None
     assert tool.name == "insert_code"
+
+
+def test_missing_ripgrep_reports_an_actionable_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A missing binary is a capability outage, not a stack trace.
+
+    Before this, an environment without ripgrep produced
+    "FileNotFoundError: [Errno 2] No such file or directory: 'rg'" — which tells
+    neither the user nor the model what to do about it. CI hit exactly this in
+    8 tests the first time it managed to run the suite.
+    """
+    from agentx.tools import _helpers
+
+    def _no_rg(*args: object, **kwargs: object) -> object:
+        raise FileNotFoundError(2, "No such file or directory", "rg")
+
+    monkeypatch.setattr(_helpers, "run_process", _no_rg)
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+
+    result = registry.run("search_text", {"pattern": "anything"})
+
+    assert not result.ok
+    assert "ripgrep" in result.content
+    assert "install" in result.content.lower()
+    assert "agentx doctor" in result.content
+    assert result.error_type == "MissingBinaryError"
+
+
+def test_unknown_missing_binary_still_raises_filenotfound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only binaries we have a hint for are translated; nothing is swallowed."""
+    from agentx.tools import _helpers
+
+    def _boom(*args: object, **kwargs: object) -> object:
+        raise FileNotFoundError(2, "No such file or directory", "some-other-tool")
+
+    monkeypatch.setattr(_helpers, "run_process", _boom)
+
+    with pytest.raises(FileNotFoundError):
+        _helpers.run_subprocess(["some-other-tool"], cwd=tmp_path)
+
+
+def test_doctor_checks_ripgrep() -> None:
+    """`agentx doctor` must surface a missing rg before a tool call does."""
+    import inspect
+
+    from agentx import doctor
+
+    source = inspect.getsource(doctor.run_static_doctor)
+    assert '"rg"' in source

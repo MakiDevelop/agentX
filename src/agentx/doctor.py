@@ -16,6 +16,7 @@ def run_doctor(
     return [
         _check_command("uv", ["uv", "--version"]),
         _check_command("git", ["git", "status", "--short", "--branch"], cwd=settings.workspace),
+        _check_command("rg", ["rg", "--version"]),
         _check_ollama(settings, ollama),
         _check_model(settings, ollama),
         _check_memory_backend(settings, memory),
@@ -29,6 +30,9 @@ def run_static_doctor(settings: Settings) -> list[tuple[str, bool, str]]:
     return [
         _check_command("uv", ["uv", "--version"]),
         _check_command("git", ["git", "status", "--short", "--branch"], cwd=settings.workspace),
+        # rg is not optional: search_text / find_files / locate_topic are how the
+        # model sees the repo at all. Without it those tools fail at call time.
+        _check_command("rg", ["rg", "--version"]),
         _check_task_migration(settings),
     ]
 
