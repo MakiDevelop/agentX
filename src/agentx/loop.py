@@ -43,6 +43,7 @@ from agentx.memory_hall import MemoryHallClient
 from agentx.tools import ToolRegistry
 from agentx.learning import load_learning_manager, LearningManager
 from agentx.session_store import SessionStore
+from agentx.proc import run_process
 
 EDITING_TOOLS = {"edit_file", "write_file", "search_replace", "insert_code", "apply_patch"}
 
@@ -1261,13 +1262,9 @@ class AgentSession:
         succeeded = []
         for p in list(self.pending_verifies):
             try:
-                import subprocess
-
-                r = subprocess.run(
+                r = run_process(
                     ["uv", "run", "ruff", "check", p],
                     cwd=self.settings.workspace,
-                    capture_output=True,
-                    text=True,
                     timeout=30,
                 )
                 ruff_out = f"$ uv run ruff check {p}\n{r.stdout}{r.stderr}".strip()
@@ -1306,11 +1303,9 @@ class AgentSession:
                     cmd = ["uv", "run", "pytest", "-q", "--tb=no", p, "--maxfail=1"]
                 else:
                     cmd = ["uv", "run", "pytest", "-q", "--tb=no", "-k", stem, "--maxfail=1"]
-                r = subprocess.run(
+                r = run_process(
                     cmd,
                     cwd=self.settings.workspace,
-                    capture_output=True,
-                    text=True,
                     timeout=60,
                 )
                 pytest_out = (

@@ -4,6 +4,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from agentx.proc import run_process
+
 
 @dataclass(frozen=True)
 class GitCommitPlan:
@@ -21,7 +23,8 @@ class GitPushError(ValueError):
 
 
 def build_commit_plan(workspace: Path) -> GitCommitPlan:
-    status = _git(workspace, ["status", "--short", "--branch"]).stdout
+    # --porcelain=v1: parse_status_files() reads fixed-width status codes below.
+    status = _git(workspace, ["status", "--porcelain=v1", "--branch"]).stdout
     diff_stat = _git(workspace, ["diff", "--stat"]).stdout
     files = parse_status_files(status)
     return GitCommitPlan(status=status, diff_stat=diff_stat, files=files)
@@ -128,11 +131,10 @@ def _validate_git_paths(workspace: Path, paths: list[str]) -> list[str]:
 
 
 def _git(workspace: Path, args: list[str], check: bool = False) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    # Locale-pinned: commit/push output is parsed and surfaced. See agentx.proc.
+    return run_process(
         ["git", *args],
         cwd=workspace,
-        text=True,
-        capture_output=True,
         timeout=120,
         check=check,
     )

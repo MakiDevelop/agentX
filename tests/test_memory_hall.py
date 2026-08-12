@@ -219,7 +219,7 @@ class TestAmhClient:
         client = AmhClient(store="json", store_path="/tmp/test-amh.json")
         captured = {}
 
-        def fake_run(cmd, input=None, capture_output=True, timeout=None, check=False):
+        def fake_run(cmd, input=None, **kwargs):  # noqa: A002, ANN003
             captured["cmd"] = cmd
             captured["input"] = input
 
@@ -255,7 +255,7 @@ class TestAmhClient:
             "query keyword here",
         ]
 
-        def fake_run(cmd, input=None, capture_output=True, timeout=None, check=False):
+        def fake_run(cmd, input=None, **kwargs):  # noqa: A002, ANN003
             class Result:
                 returncode = 0
                 stdout = "\n".join(output_lines).encode()
@@ -279,7 +279,7 @@ class TestAmhClient:
         client = AmhClient()
         calls = []
 
-        def fake_run(cmd, input=None, capture_output=True, timeout=None, check=False):
+        def fake_run(cmd, input=None, **kwargs):  # noqa: A002, ANN003
             calls.append(cmd)
 
             class Result:
@@ -320,7 +320,7 @@ class TestAmhClient:
         client = AmhClient()
         mock_output = "line with mem-456\nirrelevant\nanother with mem-456"
 
-        def fake_run(cmd, input=None, capture_output=True, timeout=None, check=False):
+        def fake_run(cmd, input=None, **kwargs):  # noqa: A002, ANN003
             class Result:
                 returncode = 0
                 stdout = mock_output.encode()
@@ -434,7 +434,7 @@ class TestMemoryStatusPayload:
     def test_memory_status_payload_live_probe(self, tmp_path, monkeypatch):
         monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/amh" if name == "amh" else None)
 
-        def fake_run(cmd, capture_output=True, timeout=None, check=False):
+        def fake_run(cmd, **kwargs):  # noqa: ANN003
             class Result:
                 returncode = 0
                 stdout = b"Usage: amh"

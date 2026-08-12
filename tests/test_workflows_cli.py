@@ -272,7 +272,7 @@ def test_workflow_run_payload_execute_stops_before_non_agentx_step(tmp_path, mon
         calls.append((argv, kwargs["cwd"]))
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr("agentx.cli.subprocess.run", fake_run)
+    monkeypatch.setattr("agentx.cli.run_process", fake_run)
 
     payload = workflow_run_payload("infra", workspace=tmp_path, execute=True)
 
@@ -285,7 +285,7 @@ def test_workflow_run_payload_execute_stops_before_non_agentx_step(tmp_path, mon
 
 def test_workflow_run_payload_execute_stops_before_yellow_gate(tmp_path, monkeypatch) -> None:  # noqa: ANN001
     monkeypatch.setattr(
-        "agentx.cli.subprocess.run",
+        "agentx.cli.run_process",
         lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stdout="ok", stderr=""),
     )
 
@@ -301,7 +301,7 @@ def test_workflow_run_payload_execute_stops_before_yellow_gate(tmp_path, monkeyp
 def test_workflow_run_payload_allow_yellow_requires_reason(tmp_path, monkeypatch) -> None:  # noqa: ANN001
     calls = []
     monkeypatch.setattr(
-        "agentx.cli.subprocess.run",
+        "agentx.cli.run_process",
         lambda argv, **kwargs: (
             calls.append(argv) or subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
         ),
@@ -328,7 +328,7 @@ def test_workflow_run_payload_allow_yellow_executes_with_receipt(tmp_path, monke
         calls.append(argv)
         return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr("agentx.cli.subprocess.run", fake_run)
+    monkeypatch.setattr("agentx.cli.run_process", fake_run)
 
     payload = workflow_run_payload(
         "memory",
@@ -1058,7 +1058,7 @@ def test_workflow_resume_execute_uses_artifact_workspace_and_reports_result(
             argv, 7, stdout="resume stdout\n", stderr="resume stderr\n"
         )
 
-    monkeypatch.setattr("agentx.cli.subprocess.run", fake_run)
+    monkeypatch.setattr("agentx.cli.run_process", fake_run)
 
     result = CliRunner().invoke(app, ["workflow-resume", str(source), "--execute", "--json"])
 
@@ -1083,7 +1083,8 @@ def test_workflow_resume_execute_uses_artifact_workspace_and_reports_result(
                 "完成與待辦=完成 AMH 交接",
                 "--json",
             ],
-            {"cwd": tmp_path.resolve(), "text": True, "check": False, "capture_output": True},
+            # text / capture_output / check are now defaults inside run_process.
+            {"cwd": tmp_path.resolve()},
         )
     ]
 

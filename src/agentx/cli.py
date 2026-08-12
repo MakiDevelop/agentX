@@ -65,6 +65,7 @@ from agentx.infrastructure_context import (
 )
 from agentx.intent import plan_task_items
 from agentx.jobs import PromptJobQueue
+from agentx.proc import run_process
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import (
     MemoryHallClient,
@@ -551,13 +552,10 @@ def workflow_run_payload(
                         "approval_required": approval_required,
                     }
                     break
-            completed = subprocess.run(
+            completed = run_process(
                 shlex.split(command),
                 cwd=settings.workspace,
-                text=True,
-                capture_output=True,
                 timeout=timeout,
-                check=False,
             )
             executed_steps.append(
                 {
@@ -3350,13 +3348,12 @@ def _parse_git_branch_status(branch_line: str) -> dict[str, object]:
 
 def git_status_payload(workspace: Path) -> dict[str, object]:
     try:
-        result = subprocess.run(
-            ["git", "status", "--short", "--branch"],
+        # --porcelain=v1 (not --short): the branch header and status codes are a
+        # documented machine contract and are never translated. See agentx.proc.
+        result = run_process(
+            ["git", "status", "--porcelain=v1", "--branch"],
             cwd=workspace,
-            capture_output=True,
-            text=True,
             timeout=10,
-            check=False,
         )
     except Exception as exc:
         return {
@@ -3394,13 +3391,10 @@ def _git_read(
     *,
     timeout: int = 10,
 ) -> tuple[int, str, str]:
-    result = subprocess.run(
+    result = run_process(
         ["git", *args],
         cwd=workspace,
-        capture_output=True,
-        text=True,
         timeout=timeout,
-        check=False,
     )
     return result.returncode, result.stdout, result.stderr
 
@@ -3620,14 +3614,11 @@ def _git_apply_read(
     patch: str,
     timeout: int = 20,
 ) -> tuple[int, str, str]:
-    completed = subprocess.run(
+    completed = run_process(
         ["git", "apply", *args, "-"],
         cwd=workspace,
         input=patch,
-        text=True,
-        capture_output=True,
         timeout=timeout,
-        check=False,
     )
     return completed.returncode, completed.stdout, completed.stderr
 
@@ -4129,13 +4120,10 @@ def verify_payload(
     for command in commands:
         command_text = shlex.join(command)
         try:
-            completed = subprocess.run(
+            completed = run_process(
                 command,
                 cwd=settings.workspace,
-                text=True,
-                capture_output=True,
                 timeout=timeout,
-                check=False,
             )
             stdout = (completed.stdout or "")[:output_limit]
             stderr = (completed.stderr or "")[:output_limit]
@@ -6374,12 +6362,9 @@ def workflow_resume_execution_cwd(inspect_payload: dict[str, object]) -> Path:
 
 
 def execute_workflow_resume_payload(payload: dict[str, object], *, cwd: Path) -> dict[str, object]:
-    completed = subprocess.run(
+    completed = run_process(
         list(payload["argv"]),  # type: ignore[arg-type]
         cwd=cwd,
-        text=True,
-        check=False,
-        capture_output=True,
     )
     updated = dict(payload)
     updated.update(
@@ -9501,33 +9486,13 @@ class RecordedReliabilityClient:
 
 def _git_fixture(workspace: Path) -> None:
     workspace.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "init"], cwd=workspace, check=True, capture_output=True, text=True)
-    subprocess.run(
-        ["git", "config", "user.email", "test@example.com"],
-        cwd=workspace,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "Test User"],
-        cwd=workspace,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    run_process(["git", "init"], cwd=workspace, check=True)
+    run_process(["git", "config", "user.email", "test@example.com"], cwd=workspace, check=True)
+    run_process(["git", "config", "user.name", "Test User"], cwd=workspace, check=True)
     (workspace / ".gitignore").write_text(".agentx/\n", encoding="utf-8")
     (workspace / "README.md").write_text("# Reliability Fixture\n", encoding="utf-8")
-    subprocess.run(
-        ["git", "add", ".gitignore", "README.md"],
-        cwd=workspace,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    subprocess.run(
-        ["git", "commit", "-m", "init"], cwd=workspace, check=True, capture_output=True, text=True
-    )
+    run_process(["git", "add", ".gitignore", "README.md"], cwd=workspace, check=True)
+    run_process(["git", "commit", "-m", "init"], cwd=workspace, check=True)
 
 
 def _run_reliability_case(

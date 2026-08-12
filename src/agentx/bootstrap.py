@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import os
-import subprocess
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Protocol
 
+from agentx.proc import run_process
 from agentx.tools import SKIPPED_DIRS
 
 LOCAL_INSTRUCTIONS_SCHEMA = "agentx.local_instructions.v1"
@@ -166,13 +166,12 @@ def _read_bootstrap_file(workspace: Path, item: BootstrapFile) -> str | None:
 
 
 def _git_status(workspace: Path) -> str:
-    completed = subprocess.run(
-        ["git", "status", "--short", "--branch"],
+    # --porcelain=v1 (not --short): this text is fed to the model as repo
+    # context, so it must not vary with the operator's locale. See agentx.proc.
+    completed = run_process(
+        ["git", "status", "--porcelain=v1", "--branch"],
         cwd=workspace,
-        text=True,
-        capture_output=True,
         timeout=10,
-        check=False,
     )
     output = completed.stdout or completed.stderr
     return f"--- git status ---\n{output.strip()}"

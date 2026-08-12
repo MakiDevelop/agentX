@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import shlex
 import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from pypdf import PdfReader
+from agentx.proc import run_process
 
 
 SENSITIVE_PARTS = {".ssh", ".gnupg", ".secrets"}
@@ -148,12 +148,9 @@ def _read_image(path: Path) -> str:
 def _try_tesseract(path: Path) -> str:
     if shutil.which("tesseract") is None:
         return ""
-    completed = subprocess.run(
+    completed = run_process(
         ["tesseract", str(path), "stdout", "-l", "eng+chi_tra"],
-        text=True,
-        capture_output=True,
         timeout=30,
-        check=False,
     )
     if completed.returncode != 0:
         return ""

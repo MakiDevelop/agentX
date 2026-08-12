@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -15,6 +14,7 @@ from agentx.memory_hall import MemoryHallClient
 from agentx.context_compactor import LLMContextCompactor
 from agentx.runtime_prompt import PLANNING_SYSTEM_PROMPT, build_worker_system_prompt
 from agentx.tools import ToolRegistry
+from agentx.proc import run_process
 
 
 @dataclass
@@ -384,13 +384,10 @@ class Orchestrator:
             return True, "no build system detected"
 
         try:
-            completed = subprocess.run(
+            completed = run_process(
                 cmd,
                 cwd=ws,
-                text=True,
-                capture_output=True,
                 timeout=60,
-                check=False,
             )
             output = (completed.stdout + "\n" + completed.stderr).strip()
             return completed.returncode == 0, output

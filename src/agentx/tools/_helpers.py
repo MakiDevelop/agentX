@@ -3,10 +3,11 @@ from __future__ import annotations
 import ast
 import re
 import socket
-import subprocess
 import unicodedata
 from pathlib import Path
 from urllib.parse import urlparse
+
+from agentx.proc import run_process
 
 
 SKIPPED_DIRS = {
@@ -164,13 +165,10 @@ def run_subprocess(
     cwd: Path,
     timeout: float = 20.0,
 ) -> tuple[int, str]:
-    completed = subprocess.run(
+    completed = run_process(
         cmd,
         cwd=cwd,
-        text=True,
-        capture_output=True,
         timeout=timeout,
-        check=False,
     )
     output = completed.stdout or completed.stderr
     return completed.returncode, output

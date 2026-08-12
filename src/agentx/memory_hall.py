@@ -3,12 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
+from agentx.proc import run_process
 
 AMH_STATUS_SCHEMA = "agentx.memory_status.v1"
 MEMORY_READ_SCHEMA = "agentx.memory_read.v1"
@@ -475,12 +475,12 @@ class AmhClient:
             cmd += ["--path", self.store_path]
         if caller_ns:
             cmd += ["--caller-ns", caller_ns]
-        result = subprocess.run(
+        # text=False: the AMH CLI speaks bytes here and callers decode explicitly.
+        result = run_process(
             cmd,
             input=input_text.encode() if input_text else None,
-            capture_output=True,
             timeout=self.timeout,
-            check=False,
+            text=False,
         )
         if result.returncode != 0:
             raise RuntimeError(f"amh command failed: {result.stderr.decode(errors='replace')}")
@@ -744,11 +744,10 @@ def memory_status_payload(
         warnings.append("unknown_memory_backend")
 
     if live_probe and amh_available:
-        completed = subprocess.run(
+        completed = run_process(
             [*amh_command, "--help"],
-            capture_output=True,
             timeout=timeout,
-            check=False,
+            text=False,
         )
         live_probe_result = {
             "command": " ".join([*amh_command, "--help"]),

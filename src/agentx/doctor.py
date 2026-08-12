@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import hashlib
-import subprocess
 from datetime import datetime, timedelta
 
 from agentx.config import Settings
 from agentx.memory_hall import MemoryHallClient
 from agentx.ollama import OllamaClient
 from agentx.tasks import get_task_migration_status
+from agentx.proc import run_process
 
 
 def run_doctor(
@@ -36,9 +36,7 @@ def run_static_doctor(settings: Settings) -> list[tuple[str, bool, str]]:
 
 def _check_command(name: str, command: list[str], cwd=None) -> tuple[str, bool, str]:
     try:
-        result = subprocess.run(
-            command, cwd=cwd, text=True, capture_output=True, timeout=20, check=False
-        )
+        result = run_process(command, cwd=cwd, timeout=20)
     except Exception as exc:
         return name, False, f"{type(exc).__name__}: {exc}"
     output = (result.stdout or result.stderr).strip()

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -12,6 +11,7 @@ from agentx.git_workflow import GitPushError, push_current_branch, stage_paths, 
 from agentx.infrastructure_context import build_infrastructure_context
 from agentx.intent import analyze_intent, plan_task_checklist
 from agentx.memory_hall import MemoryHallClient
+from agentx.proc import run_process
 from agentx.protocol import Tool
 from agentx.safety import Risk
 from agentx.tools._helpers import (
@@ -700,13 +700,10 @@ class RunCommandTool(_WorkspaceTool):
         if command not in ALLOWED_COMMANDS:
             allowed = "\n".join(f"- {item}" for item in sorted(ALLOWED_COMMANDS))
             raise PermissionError(f"Command is not allowlisted: {command}\nAllowed:\n{allowed}")
-        completed = subprocess.run(
+        completed = run_process(
             ALLOWED_COMMANDS[command],
             cwd=self.workspace,
-            text=True,
-            capture_output=True,
             timeout=120,
-            check=False,
         )
         output = completed.stdout or completed.stderr
         return f"$ {command}\nexit={completed.returncode}\n{output.strip()}"
@@ -726,13 +723,10 @@ class RunBuildCommandTool(_WorkspaceTool):
         if command not in BUILD_COMMANDS:
             allowed = "\n".join(f"- {item}" for item in sorted(BUILD_COMMANDS))
             raise PermissionError(f"Command is not allowlisted: {command}\nAllowed:\n{allowed}")
-        completed = subprocess.run(
+        completed = run_process(
             BUILD_COMMANDS[command],
             cwd=self.workspace,
-            text=True,
-            capture_output=True,
             timeout=300,
-            check=False,
         )
         output = completed.stdout or completed.stderr
         return f"$ {command}\nexit={completed.returncode}\n{output.strip()}"
@@ -750,13 +744,10 @@ class RunTestsTool(_WorkspaceTool):
         ]
         outputs: list[str] = []
         for command in commands:
-            completed = subprocess.run(
+            completed = run_process(
                 command,
                 cwd=self.workspace,
-                text=True,
-                capture_output=True,
                 timeout=120,
-                check=False,
             )
             output = completed.stdout or completed.stderr
             outputs.append(f"$ {' '.join(command)}\nexit={completed.returncode}\n{output.strip()}")
@@ -783,13 +774,10 @@ class ApplyPatchTool(_WorkspaceTool):
             patch_path = Path(tf.name)
 
         try:
-            check = subprocess.run(
+            check = run_process(
                 ["git", "apply", "--check", str(patch_path)],
                 cwd=self.workspace,
-                text=True,
-                capture_output=True,
                 timeout=20,
-                check=False,
             )
             if check.returncode != 0:
                 return f"git apply --check failed\n{check.stdout}{check.stderr}".strip()
@@ -800,13 +788,10 @@ class ApplyPatchTool(_WorkspaceTool):
             #    spaces, " b/" in names, renames, copies, binary patches, etc.)
             paths: set[str] = patch_write_paths(patch)
 
-            name_only = subprocess.run(
+            name_only = run_process(
                 ["git", "apply", "--name-only", str(patch_path)],
                 cwd=self.workspace,
-                text=True,
-                capture_output=True,
                 timeout=20,
-                check=False,
             )
             if name_only.returncode == 0:
                 for line in name_only.stdout.strip().splitlines():
@@ -819,13 +804,10 @@ class ApplyPatchTool(_WorkspaceTool):
                     self.workspace, resolve_inside_workspace(self.workspace, path)
                 )
 
-            applied = subprocess.run(
+            applied = run_process(
                 ["git", "apply", str(patch_path)],
                 cwd=self.workspace,
-                text=True,
-                capture_output=True,
                 timeout=20,
-                check=False,
             )
             output = (applied.stdout + applied.stderr).strip()
             if applied.returncode != 0:
@@ -849,13 +831,10 @@ class _DockerComposeTool(_WorkspaceTool):
             service=args.get("service"),
             tail=int(args.get("tail", 100)),
         )
-        completed = subprocess.run(
+        completed = run_process(
             command,
             cwd=self.workspace,
-            text=True,
-            capture_output=True,
             timeout=300,
-            check=False,
         )
         output = completed.stdout or completed.stderr
         return f"$ {' '.join(command)}\nexit={completed.returncode}\n{output.strip()}"
