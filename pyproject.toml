@@ -16,6 +16,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest==9.0.3",
+    "pytest-cov==7.0.0",
     "ruff==0.15.13",
 ]
 
@@ -91,3 +92,36 @@ max-complexity = 25
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["agentx"]
+branch = true
+
+[tool.coverage.report]
+# Ratchet, measured 2026-08 immediately after CI started running the suite at
+# all. Raise it when coverage improves; never lower it to make a change pass.
+#
+# This is *branch* coverage (branch = true above), which is stricter than line
+# coverage: the same suite reads as 74% by line and 71% by branch. Branch is the
+# honest number for an agent loop full of guards and early returns.
+#
+# The number is a floor, not a goal. What it actually buys is a tripwire: before
+# this existed nobody knew that orchestrator.py — named a kernel organ in
+# docs/NEXT_SESSION.md — had 0% coverage across 219 statements.
+#
+# Lowest-covered modules at the time of writing, as a to-do list:
+#   orchestrator.py       0%   (219 statements, entirely untested)
+#   sse.py               17%
+#   llama_cpp.py         24%
+#   doctor.py            34%
+#   tui.py               39%
+#   ollama.py            40%
+#   context_compactor.py 52%
+fail_under = 71
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]

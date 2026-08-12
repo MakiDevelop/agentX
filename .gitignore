@@ -16,3 +16,6 @@ playground/
 .agentx/learning/
 .agentx/reliability/
 tmp/
+.coverage
+coverage.xml
+htmlcov/

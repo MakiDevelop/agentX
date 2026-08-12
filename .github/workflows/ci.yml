@@ -90,8 +90,11 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
 
-      - name: Run tests (quick)
-        run: uv run pytest -q --tb=no
+      - name: Run tests with coverage ratchet
+        # fail_under lives in pyproject [tool.coverage.report]. It is a floor
+        # that only moves up; see the note there for the modules it is meant to
+        # drag along.
+        run: uv run pytest -q --tb=no --cov=agentx --cov-report=term
 
   # Future: when we have a published artifact / PyPI path, add a job that
   # exercises the "shrinkwrap equivalent" export + hash-pinned install.
