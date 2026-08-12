@@ -62,7 +62,9 @@ jobs:
         run: python scripts/check-lockfile-commit.py || true
 
       - name: Docs drift (README vs actual CLI commands)
-        run: python scripts/check-docs-drift.py
+        # `uv run`: the script imports agentx to ask the CLI what commands
+        # exist, so it needs the project environment, not bare python.
+        run: uv run python scripts/check-docs-drift.py
 
       - name: No legacy task module guard
         run: python scripts/check_no_legacy_task.py

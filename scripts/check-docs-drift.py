@@ -23,6 +23,7 @@ Run: python scripts/check-docs-drift.py
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -37,21 +38,28 @@ UNDOCUMENTED_ALLOWLIST: dict[str, str] = {}
 
 def cli_commands() -> list[str]:
     """Ask the CLI itself which commands exist."""
+    # Inherit the environment rather than constructing a minimal one: the
+    # interpreter needs its venv (typer, rich, pydantic) to import agentx at all.
+    # Only the variables that change how the help text is *rendered* are pinned,
+    # so the output parses identically everywhere. (An earlier version built the
+    # env from scratch and CI failed with "could not enumerate CLI commands".)
+    env = dict(os.environ)
+    env.update({"NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "200"})
+    env["PYTHONPATH"] = os.pathsep.join([str(REPO_ROOT / "src"), env.get("PYTHONPATH", "")]).rstrip(
+        os.pathsep
+    )
+
     result = subprocess.run(
         [sys.executable, "-m", "agentx.cli", "--help"],
         capture_output=True,
         text=True,
         check=False,
         cwd=REPO_ROOT,
-        env={
-            "PATH": "/usr/bin:/bin:/usr/local/bin",
-            "NO_COLOR": "1",
-            "TERM": "dumb",
-            "COLUMNS": "200",
-            "PYTHONPATH": str(REPO_ROOT / "src"),
-        },
+        env=env,
     )
     output = result.stdout or result.stderr
+    if result.returncode != 0 and not output.strip():
+        print(f"`agentx --help` failed (exit {result.returncode})", file=sys.stderr)
     commands: list[str] = []
     in_block = False
     for line in output.splitlines():
