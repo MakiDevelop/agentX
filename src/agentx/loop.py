@@ -11,6 +11,13 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from agentx.agent_turn import (
+    actions_from_turn,
+    execute_native_tool,
+    incomplete_final_reason,
+    invoke_model,
+    record_native_assistant,
+)
 from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
 from agentx.context_compactor import (
@@ -36,6 +43,7 @@ from agentx.hooks import (
 from agentx.json_repair import extract_json_object
 from agentx.learning import LearningManager, load_learning_manager
 from agentx.memory_hall import MemoryHallClient
+from agentx.model_size import is_small_local_model
 from agentx.ollama import OllamaClient
 from agentx.proc import run_process
 from agentx.protocol import FinalAnswer, Reflect, ToolCall, ToolResult
@@ -118,6 +126,7 @@ class AgentSession:
         self.valid_action_count = 0
         self.invalid_action_count = 0
         self.plan_only: bool = False
+        self._current_user_prompt: str = ""
         self._custom_system_prompt = system_prompt
         self._has_completed_planning: bool = False
         self.memory = memory
@@ -387,24 +396,32 @@ class AgentSession:
         self._persist_state_event("pending_verifies", list(self.pending_verifies))
         # Provide targeted verify context (will be appended to tool result content by registry POST)
         # Updated message to match current slice behavior (auto test + clear after), resolving model contradiction.
-        verify_ctx = (
-            f"【Hook-driven verify - stateful】{ctx.tool} on {path} succeeded.\n"
-            "Path added to pending_verifies (persisted for resume/compact).\n\n"
-            "【Gemma4/Small Model Action Required】\n"
-            "1. 先讀上面的 Auto read-back snippet（確認你的 edit 內容）。\n"
-            "2. 看後面的 targeted ruff + pytest 結果（exit 0/5 = 此路徑 OK）。\n"
-            "3. 如果有 WARNING 或問題：用 search_replace/insert_code 修小問題，再等下次 hook。\n"
-            "4. 如果都 OK 且想驗證整批：明確呼叫 run_tests tool（不要自動假設已驗）。\n"
-            "5. 繼續前先用 task_list 記錄此 path 的驗證狀態 + 確認你的 read set（最近讀過的檔案）是否足夠覆蓋下次 edit。\n"
-            "【Gemma4 建議下一步讀取】（小模型請務必跟）：\n"
-            f"- 建議讀 {path} 對應的測試檔（例如 {Path(path).stem}_test.py 或 tests/ 相關）。\n"
-            f"- 如需更多 context，可用 search_text 找此模組的呼叫者或依賴：pattern='{Path(path).stem}'。\n"
-            "- 用 task_list 記錄 'next reads for verification'。\n\n"
-            "Targeted ruff auto-run for pending paths（micro-verify）。\n"
-            "For .py: 也會跑 targeted pytest（test file 直接跑，否則 -k module）。\n"
-            "Full run_tests 必須你自己顯式呼叫（batch 準備好時，例如 final 或 commit 前）。\n"
-            "Do not skip this ritual for Gemma4 reliability."
-        )
+        if is_small_local_model(self.settings.model):
+            verify_ctx = (
+                f"【Hook-driven verify - stateful】{ctx.tool} on {path} succeeded.\n"
+                "Path added to pending_verifies (persisted for resume/compact).\n\n"
+                "【Gemma4/Small Model Action Required】\n"
+                "1. 先讀上面的 Auto read-back snippet（確認你的 edit 內容）。\n"
+                "2. 看後面的 targeted ruff + pytest 結果（exit 0/5 = 此路徑 OK）。\n"
+                "3. 如果有 WARNING 或問題：用 search_replace/insert_code 修小問題，再等下次 hook。\n"
+                "4. 如果都 OK 且想驗證整批：明確呼叫 run_tests tool（不要自動假設已驗）。\n"
+                "5. 繼續前先用 task_list 記錄此 path 的驗證狀態 + 確認你的 read set（最近讀過的檔案）是否足夠覆蓋下次 edit。\n"
+                "【Gemma4 建議下一步讀取】（小模型請務必跟）：\n"
+                f"- 建議讀 {path} 對應的測試檔（例如 {Path(path).stem}_test.py 或 tests/ 相關）。\n"
+                f"- 如需更多 context，可用 search_text 找此模組的呼叫者或依賴：pattern='{Path(path).stem}'。\n"
+                "- 用 task_list 記錄 'next reads for verification'。\n\n"
+                "Targeted ruff auto-run for pending paths（micro-verify）。\n"
+                "For .py: 也會跑 targeted pytest（test file 直接跑，否則 -k module）。\n"
+                "Full run_tests 必須你自己顯式呼叫（batch 準備好時，例如 final 或 commit 前）。\n"
+                "Do not skip this ritual for Gemma4 reliability."
+            )
+        else:
+            verify_ctx = (
+                f"【Hook-driven verify - stateful】{ctx.tool} on {path} succeeded. "
+                "Path is in pending_verifies. "
+                "Review the read-back snippet and targeted ruff/pytest. "
+                "Continue the task; call run_tests when the batch is ready."
+            )
         # Auto read-back snippet for immediate verification (GREEN read, post-edit content)
         try:
             read_res = self.tools.run("read_file", {"path": path, "max_chars": 400})
@@ -472,6 +489,7 @@ class AgentSession:
                 return result.content
             return f"工具執行失敗：{result.content}"
 
+        self._current_user_prompt = prompt
         user_content = (
             f"Workspace: {self.settings.workspace}\n"
             f"Default memory namespace: {namespace}\n"
@@ -504,7 +522,8 @@ class AgentSession:
 
             self.model_turn_count += 1
             estimated_before = self.context_tokens_estimate
-            raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
+            turn = invoke_model(self, cancel_event)
+            raw = turn.content
             # Calibrate the budget against the tokenizer that actually ran.
             # Backends that report nothing return 0 and are ignored.
             actual_prompt_tokens = getattr(self.ollama, "last_prompt_tokens", 0)
@@ -515,15 +534,15 @@ class AgentSession:
                     f"actual={actual_prompt_tokens} "
                     f"factor={self.token_counter.calibration:.2f}"
                 )
-            action = self._parse_action(raw)
-            if isinstance(action, InvalidAction):
+            parsed = actions_from_turn(self, turn)
+            if len(parsed) == 1 and isinstance(parsed[0], InvalidAction):
                 self.invalid_action_count += 1
                 self.messages.append({"role": "assistant", "content": raw})
                 self.messages.append(
                     {
                         "role": "user",
                         "content": (
-                            "Invalid response. Return strict JSON only. "
+                            "Invalid response. Call a tool, or return strict JSON. "
                             "To inspect files, call a real tool like "
                             '{"type":"tool_call","tool":"list_files","args":{"path":"."}}. '
                             'To finish, return {"type":"final","content":"..."}'
@@ -532,8 +551,18 @@ class AgentSession:
                 )
                 continue
             self.valid_action_count += 1
+            action = parsed[0]
 
             if isinstance(action, FinalAnswer):
+                blocked = incomplete_final_reason(self)
+                if blocked:
+                    self._final_guard_retries += 1
+                    if self._final_guard_retries < 4:
+                        self.messages.append({"role": "assistant", "content": action.model_dump_json()})
+                        self.messages.append({"role": "system", "content": blocked})
+                        self._persist_message("assistant", action.model_dump_json())
+                        self._persist_message("system", blocked)
+                        continue
                 failing = self._unresolved_failing_tools()
                 if failing:
                     self._final_guard_retries += 1
@@ -626,6 +655,18 @@ class AgentSession:
                 )
                 continue
 
+            if turn.has_tool_calls:
+                tool_actions = [item for item in parsed if isinstance(item, ToolCall)]
+                record_native_assistant(self, turn)
+                stop_turn = False
+                for item in tool_actions:
+                    if execute_native_tool(self, item, step):
+                        stop_turn = True
+                        break
+                if stop_turn:
+                    continue
+                continue
+
             # Special handling for internal task management tools
             self.tool_call_count += 1
             if action.tool.startswith("task_"):
@@ -654,12 +695,16 @@ class AgentSession:
             # === Opt5: 成功編輯模式主動寫入 Memory Hall 作為經驗庫（供未來 few-shot recall） ===
             # 讓 Gemma4 等模型可以從過去成功案例學到模式，增加「聰明」程度。
             # (verify injection moved to _on_post_edit_verify POST hook for stateful/targeted)
-            if result.ok and action.tool in (
-                "edit_file",
-                "write_file",
-                "search_replace",
-                "insert_code",
-                "apply_patch",
+            if (
+                result.ok
+                and action.tool in (
+                    "edit_file",
+                    "write_file",
+                    "search_replace",
+                    "insert_code",
+                    "apply_patch",
+                )
+                and is_small_local_model(self.settings.model)
             ):
                 try:
                     path = action.args.get("path", "unknown")
@@ -790,8 +835,9 @@ class AgentSession:
                             ),
                         }
                     )
-                else:
-                    # 複雜編輯（>=3 次）：完整 reflection (model can call run_tests explicitly before this for full results)
+                elif is_small_local_model(self.settings.model):
+                    # 複雜編輯（>=3 次）：小模型才額外燒一輪 reflection。
+                    # 大模型被這段打斷後會把步驟預算浪費在自我獨白上。
                     task_summary = self._get_current_task_summary()
                     reflection = self._reflect(
                         f"剛剛使用了 {action.tool} 工具，驗證結果如下（targeted ruff 已自動執行；full run_tests 需模型顯式呼叫）"
@@ -809,6 +855,16 @@ class AgentSession:
                             ),
                         }
                     )
+                else:
+                    self.messages.append(
+                        {
+                            "role": "system",
+                            "content": (
+                                "targeted verify done. Continue the task, or return "
+                                '{"type":"final","content":"..."} when the user request is complete.'
+                            ),
+                        }
+                    )
 
         # Fallback: force a final answer before giving up
         self.messages.append(
@@ -822,8 +878,8 @@ class AgentSession:
         )
         try:
             self.model_turn_count += 1
-            raw = self.ollama.chat(self.messages, json_mode=True, cancel_event=cancel_event)
-            action = self._parse_action(raw)
+            turn = invoke_model(self, cancel_event)
+            action = actions_from_turn(self, turn)[0]
             if isinstance(action, FinalAnswer):
                 return self._handle_final_answer(action.content, effective_plan_only)
         except Exception as exc:
@@ -1122,7 +1178,7 @@ class AgentSession:
 
         - The model never produced a usable turn. Switching models is sound.
         - The model worked fine and simply ran out of steps (max_steps defaults
-          to 8, which a read → search → edit → verify task exhausts). Telling
+          to 64, which a tiny task should not exhaust). Telling
           the operator their model is bad at tool calling sends them to fix
           something that was never broken, while the real fix — raise max_steps
           or narrow the task — goes unmentioned.
