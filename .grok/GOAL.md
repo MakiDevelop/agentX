@@ -38,7 +38,8 @@ uv run pytest -q tests/test_tool_schemas.py tests/test_ollama_native.py tests/te
 
 | 時間 | 完成 | 證據 |
 |------|------|------|
-| | | |
+| 16:10 | native tools + 長視野 + context + mode 連續 | pytest 1080 passed |
+| 16:26 | 活體 smoke：gemma4:31b 兩步寫出檔案 | `hello_agentx.txt` = `agentx-ok`；termination=final_success |
 
 ## Attempts（撞牆計數）
 
