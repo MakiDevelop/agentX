@@ -28,7 +28,11 @@ class _NativeOllama:
 
 
 class _Memory:
+    def __init__(self) -> None:
+        self.queries: list[str] = []
+
     def search(self, query: str, namespace: str = "shared", limit: int = 5) -> str:
+        self.queries.append(query)
         return "[]"
 
     def write(self, content: str, namespace: str = "agent:agentx") -> str:
@@ -131,6 +135,19 @@ def test_long_agentx_constitution_is_truncated(tmp_path: Path) -> None:
     assert "read_file path=AGENTX.md" in local
     assert "Runtime card" in context
     assert len(context) < 8000 or context.startswith("Workspace:")
+
+
+def test_ask_searches_memory_with_the_actual_task(tmp_path: Path) -> None:
+    ollama = _NativeOllama([ChatTurn(content='{"type":"final","content":"ok"}')])
+    memory = _Memory()
+    session = AgentSession(
+        settings=make_settings(tmp_path, model="gemma4:31b", max_steps=3, learning_enabled=False),
+        ollama=ollama,  # type: ignore[arg-type]
+        tools=ToolRegistry(builtin_tools(tmp_path, memory), auto_approve_yellow=True),  # type: ignore[arg-type]
+        memory=memory,  # type: ignore[arg-type]
+    )
+    session.ask("上次 erika.chibakuma.com 爬蟲做到哪")
+    assert any("erika.chibakuma.com" in query for query in memory.queries)
 
 
 def test_mode_switch_carries_chat_history(tmp_path: Path) -> None:

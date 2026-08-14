@@ -5,22 +5,39 @@ Kept out of loop.py so the agent loop file stays under the module-size ratchet.
 
 from __future__ import annotations
 
-import re
 import threading
 from typing import Any
 
 from agentx.chat_turn import ChatTurn
 from agentx.errors import ErrorContext, ErrorType
 from agentx.hooks import HookEvent, TurnEndContext
+from agentx.intent_route import MUTATION_INTENT
 from agentx.protocol import FinalAnswer, ToolCall
 from agentx.tool_schemas import ollama_tools_from_registry
 
-MUTATION_INTENT = re.compile(
-    r"(幫我寫|寫一支|寫一個|寫一份|建立(?:一個)?檔|新增檔|實作|"
-    r"create (?:a |the )?(?:file|script|crawler|module)|"
-    r"implement |write (?:a |the )?(?:file|script|crawler))",
-    re.IGNORECASE,
-)
+
+def refresh_memory_for_task(session: Any, prompt: str) -> None:
+    """Replace the bootstrap memory block with a search against this task.
+
+    Session start used to query ``"{workspace} project context"``, so the
+    model never saw memories about the thing Maki actually asked.
+    """
+    memory = session.memory or getattr(session.tools, "memory", None)
+    if memory is None or not str(prompt).strip():
+        return
+    from agentx.bootstrap import build_memory_context
+
+    text = "Memory Hall context:\n" + build_memory_context(
+        memory,
+        getattr(session, "namespace", "project:agentX"),
+        query=str(prompt).strip()[:400],
+    )
+    for index, message in enumerate(session.messages):
+        content = str(message.get("content") or "")
+        if message.get("role") == "system" and content.startswith("Memory Hall context:"):
+            session.messages[index] = {"role": "system", "content": text}
+            return
+    session.messages.append({"role": "system", "content": text})
 
 
 def invoke_model(session: Any, cancel_event: threading.Event | None) -> ChatTurn:

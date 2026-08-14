@@ -17,6 +17,7 @@ from agentx.agent_turn import (
     incomplete_final_reason,
     invoke_model,
     record_native_assistant,
+    refresh_memory_for_task,
 )
 from agentx.bootstrap import build_memory_context, build_repo_context
 from agentx.config import Settings
@@ -164,8 +165,9 @@ class AgentSession:
         # Context Compaction v2（Phase B1）
         if compactor is not None:
             self.compactor: ContextCompactor = compactor
-        elif "gemma" in settings.model.lower():
-            # Opt-in LLM-assisted for Gemma4/small models (smarter summary using the model itself)
+        elif is_small_local_model(settings.model):
+            # Extra LLM summary only for actually-small models. A 31B
+            # compact turn is a wasted request and steals step budget.
             self.compactor: ContextCompactor = LLMContextCompactor(self.ollama)
         else:
             self.compactor: ContextCompactor = HeuristicContextCompactor()
@@ -490,6 +492,7 @@ class AgentSession:
             return f"工具執行失敗：{result.content}"
 
         self._current_user_prompt = prompt
+        refresh_memory_for_task(self, prompt)
         user_content = (
             f"Workspace: {self.settings.workspace}\n"
             f"Default memory namespace: {namespace}\n"

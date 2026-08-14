@@ -19,6 +19,7 @@ from agentx.hooks import HookManager
 from agentx.json_repair import extract_json_object
 from agentx.loop import AgentSession
 from agentx.memory_hall import MemoryHallClient
+from agentx.model_size import is_small_local_model
 from agentx.ollama import OllamaClient
 from agentx.tools import ToolRegistry
 
@@ -138,7 +139,7 @@ class Coordinator:
         completed: list[StepResult],
     ) -> StepResult:
         compactor = (
-            LLMContextCompactor(self.ollama) if "gemma" in self.settings.model.lower() else None
+            LLMContextCompactor(self.ollama) if is_small_local_model(self.settings.model) else None
         )
         session = AgentSession(
             settings=self.settings,

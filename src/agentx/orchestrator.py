@@ -12,6 +12,7 @@ from agentx.context_compactor import LLMContextCompactor
 from agentx.json_repair import extract_json_object
 from agentx.loop import AgentLoop
 from agentx.memory_hall import MemoryHallClient
+from agentx.model_size import is_small_local_model
 from agentx.proc import run_process
 from agentx.runtime_prompt import PLANNING_SYSTEM_PROMPT, build_worker_system_prompt
 from agentx.tools import ToolRegistry
@@ -56,7 +57,7 @@ class Orchestrator:
         self.memory = memory
         self.tools = tools
         self.worker_max_steps = worker_max_steps or int(
-            os.getenv("AGENTX_ORCHESTRATOR_WORKER_STEPS", "8")
+            os.getenv("AGENTX_ORCHESTRATOR_WORKER_STEPS", "24")
         )
         self.max_retries = max_retries
         self.trace = trace
@@ -259,7 +260,7 @@ class Orchestrator:
         """Use LLM to decompose prompt into a structured plan."""
         plan_settings = self.settings.with_updates(max_steps=6)
         compactor = (
-            LLMContextCompactor(self.llm) if "gemma" in self.settings.model.lower() else None
+            LLMContextCompactor(self.llm) if is_small_local_model(self.settings.model) else None
         )
         planner = AgentLoop(
             settings=plan_settings,
@@ -316,7 +317,7 @@ class Orchestrator:
         """Fallback: run as single agent when planning fails."""
         self._trace("running fallback single agent")
         compactor = (
-            LLMContextCompactor(self.llm) if "gemma" in self.settings.model.lower() else None
+            LLMContextCompactor(self.llm) if is_small_local_model(self.settings.model) else None
         )
         worker = AgentLoop(
             settings=self.settings,
