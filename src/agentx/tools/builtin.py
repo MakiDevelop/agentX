@@ -5,6 +5,7 @@ import re
 import tempfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
 
 import httpx
 
@@ -924,7 +925,7 @@ class WebFetchTool:
     name = "web_fetch"
     description = (
         "讀取指定外部 URL 的文字內容（僅 http/https 公網；"
-        "會阻擋 localhost/private IP；HTML 會清理成純文字）"
+        "會跟隨公網 301/302，但拒絕轉到 localhost/private IP；HTML 會清理成純文字）"
     )
     risk = Risk.GREEN
     signature = "url, max_chars=20000, timeout=10, max_bytes=2000000"
@@ -941,11 +942,24 @@ class WebFetchTool:
         max_bytes = int(args.get("max_bytes", _WEB_FETCH_DEFAULT_MAX_BYTES))
         max_bytes = max(1, min(max_bytes, _WEB_FETCH_MAX_BYTES))
 
-        # SSRF gate: must run before any network I/O.
-        validate_external_url(url)
-
-        with httpx.Client(timeout=timeout, follow_redirects=False) as client:
-            with client.stream("GET", url) as response:
+        # SSRF gate before any I/O. Redirects are followed only after each
+        # Location also passes the same gate (http:// → https:// is allowed;
+        # http:// → localhost is not).
+        current = url.strip()
+        max_hops = 5
+        for _hop in range(max_hops + 1):
+            validate_external_url(current)
+            with (
+                httpx.Client(timeout=timeout, follow_redirects=False) as client,
+                client.stream("GET", current) as response,
+            ):
+                status = int(getattr(response, "status_code", 0) or 0)
+                if status in {301, 302, 303, 307, 308}:
+                    location = (response.headers.get("location") or "").strip()
+                    if not location:
+                        response.raise_for_status()
+                    current = urljoin(current, location)
+                    continue
                 response.raise_for_status()
                 content_type = response.headers.get("content-type", "")
                 normalized_type = content_type.split(";", 1)[0].strip().lower()
@@ -967,6 +981,7 @@ class WebFetchTool:
             text = body.decode(encoding, errors="replace")
             text = extract_web_text(text, content_type)
             return text[:max_chars]
+        raise ValueError(f"too many redirects (>{max_hops}) from {url}")
 
 
 def builtin_tools(workspace: Path, memory: MemoryHallClient) -> list[Tool]:

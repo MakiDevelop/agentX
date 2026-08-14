@@ -510,12 +510,76 @@ def test_web_fetch_respects_max_chars(tmp_path: Path, monkeypatch) -> None:
     assert len(result.content) == 100
 
 
-def test_web_fetch_does_not_follow_redirects(tmp_path: Path, monkeypatch) -> None:
-    import httpx
+def test_web_fetch_follows_public_http_to_https_redirect(tmp_path: Path, monkeypatch) -> None:
+    seen_urls: list[str] = []
+    html = b"<html><body><h1>ERIKA</h1></body></html>"
 
-    seen: list[dict[str, object]] = []
+    class RedirectResponse:
+        status_code = 301
+        headers = {"location": "https://erika.chibakuma.com/", "content-type": "text/html"}
 
-    class FakeStreamResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def raise_for_status(self) -> None:
+            raise AssertionError("redirect must not raise_for_status")
+
+        def iter_bytes(self):
+            yield b""
+
+    class FinalResponse:
+        status_code = 200
+        headers = {"content-type": "text/html; charset=utf-8"}
+        encoding = "utf-8"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def iter_bytes(self):
+            yield html
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            assert kwargs["follow_redirects"] is False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def stream(self, method: str, url: str):
+            seen_urls.append(url)
+            if url.startswith("http://"):
+                return RedirectResponse()
+            return FinalResponse()
+
+    monkeypatch.setattr("agentx.tools.builtin.httpx.Client", FakeClient)
+    monkeypatch.setattr(
+        "agentx.tools._helpers.socket.getaddrinfo",
+        lambda *args, **kwargs: [(None, None, None, None, ("93.184.216.34", 0))],
+    )
+
+    registry = ToolRegistry(builtin_tools(tmp_path, FakeMemory()), auto_approve_yellow=True)  # type: ignore[arg-type]
+    result = registry.run("web_fetch", {"url": "http://erika.chibakuma.com/"})
+
+    assert result.ok, result.content
+    assert "ERIKA" in result.content
+    assert seen_urls == ["http://erika.chibakuma.com/", "https://erika.chibakuma.com/"]
+
+
+def test_web_fetch_refuses_redirect_to_localhost(tmp_path: Path, monkeypatch) -> None:
+    class RedirectResponse:
+        status_code = 302
         headers = {"location": "http://localhost:3000/admin", "content-type": "text/html"}
 
         def __enter__(self):
@@ -525,19 +589,14 @@ def test_web_fetch_does_not_follow_redirects(tmp_path: Path, monkeypatch) -> Non
             return None
 
         def raise_for_status(self) -> None:
-            resp = httpx.Response(
-                302,
-                headers=self.headers,
-                request=httpx.Request("GET", "https://example.com/redirect"),
-            )
-            resp.raise_for_status()
+            raise AssertionError("redirect must not raise_for_status")
 
         def iter_bytes(self):
             yield b""
 
     class FakeClient:
         def __init__(self, *args, **kwargs) -> None:
-            seen.append(kwargs)
+            assert kwargs["follow_redirects"] is False
 
         def __enter__(self):
             return self
@@ -546,8 +605,7 @@ def test_web_fetch_does_not_follow_redirects(tmp_path: Path, monkeypatch) -> Non
             return None
 
         def stream(self, method: str, url: str):
-            assert method == "GET"
-            return FakeStreamResponse()
+            return RedirectResponse()
 
     monkeypatch.setattr("agentx.tools.builtin.httpx.Client", FakeClient)
     monkeypatch.setattr(
@@ -559,9 +617,8 @@ def test_web_fetch_does_not_follow_redirects(tmp_path: Path, monkeypatch) -> Non
     result = registry.run("web_fetch", {"url": "https://example.com/redirect"})
 
     assert not result.ok
-    assert seen[0]["follow_redirects"] is False
-    assert result.error_type == "HTTPStatusError"
-    assert "302" in result.content
+    assert result.error_type == "ValueError"
+    assert "local" in result.content.lower()
 
 
 def test_web_fetch_rejects_binary_content_type(tmp_path: Path, monkeypatch) -> None:
