@@ -1,7 +1,13 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from agentx.doctor import _check_command, _check_task_migration
+from agentx.doctor import (
+    _check_command,
+    _check_memory_backend,
+    _check_memory_search,
+    _check_task_migration,
+)
+from agentx.memory_hall import NullMemoryClient
 from agentx.tasks import save_tasks
 
 
@@ -72,6 +78,19 @@ def test_check_task_migration_mixed_state(tmp_path: Path) -> None:
     assert name == "task_migration (MT22)"
     assert ok is True
     assert "mixed (legacy + multi 並存)" in detail
+
+
+def test_auto_backend_without_amh_is_not_a_doctor_failure(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setattr("agentx.memory_hall.shutil.which", lambda name: None)
+    settings = SimpleNamespace(memory_backend="auto")
+    name, ok, detail = _check_memory_backend(settings, NullMemoryClient())
+    assert name == "memory_backend (ACA)"
+    assert ok is True
+    assert "optional" in detail
+    search_name, search_ok, search_detail = _check_memory_search(NullMemoryClient())
+    assert search_name == "memory_search"
+    assert search_ok is True
+    assert "memory off" in search_detail
 
 
 def test_check_task_migration_handles_error_gracefully() -> None:

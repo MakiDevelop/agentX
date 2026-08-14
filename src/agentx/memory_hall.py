@@ -15,6 +15,8 @@ AMH_STATUS_SCHEMA = "agentx.memory_status.v1"
 MEMORY_READ_SCHEMA = "agentx.memory_read.v1"
 MEMORY_WRITE_SCHEMA = "agentx.memory_write.v1"
 
+MEMORY_BACKENDS = ("auto", "amh", "memhall", "off")
+
 # === ACA (Agent Civilization Architecture) constants ===
 # See docs from agent-memory-hall: Agent_Civilization_Architecture.md + Anti_Ouroboros_Evidence.md
 # agentX aims for L1 (Memory) + L2 (Trust) conformance when writing organizational memory.
@@ -442,9 +444,14 @@ class AmhClient:
     """
 
     def __init__(
-        self, store: str = "json", store_path: str | None = None, timeout: float = 30.0
+        self,
+        store: str = "json",
+        store_path: str | None = None,
+        timeout: float = 30.0,
+        token: str | None = None,
     ) -> None:
         self.timeout = timeout
+        self.token = token
         self._amh_cmd = self._resolve_amh_cmd()
         self.store = store
         # Support common AMH stores: json, sqlite (need --path file), postgres/memhall (need --path connstr/url)
@@ -476,6 +483,8 @@ class AmhClient:
             cmd += ["--path", self.store_path]
         if caller_ns:
             cmd += ["--caller-ns", caller_ns]
+        if self.token:
+            cmd += ["--token", self.token]
         # text=False: the AMH CLI speaks bytes here and callers decode explicitly.
         result = run_process(
             cmd,
@@ -488,16 +497,17 @@ class AmhClient:
         return result.stdout.decode(errors="replace")
 
     def search(self, query: str, namespace: str = "shared", limit: int = 5) -> str:
-        # AMH CLI read supports ns filter; we do post-filter for query for simplicity
-        out = self._run_amh("read", "--ns", namespace, "--limit", str(limit), caller_ns=namespace)
-        # Simple text filter for query (real AMH would have better search)
-        lines = []
-        for line in out.splitlines():
-            if query.lower() in line.lower():
-                lines.append(line)
-            if len(lines) >= limit:
-                break
-        return "\n".join(lines) or out[:2000]
+        out = self._run_amh(
+            "read",
+            "--ns",
+            namespace,
+            "--text",
+            query,
+            "--limit",
+            str(limit),
+            caller_ns=namespace,
+        )
+        return out.strip() or "[]"
 
     def write(self, content: str, namespace: str = "agent:agentx") -> str:
         # Use ACA-shaped if possible, but CLI accepts text
@@ -712,6 +722,52 @@ class AmhClient:
         return [{"content": line} for line in out.splitlines()[:limit]]
 
 
+def amh_cli_available() -> bool:
+    """True only when the official `amh` binary is installed.
+
+    Auto-detect must not treat `npx @chibakuma/agent-memory-hall` as available:
+    that would download a package on first run for people who never asked for AMH.
+    """
+    return shutil.which("amh") is not None
+
+
+def resolve_memory_backend(requested: str | None) -> str:
+    """Map a configured backend to the client that will actually run.
+
+    auto → amh if `amh` is on PATH, otherwise off.
+    People without AMH still get a working agent; memory tools become no-ops.
+    This repo is not bound to memory-hall as a submodule.
+    """
+    name = (requested or "auto").strip().lower()
+    if name in {"off", "none", "disabled"}:
+        return "off"
+    if name == "auto":
+        return "amh" if amh_cli_available() else "off"
+    if name in {"amh", "memhall"}:
+        return name
+    return "off"
+
+
+def build_memory_client(
+    *,
+    memory_backend: str,
+    memory_amh_store: str = "json",
+    memory_amh_path: str | None = None,
+    memory_hall_url: str = "",
+    memory_hall_token: str | None = None,
+) -> MemoryHallClient | AmhClient | NullMemoryClient:
+    resolved = resolve_memory_backend(memory_backend)
+    if resolved == "off":
+        return NullMemoryClient()
+    if resolved == "amh":
+        return AmhClient(
+            store=memory_amh_store or "json",
+            store_path=memory_amh_path,
+            token=memory_hall_token,
+        )
+    return MemoryHallClient(base_url=memory_hall_url, token=memory_hall_token)
+
+
 def memory_status_payload(
     *,
     workspace: Path,
@@ -724,25 +780,28 @@ def memory_status_payload(
     live_probe: bool = False,
     timeout: float = 10.0,
 ) -> dict[str, Any]:
-    backend = (memory_backend or "memhall").lower()
+    backend = (memory_backend or "auto").strip().lower()
+    resolved = resolve_memory_backend(backend)
     store = memory_amh_store or "json"
     amh_path = memory_amh_path
-    if backend == "amh" and amh_path is None and store in {"json", "sqlite"}:
+    if resolved == "amh" and amh_path is None and store in {"json", "sqlite"}:
         ext = "json" if store == "json" else "db"
         amh_path = str((workspace / ".agentx" / "amh" / f"memory.{ext}").resolve())
 
     amh_bin = shutil.which("amh")
     npx_bin = shutil.which("npx")
     amh_command = ["amh"] if amh_bin else ["npx", "@chibakuma/agent-memory-hall"] if npx_bin else []
-    amh_available = bool(amh_command)
+    amh_available = bool(amh_bin)
     live_probe_result: dict[str, Any] | None = None
     warnings: list[str] = []
     blockers: list[str] = []
 
     if backend == "amh" and not amh_available:
         blockers.append("amh_cli_unavailable")
-    if backend not in {"amh", "memhall"}:
+    if backend not in MEMORY_BACKENDS:
         warnings.append("unknown_memory_backend")
+    if backend == "auto" and resolved == "off":
+        warnings.append("amh_not_installed_memory_disabled")
 
     if live_probe and amh_available:
         completed = run_process(
@@ -775,6 +834,7 @@ def memory_status_payload(
         "workspace": str(workspace.resolve()),
         "namespace": namespace,
         "memory_backend": backend,
+        "resolved_backend": resolved,
         "live_probe": live_probe,
         "blockers": blockers,
         "warnings": warnings,

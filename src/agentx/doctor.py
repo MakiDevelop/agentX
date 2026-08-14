@@ -63,6 +63,13 @@ def _check_model(settings: Settings, ollama: OllamaClient) -> tuple[str, bool, s
 
 
 def _check_memory_search(memory: MemoryHallClient) -> tuple[str, bool, str]:
+    if getattr(memory, "disabled", False):
+        return (
+            "memory_search",
+            True,
+            "memory off (no AMH CLI and backend=auto/off). Agent still runs; "
+            "install `amh` or set memory_backend=memhall to enable long-term memory.",
+        )
     try:
         result = memory.search("agentX doctor", namespace="project:agentX", limit=1)
     except Exception as exc:
@@ -109,8 +116,14 @@ def _check_task_migration(settings: Settings) -> tuple[str, bool, str]:
 def _check_memory_backend(
     settings: Settings, memory: MemoryHallClient = None
 ) -> tuple[str, bool, str]:
-    backend = getattr(settings, "memory_backend", "memhall")
-    detail = f"backend={backend}"
+    from agentx.memory_hall import resolve_memory_backend
+
+    configured = getattr(settings, "memory_backend", "auto")
+    backend = resolve_memory_backend(configured)
+    detail = f"configured={configured} resolved={backend}"
+    if configured in {"auto", "off"} and backend == "off":
+        detail += " (AMH optional — not installed; agent runs without long-term memory)"
+        return "memory_backend (ACA)", True, detail
     if backend == "amh":
         store = getattr(settings, "memory_amh_store", "json")
         path = getattr(settings, "memory_amh_path", "(default)")
@@ -258,5 +271,5 @@ def _check_memory_backend(
                     f"backend={backend} store={store} path={path} | store probe FAILED: {type(exc).__name__}: {exc}",
                 )
     else:
-        detail += " (legacy memhall — ACA client shaping enabled via write_aca + tier tools)"
+        detail += " (Memory Hall HTTP — optional substrate, not a repo dependency)"
     return "memory_backend (ACA)", True, detail

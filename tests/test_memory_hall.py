@@ -6,9 +6,11 @@ from agentx.memory_hall import (
     AmhClient,
     MemoryHallClient,
     NullMemoryClient,
+    build_memory_client,
     memory_read_payload,
     memory_status_payload,
     memory_write_payload,
+    resolve_memory_backend,
 )
 from agentx.tools.builtin import MemoryWriteTool
 
@@ -209,6 +211,45 @@ class TestMemoryWriteToolAca:
             )
 
 
+class TestResolveMemoryBackend:
+    def test_auto_uses_amh_only_when_binary_exists(self, monkeypatch):
+        monkeypatch.setattr("agentx.memory_hall.shutil.which", lambda name: "/usr/bin/amh" if name == "amh" else None)
+        assert resolve_memory_backend("auto") == "amh"
+        monkeypatch.setattr("agentx.memory_hall.shutil.which", lambda name: None)
+        assert resolve_memory_backend("auto") == "off"
+
+    def test_explicit_backends_and_off(self, monkeypatch):
+        monkeypatch.setattr("agentx.memory_hall.shutil.which", lambda name: None)
+        assert resolve_memory_backend("amh") == "amh"
+        assert resolve_memory_backend("memhall") == "memhall"
+        assert resolve_memory_backend("off") == "off"
+        assert resolve_memory_backend("nope") == "off"
+
+    def test_auto_without_amh_builds_null_client(self, monkeypatch):
+        monkeypatch.setattr("agentx.memory_hall.shutil.which", lambda name: None)
+        client = build_memory_client(memory_backend="auto")
+        assert isinstance(client, NullMemoryClient)
+        assert client.search("x") == "[]"
+
+    def test_memhall_builds_http_client(self):
+        client = build_memory_client(
+            memory_backend="memhall",
+            memory_hall_url="http://127.0.0.1:9100",
+        )
+        assert isinstance(client, MemoryHallClient)
+
+    def test_auto_status_is_ok_without_amh(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("shutil.which", lambda name: None)
+        payload = memory_status_payload(
+            workspace=tmp_path,
+            namespace="project:test",
+            memory_backend="auto",
+        )
+        assert payload["ok"] is True
+        assert payload["resolved_backend"] == "off"
+        assert "amh_not_installed_memory_disabled" in payload["warnings"]
+
+
 class TestAmhClient:
     """More complete tests for AmhClient using mocks for amh CLI (subprocess)."""
 
@@ -243,34 +284,31 @@ class TestAmhClient:
         # Content appears as a CLI argument (before the --store flags which are appended later)
         assert "test content for write" in captured["cmd"]
 
-    def test_amh_client_search_filters_results(self, monkeypatch):
-        # Patch before client creation
+    def test_amh_client_search_uses_amh_text_flag(self, monkeypatch):
         monkeypatch.setattr("shutil.which", lambda x: "/usr/bin/amh")
 
         client = AmhClient()
-        output_lines = [
-            "some irrelevant line",
-            "important decision about postgres",
-            "another line with query",
-            "query keyword here",
-        ]
+        captured: dict = {}
 
         def fake_run(cmd, input=None, **kwargs):  # noqa: A002, ANN003
+            captured["cmd"] = cmd
+
             class Result:
                 returncode = 0
-                stdout = "\n".join(output_lines).encode()
+                stdout = b"hit about postgres query"
                 stderr = b""
 
             return Result()
 
         monkeypatch.setattr("subprocess.run", fake_run)
 
-        result = client.search("query", namespace="project:bar", limit=5)
+        result = client.search("postgres", namespace="project:bar", limit=5)
 
-        assert "query keyword here" in result
-        assert "another line with query" in result
-        # Irrelevant filtered out in basic impl
-        assert "some irrelevant line" not in result
+        assert "postgres" in result
+        assert "--text" in captured["cmd"]
+        assert "postgres" in captured["cmd"]
+        assert "--ns" in captured["cmd"]
+        assert "project:bar" in captured["cmd"]
 
     def test_amh_client_tier_upgrade_falls_back_on_error(self, monkeypatch):
         # Patch before client creation
