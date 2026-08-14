@@ -22,6 +22,9 @@ CONFIG_KEYS = {
 }
 
 
+_SECRET_KEYS = {"memory_hall_token", "token", "secret", "password"}
+
+
 @dataclass(frozen=True)
 class ProjectConfig:
     model: str | None = None
@@ -33,18 +36,30 @@ class ProjectConfig:
     memory_backend: str | None = None
     memory_amh_store: str | None = None
     memory_amh_path: str | None = None
+    memory_hall_url: str | None = None
 
 
 def config_path(workspace: Path) -> Path:
     return workspace / ".agentx" / "config.toml"
 
 
-def load_project_config(workspace: Path) -> ProjectConfig:
-    path = config_path(workspace)
-    if not path.exists():
-        return ProjectConfig()
+def local_config_path(workspace: Path) -> Path:
+    return workspace / ".agentx" / "config.local.toml"
+
+
+def _read_agentx_table(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
     data = tomllib.loads(path.read_text(encoding="utf-8"))
-    agentx = data.get("agentx", {})
+    table = data.get("agentx", {})
+    return table if isinstance(table, dict) else {}
+
+
+def _strip_secret_keys(table: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in table.items() if str(key).lower() not in _SECRET_KEYS}
+
+
+def _project_config_from_table(agentx: dict[str, Any]) -> ProjectConfig:
     approval = agentx.get("approval")
     if approval is not None:
         approval = normalize_approval_mode(str(approval)).value
@@ -53,6 +68,9 @@ def load_project_config(workspace: Path) -> ProjectConfig:
         mode = str(mode).strip().lower()
     if mode == "ask":
         mode = "agent"
+    url = agentx.get("memory_hall_url")
+    if url is not None:
+        url = str(url).strip() or None
     return ProjectConfig(
         model=agentx.get("model"),
         namespace=agentx.get("namespace"),
@@ -63,13 +81,29 @@ def load_project_config(workspace: Path) -> ProjectConfig:
         memory_backend=agentx.get("memory_backend"),
         memory_amh_store=agentx.get("memory_amh_store"),
         memory_amh_path=agentx.get("memory_amh_path"),
+        memory_hall_url=url,
     )
+
+
+def load_shared_project_config(workspace: Path) -> ProjectConfig:
+    return _project_config_from_table(_read_agentx_table(config_path(workspace)))
+
+
+def load_project_config(workspace: Path) -> ProjectConfig:
+    """Shared config.toml, then gitignored config.local.toml on top.
+
+    Secret keys in either file are ignored. Token comes from env or
+    ~/.config/memhall/token — never from the repo tree.
+    """
+    shared = _strip_secret_keys(_read_agentx_table(config_path(workspace)))
+    local = _strip_secret_keys(_read_agentx_table(local_config_path(workspace)))
+    return _project_config_from_table({**shared, **local})
 
 
 def set_project_config(workspace: Path, key: str, value: str) -> ProjectConfig:
     if key not in CONFIG_KEYS:
         raise ValueError(f"Unsupported config key: {key}")
-    current = load_project_config(workspace)
+    current = load_shared_project_config(workspace)
     data: dict[str, Any] = {
         "model": current.model,
         "namespace": current.namespace,

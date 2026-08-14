@@ -590,8 +590,11 @@ memory_backend = "auto"      # auto / amh / memhall / off
 載入優先序：
 
 1. 環境變數，例如 `AGENTX_MODEL=gemma4:31b ax`、`AGENTX_PERSONA=tutor ax`
-2. 目前 workspace 的 `.agentx/config.toml`
-3. agentX 預設值
+2. `.agentx/config.local.toml`（gitignore，本機覆寫；可放 `memory_backend` / `memory_hall_url`）
+3. `.agentx/config.toml`（可進 git）
+4. agentX 預設值
+
+token 不進任何 toml。順序：`AGENTX_MEMORY_HALL_TOKEN` / `MH_API_TOKEN` → `~/.config/memhall/token`。
 
 常用鍵：
 

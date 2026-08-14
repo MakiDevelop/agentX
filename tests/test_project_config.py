@@ -84,3 +84,65 @@ def test_settings_default_memory_hall_url_matches_home_ai_main_path(tmp_path, mo
     settings = Settings()
 
     assert settings.memory_hall_url == "http://100.89.41.50:9100"
+
+
+def test_local_config_overrides_shared_backend_and_url(tmp_path, monkeypatch):
+    monkeypatch.delenv("AGENTX_MEMORY_BACKEND", raising=False)
+    monkeypatch.delenv("AGENTX_MEMORY_HALL_URL", raising=False)
+    set_project_config(tmp_path, "memory_backend", "auto")
+    local = tmp_path / ".agentx" / "config.local.toml"
+    local.write_text(
+        '[agentx]\nmemory_backend = "memhall"\nmemory_hall_url = "http://127.0.0.1:9100"\n',
+        encoding="utf-8",
+    )
+
+    config = load_project_config(tmp_path)
+    settings = Settings(workspace=tmp_path)
+
+    assert config.memory_backend == "memhall"
+    assert config.memory_hall_url == "http://127.0.0.1:9100"
+    assert settings.memory_backend == "memhall"
+    assert settings.memory_hall_url == "http://127.0.0.1:9100"
+    shared = (tmp_path / ".agentx" / "config.toml").read_text(encoding="utf-8")
+    assert "127.0.0.1" not in shared
+
+
+def test_set_project_config_does_not_copy_local_overlay(tmp_path):
+    set_project_config(tmp_path, "memory_backend", "auto")
+    (tmp_path / ".agentx" / "config.local.toml").write_text(
+        '[agentx]\nmemory_backend = "memhall"\n',
+        encoding="utf-8",
+    )
+    set_project_config(tmp_path, "model", "gemma4:31b")
+
+    shared = (tmp_path / ".agentx" / "config.toml").read_text(encoding="utf-8")
+    assert 'memory_backend = "auto"' in shared
+    assert "memhall" not in shared
+
+
+def test_local_config_ignores_token_keys(tmp_path, monkeypatch):
+    monkeypatch.delenv("AGENTX_MEMORY_HALL_TOKEN", raising=False)
+    monkeypatch.delenv("MH_API_TOKEN", raising=False)
+    token_file = tmp_path / "token"
+    token_file.write_text("file-token\n", encoding="utf-8")
+    monkeypatch.setenv("AGENTX_MEMORY_HALL_TOKEN_FILE", str(token_file))
+    (tmp_path / ".agentx").mkdir()
+    (tmp_path / ".agentx" / "config.local.toml").write_text(
+        '[agentx]\nmemory_hall_token = "do-not-use"\ntoken = "also-no"\n',
+        encoding="utf-8",
+    )
+
+    settings = Settings(workspace=tmp_path)
+
+    assert settings.memory_hall_token == "file-token"
+
+
+def test_env_token_wins_over_token_file(tmp_path, monkeypatch):
+    token_file = tmp_path / "token"
+    token_file.write_text("file-token\n", encoding="utf-8")
+    monkeypatch.setenv("AGENTX_MEMORY_HALL_TOKEN_FILE", str(token_file))
+    monkeypatch.setenv("AGENTX_MEMORY_HALL_TOKEN", "env-token")
+
+    settings = Settings(workspace=tmp_path)
+
+    assert settings.memory_hall_token == "env-token"

@@ -15,6 +15,7 @@ playground/
 .agentx/handoff/
 .agentx/learning/
 .agentx/reliability/
+.agentx/config.local.toml
 tmp/
 .coverage
 coverage.xml

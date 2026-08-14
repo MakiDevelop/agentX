@@ -12,6 +12,27 @@ DEFAULT_MEMORY_HALL_URL = "http://100.89.41.50:9100"
 DEFAULT_MAX_STEPS = 64
 DEFAULT_MODE = "agent"
 DEFAULT_OLLAMA_TIMEOUT = 180.0
+DEFAULT_MEMHALL_TOKEN_FILE = Path.home() / ".config" / "memhall" / "token"
+
+
+def memhall_token_file() -> Path:
+    override = os.getenv("AGENTX_MEMORY_HALL_TOKEN_FILE")
+    if override:
+        return Path(override).expanduser()
+    return DEFAULT_MEMHALL_TOKEN_FILE
+
+
+def load_memhall_token() -> str | None:
+    """Env first, then ~/.config/memhall/token. Never read a token from the repo."""
+    for key in ("AGENTX_MEMORY_HALL_TOKEN", "MH_API_TOKEN"):
+        value = os.getenv(key)
+        if value and value.strip():
+            return value.strip()
+    try:
+        text = memhall_token_file().read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return text or None
 
 
 @dataclass(frozen=True)
@@ -41,8 +62,10 @@ class Settings:
             model=os.getenv("AGENTX_MODEL") or config.model or DEFAULT_MODEL,
             ollama_url=os.getenv("AGENTX_OLLAMA_URL", "http://127.0.0.1:11434"),
             ollama_timeout=float(os.getenv("AGENTX_OLLAMA_TIMEOUT", str(int(DEFAULT_OLLAMA_TIMEOUT)))),
-            memory_hall_url=os.getenv("AGENTX_MEMORY_HALL_URL", DEFAULT_MEMORY_HALL_URL),
-            memory_hall_token=os.getenv("AGENTX_MEMORY_HALL_TOKEN") or os.getenv("MH_API_TOKEN"),
+            memory_hall_url=os.getenv("AGENTX_MEMORY_HALL_URL")
+            or config.memory_hall_url
+            or DEFAULT_MEMORY_HALL_URL,
+            memory_hall_token=load_memhall_token(),
             memory_backend=os.getenv("AGENTX_MEMORY_BACKEND") or config.memory_backend or "auto",
             memory_amh_store=config.memory_amh_store or os.getenv("AGENTX_AMH_STORE") or "json",
             memory_amh_path=config.memory_amh_path or os.getenv("AGENTX_AMH_PATH"),
