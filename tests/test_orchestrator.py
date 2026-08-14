@@ -1,7 +1,9 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 from helpers import make_settings
 
+from agentx import cli
 from agentx.orchestrator import Orchestrator
 from agentx.tools import ToolRegistry, builtin_tools
 
@@ -82,3 +84,68 @@ def test_fallback_single_agent_when_plan_is_not_json(tmp_path: Path) -> None:
     assert result.success
     assert result.subtask_results[0].subtask_id == "fallback"
     assert "fallback done" in result.summary
+
+
+def test_run_print_prompt_auto_routes_complex_task_to_orchestrator(monkeypatch) -> None:  # noqa: ANN001
+    seen: list[str] = []
+
+    class FakeOrch:
+        def __init__(self, **kwargs) -> None:  # noqa: ANN003
+            pass
+
+        def run(self, prompt: str, namespace: str = "project:agentX") -> object:
+            seen.append(prompt)
+            return SimpleNamespace(summary="auto-orch")
+
+    class FakeAgentLoop:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            raise AssertionError("single-agent loop should not run")
+
+    monkeypatch.setattr(cli, "build_runtime", lambda *args, **kwargs: (object(), object(), object()))
+    monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
+    monkeypatch.setattr("agentx.orchestrator.Orchestrator", FakeOrch)
+
+    result = cli.run_print_prompt(
+        "拆成子任務：先讀 loop，再拆 compact，最後補測試",
+        namespace="project:test",
+        agent_mode=True,
+        return_metadata=True,
+        suppress_trace=True,
+    )
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert result.output == "auto-orch"
+    assert seen
+
+
+def test_run_print_prompt_keeps_simple_task_on_single_agent(monkeypatch) -> None:  # noqa: ANN001
+    class FakeAgentLoop:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            self.session = SimpleNamespace(
+                message_count=1,
+                context_tokens_estimate=10,
+                error_history=[],
+                compaction_count=0,
+                model_turn_count=0,
+                tool_call_count=0,
+                reflection_count=0,
+                pending_verifies=set(),
+                tasks=[],
+                last_termination="final_success",
+                last_failing_tools=set(),
+            )
+
+        def run(self, prompt: str, **kwargs) -> str:  # noqa: ANN003
+            return "single-agent"
+
+    monkeypatch.setattr(cli, "build_runtime", lambda *args, **kwargs: (object(), object(), object()))
+    monkeypatch.setattr(cli, "AgentLoop", FakeAgentLoop)
+
+    result = cli.run_print_prompt(
+        "demo",
+        namespace="project:test",
+        agent_mode=True,
+        return_metadata=True,
+        suppress_trace=True,
+    )
+    assert isinstance(result, cli.HeadlessRunResult)
+    assert result.output == "single-agent"

@@ -25,7 +25,7 @@ from __future__ import annotations
 import shlex
 from typing import TYPE_CHECKING, Any
 
-from agentx.intent_route import should_use_agent
+from agentx.intent_route import should_auto_orchestrate, should_use_agent
 from agentx.transcript import find_transcript, format_approval_receipts
 
 if TYPE_CHECKING:
@@ -216,6 +216,40 @@ def maybe_escalate_to_agent(
     state.set_chat_mode("agent")
     _carry_mode_context(state, previous, "agent", chat_messages)
     return True
+
+
+def maybe_run_orchestrator(
+    state: Any,
+    prompt: str,
+    *,
+    ollama: Any,
+    memory: Any,
+    tools: Any,
+    namespace: str,
+) -> str | None:
+    """Run the orchestrator for complex agent tasks. None = stay on single loop."""
+    if getattr(state, "plan_mode", False):
+        return None
+    if not should_auto_orchestrate(prompt, agent_mode=getattr(state, "mode", None) == "agent"):
+        return None
+    from agentx.orchestrator import Orchestrator
+
+    result = Orchestrator(
+        settings=state.settings,
+        llm=ollama,
+        memory=memory,
+        tools=tools,
+        trace=None,
+    ).run(prompt, namespace=namespace)
+    session = getattr(state, "agent_session", None)
+    if session is not None and hasattr(session, "messages"):
+        session.messages.append(
+            {
+                "role": "system",
+                "content": "Orchestrator finished.\n" + str(result.summary or "")[:3000],
+            }
+        )
+    return result.summary
 
 
 # --- read-only tool-backed slash handlers ---------------------------------

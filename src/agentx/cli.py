@@ -99,6 +99,7 @@ from agentx.infrastructure_context import (
     infrastructure_context_metadata,
 )
 from agentx.intent import plan_task_items
+from agentx.intent_route import should_auto_orchestrate
 from agentx.jobs import PromptJobQueue
 from agentx.loop import AgentLoop, AgentSession
 from agentx.memory_hall import (
@@ -6598,7 +6599,14 @@ def run_print_prompt(  # noqa: C901  (complexity 30; headless entrypoint, split 
             return HeadlessRunResult(output=output, termination="invalid_action")
         return output
 
-    if orchestrate:
+    if should_auto_orchestrate(
+        prompt,
+        agent_mode=agent_mode,
+        plan_mode=plan_mode,
+        plan_then_execute=plan_then_execute,
+        resume=bool(resume_session),
+        force=orchestrate,
+    ):
         from agentx.orchestrator import Orchestrator
 
         orch = Orchestrator(
@@ -9611,11 +9619,22 @@ def shell(  # noqa: C901
                             "當你認為規劃已經完整、足夠具體、可執行時，請在 final answer 的最後主動建議使用者輸入 `/execute` 來開始實際執行。\n\n"
                             "使用者任務："
                         ) + queued_prompt
-                    answer = agent_session.ask(
-                        agent_prompt,
+                    answer = _runtime_handlers.maybe_run_orchestrator(
+                        state,
+                        queued_prompt,
+                        ollama=ollama,
+                        memory=memory,
+                        tools=tools,
                         namespace=namespace,
-                        cancel_event=current_cancel,
                     )
+                    if answer is None:
+                        answer = agent_session.ask(
+                            agent_prompt,
+                            namespace=namespace,
+                            cancel_event=current_cancel,
+                        )
+                    else:
+                        print_raw("複雜任務，改走 orchestrator（plan → workers）")
                     transcript.write("assistant", {"mode": state.mode, "content": answer[:4000]})
                     if tui is not None:
                         print_raw(format_assistant_header())
