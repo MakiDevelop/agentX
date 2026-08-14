@@ -43,7 +43,7 @@ class Settings:
             ollama_timeout=float(os.getenv("AGENTX_OLLAMA_TIMEOUT", str(int(DEFAULT_OLLAMA_TIMEOUT)))),
             memory_hall_url=os.getenv("AGENTX_MEMORY_HALL_URL", DEFAULT_MEMORY_HALL_URL),
             memory_hall_token=os.getenv("AGENTX_MEMORY_HALL_TOKEN") or os.getenv("MH_API_TOKEN"),
-            memory_backend=os.getenv("AGENTX_MEMORY_BACKEND") or config.memory_backend or "memhall",
+            memory_backend=os.getenv("AGENTX_MEMORY_BACKEND") or config.memory_backend or "auto",
             memory_amh_store=config.memory_amh_store or os.getenv("AGENTX_AMH_STORE") or "json",
             memory_amh_path=config.memory_amh_path or os.getenv("AGENTX_AMH_PATH"),
             max_steps=int(os.getenv("AGENTX_MAX_STEPS", str(DEFAULT_MAX_STEPS))),

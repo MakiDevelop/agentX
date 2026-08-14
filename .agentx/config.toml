@@ -4,10 +4,19 @@ namespace = "project:agentX"
 mode = "agent"
 approval = "ask"
 auto_handoff = true
-memory_backend = "memhall"  # 或 "amh" 以使用官方 AMH / ACA 後端
+# auto = 本機有 `amh` 就用官方 AMH；沒有就關記憶，agent 照跑。
+# 不要把 memory-hall repo 收成 submodule。記憶是可選基板。
+memory_backend = "auto"
 
-# amh 後端不同 store 範例（直接在 config.toml 設定）
+# 強制官方 AMH CLI（本機 json，不依賴任何人的 memhall 主機）：
 # memory_backend = "amh"
-# memory_amh_store = "postgres"
-# memory_amh_path = "postgres://user:pass@host:5432/amh"
-# 常見值：json（預設）、sqlite、postgres、memhall（轉發既有）
+# memory_amh_store = "json"
+
+# 強制打 Memory Hall HTTP（自己的 URL / token，用環境變數）：
+# memory_backend = "memhall"
+# AGENTX_MEMORY_HALL_URL / AGENTX_MEMORY_HALL_TOKEN
+
+# AMH CLI 轉發到既有 memhall（有 amh 的人可選）：
+# memory_backend = "amh"
+# memory_amh_store = "memhall"
+# memory_amh_path = "http://127.0.0.1:9100"

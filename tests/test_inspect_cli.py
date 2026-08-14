@@ -100,7 +100,7 @@ def test_inspect_payload_aggregates_runner_preflight(tmp_path, monkeypatch) -> N
     assert payload["signals"]["verify_command_plan_count"] == 2  # type: ignore[index]
     assert payload["signals"]["local_instruction_found_count"] == 1  # type: ignore[index]
     assert payload["signals"]["local_instruction_selected_file"] == "AGENTX.md"  # type: ignore[index]
-    assert payload["signals"]["memory_backend"] == "memhall"  # type: ignore[index]
+    assert payload["signals"]["memory_backend"] == "auto"  # type: ignore[index]
     assert payload["signals"]["memory_ok"] is True  # type: ignore[index]
     assert payload["status"]["schema"] == "agentx.status.v1"  # type: ignore[index]
     assert payload["tasks"]["schema"] == "agentx.tasks.v1"  # type: ignore[index]
@@ -175,7 +175,7 @@ def test_inspect_json_outputs_payload(tmp_path) -> None:  # noqa: ANN001
     assert payload["recommended_risk"] == payload["next"]["recommended_risk"]
     assert payload["signals"]["verify_command_count"] == len(payload["verify_commands"])
     assert payload["signals"]["local_instruction_selected_file"] == "AGENTS.md"
-    assert payload["signals"]["memory_backend"] == "memhall"
+    assert payload["signals"]["memory_backend"] == "auto"
     assert payload["status"]["git"]["ok"] is True
     assert payload["diff"]["schema"] == "agentx.diff.v1"
     assert payload["instructions"]["schema"] == "agentx.local_instructions.v1"

@@ -90,7 +90,7 @@ def test_memory_status_json_outputs_payload(tmp_path, monkeypatch) -> None:  # n
     payload = json.loads(result.output)
     assert payload["schema"] == "agentx.memory_status.v1"
     assert payload["workspace"] == str(tmp_path.resolve())
-    assert payload["memory_backend"] == "memhall"
+    assert payload["memory_backend"] == "auto"
     assert payload["legacy_memhall"]["token"] == "set"
     assert "secret-token" not in result.output
 

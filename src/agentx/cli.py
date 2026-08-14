@@ -6472,18 +6472,15 @@ def build_runtime(
     )
     if no_memory:
         memory = NullMemoryClient()
-    elif (settings.memory_backend or "memhall").lower() == "amh":
-        from agentx.memory_hall import AmhClient
-
-        # Prefer config.toml values (memory_amh_store / memory_amh_path), env as fallback
-        memory = AmhClient(
-            store=settings.memory_amh_store,
-            store_path=settings.memory_amh_path,
-        )
     else:
-        memory = MemoryHallClient(
-            base_url=settings.memory_hall_url,
-            token=settings.memory_hall_token,
+        from agentx.memory_hall import build_memory_client
+
+        memory = build_memory_client(
+            memory_backend=settings.memory_backend,
+            memory_amh_store=settings.memory_amh_store,
+            memory_amh_path=settings.memory_amh_path,
+            memory_hall_url=settings.memory_hall_url,
+            memory_hall_token=settings.memory_hall_token,
         )
 
     def approve(tool: str, args: dict[str, object], risk: Risk) -> bool:
@@ -6510,16 +6507,14 @@ def build_runtime(
 
 
 def build_cli_memory_client(settings: Settings) -> MemoryHallClient | NullMemoryClient:
-    if (settings.memory_backend or "memhall").lower() == "amh":
-        from agentx.memory_hall import AmhClient
+    from agentx.memory_hall import build_memory_client
 
-        return AmhClient(
-            store=settings.memory_amh_store,
-            store_path=settings.memory_amh_path,
-        )
-    return MemoryHallClient(
-        base_url=settings.memory_hall_url,
-        token=settings.memory_hall_token,
+    return build_memory_client(
+        memory_backend=settings.memory_backend,
+        memory_amh_store=settings.memory_amh_store,
+        memory_amh_path=settings.memory_amh_path,
+        memory_hall_url=settings.memory_hall_url,
+        memory_hall_token=settings.memory_hall_token,
     )
 
 
@@ -7946,18 +7941,15 @@ def init_command(
     resolved_namespace = namespace or project_config.namespace or "project:agentX"
     memory_result = None
     if write_memory:
-        if (settings.memory_backend or "memhall").lower() == "amh":
-            from agentx.memory_hall import AmhClient
+        from agentx.memory_hall import build_memory_client
 
-            memory: MemoryHallClient | NullMemoryClient = AmhClient(
-                store=settings.memory_amh_store,
-                store_path=settings.memory_amh_path,
-            )
-        else:
-            memory = MemoryHallClient(
-                base_url=settings.memory_hall_url,
-                token=settings.memory_hall_token,
-            )
+        memory = build_memory_client(
+            memory_backend=settings.memory_backend,
+            memory_amh_store=settings.memory_amh_store,
+            memory_amh_path=settings.memory_amh_path,
+            memory_hall_url=settings.memory_hall_url,
+            memory_hall_token=settings.memory_hall_token,
+        )
         tools = ToolRegistry(builtin_tools(settings.workspace, memory))
         profile = build_project_profile(settings.workspace, resolved_namespace)
         result = tools.run(
@@ -9193,18 +9185,15 @@ def doctor_command(
             timeout=settings.ollama_timeout,
         )
         try:
-            if (settings.memory_backend or "memhall").lower() == "amh":
-                from agentx.memory_hall import AmhClient
+            from agentx.memory_hall import build_memory_client
 
-                memory: MemoryHallClient | NullMemoryClient = AmhClient(
-                    store=settings.memory_amh_store,
-                    store_path=settings.memory_amh_path,
-                )
-            else:
-                memory = MemoryHallClient(
-                    base_url=settings.memory_hall_url,
-                    token=settings.memory_hall_token,
-                )
+            memory = build_memory_client(
+                memory_backend=settings.memory_backend,
+                memory_amh_store=settings.memory_amh_store,
+                memory_amh_path=settings.memory_amh_path,
+                memory_hall_url=settings.memory_hall_url,
+                memory_hall_token=settings.memory_hall_token,
+            )
             payload = doctor_payload(settings, memory=memory, ollama=ollama, live_probes=True)
         finally:
             ollama.close()

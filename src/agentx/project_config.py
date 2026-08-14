@@ -140,8 +140,8 @@ def _parse_value(key: str, value: str) -> str | bool:
         raise ValueError("auto_handoff must be true or false")
     if key == "memory_backend":
         normalized = value.lower().strip()
-        if normalized not in {"memhall", "amh"}:
-            raise ValueError("memory_backend must be memhall or amh")
+        if normalized not in {"auto", "amh", "memhall", "off"}:
+            raise ValueError("memory_backend must be auto, amh, memhall, or off")
         return normalized
     if key == "memory_amh_store":
         normalized = value.lower().strip()

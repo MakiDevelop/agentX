@@ -582,11 +582,9 @@ mode = "agent"
 approval = "ask"
 persona = "tutor"
 auto_handoff = true
-memory_backend = "memhall"   # 或 "amh" 以使用官方 AMH / ACA 後端
-
-# amh 後端 store 設定（直接在 config.toml 生效，優先於 env）
-# memory_amh_store = "postgres"   # json（預設）、sqlite、postgres、memhall
-# memory_amh_path = "postgres://user:pass@host:5432/amh"
+memory_backend = "auto"      # auto / amh / memhall / off
+# auto：本機有 `amh` 才開長期記憶；沒有 AMH 的人照樣能跑 agent
+# 不要把 memory-hall 收成 submodule；記憶是可選基板
 ```
 
 載入優先序：
@@ -604,7 +602,7 @@ memory_backend = "memhall"   # 或 "amh" 以使用官方 AMH / ACA 後端
 | `mode` | shell 啟動模式，`chat` / `agent`；`ask` 是 `agent` 的 alias |
 | `approval` | YELLOW 工具 approval policy，`ask` / `auto` / `off`；也支援 `strict` / `auto-approve` / `deny` aliases |
 | `auto_handoff` | 離開 shell 時是否自動寫 Memory Hall handoff |
-| `memory_backend` | Memory Hall 後端，`memhall`（預設，舊相容）或 `amh`（官方 Agent Memory Hall，完整 ACA L1-3 治理 + tier/audit 工具）。amh 時可用 `memory_amh_store` / `memory_amh_path` 指定 json/sqlite/postgres/memhall 等不同 store（或用對應 env 覆蓋） |
+| `memory_backend` | 長期記憶後端：`auto`（預設，有 `amh` 才開）/ `amh` / `memhall` / `off`。沒有 AMH 的人設 `auto` 或 `off`，agent 照跑。不要把 memory-hall 收成 submodule。 |
 
 ## 上下文限制
 
