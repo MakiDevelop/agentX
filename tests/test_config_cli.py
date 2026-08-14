@@ -32,7 +32,7 @@ def test_config_json_outputs_resolved_config(tmp_path) -> None:  # noqa: ANN001
     assert payload["schema"] == "agentx.config.v1"
     assert payload["workspace"] == str(tmp_path.resolve())
     assert payload["namespace"] == "project:agentX"
-    assert payload["mode"] == "chat"
+    assert payload["mode"] == "agent"
     assert payload["memory_hall_token"] in {"set", "missing"}
 
 

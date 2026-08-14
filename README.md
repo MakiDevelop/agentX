@@ -578,7 +578,7 @@ Docker Compose allowlist：
 [agentx]
 model = "gemma4:31b"
 namespace = "project:agentX"
-mode = "chat"
+mode = "agent"
 approval = "ask"
 persona = "tutor"
 auto_handoff = true

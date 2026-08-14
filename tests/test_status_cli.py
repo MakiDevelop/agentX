@@ -67,7 +67,7 @@ def test_status_json_outputs_workspace_posture(tmp_path) -> None:  # noqa: ANN00
     payload = json.loads(result.output)
     assert payload["schema"] == "agentx.status.v1"
     assert payload["workspace"] == str(tmp_path.resolve())
-    assert payload["runtime"]["mode"] == "chat"
+    assert payload["runtime"]["mode"] == "agent"
     assert payload["git"]["ok"] is True
     assert payload["tasks"]["count"] == 0
 

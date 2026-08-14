@@ -1,7 +1,7 @@
 [agentx]
 model = "gemma4:31b"
 namespace = "project:agentX"
-mode = "chat"
+mode = "agent"
 approval = "ask"
 auto_handoff = true
 memory_backend = "memhall"  # 或 "amh" 以使用官方 AMH / ACA 後端

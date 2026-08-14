@@ -90,7 +90,7 @@ from agentx.command_catalog import (
     slash_command_help,
     slash_command_suggestions,
 )
-from agentx.config import Settings
+from agentx.config import DEFAULT_MODE, Settings
 from agentx.context_compactor import LLMContextCompactor
 from agentx.doctor import run_doctor, run_static_doctor
 from agentx.git_workflow import build_commit_plan, commit_and_push
@@ -172,7 +172,7 @@ class ShellState:
     agent_session: AgentSession | None = None
     memory: MemoryHallClient | None = None  # for hot-reload of ACA amh backend
     plan_mode: bool = False
-    mode: str = "chat"  # "chat" 或 "agent"
+    mode: str = DEFAULT_MODE  # "chat" 或 "agent"
     namespace: str = "project:agentX"
     compaction_count: int = 0
 
@@ -7772,7 +7772,7 @@ def config_command(
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     project_config = load_project_config(settings.workspace)
     resolved_namespace = namespace or project_config.namespace or "project:agentX"
-    resolved_mode = mode or project_config.mode or "chat"
+    resolved_mode = mode or project_config.mode or DEFAULT_MODE
     if resolved_mode == "ask":
         resolved_mode = "agent"
     approval_mode = normalize_approval_mode(
@@ -9093,7 +9093,7 @@ def inspect_command(
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     project_config = load_project_config(settings.workspace)
     resolved_namespace = namespace or project_config.namespace or "project:agentX"
-    resolved_mode = mode or project_config.mode or "chat"
+    resolved_mode = mode or project_config.mode or DEFAULT_MODE
     if resolved_mode == "ask":
         resolved_mode = "agent"
     approval_mode = normalize_approval_mode(
@@ -9137,7 +9137,7 @@ def status_command(
     settings = Settings(workspace=resolve_headless_workspace(workspace))
     project_config = load_project_config(settings.workspace)
     resolved_namespace = namespace or project_config.namespace or "project:agentX"
-    resolved_mode = mode or project_config.mode or "chat"
+    resolved_mode = mode or project_config.mode or DEFAULT_MODE
     if resolved_mode == "ask":
         resolved_mode = "agent"
     approval_mode = normalize_approval_mode(
@@ -9480,7 +9480,7 @@ def shell(  # noqa: C901
         settings = settings.with_updates(max_steps=max_steps)
     project_config = load_project_config(settings.workspace)
     namespace = namespace or project_config.namespace or "project:agentX"
-    mode = mode or project_config.mode or "chat"
+    mode = mode or project_config.mode or DEFAULT_MODE
     if mode == "ask":
         mode = "agent"
 
@@ -9609,7 +9609,7 @@ def shell(  # noqa: C901
                         namespace=namespace,
                         cancel_event=current_cancel,
                     )
-                    transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
+                    transcript.write("assistant", {"mode": state.mode, "content": answer[:4000]})
                     if tui is not None:
                         print_raw(format_assistant_header())
                     print_block(answer)
@@ -10271,6 +10271,7 @@ def shell(  # noqa: C901
             transcript=transcript,
             emit=console.print,
             emit_error=print_raw,
+            chat_messages=chat_messages,
         )
 
     register_handler("/mode", handle_mode)

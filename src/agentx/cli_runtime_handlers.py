@@ -134,16 +134,63 @@ def handle_mode(
     transcript: Any,
     emit: Callable[[str], None],
     emit_error: Callable[[str], None],
+    chat_messages: MutableSequence[dict[str, str]] | None = None,
 ) -> None:
     """Switch chat/agent mode; emit_error on invalid value (matches print_raw path)."""
+    previous = state.mode
     next_mode = prompt.removeprefix("/mode ").strip()
     try:
         state.set_chat_mode(next_mode)
     except ValueError:
         emit_error("mode must be chat, ask, or agent")
         return
+    _carry_mode_context(state, previous, state.mode, chat_messages)
     transcript.write("slash_command", {"command": prompt, "mode": state.mode})
     emit(f"mode={state.mode}")
+
+
+def _carry_mode_context(
+    state: Any,
+    previous: str,
+    new_mode: str,
+    chat_messages: MutableSequence[dict[str, str]] | None,
+) -> None:
+    """Keep the live conversation when the user flips chat ↔ agent.
+
+    The 2026-08-12 crawler session forgot the task on /mode agent because
+    chat_messages and AgentSession.messages were two isolated histories.
+    """
+    if previous == new_mode:
+        return
+    session = getattr(state, "agent_session", None)
+    if previous == "chat" and new_mode == "agent" and session is not None and chat_messages:
+        recent = [m for m in chat_messages if m.get("role") in {"user", "assistant"}][-8:]
+        if not recent:
+            return
+        lines = [f"{m.get('role')}: {str(m.get('content') or '')[:800]}" for m in recent]
+        session.messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "Previous chat (tools were unavailable then). "
+                    "Continue the same task now that tools are available.\n" + "\n".join(lines)
+                ),
+            }
+        )
+        return
+    if previous == "agent" and new_mode == "chat" and session is not None and chat_messages is not None:
+        last = next(
+            (m for m in reversed(getattr(session, "messages", [])) if m.get("role") == "assistant"),
+            None,
+        )
+        if last is None:
+            return
+        chat_messages.append(
+            {
+                "role": "system",
+                "content": "Previous agent work:\n" + str(last.get("content") or "")[:1500],
+            }
+        )
 
 
 # --- read-only tool-backed slash handlers ---------------------------------
