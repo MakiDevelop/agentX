@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from agentx.model_size import is_small_local_model
+
 PERSONAS: dict[str, str] = {
     "default": (
         "預設 agentX 工程助手。直接、務實、以完成任務與驗證為優先。"
@@ -24,8 +26,9 @@ PERSONAS: dict[str, str] = {
 
 def persona_prompt(name: str | None, model: str | None = None) -> str:
     key = normalize_persona(name)
-    # Auto-adjust to gemma4 persona when using gemma model and default persona
-    if (key == "default") and model and "gemma" in str(model).lower():
+    # Only the actually-small local models need the weak-model persona.
+    # gemma4:31b is a large model; treating it as a 2B toy makes it timid.
+    if key == "default" and is_small_local_model(model):
         key = "gemma4"
     return PERSONAS[key]
 

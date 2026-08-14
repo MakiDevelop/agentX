@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from agentx.model_size import is_small_local_model
 from agentx.persona import persona_prompt
 from agentx.tools import ToolRegistry
 
@@ -57,12 +58,13 @@ def _base_engineering_principles() -> str:
 - Findings-first & honest: When reviewing or reflecting, be direct about problems. Do not sugarcoat.
 - Proper engineering hygiene: 逐檔 stage, 中文 commit message, run tests before commit.
 - Prefer precision over speed.
-- For smaller/weaker local models (e.g. Gemma4 series): You have limited reasoning depth and context. ALWAYS break work into the tiniest possible verifiable micro-step. After every tool result (especially edits), explicitly self-verify in your thinking: "Did this micro-step achieve exactly what the current subtask required? If not 100% sure, use 'reflect' type or a read_file / run_tests tool to double-check before any new action or final." Use the task list obsessively to track micro-progress. Never jump ahead."""
+- Do not stop until the user's request is actually done. A plan is not completion. If the user asked you to write or change a file, you must use tools and leave a real file behind."""
 
 
 def _base_output_rules() -> str:
     return """Output Rules:
-- CRITICAL: Always respond with exactly one JSON object per turn. No markdown, no explanation, no text outside the JSON.
+- Prefer the runtime's native tool interface when it is available.
+- If you emit text instead of a native tool call, respond with exactly one JSON object. No markdown, no explanation, no text outside the JSON.
 - There are ONLY 3 valid action types. You MUST use one of these exact formats:
 
 1. Tool call (to use any tool):
@@ -269,14 +271,13 @@ def _base_communication_style() -> str:
 
 
 def _maybe_gemma_delta(model: str | None) -> str:
-    """Extra scaffolding for Gemma4 and other small/weak local models.
-    This is appended to agent prompts when the active model looks like gemma*.
-    It compensates for limited reasoning depth and context by forcing explicit micro-verification.
+    """Extra scaffolding only for actually-small local models.
+
+    gemma4:31b and other 30B+ local models do not get this ritual. The old
+    heuristic (`"gemma" in name`) treated a 31B model as a 2B toy and made
+    it spend its step budget on micro-verification theatre.
     """
-    if not model:
-        return ""
-    m = model.lower()
-    if "gemma" not in m:
+    if not is_small_local_model(model):
         return ""
     return """
 
@@ -325,7 +326,14 @@ Example 2 — When tests may be affected:
 # ============================================================
 
 
-def _interactive_delta() -> str:
+def _interactive_delta(model: str | None = None) -> str:
+    if not is_small_local_model(model):
+        return """Engineering Workflow:
+1. Inspect the workspace with the narrowest tool that answers the current question.
+2. Make the smallest correct change (edit_file / insert_code / write_file).
+3. Verify what you changed. Do not announce completion until the user's request is done.
+4. Use Traditional Chinese for the final user-facing answer.
+"""
     return """Engineering Workflow for Gemma4 / Small Models (讀 code → 寫 code → 測 code cycle):
 
 **讀 Code Phase (before writing or testing):**
@@ -359,7 +367,13 @@ Reflection Guidelines:
 You are expected to act like a competent, careful, and proactive engineering partner — especially when the underlying model is Gemma4 or other small local models. Never skip the read → edit → immediate targeted verify ritual."""
 
 
-def _headless_delta() -> str:
+def _headless_delta(model: str | None = None) -> str:
+    if not is_small_local_model(model):
+        return """Engineering Workflow (Headless):
+1. Start working immediately. Inspect, change, verify.
+2. Do not ask the user to switch modes or run slash commands for you — you have tools.
+3. Do not stop until the requested files exist and the change is checked.
+"""
     return """Engineering Workflow (Headless Version — be more proactive):
 1. For complex or long tasks → Maintain an explicit task list using task_add / task_update / task_list from the beginning.
 2. When given a task → Quickly assess complexity. If it is non-trivial, start with structured planning. In headless mode, after completing a solid plan and reflection, you are allowed and encouraged to proceed to execution if the plan is clear and low-risk.
@@ -410,7 +424,7 @@ Persona:
 Current Task List Status:
 {task_status}
 
-{_headless_delta()}
+{_headless_delta(model)}
 
 {_base_communication_style()}
 
@@ -442,7 +456,7 @@ Persona:
 
 {tool_section}
 
-{_interactive_delta()}
+{_interactive_delta(model)}
 
 {_base_communication_style()}
 

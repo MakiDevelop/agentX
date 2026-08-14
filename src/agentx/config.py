@@ -9,6 +9,9 @@ from agentx.project_config import load_project_config
 
 DEFAULT_MODEL = "gemma4:31b"
 DEFAULT_MEMORY_HALL_URL = "http://100.89.41.50:9100"
+DEFAULT_MAX_STEPS = 64
+DEFAULT_MODE = "agent"
+DEFAULT_OLLAMA_TIMEOUT = 180.0
 
 
 @dataclass(frozen=True)
@@ -37,18 +40,18 @@ class Settings:
         self._set_values(
             model=os.getenv("AGENTX_MODEL") or config.model or DEFAULT_MODEL,
             ollama_url=os.getenv("AGENTX_OLLAMA_URL", "http://127.0.0.1:11434"),
-            ollama_timeout=float(os.getenv("AGENTX_OLLAMA_TIMEOUT", "60")),
+            ollama_timeout=float(os.getenv("AGENTX_OLLAMA_TIMEOUT", str(int(DEFAULT_OLLAMA_TIMEOUT)))),
             memory_hall_url=os.getenv("AGENTX_MEMORY_HALL_URL", DEFAULT_MEMORY_HALL_URL),
             memory_hall_token=os.getenv("AGENTX_MEMORY_HALL_TOKEN") or os.getenv("MH_API_TOKEN"),
             memory_backend=os.getenv("AGENTX_MEMORY_BACKEND") or config.memory_backend or "memhall",
             memory_amh_store=config.memory_amh_store or os.getenv("AGENTX_AMH_STORE") or "json",
             memory_amh_path=config.memory_amh_path or os.getenv("AGENTX_AMH_PATH"),
-            max_steps=int(os.getenv("AGENTX_MAX_STEPS", "8")),
+            max_steps=int(os.getenv("AGENTX_MAX_STEPS", str(DEFAULT_MAX_STEPS))),
             context_limit_tokens=int(os.getenv("AGENTX_CONTEXT_LIMIT", "32768")),
             auto_handoff=auto_handoff,
             persona=normalize_persona(os.getenv("AGENTX_PERSONA") or config.persona or "default"),
             workspace=workspace,
-            learning_enabled=os.getenv("AGENTX_LEARNING", "1") != "0",
+            learning_enabled=os.getenv("AGENTX_LEARNING", "0") == "1",
         )
 
     @classmethod

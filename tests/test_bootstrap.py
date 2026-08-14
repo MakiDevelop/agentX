@@ -178,7 +178,9 @@ def test_repo_context_truncates_per_file_and_total_context(tmp_path: Path) -> No
     context = build_repo_context(tmp_path, max_chars=12000)
     capped = build_repo_context(tmp_path, max_chars=150)
 
-    assert "A" * 3000 in context
+    assert "--- AGENTX.md" in context
+    assert "A" * 200 in context
+    assert "A" * 3000 not in context
     assert "TAIL_MARKER" not in context
     assert len(capped) <= 150
 

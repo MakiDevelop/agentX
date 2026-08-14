@@ -39,10 +39,17 @@ class MemorySearcher(Protocol):
     def search(self, query: str, namespace: str = "shared", limit: int = 5) -> str: ...
 
 
-def build_repo_context(workspace: Path, max_chars: int = 12000) -> str:
-    parts = [f"Workspace: {workspace}"]
+def build_repo_context(workspace: Path, max_chars: int = 8000) -> str:
+    parts = [
+        f"Workspace: {workspace}",
+        (
+            "Runtime card: you have tools. Inspect before editing. "
+            "Do not stop until the user request is done. "
+            "Do not ask the user to run slash commands you can call as tools."
+        ),
+    ]
     parts.append(_git_status(workspace))
-    parts.append(_file_inventory(workspace))
+    parts.append(_file_inventory(workspace, limit=40))
     parts.append(build_local_instruction_context(workspace))
 
     for item in PROJECT_SUMMARY_FILES:
@@ -57,13 +64,13 @@ def build_repo_context(workspace: Path, max_chars: int = 12000) -> str:
             path = handoff_dir / filename
             if path.is_file():
                 content = path.read_text(encoding="utf-8", errors="replace")
-                parts.append(f"--- .agentx/handoff/{filename} ---\n{content[:3000]}")
+                parts.append(f"--- .agentx/handoff/{filename} ---\n{content[:800]}")
 
     context = "\n\n".join(part for part in parts if part.strip())
     return context[:max_chars]
 
 
-def build_local_instruction_context(workspace: Path, max_chars: int = 9000) -> str:
+def build_local_instruction_context(workspace: Path, max_chars: int = 2500) -> str:
     """Load repo-local instruction files in priority order.
 
     AGENTX.md is agentX-native and wins by ordering. AGENTS.md and CLAUDE.md
@@ -162,7 +169,22 @@ def _read_bootstrap_file(workspace: Path, item: BootstrapFile) -> str | None:
     if not path.is_file():
         return None
     content = path.read_text(encoding="utf-8", errors="replace")
-    return f"--- {item.path} ({item.purpose}) ---\n{content[: item.max_chars]}"
+    excerpt, truncated = _excerpt_instruction(item.path, content, item.max_chars)
+    header = f"--- {item.path} ({item.purpose}) ---\n{excerpt}"
+    if truncated:
+        header += f"\n[truncated; read the rest with read_file path={item.path}]"
+    return header
+
+
+_DEV_CONSTITUTION_MARKERS = ("Hard Mode", "撞牆偵測", "專案憲法", "Self-Improvement Protocol")
+
+
+def _excerpt_instruction(name: str, content: str, max_chars: int) -> tuple[str, bool]:
+    """Keep short project notes; do not dump a 600-line developer constitution."""
+    if name == "AGENTX.md" and any(marker in content for marker in _DEV_CONSTITUTION_MARKERS):
+        budget = min(500, max_chars)
+        return content[:budget], len(content) > budget
+    return content[:max_chars], len(content) > max_chars
 
 
 def _git_status(workspace: Path) -> str:
