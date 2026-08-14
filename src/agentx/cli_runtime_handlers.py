@@ -25,6 +25,7 @@ from __future__ import annotations
 import shlex
 from typing import TYPE_CHECKING, Any
 
+from agentx.intent_route import should_use_agent
 from agentx.transcript import find_transcript, format_approval_receipts
 
 if TYPE_CHECKING:
@@ -178,7 +179,12 @@ def _carry_mode_context(
             }
         )
         return
-    if previous == "agent" and new_mode == "chat" and session is not None and chat_messages is not None:
+    if (
+        previous == "agent"
+        and new_mode == "chat"
+        and session is not None
+        and chat_messages is not None
+    ):
         last = next(
             (m for m in reversed(getattr(session, "messages", [])) if m.get("role") == "assistant"),
             None,
@@ -191,6 +197,25 @@ def _carry_mode_context(
                 "content": "Previous agent work:\n" + str(last.get("content") or "")[:1500],
             }
         )
+
+
+def maybe_escalate_to_agent(
+    state: Any,
+    prompt: str,
+    chat_messages: MutableSequence[dict[str, str]] | None = None,
+) -> bool:
+    """If chat mode received a tool task, switch to agent and carry history.
+
+    Returns True when a switch happened.
+    """
+    if getattr(state, "mode", None) == "agent":
+        return False
+    if not should_use_agent(prompt):
+        return False
+    previous = state.mode
+    state.set_chat_mode("agent")
+    _carry_mode_context(state, previous, "agent", chat_messages)
+    return True
 
 
 # --- read-only tool-backed slash handlers ---------------------------------

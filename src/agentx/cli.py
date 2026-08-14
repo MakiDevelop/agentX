@@ -108,6 +108,7 @@ from agentx.memory_hall import (
     memory_status_payload,
     memory_write_payload,
 )
+from agentx.model_size import is_small_local_model
 from agentx.ollama import OllamaCancelledError, OllamaClient
 from agentx.persona import list_personas, normalize_persona
 from agentx.proc import run_process
@@ -6631,7 +6632,9 @@ def run_print_prompt(  # noqa: C901  (complexity 30; headless entrypoint, split 
         if plan_mode:
             agent_prompt = plan_prompt
 
-        compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None
+        compactor = (
+            LLMContextCompactor(ollama) if is_small_local_model(settings.model) else None
+        )
         if resume_session:
             try:
                 session_path = resolve_session_store_path(settings.workspace, resume_session)
@@ -9515,7 +9518,7 @@ def shell(  # noqa: C901
 
     if current_tasks:
         transcript.write("tasks", {"count": len(current_tasks), "summary": task_summary})
-    compactor = LLMContextCompactor(ollama) if "gemma" in settings.model.lower() else None
+    compactor = LLMContextCompactor(ollama) if is_small_local_model(settings.model) else None
     agent_session = AgentSession(
         settings=settings,
         ollama=ollama,
@@ -9587,6 +9590,10 @@ def shell(  # noqa: C901
                 if attachment_context:
                     queued_prompt = f"{queued_prompt}\n\n{attachment_context}"
                     transcript.write("attachments", {"paths": attachment_paths})
+                if _runtime_handlers.maybe_escalate_to_agent(
+                    state, queued_prompt, chat_messages
+                ):
+                    print_raw("自動切到 agent 模式（這個任務需要工具）")
                 if state.mode == "agent":
                     history.append((state.mode, queued_prompt))
                     transcript.write("user", {"mode": state.mode, "content": queued_prompt})
@@ -9638,7 +9645,7 @@ def shell(  # noqa: C901
                     cancel_event=current_cancel,
                 )
                 chat_messages.append({"role": "assistant", "content": answer})
-                transcript.write("assistant", {"mode": mode, "content": answer[:4000]})
+                transcript.write("assistant", {"mode": state.mode, "content": answer[:4000]})
                 if streamed:
                     print_raw("")
                 else:
